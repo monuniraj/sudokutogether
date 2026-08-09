@@ -5283,30 +5283,52 @@ useEffect(() => {
                       })()}
                     </div>
 
-                    <div className="flex w-full gap-2.5 mt-1 pt-2">
+                    {/* Action buttons row */}
+                    <div className="flex gap-2.5 w-full pt-4 border-t border-stone-200/50 dark:border-zinc-800/50 mt-2 shrink-0">
+                      {/* Button 1: Back Arrow */}
                       <button
                         onClick={() => {
                           playClickSound();
-                          // Dismiss the modal so user can view the board without resetting the game over state
                           setShowGameOverModal(false);
+                          navigateToScreen("home");
                         }}
-                        className={`flex-1 aspect-[2.5/1] rounded-2xl flex items-center justify-center transition-all active:scale-95 border-none cursor-pointer ${darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-white" : "bg-stone-100 hover:bg-stone-200 text-stone-900"}`}
-                        title="Back"
+                        className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-700"}`}
+                        title="Back to Home"
                       >
-                         <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />
+                         <ArrowLeft className="w-7 h-7" strokeWidth={1.5} />
                       </button>
+
+                      {/* Button 2: Replay Same Board */}
                       <button
                         onClick={() => {
                           playClickSound();
-                          if (activeGameId) {
-                            fetchLeaderboardResults(activeGameId);
-                          }
+                          // Collect previous participants before resetting leaderboard
+                          const othersList: Array<{ id: string; name: string; isReal: boolean }> = [];
+                          syncedLeaderboard.forEach(r => {
+                            if (r.userId !== userProfile?.id && !othersList.some(o => o.id === r.userId)) {
+                              othersList.push({ id: r.userId, name: r.playerName, isReal: true });
+                            }
+                          });
+                          
+                          setLastGameParticipants(othersList);
+                          setRematchParticipants(othersList);
+                          setRematchInvitedPlayers(new Set());
+                          
+                          const nextGameId = `SUDOKU-${boardState?.seed}-${challengeDifficulty}-M${challengeMistakeLimit}-T${challengeTimerEnabled ? 1 : 0}`;
+                          setRematchGameId(nextGameId);
+                          
+                          // Replay the EXACT SAME board seed!
+                          generateAndSetNewPuzzle(challengeDifficulty, boardState?.seed, challengeMistakeLimit, challengeTimerEnabled);
+                          setIsTimerPaused(false);
+                          setShowRematchInviteModal(true);
                         }}
-                        className={`flex-1 aspect-[2.5/1] rounded-2xl flex items-center justify-center transition-all active:scale-95 border-none cursor-pointer ${darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-white" : "bg-stone-100 hover:bg-stone-200 text-stone-900"}`}
-                        title="Refresh Results"
+                        className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#D1FAE5]/10 hover:bg-[#D1FAE5]/20 text-[#a7f3d0]" : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"}`}
+                        title="Replay Same Board"
                       >
-                        <RefreshCw className={`w-5 h-5 sm:w-6 sm:h-6 ${isLoadingLeaderboard ? "animate-spin" : ""}`} strokeWidth={2} />
+                         <RotateCcw className="w-7 h-7" strokeWidth={1.5} />
                       </button>
+
+                      {/* Button 3: New Game / Rematch */}
                       <button
                         onClick={() => {
                           playClickSound();
@@ -5341,11 +5363,31 @@ useEffect(() => {
                           // Open the rematch invite / participant lobby modal so they can re-invite with one click!
                           setShowRematchInviteModal(true);
                         }}
-                        className={`flex-[3] text-sm sm:text-base font-black uppercase tracking-wider rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-95 border-none cursor-pointer ${darkMode ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-[#9D174D] hover:bg-[#831843] text-white"}`}
+                        className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-purple-900/40 hover:bg-purple-900/60 text-purple-200" : "bg-purple-100 hover:bg-purple-200 text-purple-900"}`}
+                        title="New Rematch Game"
                       >
-                         Rematch
+                         <Shuffle className="w-7 h-7" strokeWidth={1.5} />
                       </button>
                     </div>
+
+                    {/* Challenge Friends Button */}
+                    <button
+                      onClick={async () => {
+                        playClickSound();
+                        const isConfigured = checkIsDisplayNameConfigured();
+                        if (!isConfigured) {
+                          setDisplayNameCallbackAction("END_GAME_SHARE");
+                          setShowDisplayNameModal(true);
+                        } else {
+                          await executeEndGameShareAction();
+                        }
+                      }}
+                      className={`w-full py-4 px-6 rounded-[24px] flex items-center justify-center gap-2 transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer font-bold mt-2 ${darkMode ? "bg-blue-900/40 text-blue-200 border border-blue-900/50 hover:bg-blue-900/60" : "bg-[#DBEAFE] text-[#1E3A8A] hover:bg-[#BFDBFE]"}`}
+                    >
+                      <Share2 className="w-5 h-5" strokeWidth={2} />
+                      <span>Challenge Friends with Your Best Time</span>
+                      <Copy className="w-5 h-5 ml-auto opacity-70" strokeWidth={2} />
+                    </button>
 
                   </motion.div>
                 </div>
@@ -5398,18 +5440,22 @@ useEffect(() => {
                     </div>
 
                     {/* Button Split */}
+                    {/* Action buttons row */}
                     <div className="flex w-full gap-3 mt-2">
+                      {/* Button 1: Back Arrow */}
                       <button
                         onClick={() => {
                           playClickSound();
-                          // Dismiss the modal so user can see the board without resetting the game over state
                           setShowGameOverModal(false);
+                          navigateToScreen("home");
                         }}
-                        className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-purple-900/50 text-purple-200 hover:bg-purple-900/80 border border-purple-900/50" : "bg-[#F3E8FF] text-[#6B21A8] hover:bg-[#E9D5FF]"}`}
-                        title="Back"
+                        className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-700"}`}
+                        title="Back to Home"
                       >
                          <ArrowLeft className="w-7 h-7" strokeWidth={1.5} />
                       </button>
+
+                      {/* Button 2: Replay Same Board */}
                       <button
                         onClick={() => {
                           playClickSound();
@@ -5417,10 +5463,24 @@ useEffect(() => {
                           setIsTimerPaused(false);
                           setShowGameOverModal(false);
                         }}
-                        className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]" : "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]"}`}
+                        className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#D1FAE5]/10 hover:bg-[#D1FAE5]/20 text-[#a7f3d0]" : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"}`}
                         title="Replay Same Board"
                       >
                          <RotateCcw className="w-7 h-7" strokeWidth={1.5} />
+                      </button>
+
+                      {/* Button 3: Start New Puzzle */}
+                      <button
+                        onClick={() => {
+                          playClickSound();
+                          generateAndSetNewPuzzle(difficulty);
+                          setIsTimerPaused(false);
+                          setShowGameOverModal(false);
+                        }}
+                        className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-purple-900/40 hover:bg-purple-900/60 text-purple-200" : "bg-purple-100 hover:bg-purple-200 text-purple-900"}`}
+                        title="Start New Puzzle"
+                      >
+                         <Shuffle className="w-7 h-7" strokeWidth={1.5} />
                       </button>
                     </div>
 
