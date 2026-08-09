@@ -1485,17 +1485,15 @@ useEffect(() => {
     try {
       const saved = localStorage.getItem("sudoku_past_players");
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        const parsed = JSON.parse(saved) as any[];
+        if (Array.isArray(parsed)) {
+          // Filter out legacy simulated demo bots to keep only real human players
+          return parsed.filter(p => p.id !== "USER_88201" && p.id !== "GUEST_99210" && p.id !== "USER_33104");
+        }
       }
     } catch {}
     
-    // Default demo past players to showcase target/current user authentication states
-    return [
-      { id: "USER_88201", name: "Sarah Solver", isFriend: false, status: "online", inviteStatus: "idle", isSynced: true },
-      { id: "GUEST_99210", name: "Swift Ranger 10", isFriend: false, status: "offline", inviteStatus: "idle", isSynced: false },
-      { id: "USER_33104", name: "Chloe Zen", isFriend: true, status: "online", inviteStatus: "idle", isSynced: true },
-    ];
+    return [];
   });
 
   useEffect(() => {
@@ -1554,6 +1552,7 @@ useEffect(() => {
   const [showTargetLoginRequiredModal, setShowTargetLoginRequiredModal] = useState<boolean>(false);
   const [pendingTargetPlayer, setPendingTargetPlayer] = useState<{ id: string; name: string } | null>(null);
   const [activeCompliancePage, setActiveCompliancePage] = useState<"privacy" | "terms" | "about" | "contact" | null>(null);
+  const [lastGameParticipants, setLastGameParticipants] = useState<Array<{ id: string; name: string; isReal: boolean }>>([]);
 
   const isUserAuthorizedForMultiplayer = () => {
     return true;
@@ -5301,10 +5300,7 @@ useEffect(() => {
                           
                           addLog(`⚔️ Initializing Multiplayer Challenge Rematch (Seed #${newSeed})...`);
 
-                          // Start fresh local synced leaderboard
-                          setSyncedLeaderboard([]);
-
-                          // Collect previous participants (exclude current player)
+                          // Collect previous participants (exclude current player) before resetting leaderboard
                           const othersList: Array<{ id: string; name: string; isReal: boolean }> = [];
                           syncedLeaderboard.forEach(r => {
                             if (r.userId !== userProfile?.id && !othersList.some(o => o.id === r.userId)) {
@@ -5312,8 +5308,19 @@ useEffect(() => {
                             }
                           });
 
+                          // Set active rematch details
+                          setLastGameParticipants(othersList);
+                          setRematchParticipants(othersList);
+                          setRematchInvitedPlayers(new Set());
+
+                          // Start fresh local synced leaderboard
+                          setSyncedLeaderboard([]);
+                          const nextGameId = `SUDOKU-${newSeed}-${challengeDifficulty}-M${challengeMistakeLimit}-T${challengeTimerEnabled ? 1 : 0}`;
+                          setRematchGameId(nextGameId);
+
                           // Trigger brand new unique puzzle generation inside challenge mode
                           generateAndSetNewPuzzle(challengeDifficulty, newSeed, challengeMistakeLimit, challengeTimerEnabled);
+                          setIsTimerPaused(false);
 
                           // Open the rematch invite / participant lobby modal so they can re-invite with one click!
                           setShowRematchInviteModal(true);
@@ -5390,10 +5397,12 @@ useEffect(() => {
                       <button
                         onClick={() => {
                           playClickSound();
-                          generateAndSetNewPuzzle(difficulty);
+                          generateAndSetNewPuzzle(difficulty, boardState?.seed);
                           setIsTimerPaused(false);
+                          setShowGameOverModal(false);
                         }}
                         className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]" : "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]"}`}
+                        title="Replay Same Board"
                       >
                          <RotateCcw className="w-7 h-7" strokeWidth={1.5} />
                       </button>
@@ -7712,6 +7721,10 @@ useEffect(() => {
                     <div className="py-4 text-center text-stone-500 font-sans text-xs select-none">
                       Sign-in required
                     </div>
+                  ) : multiplayerPlayers.length === 0 ? (
+                    <div className="py-6 text-center text-stone-500 dark:text-stone-400 font-sans text-xs select-none italic">
+                      Waiting for real players to join...
+                    </div>
                   ) : (
                     <div className="flex flex-col gap-1.5 max-h-[150px] overflow-y-auto pr-1 no-scrollbar">
                       {[...multiplayerPlayers]
@@ -7951,6 +7964,10 @@ useEffect(() => {
                 {!isUserAuthorizedForMultiplayer() ? (
                   <div className="py-4 text-center text-stone-500 font-sans text-xs select-none">
                     Sign-in required
+                  </div>
+                ) : multiplayerPlayers.length === 0 ? (
+                  <div className="py-6 text-center text-stone-500 dark:text-stone-400 font-sans text-xs select-none italic">
+                    Waiting for real players to join...
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1.5 max-h-[150px] overflow-y-auto pr-1 no-scrollbar-y">
@@ -8442,21 +8459,9 @@ useEffect(() => {
                                 next.add(p.id);
                                 return next;
                               });
-                              // Also trigger simulated invitation system standard handling
+                              // Also trigger invitation system standard handling
                               handleInviteFriend(p.id);
                               addLog(`✉️ Re-invited ${p.name} to the rematch lobby.`);
-                              
-                              // Trigger a simulated acceptance from the bot/friend after 1.5 - 2.5 seconds
-                              setTimeout(() => {
-                                setMultiplayerPlayers(prev => prev.map(m => {
-                                  if (m.id === p.id) {
-                                    return { ...m, inviteStatus: 'joined' as const };
-                                  }
-                                  return m;
-                                }));
-                                addLog(`✓ ${p.name} accepted the rematch and joined the lobby!`);
-                                try { playClickSound(); } catch (err) {}
-                              }, 1500 + Math.random() * 1000);
                             }}
                             className={`px-3 py-1.5 font-sans text-[10.5px] font-black uppercase tracking-wider rounded-xl border-none cursor-pointer transition-all active:scale-95 ${
                               hasInvited 
@@ -8490,22 +8495,10 @@ useEffect(() => {
                       return next;
                     });
 
-                    // Invite them for real/simulated
+                    // Invite them for real
                     rematchParticipants.forEach(p => {
                       handleInviteFriend(p.id);
                       addLog(`✉️ Re-invited ${p.name} to the rematch lobby.`);
-
-                      // Simulate acceptance
-                      setTimeout(() => {
-                        setMultiplayerPlayers(prev => prev.map(m => {
-                          if (m.id === p.id) {
-                            return { ...m, inviteStatus: 'joined' as const };
-                          }
-                          return m;
-                        }));
-                        addLog(`✓ ${p.name} accepted the rematch invitation!`);
-                        try { playClickSound(); } catch (err) {}
-                      }, 1200 + Math.random() * 800);
                     });
 
                     showToast("Dispatched re-invites to all previous participants!");
