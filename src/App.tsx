@@ -2132,17 +2132,21 @@ useEffect(() => {
 
     const handlePopState = (event: PopStateEvent) => {
       const params = new URLSearchParams(window.location.search);
-      let chalParam = params.get("challenge") || params.get("gameId");
+      let chalParam = params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("room");
       if (!chalParam && window.location.hash) {
         const qs = window.location.hash.substring(window.location.hash.indexOf("?") + 1);
         const hashParams = new URLSearchParams(qs);
-        chalParam = hashParams.get("challenge") || hashParams.get("gameId");
+        chalParam = hashParams.get("challenge") || hashParams.get("gameId") || hashParams.get("seed") || hashParams.get("room");
       }
       if (!chalParam && window.location.hash) {
         const cleanedHash = window.location.hash.substring(1);
         if (cleanedHash.startsWith("SUDOKU-")) {
           chalParam = cleanedHash;
         }
+      }
+
+      if (chalParam && /^\d+$/.test(chalParam)) {
+        chalParam = `SUDOKU-${chalParam}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-T${timerEnabled ? 1 : 0}`;
       }
 
       if (chalParam) {
@@ -2645,7 +2649,11 @@ useEffect(() => {
       ? JSON.parse(localStorage.getItem("sudoku_userProfile") || "").name 
       : "Anonymous Voyager";
     
-    const chalUrl = `${getChallengeBaseUrl()}?challenge=${gameId}${isPrivate && roomPassword ? `&pw=${encodePass(roomPassword)}` : ""}&sender=${encodeURIComponent(currentProfileName)}`;
+    // Extract seed from gameId (e.g. SUDOKU-123456-EASY-M3-T1 -> 123456)
+    const seedMatch = gameId.match(/SUDOKU-(\d+)/i);
+    const seedParam = seedMatch ? seedMatch[1] : "";
+    
+    const chalUrl = `${getChallengeBaseUrl()}?challenge=${gameId}&seed=${seedParam}&room=${gameId}${isPrivate && roomPassword ? `&pw=${encodePass(roomPassword)}` : ""}&sender=${encodeURIComponent(currentProfileName)}`;
     const pwMsg = isPrivate && roomPassword ? ` (Room Password: ${roomPassword})` : "";
     const shareText = customText || `Let's play a Sudoku Rematch! Join my challenge match${pwMsg}:`;
 
@@ -3236,7 +3244,7 @@ useEffect(() => {
   // Load Initial puzzle or handle deep-linked challenge invite on startup
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    let chalParam = params.get("challenge") || params.get("gameId");
+    let chalParam = params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("room");
     let queryPw = params.get("pw") || params.get("password");
     let senderParam = params.get("sender") || params.get("senderName") || params.get("invitedBy") || params.get("sender_name");
     
@@ -3244,7 +3252,7 @@ useEffect(() => {
     if (!chalParam && window.location.hash) {
       const qs = window.location.hash.substring(window.location.hash.indexOf("?") + 1);
       const hashParams = new URLSearchParams(qs);
-      chalParam = hashParams.get("challenge") || hashParams.get("gameId");
+      chalParam = hashParams.get("challenge") || hashParams.get("gameId") || hashParams.get("seed") || hashParams.get("room");
       if (!queryPw) {
         queryPw = hashParams.get("pw") || hashParams.get("password");
       }
@@ -3259,6 +3267,10 @@ useEffect(() => {
       if (cleanedHash.startsWith("SUDOKU-")) {
         chalParam = cleanedHash;
       }
+    }
+
+    if (chalParam && /^\d+$/.test(chalParam)) {
+      chalParam = `SUDOKU-${chalParam}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-T${timerEnabled ? 1 : 0}`;
     }
 
     if (chalParam) {
@@ -3282,20 +3294,24 @@ useEffect(() => {
           try {
             const urlObj = new URL(event.url);
             const params = new URLSearchParams(urlObj.search);
-            let chalParam = params.get("challenge") || params.get("gameId");
+            let chalParam = params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("room");
             let queryPw = params.get("pw") || params.get("password");
             let senderParam = params.get("sender") || params.get("senderName") || params.get("invitedBy") || params.get("sender_name");
             
             if (!chalParam && urlObj.hash) {
               const qs = urlObj.hash.substring(urlObj.hash.indexOf("?") + 1);
               const hashParams = new URLSearchParams(qs);
-              chalParam = hashParams.get("challenge") || hashParams.get("gameId");
+              chalParam = hashParams.get("challenge") || hashParams.get("gameId") || hashParams.get("seed") || hashParams.get("room");
               if (!queryPw) {
                 queryPw = hashParams.get("pw") || hashParams.get("password");
               }
               if (!senderParam) {
                 senderParam = hashParams.get("sender") || hashParams.get("senderName") || hashParams.get("invitedBy") || hashParams.get("sender_name");
               }
+            }
+
+            if (chalParam && /^\d+$/.test(chalParam)) {
+              chalParam = `SUDOKU-${chalParam}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-T${timerEnabled ? 1 : 0}`;
             }
             
             if (chalParam) {
