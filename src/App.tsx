@@ -7,7 +7,10 @@ import {
   collection,
   onSnapshot,
   serverTimestamp,
-  getDocs
+  getDocs,
+  query,
+  where,
+  updateDoc
 } from "firebase/firestore";
 import { 
   Paintbrush, 
@@ -1842,7 +1845,16 @@ useEffect(() => {
   const [highlightIdentical, setHighlightIdentical] = useState<boolean>(true);
   const [showRemainingNumbers, setShowRemainingNumbers] = useState<boolean>(true);
   const [autoComplete, setAutoComplete] = useState<boolean>(false);
-  const [notifications, setNotifications] = useState<boolean>(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_notificationsEnabled");
+      return saved !== null ? saved === "true" : true;
+    } catch {
+      return true;
+    }
+  });
+  const [sessionStartTime] = useState<number>(() => Date.now());
+  const [activeInviteNotification, setActiveInviteNotification] = useState<any | null>(null);
 
   // Stats status trackers derived directly from the actual completed games array (no fake data!)
   const gamesPlayed = completedGames.length;
@@ -2003,6 +2015,10 @@ useEffect(() => {
     localStorage.setItem("sudoku_mistakeLimitEnabled", String(mistakeLimitEnabled));
   }, [mistakeLimitEnabled]);
 
+  useEffect(() => {
+    localStorage.setItem("sudoku_notificationsEnabled", String(notificationsEnabled));
+  }, [notificationsEnabled]);
+
   // Synchronize dynamic friend invitations across multiple browser tabs
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
@@ -2029,6 +2045,53 @@ useEffect(() => {
       window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
+
+  // Real-time listener for incoming invites from Firestore
+  useEffect(() => {
+    const userId = userProfile?.id;
+    if (!userId) return;
+
+    console.log(`[Firestore] Subscribing to incoming invites for user: ${userId}`);
+    const invitesCol = collection(db, "invites");
+    const q = query(
+      invitesCol,
+      where("toUserId", "==", userId),
+      where("status", "==", "pending")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const inviteData = change.doc.data();
+            
+            // Extract the timestamp to check if it's a new invite
+            const ts = inviteData.timestamp;
+            const inviteTime = ts ? ts.toMillis() : Date.now();
+            
+            // Only process new invites sent after the app loaded (with a small safety buffer)
+            if (inviteTime > sessionStartTime - 5000) {
+              if (notificationsEnabled) {
+                // Play audio chime
+                playInviteChime();
+                // Set active invite to show the toast banner
+                setActiveInviteNotification(inviteData);
+              }
+            }
+          }
+        });
+      },
+      (err) => {
+        console.error("[Firestore] Invites listener error:", err);
+      }
+    );
+
+    return () => {
+      console.log(`[Firestore] Unsubscribing from incoming invites for user: ${userId}`);
+      unsubscribe();
+    };
+  }, [userProfile?.id, notificationsEnabled, sessionStartTime]);
 
   // Dynamically update friends & past players to "online/live" if another app instance/tab is open in the browser
   useEffect(() => {
@@ -2204,6 +2267,34 @@ useEffect(() => {
       osc.stop(audioCtx.currentTime + 0.1);
     } catch (e) {
       console.error("Audio Web Synth Click Error:", e);
+    }
+  };
+
+  // Play a pleasant ascending invitation chime (C5 -> E5) using Web Audio API
+  const playInviteChime = () => {
+    if (!notificationsEnabled) return; // settings guard cond
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const playNote = (freq: number, start: number, duration: number) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.08, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+        osc.start(start);
+        osc.stop(start + duration);
+      };
+
+      const now = audioCtx.currentTime;
+      playNote(523.25, now, 0.15); // C5
+      playNote(659.25, now + 0.10, 0.25); // E5
+    } catch (e) {
+      console.error("Audio Chime Error:", e);
     }
   };
 
@@ -2696,7 +2787,7 @@ useEffect(() => {
   };
 
   // Handles multiplayer invite process and dynamic join simulation
-  const handleInviteFriend = (playerId: string) => {
+  const handleInviteFriend = async (playerId: string) => {
     playClickSound();
 
     // Issue 7 requirement: Require Google Login before Direct Friend Invites
@@ -2713,6 +2804,29 @@ useEffect(() => {
       return p;
     }));
     addLog(`📤 Custom challenge invite dispatched to player.`);
+
+    // Determine target game ID
+    const targetSeed = challengeSeed || (Math.floor(Math.random() * 900000) + 100000);
+    const finalGameId = rematchGameId || activeGameId || `SUDOKU-${targetSeed}-${challengeDifficulty}-M${challengeMistakeLimit}-T${challengeTimerEnabled ? 1 : 0}`;
+    const password = challengeRoomAccess === "PRIVATE" ? roomPassword : "";
+
+    // Write to Firestore invites collection!
+    try {
+      const inviteRef = doc(collection(db, "invites"));
+      await setDoc(inviteRef, {
+        id: inviteRef.id,
+        toUserId: playerId,
+        fromUserId: userProfile?.id || "GUEST_ANON",
+        fromName: userProfile?.name || "Player",
+        gameId: finalGameId,
+        password: password || "",
+        status: "pending",
+        timestamp: serverTimestamp()
+      });
+      console.log(`[Firestore] Dispatched real-time invite to player ${playerId} for game ${finalGameId}`);
+    } catch (err) {
+      console.error("[Firestore] Failed to dispatch invite:", err);
+    }
   };
 
   // Handles adding a past player as a friend
@@ -5692,10 +5806,10 @@ useEffect(() => {
                   <div className="flex items-center justify-between">
                     <span className={`text-sm font-medium ${darkMode ? "text-stone-300" : "text-stone-850"}`}>Push Notifications</span>
                     <button
-                      onClick={() => { playClickSound(); setNotifications(!notifications); }}
-                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${notifications ? (darkMode ? "bg-sky-500" : "bg-[#0369A1] active:bg-[#025a8b] shadow-none") : (darkMode ? "bg-zinc-850" : "bg-[#BAE6FD] active:bg-[#90cdf4] shadow-sm active:shadow-none")}`}
+                      onClick={() => { playClickSound(); setNotificationsEnabled(!notificationsEnabled); }}
+                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${notificationsEnabled ? (darkMode ? "bg-sky-500" : "bg-[#0369A1] active:bg-[#025a8b] shadow-none") : (darkMode ? "bg-zinc-850" : "bg-[#BAE6FD] active:bg-[#90cdf4] shadow-sm active:shadow-none")}`}
                     >
-                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${notifications ? "translate-x-5" : "translate-x-0"}`} />
+                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${notificationsEnabled ? "translate-x-5" : "translate-x-0"}`} />
                     </button>
                   </div>
                 </div>
@@ -9024,7 +9138,7 @@ useEffect(() => {
                     setLightningMode(false);
                     setMagicNote(false);
                     setHideUsedNumber(false);
-                    setNotifications(true);
+                    setNotificationsEnabled(true);
                     
                     setShowResetSettingsModal(false);
                     showToast("Preferences reset to defaults");
@@ -9051,7 +9165,7 @@ useEffect(() => {
                     setLightningMode(false);
                     setMagicNote(false);
                     setHideUsedNumber(false);
-                    setNotifications(true);
+                    setNotificationsEnabled(true);
 
                     const keysToRemove = [];
                     for (let i = 0; i < localStorage.length; i++) {
@@ -9727,6 +9841,74 @@ useEffect(() => {
               <div className="flex flex-col text-left">
                 <span className="font-sans font-black text-sm uppercase tracking-tight leading-none text-[#135236]">Notebook Synced!</span>
                 <span className="text-[10px] text-[#135236]/80 mt-1 font-sans font-medium">Your progress is now linked securely to Google cloud node.</span>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 📥 IN-APP INVITATION TOAST BANNER */}
+      <AnimatePresence>
+        {activeInviteNotification && (
+          <div className="fixed inset-x-4 top-[24px] z-[70000] flex justify-center animate-bounce-subtle">
+            <motion.div
+              initial={{ opacity: 0, y: -40, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className={`w-full max-w-md p-4 rounded-2xl flex items-center justify-between gap-4 backdrop-blur-md border ${
+                darkMode 
+                  ? "bg-zinc-900/95 border-zinc-800 text-stone-100 shadow-[0_16px_36px_rgba(0,0,0,0.5)]" 
+                  : "bg-white/95 border-stone-200 text-stone-900 shadow-[0_16px_36px_rgba(0,0,0,0.12)]"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-xl ${darkMode ? "bg-purple-950/50 text-purple-300" : "bg-purple-50 text-purple-600"}`}>
+                  <Users className="w-5 h-5" strokeWidth={2.5} />
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-purple-400" : "text-purple-700"}`}>
+                    Sudoku Invite
+                  </span>
+                  <span className="font-sans text-xs font-semibold mt-0.5">
+                    <strong>{activeInviteNotification.fromName}</strong> invited you to play!
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={async () => {
+                    playClickSound();
+                    try {
+                      await updateDoc(doc(db, "invites", activeInviteNotification.id), { status: "declined" });
+                    } catch (e) {
+                      console.error("Failed to decline invite in DB:", e);
+                    }
+                    setActiveInviteNotification(null);
+                  }}
+                  className={`px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 ${
+                    darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
+                  }`}
+                >
+                  Decline
+                </button>
+                <button
+                  onClick={async () => {
+                    playClickSound();
+                    try {
+                      await updateDoc(doc(db, "invites", activeInviteNotification.id), { status: "accepted" });
+                    } catch (e) {
+                      console.error("Failed to accept invite in DB:", e);
+                    }
+                    const { gameId, password, fromName } = activeInviteNotification;
+                    setActiveInviteNotification(null);
+                    handleLoadChallengeFromId(gameId, password, fromName);
+                  }}
+                  className={`px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 text-white ${
+                    darkMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-emerald-600 hover:bg-emerald-550"
+                  }`}
+                >
+                  Accept
+                </button>
               </div>
             </motion.div>
           </div>

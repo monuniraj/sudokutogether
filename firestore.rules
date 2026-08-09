@@ -9,5 +9,10 @@ service cloud.firestore {
       // or unauthenticated guests (since app uses guest IDs, not Firebase Auth)
       allow write: if true;
     }
+
+    // Invitations collection for real-time multiplayer invites
+    match /invites/{inviteId} {
+      allow read, write: if true;
+    }
   }
 }
