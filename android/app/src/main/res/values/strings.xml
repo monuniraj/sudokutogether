@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sudoku Together: Multiplayer</string>
+    <string name="title_activity_main">Sudoku Together: Multiplayer</string>
+    <string name="package_name">com.sudokutogether.app</string>
+    <string name="custom_url_scheme">com.sudokutogether.app</string>
+</resources>

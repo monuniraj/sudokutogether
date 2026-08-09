@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.sudokutogether.app",
+      "sha256_cert_fingerprints": [
+        "43:42:C8:C9:D3:01:45:CD:EA:23:B1:F0:8C:35:B7:51:B6:C3:3E:4B:EC:92:89:30:9F:91:0D:4C:62:7F:FD:F9"
+      ]
+    }
+  }
+]

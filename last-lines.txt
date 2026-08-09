@@ -1,0 +1,153 @@
+8801:                   </div>
+8802: 
+8803:                   <div className="flex gap-2.5 pt-2">
+8804:                     <button
+8805:                       onClick={() => { playClickSound(); setAuthModalTab("SELECT"); }}
+8806:                       className="bg-stone-100 hover:bg-stone-200 text-stone-850 border-none py-3 px-4 rounded-xl font-sans text-xs font-black uppercase tracking-wider cursor-pointer active:translate-y-px transition-all"
+8807:                     >
+8808:                       Back
+8809:                     </button>
+8810:                     <button
+8811:                       onClick={() => {
+8812:                         playClickSound();
+8813:                         if (!phoneInput.trim()) {
+8814:                           alert("Please fill in a valid phone number.");
+8815:                           return;
+8816:                         }
+8817:                         const randomCode = Math.floor(1000 + Math.random() * 9000).toString();
+8818:                         setOtpCode(randomCode);
+8819:                         setAuthPendingPhone(phoneInput);
+8820:                         addLog(`📱 Dispatching OTP Verification SMS. Simulated mock security code: ${randomCode}`);
+8821:                         
+8822:                         alert(`[SMS Dispatch Simulation]\nVerification Code sent to ${phoneInput}:\n👉 Code: ${randomCode}`);
+8823:                         
+8824:                         setAuthModalTab("OTP");
+8825:                         setAuthOtpInput("");
+8826:                       }}
+8827:                       className="flex-1 bg-[#E6F4EA] hover:bg-[#D1FAE5] text-[#135236] border-none py-3 px-4 rounded-xl font-sans text-xs font-black uppercase tracking-wider text-center cursor-pointer shadow-sm active:translate-y-px transition-all"
+8828:                     >
+8829:                       Request OTP Code
+8830:                     </button>
+8831:                   </div>
+8832:                 </div>
+8833:               )}
+8834: 
+8835:               {/* OTP CODE VERIFICATION */}
+8836:               {authModalTab === "OTP" && (
+8837:                 <div className="flex flex-col gap-4 text-left font-sans">
+8838:                   <div>
+8839:                     <span className="text-stone-400 font-mono text-[9px] uppercase tracking-wider block mb-1">STEP 3 OF 3</span>
+8840:                     <h5 className="text-md font-sans font-black text-stone-900 uppercase">Input OTP Code</h5>
+8841:                     <p className="text-xs text-stone-500 mt-1">Please type the 4-digit code dispatched to <strong>{authPendingPhone}</strong>.</p>
+8842:                   </div>
+8843: 
+8844:                   <div>
+8845:                     <label className="block">
+8846:                       <span className="block text-[10px] font-mono font-black text-stone-600 uppercase tracking-wider mb-1.5">ENTER 4-DIGIT VERIFICATION CODE:</span>
+8847:                       <input 
+8848:                         type="text" 
+8849:                         maxLength={4}
+8850:                         value={authOtpInput}
+8851:                         onChange={(e) => setAuthOtpInput(e.target.value)}
+8852:                         placeholder="e.g. 1234"
+8853:                         className="w-full text-center bg-white text-stone-950 border-none rounded-xl p-3 text-lg font-mono font-black tracking-widest focus:outline-none focus:ring-2 focus:ring-[#2B6CB0]/20 shadow-[0_2px_12px_rgba(0,0,0,0.03)]"
+8854:                       />
+8855:                     </label>
+8856:                     <p className="text-[10px] text-stone-500 italic font-mono mt-1 text-center">
+8857:                       Cheat Sheet: Current OTP validation token is <strong className="text-[#2B6CB0] font-black">{otpCode}</strong>
+8858:                     </p>
+8859:                   </div>
+8860: 
+8861:                   <div className="flex gap-2.5 pt-2">
+8862:                     <button
+8863:                       onClick={() => { playClickSound(); setAuthModalTab("PHONE"); }}
+8864:                       className="bg-stone-100 hover:bg-stone-200 text-stone-850 border-none py-3 px-4 rounded-xl font-sans text-xs font-black uppercase tracking-wider cursor-pointer active:translate-y-px transition-all"
+8865:                     >
+8866:                       Back
+8867:                     </button>
+8868:                     <button
+8869:                       onClick={() => {
+8870:                         playClickSound();
+8871:                         if (authOtpInput.trim() !== otpCode) {
+8872:                           alert(`Invalid OTP code entered. Please retry or check the cheat sheet of value ${otpCode}`);
+8873:                           return;
+8874:                         }
+8875:                         
+8876:                         addLog(`📱 OTP Verification Succeeded for: ${authPendingPhone}`);
+8877:                         handleSyncAndMergeData({
+8878:                           id: "P_" + Math.floor(100000 + Math.random() * 900000),
+8879:                           name: "Voyager " + authPendingPhone.slice(-4),
+8880:                           phone: authPendingPhone,
+8881:                           avatarColor: "#10B981"
+8882:                         });
+8883:                         setShowAuthModal(false);
+8884:                       }}
+8885:                       className="flex-1 bg-emerald-650 hover:bg-emerald-700 text-white border-none py-2.5 px-4 rounded-md font-sans text-xs font-bold uppercase tracking-wider text-center cursor-pointer shadow-xs"
+8886:                     >
+8887:                       Verify & Synchronize
+8888:                     </button>
+8889:                   </div>
+8890:                 </div>
+8891:               )}
+8892: 
+8893:               {/* Storage telemetry status report */}
+8894:               <div className="bg-stone-100/50 border border-stone-200/50 p-3 rounded-md text-[10px] text-stone-400 font-mono text-center shrink-0">
+8895:                 Data Merging: Zero data loss, sync merges browser localStorage into persistent remote profiles.
+8896:               </div>
+8897: 
+8898:             </motion.div>
+8899:           </div>
+8900:         )}
+8901:       </AnimatePresence>
+8902: 
+8903:       {/* 💚 NOTEBOOK SYNCED SUCCESS TOAST */}
+8904:       <AnimatePresence>
+8905:         {showSyncSuccessToast && (
+8906:           <div className="fixed inset-x-4 top-[85px] z-[50000] flex justify-center pointer-events-none">
+8907:             <motion.div
+8908:               initial={{ opacity: 0, y: -20, scale: 0.95 }}
+8909:               animate={{ opacity: 1, y: 0, scale: 1 }}
+8910:               exit={{ opacity: 0, y: -10, scale: 0.95 }}
+8911:               className="bg-[#E6F4EA] border border-[#A7F3D0] text-[#135236] px-6 py-4.5 rounded-2xl shadow-[0_12px_24px_rgba(19,82,54,0.1)] flex items-center gap-3.5 select-none"
+8912:             >
+8913:               <div className="w-6 h-6 rounded-full bg-[#135236] text-white flex items-center justify-center font-black text-sm shrink-0">
+8914:                 ✓
+8915:               </div>
+8916:               <div className="flex flex-col text-left">
+8917:                 <span className="font-sans font-black text-sm uppercase tracking-tight leading-none text-[#135236]">Notebook Synced!</span>
+8918:                 <span className="text-[10px] text-[#135236]/80 mt-1 font-sans font-medium">Your progress is now linked securely to Google cloud node.</span>
+8919:               </div>
+8920:             </motion.div>
+8921:           </div>
+8922:         )}
+8923:       </AnimatePresence>
+8924: 
+8925:       {/* GLOBAL TOAST OVERLAY */}
+8926:       <AnimatePresence>
+8927:         {toastMessage && (
+8928:           <div className="fixed inset-x-4 top-[100px] z-[60000] flex justify-center pointer-events-none">
+8929:             <motion.div
+8930:               initial={{ opacity: 0, y: -20, scale: 0.95 }}
+8931:               animate={{ opacity: 1, y: 0, scale: 1 }}
+8932:               exit={{ opacity: 0, y: -10, scale: 0.95 }}
+8933:               className={`${darkMode ? "bg-zinc-800 text-white shadow-xl border border-zinc-700" : "bg-emerald-950 text-white shadow-[0_12px_24px_rgba(0,0,0,0.15)]"} px-5 py-3 rounded-full flex items-center gap-2 select-none`}
+8934:             >
+8935:               <Info className="w-4 h-4 text-sky-400" />
+8936:               <span className="font-sans font-medium text-sm tracking-wide">{toastMessage}</span>
+8937:             </motion.div>
+8938:           </div>
+8939:         )}
+8940:       </AnimatePresence>
+8941: 
+8942:       {/* Decorative dashed margin footers */}
+8943:       {activeTab !== "sudoku" && (
+8944:         <footer className="mt-auto py-8 bg-[#FDFBF7] border-t-4 border-[#1E1E1E] text-center text-xs text-stone-500 font-mono relative overflow-hidden">
+8945:           <div className="max-w-7xl mx-auto px-8 flex justify-between items-center flex-col md:flex-row gap-2">
+8946:             <span>Google AI Studio • Scrapbook & Sudoku Engine Kit</span>
+8947:             <span>Crafted in Jetpack Compose Design Specification Style</span>
+8948:           </div>
+8949:         </footer>
+8950:       )}
+8951:     </div>
+8952:   );
+8953: }

@@ -1,0 +1,6 @@
+{
+  "name": "Sudoku Together",
+  "description": "Mediterranean-themed color-based Sudoku game. Solve the daily Santorini puzzle to unlock travel badges.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

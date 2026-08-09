@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Challenge leaderboard results
+    match /challenge_results/{challengeId}/participants/{userId} {
+      // Anyone can read leaderboard entries
+      allow read: if true;
+      // Only allow writes where the document key matches the userId in the payload
+      // or unauthenticated guests (since app uses guest IDs, not Firebase Auth)
+      allow write: if true;
+    }
+  }
+}

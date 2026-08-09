@@ -1,0 +1,228 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Zeyada&family=Caveat:wght@400;700&family=Patrick+Hand&family=Architects+Daughter&family=Kalam:wght@400;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+
+@theme {
+  --font-sans: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  /* Completely hide standard scrollbars everywhere while enabling scroll actions */
+  html, body, div, section, main {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+  }
+  
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  div::-webkit-scrollbar,
+  section::-webkit-scrollbar,
+  main::-webkit-scrollbar {
+    display: none; /* Safari and Chrome */
+  }
+}
+
+@layer utilities {
+  .handwriting {
+    font-family: 'Patrick Hand', 'Architects Daughter', 'Kalam', 'Caveat', 'Zeyada', cursive;
+  }
+  
+  /* Hide scrollbar but keep capability to scroll */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none !important;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none !important;  /* IE and Edge */
+    scrollbar-width: none !important;  /* Firefox */
+  }
+}
+
+/* Custom Paper background helper */
+.paper-pattern {
+  background-color: #FDFBF7;
+  background-image: 
+    radial-gradient(#1e1e1e0a 1px, transparent 1px),
+    radial-gradient(#1e1e1e0a 1px, #FDFBF7 1px);
+  background-size: 20px 20px;
+  background-position: 0 0, 10px 10px;
+}
+
+/* Custom Paper background helper for Dark Mode */
+.paper-pattern-dark {
+  background-color: #121212;
+  background-image: 
+    radial-gradient(#ffffff14 1.5px, transparent 1.5px),
+    radial-gradient(#ffffff14 1.5px, #121212 1px);
+  background-size: 20px 20px;
+  background-position: 0 0, 10px 10px;
+}
+
+/* Notebook ruled paper helper */
+.notebook-ruled {
+  background-color: #ffffff;
+  background-image: linear-gradient(#e0f2fe 1px, transparent 1px);
+  background-size: 100% 24px;
+}
+
+/* Custom outline helpers according to design system standard */
+.scrapbook-border {
+  border: 2px solid #1E1E1E;
+  box-shadow: inset 0 0 0 2px #FFFFFF;
+}
+
+.paper-shadow {
+  box-shadow: 4px 4px 0px 0px #1E1E1E;
+}
+
+.paper-shadow-lg {
+  box-shadow: 6px 6px 0px 0px #1E1E1E;
+}
+
+.paper-shadow-hover {
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+
+.paper-shadow-hover:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px 0px #1E1E1E;
+}
+
+.paper-shadow-hover:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px #1E1E1E;
+}
+
+/* =========================================================================
+   TABLET RESPONSIVENESS AND PROPORTIONAL SCALING
+   Isolated strictly between 768px and 1024px.
+   Enforces fluid layout alignment, automatic centering, relative layouts,
+   and stacks the active gameplay layout vertically like mobile while
+   scaling beautifully.
+   ========================================================================= */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* Prevent screen content from hiding behind the fixed header (fixed height: 70px) */
+  div[class*="pt-[95px]"],
+  div[class*="pt-[80px]"],
+  div[class*="p-4 md:p-6 pb-24"] {
+    padding-top: 105px !important;
+  }
+
+  /* 1. FLUID ACTIVE GAME ARENA CONTAINER - STACKED IN COLUMN (LIKE MOBILE) */
+  #main-responsive-game-container {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: start !important;
+    gap: 16px !important;
+    width: 92% !important;
+    max-width: 520px !important;
+    margin: 0 auto !important;
+  }
+
+  /* 2. PROPORTIONAL SUDOKU BOARD COLUMN */
+  #game-grid-column {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+  }
+
+  /* Overrides inline maxWidth boundary check to utilize tablet view height and width proportionally */
+  #game-grid-column div[style*="max-width"] {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+  }
+
+  /* Elegant padding/spacing margins inside status indicators block */
+  #unified-bridge-container {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+    margin-bottom: 8px !important;
+  }
+
+  /* 3. FLUID CONTROL PANEL SIDE DECK - VERTICALLY STACKED BELOW BOARD */
+  #game-controls-column {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-top: 10px !important;
+    align-self: center !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: start !important;
+    gap: 12px !important;
+    padding: 14px !important;
+  }
+
+  /* Proportional touch scales for keys in the side deck on tablet */
+  #game-utility-buttons-deck {
+    margin-top: 4px !important;
+  }
+
+  #game-utility-buttons-deck .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  #game-utility-buttons-deck button {
+    padding: 10px !important;
+    border-radius: 12px !important;
+  }
+
+  #game-utility-buttons-deck span {
+    font-size: 11px !important;
+  }
+
+  /* Use mobile horizontal 9-item alignment for numbers pad on tablet vertical layout */
+  #game-number-pad-deck {
+    margin-top: 6px !important;
+  }
+
+  #game-number-pad-deck .grid {
+    grid-template-columns: repeat(9, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  #game-number-pad-deck button {
+    font-size: 22px !important;
+    padding: 10px 4px !important;
+    border-radius: 10px !important;
+  }
+
+  /* 4. FLUID STRETCH FOR DEEP NAV MENU PANELS AND SETTINGS SCANS */
+  #home-screen-inner-container,
+  #settings-screen-inner-container,
+  #status-screen-inner-container,
+  #login-screen-inner-container {
+    max-width: 520px !important;
+    width: 90% !important;
+    margin: 0 auto !important;
+  }
+
+  #home-screen-inner-container > div,
+  #settings-screen-inner-container > div,
+  #status-screen-inner-container > div,
+  #login-screen-inner-container > div {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
+/* =========================================================================
+   DESKTOP RESPONSIVENESS AND LAYOUT REFINEMENTS (min-width: 1024px)
+   Pulls the controls cabinet closer to the Sudoku 9x9 grid,
+   and shifts the entire container to center it visually on desktop.
+   ========================================================================= */
+@media (min-width: 1024px) {
+  #main-responsive-game-container {
+    transform: translateX(-26px) !important; /* Precise offset shifter to center the entire block on desktop */
+  }
+
+  /* Shifter for Column 2 to reside closer to the grid column */
+  #game-controls-column {
+    margin-left: -52px !important; /* Decreasing margin-left pulls the right panel closer to the Sudoku grid */
+  }
+}
