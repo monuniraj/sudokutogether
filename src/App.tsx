@@ -4242,25 +4242,19 @@ useEffect(() => {
         <footer className={`mt-8 pt-8 border-t border-stone-200/50 dark:border-zinc-800/50 flex flex-col sm:flex-row justify-between items-center gap-4 text-2xs md:text-xs font-mono ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>
           <span>© 2026 Sudoku Together Mode. All rights reserved.</span>
           <div className="flex gap-4">
-            <a
-              href="https://docs.google.com/document/d/1oKUH359XvOq-0i0WglkBJAXK0O_b8U80TjumV9kXA30/edit?usp=sharing"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`hover:underline transition-colors ${darkMode ? "text-stone-300 hover:text-white" : "text-[#333333] hover:text-black"}`}
-              onClick={() => playClickSound()}
+            <button
+              onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("privacy"); }}
+              className={`hover:underline transition-colors bg-transparent border-none cursor-pointer p-0 font-mono text-2xs md:text-xs ${darkMode ? "text-stone-300 hover:text-white" : "text-[#333333] hover:text-black"}`}
             >
               Privacy Policy
-            </a>
+            </button>
             <span>•</span>
-            <a
-              href="https://docs.google.com/document/d/1SYrX0lB70RBHLXafLGyHRIqRCyU9PoU419YeOt333B8/edit?usp=sharing"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`hover:underline transition-colors ${darkMode ? "text-stone-300 hover:text-white" : "text-[#333333] hover:text-black"}`}
-              onClick={() => playClickSound()}
+            <button
+              onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("terms"); }}
+              className={`hover:underline transition-colors bg-transparent border-none cursor-pointer p-0 font-mono text-2xs md:text-xs ${darkMode ? "text-stone-300 hover:text-white" : "text-[#333333] hover:text-black"}`}
             >
               Terms of Service
-            </a>
+            </button>
           </div>
         </footer>
       </section>
