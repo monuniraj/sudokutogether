@@ -139,6 +139,7 @@ interface PendingChallenge {
   isNew: boolean;
   password?: string;
   senderName?: string;
+  sentAt?: number;
 }
 
 interface FriendConnection {
@@ -8448,27 +8449,36 @@ useEffect(() => {
                }}
             >
               {/* Header */}
-              <div className="flex justify-between items-center select-none shrink-0 mb-4">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">⚔️</span>
-                    <h4 className="text-xl font-sans font-black uppercase tracking-wide">
-                      Rematch Started!
-                    </h4>
+              {(() => {
+                const isSameMatchReplay = boardState && rematchGameId.includes(`-${boardState.seed}-`);
+                return (
+                  <div className="flex justify-between items-center select-none shrink-0 mb-4">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        {isSameMatchReplay ? (
+                          <RotateCcw className="w-5 h-5 text-emerald-500" strokeWidth={2.5} />
+                        ) : (
+                          <Zap className="w-5 h-5 text-amber-500 animate-pulse" strokeWidth={2.5} />
+                        )}
+                        <h4 className="text-lg font-sans font-black uppercase tracking-wide">
+                          {isSameMatchReplay ? "Same Match Replay" : "New Match"}
+                        </h4>
+                      </div>
+                      <span className={`text-[10px] uppercase font-bold tracking-wider opacity-70 mt-0.5 ${darkMode ? "text-purple-400" : "text-purple-750"}`}>
+                        {isSameMatchReplay ? "Board reset to start" : "Fresh puzzle loaded"}
+                      </span>
+                    </div>
+                    <button 
+                      onClick={() => { playClickSound(); setShowRematchInviteModal(false); }}
+                      className={`p-1.5 rounded-full border-none cursor-pointer transition-all active:scale-95 hover:scale-105 ${
+                        darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-250" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
+                      }`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
-                  <span className={`text-[10px] uppercase font-bold tracking-wider opacity-70 mt-0.5 ${darkMode ? "text-purple-400" : "text-purple-750"}`}>
-                    Fresh match, previous participants re-invited
-                  </span>
-                </div>
-                <button 
-                  onClick={() => { playClickSound(); setShowRematchInviteModal(false); }}
-                  className={`p-1.5 rounded-full border-none cursor-pointer transition-all active:scale-95 hover:scale-105 ${
-                    darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-250" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
-                  }`}
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+                );
+              })()}
 
               {/* Match profile brief definition */}
               <div className={`p-4 rounded-xl flex flex-col gap-1.5 mb-5 select-none ${
@@ -8579,8 +8589,10 @@ useEffect(() => {
 
                     showToast("Dispatched re-invites to all previous participants!");
                   }}
-                  className={`w-full py-3.5 px-4 font-sans text-xs font-black uppercase tracking-wider rounded-xl border-none cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                    darkMode ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-emerald-600 hover:bg-emerald-550 text-white"
+                  className={`w-full py-3.5 px-4 font-sans text-xs font-bold uppercase tracking-wider rounded-xl cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-2 border ${
+                    darkMode 
+                      ? "bg-zinc-900 border-amber-950 hover:bg-zinc-850 text-[#FBBF24]" 
+                      : "bg-[#FEF3C7] hover:bg-[#FDE68A] text-[#92400E] border-amber-200"
                   }`}
                   disabled={rematchParticipants.length === 0}
                 >
@@ -8594,8 +8606,10 @@ useEffect(() => {
                       playClickSound();
                       shareChallengeLink(rematchGameId, `Join my Sudoku Rematch! Challenge link:`);
                     }}
-                    className={`flex-1 py-3 px-4 font-sans text-xs font-black uppercase tracking-wider rounded-xl border-none cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
-                      darkMode ? "bg-purple-950/40 hover:bg-purple-950/65 text-purple-300" : "bg-purple-100 hover:bg-purple-200 text-purple-900"
+                    className={`flex-1 py-3 px-4 font-sans text-xs font-bold uppercase tracking-wider rounded-xl cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 border ${
+                      darkMode 
+                        ? "bg-zinc-900 border-purple-950 hover:bg-zinc-850 text-[#C084FC]" 
+                        : "bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8] border-purple-200"
                     }`}
                   >
                     <Share2 className="w-3.5 h-3.5" />
@@ -8606,8 +8620,10 @@ useEffect(() => {
                       playClickSound();
                       setShowRematchInviteModal(false);
                     }}
-                    className={`px-5 py-3 font-sans text-xs font-black uppercase tracking-wider rounded-xl border-none cursor-pointer transition-all active:scale-95 ${
-                      darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-250" : "bg-stone-150 hover:bg-stone-200 text-stone-700"
+                    className={`px-5 py-3 font-sans text-xs font-bold uppercase tracking-wider rounded-xl cursor-pointer transition-all active:scale-95 border ${
+                      darkMode 
+                        ? "bg-zinc-900 border-sky-950 hover:bg-zinc-850 text-[#38BDF8]" 
+                        : "bg-[#E0F2FE] hover:bg-[#bae6fd] text-[#0f172a] border-sky-200"
                     }`}
                   >
                     Start Solving
