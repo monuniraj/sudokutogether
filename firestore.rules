@@ -14,5 +14,13 @@ service cloud.firestore {
     match /invites/{inviteId} {
       allow read, write: if true;
     }
+
+    // User profiles, FCM tokens, and past players subcollections
+    match /users/{userId} {
+      allow read, write: if true;
+      match /{allSubcollections=**} {
+        allow read, write: if true;
+      }
+    }
   }
 }

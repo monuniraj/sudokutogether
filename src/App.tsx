@@ -2251,6 +2251,161 @@ useEffect(() => {
     };
   }, []);
 
+  const saveOpponentsToPastPlayers = async (opponents: Array<{ id: string, name: string }>) => {
+    const currentUserId = userProfile?.id;
+    if (!currentUserId) return;
+
+    // Filter out self and anonymous guests
+    const filteredOpponents = opponents.filter(opp => opp.id && opp.id !== currentUserId && opp.id !== "GUEST_ANON" && opp.id !== "me");
+    if (filteredOpponents.length === 0) return;
+
+    console.log("[Multiplayer] Saving opponents to past players:", filteredOpponents);
+
+    // 1. Update local state `multiplayerPlayers`
+    setMultiplayerPlayers(prev => {
+      let next = [...prev];
+      let updated = false;
+
+      filteredOpponents.forEach(opp => {
+        const index = next.findIndex(p => p.id === opp.id);
+        if (index === -1) {
+          next.push({
+            id: opp.id,
+            name: opp.name || "Player " + opp.id.substring(0, 5),
+            isFriend: false,
+            status: "offline" as const,
+            inviteStatus: "idle" as const
+          });
+          updated = true;
+        } else {
+          // If name changed or was blank, update it
+          if (opp.name && next[index].name !== opp.name) {
+            next[index] = { ...next[index], name: opp.name };
+            updated = true;
+          }
+        }
+      });
+
+      return updated ? next : prev;
+    });
+
+    // 2. Write to Firestore `users/{currentUserId}/past_players/{opponentId}`
+    try {
+      for (const opp of filteredOpponents) {
+        // Find if they are currently marked as a friend locally
+        const localRecord = multiplayerPlayers.find(p => p.id === opp.id);
+        const isFriendVal = localRecord ? localRecord.isFriend : false;
+
+        const pastPlayerRef = doc(db, "users", currentUserId, "past_players", opp.id);
+        await setDoc(pastPlayerRef, {
+          id: opp.id,
+          name: opp.name || "Player",
+          isFriend: isFriendVal,
+          timestamp: serverTimestamp()
+        }, { merge: true });
+      }
+      console.log("[Firestore] Opponents saved to users subcollection successfully.");
+    } catch (err) {
+      console.error("[Firestore] Failed to save opponents to past_players subcollection:", err);
+    }
+  };
+
+  const handleToggleFriend = (playerId: string, playerName?: string) => {
+    playClickSound();
+
+    if (!isUserAuthorizedForMultiplayer()) {
+      setLoginRequiredPurpose("ADD_FRIEND");
+      setShowLoginRequiredModal(true);
+      return;
+    }
+
+    setMultiplayerPlayers(prev => {
+      const playerIndex = prev.findIndex(p => p.id === playerId);
+
+      if (playerIndex >= 0) {
+        const player = prev[playerIndex];
+        if (player.isFriend) {
+          // Remove friend
+          const updated = prev.map(p => p.id === playerId ? { ...p, isFriend: false } : p);
+          addLog(`✓ ${player.name} removed from Friends list.`);
+          showToast(`Removed ${player.name} from friends.`);
+
+          // Async sync to Firestore
+          const currentUserId = userProfile?.id;
+          if (currentUserId) {
+            const pastPlayerRef = doc(db, "users", currentUserId, "past_players", playerId);
+            setDoc(pastPlayerRef, { isFriend: false }, { merge: true }).catch(err => {
+              console.error("[Firestore] Failed to remove friend in DB:", err);
+            });
+          }
+
+          return updated;
+        } else {
+          // Enforce 50-friend cap
+          const currentFriendsCount = prev.filter(p => p.isFriend).length;
+          if (currentFriendsCount >= 50) {
+            showToast("Friend limit reached (Max 50 friends).");
+            addLog("⚠️ Attempted to add friend but limit of 50 has been reached.");
+            return prev;
+          }
+
+          // Add friend
+          const updated = prev.map(p => p.id === playerId ? { ...p, isFriend: true } : p);
+          addLog(`✓ ${player.name} connected and added to Friends list.`);
+          showToast(`✓ Added ${player.name} as a persistent friend!`);
+
+          // Async sync to Firestore
+          const currentUserId = userProfile?.id;
+          if (currentUserId) {
+            const pastPlayerRef = doc(db, "users", currentUserId, "past_players", playerId);
+            setDoc(pastPlayerRef, { isFriend: true }, { merge: true }).catch(err => {
+              console.error("[Firestore] Failed to add friend in DB:", err);
+            });
+          }
+
+          return updated;
+        }
+      } else {
+        // Enforce 50-friend cap
+        const currentFriendsCount = prev.filter(p => p.isFriend).length;
+        if (currentFriendsCount >= 50) {
+          showToast("Friend limit reached (Max 50 friends).");
+          addLog("⚠️ Attempted to add friend but limit of 50 has been reached.");
+          return prev;
+        }
+
+        // Add them as a new friend directly since they aren't in the list
+        const name = playerName || "Player " + playerId.substring(0, 5);
+        const newPlayer = {
+          id: playerId,
+          name: name,
+          isFriend: true,
+          status: "offline" as const,
+          inviteStatus: "idle" as const
+        };
+        const updated = [...prev, newPlayer];
+        addLog(`✓ ${name} added to past players and Friends list.`);
+        showToast(`✓ Added ${name} as a persistent friend!`);
+
+        // Async sync to Firestore
+        const currentUserId = userProfile?.id;
+        if (currentUserId) {
+          const pastPlayerRef = doc(db, "users", currentUserId, "past_players", playerId);
+          setDoc(pastPlayerRef, {
+            id: playerId,
+            name: name,
+            isFriend: true,
+            timestamp: serverTimestamp()
+          }, { merge: true }).catch(err => {
+            console.error("[Firestore] Failed to add new friend in DB:", err);
+          });
+        }
+
+        return updated;
+      }
+    });
+  };
+
   const saveFcmToken = async (token: string) => {
     try {
       console.log(`[FCM] Storing token to user profile: ${token}`);
@@ -3340,6 +3495,19 @@ useEffect(() => {
         console.log(`[Firestore] Existing result is better, skipping update.`);
       }
       addLog(`✓ Game completion synced with Firestore!`);
+
+      try {
+        const docId = getSeedDocId(rBody.challengeId);
+        const participantsCol = collection(db, "challenge_results", docId, "participants");
+        const querySnapshot = await getDocs(participantsCol);
+        const opponents = querySnapshot.docs.map(d => {
+          const data = d.data();
+          return { id: data.userId, name: data.playerName };
+        });
+        saveOpponentsToPastPlayers(opponents);
+      } catch (err) {
+        console.error("Failed to sync past players during submitGameResult:", err);
+      }
     } catch (err) {
       console.error(`[Firestore] Submit attempt ${attempt} failed:`, err);
       if (attempt < 2) {
@@ -3494,6 +3662,10 @@ useEffect(() => {
         setSyncedLeaderboard(results);
         setChallengeLeaderboardCache(prev => ({ ...prev, [activeGameId]: results }));
         setIsLoadingLeaderboard(false);
+
+        // Auto-save all participants as past players
+        const opponents = results.map(r => ({ id: r.userId, name: r.playerName }));
+        saveOpponentsToPastPlayers(opponents);
       },
       (err) => {
         console.error(`[Firestore] Listener error for ${activeGameId}:`, err);
@@ -5573,17 +5745,42 @@ useEffect(() => {
                                   </span>
                                 </div>
                               </div>
-                              <div className="flex flex-col items-end justify-center">
-                                {isPending ? (
-                                  <span className={`font-sans font-black text-xs sm:text-sm uppercase tracking-widest ${darkMode ? "text-amber-400/80" : "text-amber-600"} animate-pulse`}>
-                                    Result Pending
-                                  </span>
-                                ) : player.failed ? (
-                                  <span className="font-sans font-black text-xs sm:text-sm text-red-500 uppercase tracking-widest">Fail</span>
-                                ) : (
-                                  <span className={`font-mono font-medium text-sm sm:text-base ${player.isMe ? (darkMode ? "text-indigo-200" : "text-indigo-950") : (darkMode ? "text-zinc-300" : "text-stone-700")}`}>
-                                    {formatTimer(player.time)}
-                                  </span>
+                              <div className="flex items-center gap-2">
+                                <div className="flex flex-col items-end justify-center">
+                                  {isPending ? (
+                                    <span className={`font-sans font-black text-xs sm:text-sm uppercase tracking-widest ${darkMode ? "text-amber-400/80" : "text-amber-600"} animate-pulse`}>
+                                      Result Pending
+                                    </span>
+                                  ) : player.failed ? (
+                                    <span className="font-sans font-black text-xs sm:text-sm text-red-500 uppercase tracking-widest">Fail</span>
+                                  ) : (
+                                    <span className={`font-mono font-medium text-sm sm:text-base ${player.isMe ? (darkMode ? "text-indigo-200" : "text-indigo-950") : (darkMode ? "text-zinc-300" : "text-stone-700")}`}>
+                                      {formatTimer(player.time)}
+                                    </span>
+                                  )}
+                                </div>
+                                {!player.isMe && (
+                                  (() => {
+                                    const localRecord = multiplayerPlayers.find(p => p.id === player.id);
+                                    const isFriend = localRecord ? localRecord.isFriend : false;
+                                    return (
+                                      <button
+                                        onClick={() => handleToggleFriend(player.id, player.name)}
+                                        title={isFriend ? "Remove Friend" : "Add Friend"}
+                                        className={`p-1.5 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center shrink-0 ml-1 ${
+                                          isFriend
+                                            ? (darkMode ? "bg-zinc-700/50 text-stone-300 hover:bg-zinc-600" : "bg-stone-200/50 text-stone-600 hover:bg-stone-300")
+                                            : (darkMode ? "bg-purple-900/30 text-purple-300 hover:bg-purple-900/50" : "bg-purple-50 text-purple-750 hover:bg-purple-100")
+                                        }`}
+                                      >
+                                        {isFriend ? (
+                                          <Minus className="w-3 h-3 stroke-[3]" />
+                                        ) : (
+                                          <Plus className="w-3 h-3 stroke-[3]" />
+                                        )}
+                                      </button>
+                                    );
+                                  })()
                                 )}
                               </div>
                             </div>
@@ -6830,7 +7027,7 @@ useEffect(() => {
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
                               <button
                                 onClick={() => {
                                   playClickSound();
@@ -6847,6 +7044,15 @@ useEffect(() => {
                                 }`}
                               >
                                 Duel
+                              </button>
+                              <button
+                                onClick={() => handleToggleFriend(friend.id)}
+                                title="Remove Friend"
+                                className={`p-1.5 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center shrink-0 ${
+                                  darkMode ? "bg-zinc-700/50 text-stone-300 hover:bg-zinc-600" : "bg-stone-200/50 text-stone-600 hover:bg-stone-300"
+                                }`}
+                              >
+                                <Minus className="w-3 h-3 stroke-[3]" />
                               </button>
                             </div>
                           </div>
@@ -8155,7 +8361,7 @@ useEffect(() => {
                               </div>
 
                               <div className="flex items-center gap-1.5 shrink-0">
-                                {player.isFriend ? (
+                               {player.isFriend ? (
                                   <>
                                     {isJoined ? (
                                       <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-[#a7f3d0] flex items-center gap-1">
@@ -8179,7 +8385,7 @@ useEffect(() => {
                                       </button>
                                     )}
                                     <button
-                                      onClick={() => { playClickSound(); setPlayerToUnfriend(player.id); }}
+                                      onClick={() => handleToggleFriend(player.id, player.name)}
                                       title="Unfriend"
                                       className={`p-1 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center ${
                                         darkMode 
@@ -8192,7 +8398,7 @@ useEffect(() => {
                                   </>
                                 ) : (
                                   <button
-                                    onClick={() => handleAddFriend(player.id)}
+                                    onClick={() => handleToggleFriend(player.id, player.name)}
                                     title="Add friend"
                                     className={`p-1 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center ${
                                       darkMode 
@@ -8423,7 +8629,7 @@ useEffect(() => {
                                     </button>
                                   )}
                                   <button
-                                    onClick={() => { playClickSound(); setPlayerToUnfriend(player.id); }}
+                                    onClick={() => handleToggleFriend(player.id, player.name)}
                                     title="Unfriend"
                                     className={`p-1 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center ${
                                       darkMode 
@@ -8436,7 +8642,7 @@ useEffect(() => {
                                 </>
                               ) : (
                                 <button
-                                  onClick={() => handleAddFriend(player.id)}
+                                  onClick={() => handleToggleFriend(player.id, player.name)}
                                   title="Add friend"
                                   className={`p-1 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center ${
                                     darkMode 
@@ -8663,17 +8869,42 @@ useEffect(() => {
                               </div>
                             </div>
 
-                            <div className="flex flex-col items-end justify-center">
-                              {isPending ? (
-                                <span className={`font-sans font-black text-xs sm:text-sm uppercase tracking-widest ${darkMode ? "text-amber-400/80" : "text-amber-600"} animate-pulse`}>
-                                  Result Pending
-                                </span>
-                              ) : player.failed ? (
-                                <span className="font-sans font-black text-xs sm:text-sm text-rose-500 uppercase tracking-widest">Fail</span>
-                              ) : (
-                                <span className={`font-mono font-medium text-sm ${player.isMe ? (darkMode ? "text-indigo-200" : "text-indigo-950") : (darkMode ? "text-zinc-300" : "text-stone-700")}`}>
-                                  {formatTimer(player.time)}
-                                </span>
+                            <div className="flex items-center gap-2">
+                              <div className="flex flex-col items-end justify-center">
+                                {isPending ? (
+                                  <span className={`font-sans font-black text-xs sm:text-sm uppercase tracking-widest ${darkMode ? "text-amber-400/80" : "text-amber-600"} animate-pulse`}>
+                                    Result Pending
+                                  </span>
+                                ) : player.failed ? (
+                                  <span className="font-sans font-black text-xs sm:text-sm text-rose-500 uppercase tracking-widest">Fail</span>
+                                ) : (
+                                  <span className={`font-mono font-medium text-sm ${player.isMe ? (darkMode ? "text-indigo-200" : "text-indigo-950") : (darkMode ? "text-zinc-300" : "text-stone-700")}`}>
+                                    {formatTimer(player.time)}
+                                  </span>
+                                )}
+                              </div>
+                              {!player.isMe && (
+                                (() => {
+                                  const localRecord = multiplayerPlayers.find(p => p.id === player.id);
+                                  const isFriend = localRecord ? localRecord.isFriend : false;
+                                  return (
+                                    <button
+                                      onClick={() => handleToggleFriend(player.id, player.name)}
+                                      title={isFriend ? "Remove Friend" : "Add Friend"}
+                                      className={`p-1.5 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center shrink-0 ml-1 ${
+                                        isFriend
+                                          ? (darkMode ? "bg-zinc-700/50 text-stone-300 hover:bg-zinc-600" : "bg-stone-200/50 text-stone-600 hover:bg-stone-300")
+                                          : (darkMode ? "bg-purple-900/30 text-purple-300 hover:bg-purple-900/50" : "bg-purple-50 text-purple-750 hover:bg-purple-100")
+                                      }`}
+                                    >
+                                      {isFriend ? (
+                                        <Minus className="w-3 h-3 stroke-[3]" />
+                                      ) : (
+                                        <Plus className="w-3 h-3 stroke-[3]" />
+                                      )}
+                                    </button>
+                                  );
+                                })()
                               )}
                             </div>
                           </div>
