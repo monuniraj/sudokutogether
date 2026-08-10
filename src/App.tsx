@@ -74,6 +74,10 @@ import { Capacitor } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
 import { Share } from '@capacitor/share';
 import { App as CapApp } from '@capacitor/app';
+import { PushNotifications } from "@capacitor/push-notifications";
+import { LocalNotifications } from "@capacitor/local-notifications";
+import { getToken } from "firebase/messaging";
+import { messaging } from "./firebase";
 
 let globalAudioCtx: AudioContext | null = null;
 const getAudioCtx = () => {
@@ -2073,10 +2077,14 @@ useEffect(() => {
             // Only process new invites sent after the app loaded (with a small safety buffer)
             if (inviteTime > sessionStartTime - 5000) {
               if (notificationsEnabled) {
-                // Play audio chime
-                playInviteChime();
-                // Set active invite to show the toast banner
-                setActiveInviteNotification(inviteData);
+                if (document.visibilityState === "hidden") {
+                  triggerBackgroundNotification(inviteData);
+                } else {
+                  // Play audio chime
+                  playInviteChime();
+                  // Set active invite to show the toast banner
+                  setActiveInviteNotification(inviteData);
+                }
               }
             }
           }
@@ -2242,6 +2250,192 @@ useEffect(() => {
       window.removeEventListener("popstate", handlePopState);
     };
   }, []);
+
+  const saveFcmToken = async (token: string) => {
+    try {
+      console.log(`[FCM] Storing token to user profile: ${token}`);
+      localStorage.setItem("sudoku_fcm_token", token);
+      if (userProfile?.id) {
+        const userRef = doc(db, "users", userProfile.id);
+        await setDoc(userRef, { fcmToken: token }, { merge: true });
+      }
+    } catch (e) {
+      console.error("[FCM] Failed to save FCM token:", e);
+    }
+  };
+
+  const registerPushNotifications = async () => {
+    if (!notificationsEnabled) return;
+    
+    try {
+      if (Capacitor.isNativePlatform()) {
+        console.log("[Push] Requesting native push permissions...");
+        let permStatus = await PushNotifications.checkPermissions();
+        
+        if (permStatus.receive === 'prompt') {
+          permStatus = await PushNotifications.requestPermissions();
+        }
+        
+        if (permStatus.receive === 'granted') {
+          console.log("[Push] Native push permission granted. Registering...");
+          await PushNotifications.register();
+          await LocalNotifications.requestPermissions();
+        } else {
+          console.warn("[Push] Native push permission denied.");
+        }
+      } else {
+        if (typeof window !== "undefined" && "Notification" in window) {
+          console.log("[Push] Requesting web push permissions...");
+          const permission = await Notification.requestPermission();
+          if (permission === "granted") {
+            console.log("[Push] Web push permission granted.");
+            if (messaging) {
+              try {
+                const registration = await navigator.serviceWorker.ready;
+                const token = await getToken(messaging, { 
+                  serviceWorkerRegistration: registration
+                });
+                if (token) {
+                  saveFcmToken(token);
+                }
+              } catch (err) {
+                console.error("[Push] Failed to get web push token:", err);
+              }
+            }
+          } else {
+            console.warn("[Push] Web push permission denied.");
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[Push] Error during registerPushNotifications:", err);
+    }
+  };
+
+  const triggerBackgroundNotification = async (inviteData: any) => {
+    const title = "Sudoku Challenge Invite";
+    const body = `${inviteData.fromName} invited you to play Sudoku!`;
+    const gameId = inviteData.gameId;
+    const password = inviteData.password || "";
+    const senderName = inviteData.fromName || "Player";
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              title,
+              body,
+              id: Math.floor(Math.random() * 100000),
+              extra: { gameId, password, senderName },
+              actionTypeId: "tap_invite"
+            }
+          ]
+        });
+        console.log("[Push] Scheduled native background local notification.");
+      } catch (err) {
+        console.error("[Push] Failed to schedule native local notification:", err);
+      }
+    } else {
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          registration.showNotification(title, {
+            body,
+            icon: '/logo.png',
+            data: { gameId, password, senderName }
+          });
+          console.log("[Push] Dispatched web background notification via SW.");
+        } catch (err) {
+          new Notification(title, { body });
+          console.log("[Push] Dispatched web background notification via default Notification class.");
+        }
+      }
+    }
+  };
+
+  // Set up push notification listeners
+  useEffect(() => {
+    let pushRegListener: any = null;
+    let pushErrListener: any = null;
+    let pushRecListener: any = null;
+    let pushActListener: any = null;
+    let localActListener: any = null;
+
+    const setupListeners = async () => {
+      if (Capacitor.isNativePlatform()) {
+        pushRegListener = await PushNotifications.addListener('registration', (token) => {
+          console.log("[Push] Native registration success. Token:", token.value);
+          saveFcmToken(token.value);
+        });
+
+        pushErrListener = await PushNotifications.addListener('registrationError', (err) => {
+          console.error("[Push] Native registration error:", err);
+        });
+
+        pushRecListener = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+          console.log("[Push] Native push received in foreground/background:", notification);
+          if (notificationsEnabled) {
+            playInviteChime();
+            const { gameId, password, senderName } = notification.data || {};
+            if (gameId) {
+              setActiveInviteNotification({
+                id: notification.id || Math.random().toString(),
+                fromName: senderName || "Player",
+                gameId,
+                password: password || ""
+              });
+            }
+          }
+        });
+
+        pushActListener = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+          console.log("[Push] Native push action performed:", action);
+          const { gameId, password, senderName } = action.notification.data || {};
+          if (gameId) {
+            handleLoadChallengeFromId(gameId, password, senderName);
+          }
+        });
+
+        localActListener = await LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+          console.log("[Push] Native local action performed:", action);
+          const { gameId, password, senderName } = action.notification.extra || {};
+          if (gameId) {
+            handleLoadChallengeFromId(gameId, password, senderName);
+          }
+        });
+      } else {
+        const handleServiceWorkerMessage = (event: MessageEvent) => {
+          if (event.data && event.data.type === 'navigate_invite') {
+            console.log("[Push] Web push action received from SW:", event.data);
+            const { gameId, password, senderName } = event.data;
+            handleLoadChallengeFromId(gameId, password, senderName);
+          }
+        };
+        navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+        return () => {
+          navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+        };
+      }
+    };
+
+    setupListeners();
+
+    return () => {
+      if (pushRegListener) pushRegListener.remove();
+      if (pushErrListener) pushErrListener.remove();
+      if (pushRecListener) pushRecListener.remove();
+      if (pushActListener) pushActListener.remove();
+      if (localActListener) localActListener.remove();
+    };
+  }, [notificationsEnabled]);
+
+  // Trigger push registration when setting is enabled
+  useEffect(() => {
+    if (notificationsEnabled) {
+      registerPushNotifications();
+    }
+  }, [notificationsEnabled]);
 
   // Click sound generator (tactile crisp feedback)
   const playClickSound = () => {

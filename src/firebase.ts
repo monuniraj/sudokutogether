@@ -1,7 +1,8 @@
-// Firebase app initialization — exports the Firestore `db` instance used across the app.
+// Firebase app initialization - exports the Firestore `db` instance used across the app.
 // Firebase web API keys are intentionally public-safe; security is enforced via Firestore Rules.
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getMessaging } from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB0Jdg1RBxsEUTyoWFnEdRm-XcjoA6gFDc",
@@ -17,3 +18,8 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 export const db = getFirestore(app);
+
+// Safe export for Firebase Messaging (checking for service worker support, i.e. browser environment)
+export const messaging = (typeof window !== "undefined" && "serviceWorker" in navigator)
+  ? getMessaging(app)
+  : null;
