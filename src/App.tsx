@@ -1637,7 +1637,10 @@ useEffect(() => {
     try {
       const saved = localStorage.getItem("sudoku_saved_games");
       if (saved !== null) {
-        return JSON.parse(saved).slice(0, 10);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.slice(0, 10);
+        }
       }
       return [];
     } catch {
@@ -1649,7 +1652,10 @@ useEffect(() => {
     try {
       const saved = localStorage.getItem("sudoku_completed_games");
       if (saved !== null) {
-        return JSON.parse(saved).slice(0, 10);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.slice(0, 10);
+        }
       }
       return [];
     } catch {
@@ -1662,7 +1668,9 @@ useEffect(() => {
       const saved = localStorage.getItem("sudoku_pending_challenges");
       if (saved !== null) {
         const parsed = JSON.parse(saved);
-        return parsed.sort((a: any, b: any) => (b.sentAt || 0) - (a.sentAt || 0)).slice(0, 10);
+        if (Array.isArray(parsed)) {
+          return parsed.sort((a: any, b: any) => (b.sentAt || 0) - (a.sentAt || 0)).slice(0, 10);
+        }
       }
       return [];
     } catch {
@@ -3000,9 +3008,7 @@ useEffect(() => {
     }
     const finalGameId = `SUDOKU-${targetSeed}-${challengeDifficulty}-M${challengeMistakeLimit}-H${challengeHintLimit}-T${challengeTimerEnabled ? 1 : 0}`;
     const isPrivate = challengeRoomAccess === "PRIVATE";
-    const currentProfileName = localStorage.getItem("sudoku_userProfile") 
-      ? JSON.parse(localStorage.getItem("sudoku_userProfile") || "").name 
-      : "Anonymous Voyager";
+    const currentProfileName = userProfile?.name || "Anonymous Voyager";
     
     const chalUrl = `${getChallengeBaseUrl()}?challenge=${finalGameId}${isPrivate && roomPassword ? `&pw=${encodePass(roomPassword)}` : ""}&sender=${encodeURIComponent(currentProfileName)}`;
     const pwMsg = isPrivate && roomPassword ? ` (Room Password: ${roomPassword})` : "";
@@ -3016,9 +3022,7 @@ useEffect(() => {
     const formattedTime = formatTimer(timeToShare);
     const targetSeed = boardState?.seed || Math.floor(Math.random() * 900000) + 100000;
     const finalGameId = activeGameId || `SUDOKU-${targetSeed}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-H${challengeHintLimit}-T${timerEnabled ? 1 : 0}`;
-    const currentProfileName = localStorage.getItem("sudoku_userProfile") 
-      ? JSON.parse(localStorage.getItem("sudoku_userProfile") || "").name 
-      : (userProfile?.name || "Player");
+    const currentProfileName = userProfile?.name || "Player";
 
     // Ensure the game result is submitted/synced to Firestore for this challenge ID
     const isWon = boardState ? (boardState.currentMistakesCount < boardState.maxMistakesLimit) : true;
@@ -3058,9 +3062,7 @@ useEffect(() => {
     const hintLimitVal = matchHint ? parseInt(matchHint[1], 10) : (historyChallengeGame.hintLimit ?? 3);
     const finalId = `SUDOKU-${targetSeed}-${historyChallengeGame.difficulty}-M${historyChallengeGame.maxMistakes || 3}-H${hintLimitVal}-T${1}`;
     
-    const currentProfileName = localStorage.getItem("sudoku_userProfile") 
-      ? JSON.parse(localStorage.getItem("sudoku_userProfile") || "").name 
-      : (userProfile?.name || "Player");
+    const currentProfileName = userProfile?.name || "Player";
 
     // Ensure the game result is submitted/synced to Firestore for this challenge ID
     const rBody = {
@@ -3095,9 +3097,7 @@ useEffect(() => {
 
   const shareChallengeLink = async (gameId: string, customText?: string) => {
     const isPrivate = challengeRoomAccess === "PRIVATE";
-    const currentProfileName = localStorage.getItem("sudoku_userProfile") 
-      ? JSON.parse(localStorage.getItem("sudoku_userProfile") || "").name 
-      : "Anonymous Voyager";
+    const currentProfileName = userProfile?.name || "Anonymous Voyager";
     
     // Extract seed from gameId (e.g. SUDOKU-123456-EASY-M3-T1 -> 123456)
     const seedMatch = gameId.match(/SUDOKU-(\d+)/i);
@@ -3115,9 +3115,7 @@ useEffect(() => {
     if (!finalCard) return;
     
     const baseId = finalCard.id.split("-P")[0];
-    const currentProfileName = localStorage.getItem("sudoku_userProfile") 
-      ? JSON.parse(localStorage.getItem("sudoku_userProfile") || "").name 
-      : (userProfile?.name || "Player");
+    const currentProfileName = userProfile?.name || "Player";
 
     const chalUrl = `${getChallengeBaseUrl()}?challenge=${baseId}${finalCard.password ? `&pw=${encodePass(finalCard.password)}` : ""}&sender=${encodeURIComponent(currentProfileName)}`;
     
