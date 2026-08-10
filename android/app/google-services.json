@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "116330285995",
+    "project_id": "sudoku-together-mode",
+    "storage_bucket": "sudoku-together-mode.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:116330285995:android:90951b95c8394f583ce0ee",
+        "android_client_info": {
+          "package_name": "com.sudokutogether.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGgeqic_i26sOnmNhwtJ33NccZwuoMkhk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
