@@ -114,6 +114,7 @@ interface BoardState {
   currentMistakesCount: number;
   maxMistakesLimit: number; // 3
   hintsCount: number;
+  maxHintsLimit?: number;
   isGameOver: boolean;
   difficulty?: Difficulty;
   seed: number;
@@ -141,6 +142,7 @@ interface PendingChallenge {
   difficulty: Difficulty;
   seed: number;
   maxMistakes: number;
+  hintLimit?: number;
   timerEnabled: boolean;
   receivedAt: string;
   isNew: boolean;
@@ -1472,6 +1474,7 @@ useEffect(() => {
   const [challengeSeed, setChallengeSeed] = useState<number | null>(null);
   const [challengeMistakeLimit, setChallengeMistakeLimit] = useState<number>(3);
   const [challengeTimerEnabled, setChallengeTimerEnabled] = useState<boolean>(true);
+  const [challengeHintLimit, setChallengeHintLimit] = useState<number>(3);
   const [challengeDifficulty, setChallengeDifficulty] = useState<Difficulty>("EASY");
   const [challengeRoomAccess, setChallengeRoomAccess] = useState<"OPEN" | "PRIVATE">("OPEN");
   
@@ -1541,6 +1544,7 @@ useEffect(() => {
     seed: number;
     difficulty: Difficulty;
     maxMistakes: number;
+    hintLimit?: number;
     timerEnabled: boolean;
     password?: string;
     senderName?: string;
@@ -2862,15 +2866,16 @@ useEffect(() => {
   };
 
   const triggerLoadInviteDirectly = (id: string, queryPw?: string, resolvedSenderName?: string) => {
-    // Format: SUDOKU-[seed]-[difficulty]-M[maxMistakes]-T[timer_code] or optionally -P[password]
-    const regex = /^SUDOKU-(\d+)-([A-Z]+)-M(\d+)-T([01])(?:-P([a-zA-Z0-9]+))?$/i;
+    // Format: SUDOKU-[seed]-[difficulty]-M[maxMistakes]-H[hintLimit]-T[timer_code] or optionally -P[password]
+    const regex = /^SUDOKU-(\d+)-([A-Z]+)-M(\d+)(?:-H(\d+))?-T([01])(?:-P([a-zA-Z0-9]+))?$/i;
     const match = id.match(regex);
     if (match) {
       const seed = parseInt(match[1], 10);
       const diff = match[2].toUpperCase() as Difficulty;
       const mistakes = parseInt(match[3], 10);
-      const timerOn = match[4] === "1";
-      const rawPassword = match[5] || queryPw || "";
+      const hintLimit = match[4] !== undefined ? parseInt(match[4], 10) : 3;
+      const timerOn = match[5] === "1";
+      const rawPassword = match[6] || queryPw || "";
       const matchedPassword = decodePass(rawPassword);
       
       setEnteredInvitePassword("");
@@ -2881,6 +2886,7 @@ useEffect(() => {
         seed,
         difficulty: diff,
         maxMistakes: mistakes,
+        hintLimit: hintLimit,
         timerEnabled: timerOn,
         password: matchedPassword,
         senderName: resolvedSenderName
@@ -2896,6 +2902,7 @@ useEffect(() => {
           difficulty: diff,
           seed: seed,
           maxMistakes: mistakes,
+          hintLimit: hintLimit,
           timerEnabled: timerOn,
           receivedAt: new Date().toISOString(),
           sentAt: Date.now(),
@@ -2991,7 +2998,7 @@ useEffect(() => {
     if (!challengeSeed) {
       setChallengeSeed(targetSeed);
     }
-    const finalGameId = `SUDOKU-${targetSeed}-${challengeDifficulty}-M${challengeMistakeLimit}-T${challengeTimerEnabled ? 1 : 0}`;
+    const finalGameId = `SUDOKU-${targetSeed}-${challengeDifficulty}-M${challengeMistakeLimit}-H${challengeHintLimit}-T${challengeTimerEnabled ? 1 : 0}`;
     const isPrivate = challengeRoomAccess === "PRIVATE";
     const currentProfileName = localStorage.getItem("sudoku_userProfile") 
       ? JSON.parse(localStorage.getItem("sudoku_userProfile") || "").name 
@@ -3008,7 +3015,7 @@ useEffect(() => {
     const timeToShare = (bestTime && bestTime > 0) ? bestTime : sessionSeconds;
     const formattedTime = formatTimer(timeToShare);
     const targetSeed = boardState?.seed || Math.floor(Math.random() * 900000) + 100000;
-    const finalGameId = activeGameId || `SUDOKU-${targetSeed}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-T${timerEnabled ? 1 : 0}`;
+    const finalGameId = activeGameId || `SUDOKU-${targetSeed}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-H${challengeHintLimit}-T${timerEnabled ? 1 : 0}`;
     const currentProfileName = localStorage.getItem("sudoku_userProfile") 
       ? JSON.parse(localStorage.getItem("sudoku_userProfile") || "").name 
       : (userProfile?.name || "Player");
@@ -3047,7 +3054,9 @@ useEffect(() => {
   const executeHistoryShareAction = async () => {
     if (!historyChallengeGame) return;
     const targetSeed = historyChallengeGame.seed || (Math.floor(Math.random() * 900000) + 100000);
-    const finalId = `SUDOKU-${targetSeed}-${historyChallengeGame.difficulty}-M${historyChallengeGame.maxMistakes || 3}-T${1}`;
+    const matchHint = historyChallengeGame.id.match(/-H(\d+)/i);
+    const hintLimitVal = matchHint ? parseInt(matchHint[1], 10) : (historyChallengeGame.hintLimit ?? 3);
+    const finalId = `SUDOKU-${targetSeed}-${historyChallengeGame.difficulty}-M${historyChallengeGame.maxMistakes || 3}-H${hintLimitVal}-T${1}`;
     
     const currentProfileName = localStorage.getItem("sudoku_userProfile") 
       ? JSON.parse(localStorage.getItem("sudoku_userProfile") || "").name 
@@ -3125,7 +3134,7 @@ useEffect(() => {
     if (!challengeSeed) {
       setChallengeSeed(targetSeed);
     }
-    generateAndSetNewPuzzle(challengeDifficulty, targetSeed, challengeMistakeLimit, challengeTimerEnabled);
+    generateAndSetNewPuzzle(challengeDifficulty, targetSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit);
     setDifficulty(challengeDifficulty);
     setMistakeLimitEnabled(true);
     setTimerEnabled(challengeTimerEnabled);
@@ -3156,7 +3165,7 @@ useEffect(() => {
 
     // Determine target game ID
     const targetSeed = challengeSeed || (Math.floor(Math.random() * 900000) + 100000);
-    const finalGameId = rematchGameId || activeGameId || `SUDOKU-${targetSeed}-${challengeDifficulty}-M${challengeMistakeLimit}-T${challengeTimerEnabled ? 1 : 0}`;
+    const finalGameId = rematchGameId || activeGameId || `SUDOKU-${targetSeed}-${challengeDifficulty}-M${challengeMistakeLimit}-H${challengeHintLimit}-T${challengeTimerEnabled ? 1 : 0}`;
     const password = challengeRoomAccess === "PRIVATE" ? roomPassword : "";
 
     // Write to Firestore invites collection!
@@ -3205,7 +3214,7 @@ useEffect(() => {
   // Save played games (won or lost/terminated) into history list
   const saveGameToHistory = (isWon: boolean, mistakesOverride?: number) => {
     const gameSeed = boardState?.seed || challengeSeed || (Math.floor(Math.random() * 900000) + 100000);
-    const finalGameId = activeGameId || `SUDOKU-${gameSeed}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-T${timerEnabled ? 1 : 0}`;
+    const finalGameId = activeGameId || `SUDOKU-${gameSeed}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-H${challengeHintLimit}-T${timerEnabled ? 1 : 0}`;
     
     const finalMistakes = mistakesOverride !== undefined 
       ? mistakesOverride 
@@ -3267,14 +3276,18 @@ useEffect(() => {
 
   const handleReplayGame = (game: CompletedGame) => {
     playClickSound();
-    const match = game.id.match(/^SUDOKU-(\d+)-([A-Z]+)-M(\d+)-T([01])(?:-P[a-zA-Z0-9]+)?$/i);
+    const match = game.id.match(/^SUDOKU-(\d+)-([A-Z]+)-M(\d+)(?:-H(\d+))?-T([01])(?:-P[a-zA-Z0-9]+)?$/i);
     let seedVal = game.seed;
     let maxMistakesVal = game.maxMistakes;
     let timerOnVal = game.isChallenge ? true : timerEnabled;
+    let hintLimitVal = 3;
     if (match) {
       seedVal = parseInt(match[1], 10);
       maxMistakesVal = parseInt(match[3], 10);
-      timerOnVal = match[4] === "1";
+      if (match[4] !== undefined) {
+        hintLimitVal = parseInt(match[4], 10);
+      }
+      timerOnVal = match[5] === "1";
     }
     
     // Default fallback if seed doesn't exist
@@ -3286,7 +3299,8 @@ useEffect(() => {
       game.difficulty,
       seedVal,
       maxMistakesVal,
-      timerOnVal
+      timerOnVal,
+      hintLimitVal
     );
     
     setDifficulty(game.difficulty);
@@ -3295,6 +3309,7 @@ useEffect(() => {
     setChallengeMode(game.isChallenge);
     setChallengeSeed(seedVal);
     setChallengeMistakeLimit(maxMistakesVal);
+    setChallengeHintLimit(hintLimitVal);
     setChallengeTimerEnabled(timerOnVal);
     setIsTimerPaused(false);
     navigateToScreen("game");
@@ -3927,7 +3942,8 @@ useEffect(() => {
     level: Difficulty,
     seedOverride?: number,
     maxMistakesOverride?: number,
-    timerEnabledOverride?: boolean
+    timerEnabledOverride?: boolean,
+    hintLimitOverride?: number
   ) => {
     setVisualizingBacktrack(false);
     setGeneratorLogs([]);
@@ -3940,7 +3956,8 @@ useEffect(() => {
     // Build or set active Game ID
     const customLimit = maxMistakesOverride ?? (mistakeLimitEnabled ? 3 : 999);
     const customTimer = timerEnabledOverride ?? timerEnabled;
-    const gameId = `SUDOKU-${seed}-${level}-M${customLimit}-T${customTimer ? 1 : 0}`;
+    const customHintLimit = hintLimitOverride ?? challengeHintLimit;
+    const gameId = `SUDOKU-${seed}-${level}-M${customLimit}-H${customHintLimit}-T${customTimer ? 1 : 0}`;
     
     // Set active game details for displays
     setActiveGameId(gameId);
@@ -4014,6 +4031,7 @@ useEffect(() => {
       currentMistakesCount: 0,
       maxMistakesLimit: customLimit,
       hintsCount: 0,
+      maxHintsLimit: customHintLimit,
       isGameOver: false,
       difficulty: level,
       seed: seed
@@ -4031,6 +4049,7 @@ useEffect(() => {
       setChallengeSeed(seed);
       setChallengeMistakeLimit(customLimit);
       setChallengeTimerEnabled(customTimer);
+      setChallengeHintLimit(customHintLimit);
       setMistakeLimitEnabled(customLimit < 999);
       setTimerEnabled(customTimer);
     } else {
@@ -4282,6 +4301,9 @@ useEffect(() => {
       return;
     }
 
+    const isChallengeGame = boardState.maxHintsLimit !== undefined;
+    const hintsLeft = isChallengeGame ? (boardState.maxHintsLimit - boardState.hintsCount) : hintInventory;
+
     if (cell.value !== 0) {
       if (cell.value === solvedNum) {
         addLog("💡 Right! This is the correct number.");
@@ -4296,14 +4318,22 @@ useEffect(() => {
         addLog(`💡 ${msg}`);
         showToast(msg);
         
-        if (hintInventory <= 0) {
-          setRewardType("hint_reward");
+        if (hintsLeft <= 0) {
+          if (isChallengeGame) {
+            showToast("⚠️ You have reached the hint limit for this challenge!");
+          } else {
+            setRewardType("hint_reward");
+          }
           return;
         }
       }
     } else {
-      if (hintInventory <= 0) {
-        setRewardType("hint_reward");
+      if (hintsLeft <= 0) {
+        if (isChallengeGame) {
+          showToast("⚠️ You have reached the hint limit for this challenge!");
+        } else {
+          setRewardType("hint_reward");
+        }
         return;
       }
     }
@@ -4343,7 +4373,9 @@ useEffect(() => {
       hintsCount: prev.hintsCount + 1
     } : null);
 
-    setHintInventory(prev => prev - 1);
+    if (!isChallengeGame) {
+      setHintInventory(prev => prev - 1);
+    }
 
     addLog(`💡 Smart hint injected for Cell (Row ${selectedRow + 1}, Col ${selectedCol + 1}) → ${solvedNum}`);
     setHintExplanation({ num: solvedNum, row: selectedRow, col: selectedCol });
@@ -5515,7 +5547,7 @@ useEffect(() => {
                         <div className="relative pointer-events-none flex items-center justify-center">
                           <Lightbulb className={`w-[16px] h-[16px] xl:w-[18px] xl:h-[18px] ${darkMode ? "text-[#34D399]" : "text-[#135236]"}`} />
                           <span className={`absolute -top-1.5 -right-2 text-[7px] font-mono font-black rounded-full h-3.5 w-3.5 border flex items-center justify-center shadow-sm ${darkMode ? "bg-[#FBCFE8] text-[#831843] border-[#FBCFE8]" : "bg-[#FCE7F3] text-[#9D174D] border-white"}`}>
-                            {hintInventory}
+                            {boardState && boardState.maxHintsLimit !== undefined ? Math.max(0, boardState.maxHintsLimit - boardState.hintsCount) : hintInventory}
                           </span>
                         </div>
                         <span className="text-[9px] xl:text-[10px] font-sans font-extrabold tracking-wider uppercase leading-none mt-1">
@@ -5789,6 +5821,67 @@ useEffect(() => {
                       })()}
                     </div>
 
+                    {/* INTERACTIVE MATCH RULES CONFIG FOR REMATCH */}
+                    <div className={`p-4 rounded-2xl flex flex-col gap-3 select-none ${
+                      darkMode ? "bg-zinc-800/30 text-stone-300 border border-zinc-800/50" : "bg-stone-100/50 text-stone-850 border border-stone-200/50"
+                    }`}>
+                      <span className="font-sans font-bold uppercase tracking-wider text-[9px] opacity-75">
+                        Rematch Settings Config:
+                      </span>
+                      
+                      {/* Mistake Limit Selector */}
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex justify-between items-center text-[10px] font-bold">
+                          <span>Mistake Limit:</span>
+                          <span className="font-mono">{challengeMistakeLimit === 999 ? "No Limit" : `${challengeMistakeLimit} Mistakes`}</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          {[3, 5, 999].map(m => {
+                            const isSelected = challengeMistakeLimit === m;
+                            return (
+                              <button
+                                key={m}
+                                onClick={() => { playClickSound(); setChallengeMistakeLimit(m); }}
+                                className={`flex-1 py-1.5 font-mono text-[9px] rounded-lg transition-all duration-150 cursor-pointer active:scale-95 border-none ${
+                                  isSelected
+                                    ? "bg-[#0284c7] text-white font-bold"
+                                    : (darkMode ? "bg-[#0284c7]/20 text-sky-200 hover:bg-[#0284c7]/45" : "bg-sky-100/70 text-sky-700 hover:bg-sky-100")
+                                }`}
+                              >
+                                {m === 999 ? "No Limit" : `${m} Errors`}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Hint Limit Selector */}
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex justify-between items-center text-[10px] font-bold">
+                          <span>Hint Limit:</span>
+                          <span className="font-mono">{challengeHintLimit === 0 ? "No Hints" : `${challengeHintLimit} Hints`}</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          {[3, 1, 0].map(h => {
+                            const isSelected = challengeHintLimit === h;
+                            return (
+                              <button
+                                key={h}
+                                onClick={() => { playClickSound(); setChallengeHintLimit(h); }}
+                                className={`flex-1 py-1.5 font-mono text-[9px] rounded-lg transition-all duration-150 cursor-pointer active:scale-95 border-none ${
+                                  isSelected
+                                    ? "bg-emerald-600 text-white font-bold"
+                                    : (darkMode ? "bg-emerald-900/35 text-emerald-300 hover:bg-emerald-900/55" : "bg-emerald-100/70 text-emerald-750 hover:bg-emerald-100")
+                                }`}
+                              >
+                                {h === 0 ? "No Hints" : `${h} Hints`}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Action buttons row */}
                     <div className="flex gap-2.5 w-full pt-4 border-t border-stone-200/50 dark:border-zinc-800/50 mt-2 shrink-0">
                       {/* Button 1: Back Arrow */}
@@ -5820,11 +5913,11 @@ useEffect(() => {
                           setRematchParticipants(othersList);
                           setRematchInvitedPlayers(new Set());
                           
-                          const nextGameId = `SUDOKU-${boardState?.seed}-${challengeDifficulty}-M${challengeMistakeLimit}-T${challengeTimerEnabled ? 1 : 0}`;
+                          const nextGameId = `SUDOKU-${boardState?.seed}-${challengeDifficulty}-M${challengeMistakeLimit}-H${challengeHintLimit}-T${challengeTimerEnabled ? 1 : 0}`;
                           setRematchGameId(nextGameId);
                           
                           // Replay the EXACT SAME board seed!
-                          generateAndSetNewPuzzle(challengeDifficulty, boardState?.seed, challengeMistakeLimit, challengeTimerEnabled);
+                          generateAndSetNewPuzzle(challengeDifficulty, boardState?.seed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit);
                           setIsTimerPaused(false);
                           setShowRematchInviteModal(true);
                         }}
@@ -5859,11 +5952,11 @@ useEffect(() => {
 
                           // Start fresh local synced leaderboard
                           setSyncedLeaderboard([]);
-                          const nextGameId = `SUDOKU-${newSeed}-${challengeDifficulty}-M${challengeMistakeLimit}-T${challengeTimerEnabled ? 1 : 0}`;
+                          const nextGameId = `SUDOKU-${newSeed}-${challengeDifficulty}-M${challengeMistakeLimit}-H${challengeHintLimit}-T${challengeTimerEnabled ? 1 : 0}`;
                           setRematchGameId(nextGameId);
 
                           // Trigger brand new unique puzzle generation inside challenge mode
-                          generateAndSetNewPuzzle(challengeDifficulty, newSeed, challengeMistakeLimit, challengeTimerEnabled);
+                          generateAndSetNewPuzzle(challengeDifficulty, newSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit);
                           setIsTimerPaused(false);
 
                           // Open the rematch invite / participant lobby modal so they can re-invite with one click!
@@ -6857,11 +6950,14 @@ useEffect(() => {
                                     handleLoadChallengeFromId(challenge.id, challenge.password);
                                   } else {
                                     const launch = () => {
+                                      const matchHint = challenge.id.match(/-H(\d+)/i);
+                                      const hintLimitVal = matchHint ? parseInt(matchHint[1], 10) : (challenge.hintLimit ?? 3);
                                       generateAndSetNewPuzzle(
                                         challenge.difficulty,
                                         challenge.seed,
                                         challenge.maxMistakes,
-                                        challenge.timerEnabled
+                                        challenge.timerEnabled,
+                                        hintLimitVal
                                       );
                                       
                                       setDifficulty(challenge.difficulty);
@@ -6870,6 +6966,7 @@ useEffect(() => {
                                       setChallengeMode(true);
                                       setChallengeSeed(challenge.seed);
                                       setChallengeMistakeLimit(challenge.maxMistakes);
+                                      setChallengeHintLimit(hintLimitVal);
                                       setChallengeTimerEnabled(challenge.timerEnabled);
                                       
                                       setIsTimerPaused(false);
@@ -7402,10 +7499,16 @@ useEffect(() => {
                                     const launch = () => {
                                       setChallengeSeed(challenge.seed);
                                       setChallengeDifficulty(challenge.difficulty);
-                                      setChallengeMistakeLimit(challenge.mistakeLimit);
+                                      const maxMistakesVal = challenge.mistakeLimit ?? challenge.maxMistakes ?? 3;
+                                      setChallengeMistakeLimit(maxMistakesVal);
                                       setChallengeTimerEnabled(challenge.timerEnabled);
                                       setChallengeMode(true);
-                                      generateAndSetNewPuzzle(challenge.difficulty, challenge.seed, challenge.mistakeLimit, challenge.timerEnabled);
+                                      
+                                      const matchHint = challenge.id.match(/-H(\d+)/i);
+                                      const hintLimitVal = matchHint ? parseInt(matchHint[1], 10) : (challenge.hintLimit ?? 3);
+                                      setChallengeHintLimit(hintLimitVal);
+                                      
+                                      generateAndSetNewPuzzle(challenge.difficulty, challenge.seed, maxMistakesVal, challenge.timerEnabled, hintLimitVal);
                                       setSessionSeconds(0);
                                       setIsTimerPaused(false);
                                       navigateToScreen("game");
@@ -8207,6 +8310,39 @@ useEffect(() => {
                         );
                       })}
                     </div>
+                  </div>
+                </div>
+
+                {/* HINT LIMIT CONFIGURATION CARD */}
+                <div className={`p-4 rounded-2xl flex flex-col gap-3 select-none ${
+                  darkMode ? "bg-emerald-950/20 text-[#a7f3d0]" : "bg-emerald-50 text-emerald-800"
+                }`}>
+                  <div className="flex justify-between items-center">
+                    <span className="font-sans font-bold uppercase tracking-wider text-[10px]">
+                      Hints Limit:
+                    </span>
+                    <span className="font-mono font-black text-sm">
+                      {challengeHintLimit === 0 ? "No Hints" : challengeHintLimit === 1 ? "1 Hint Max" : `${challengeHintLimit} Hints Max`}
+                    </span>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    {[{ label: "3 Hints", value: 3 }, { label: "1 Hint", value: 1 }, { label: "No Hints", value: 0 }].map(opt => {
+                      const isSelected = challengeHintLimit === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => { playClickSound(); setChallengeHintLimit(opt.value); }}
+                          className={`flex-1 py-2 font-sans text-[10px] rounded-lg font-bold transition-all duration-150 cursor-pointer active:scale-95 border-none ${
+                            isSelected
+                              ? "bg-emerald-600 text-white"
+                              : (darkMode ? "bg-emerald-900/35 text-emerald-300 hover:bg-emerald-900/55" : "bg-emerald-100/70 text-emerald-700 hover:bg-emerald-100")
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -9281,7 +9417,8 @@ useEffect(() => {
                         incomingChallengeDetails.difficulty,
                         incomingChallengeDetails.seed,
                         incomingChallengeDetails.maxMistakes,
-                        incomingChallengeDetails.timerEnabled
+                        incomingChallengeDetails.timerEnabled,
+                        incomingChallengeDetails.hintLimit
                       );
                       
                       setDifficulty(incomingChallengeDetails.difficulty);
@@ -9290,6 +9427,7 @@ useEffect(() => {
                       setChallengeMode(true);
                       setChallengeSeed(incomingChallengeDetails.seed);
                       setChallengeMistakeLimit(incomingChallengeDetails.maxMistakes);
+                      setChallengeHintLimit(incomingChallengeDetails.hintLimit ?? 3);
                       setChallengeTimerEnabled(incomingChallengeDetails.timerEnabled);
 
                       // Set storage timestamp so the host tab can recognize the acceptance and transition state to Joined
