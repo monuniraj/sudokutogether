@@ -5831,12 +5831,12 @@ useEffect(() => {
 
               {/* 1. MULTIPLAYER LEADERBOARD MODAL (when challengeMode is true) */}
               {boardState && showGameOverModal && challengeMode && (
-                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex flex-col items-center justify-center p-4 sm:p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.95, y: 15 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                    className={`p-6 md:p-8 max-w-md w-full relative flex flex-col gap-5 rounded-[28px] shadow-[0_24px_50px_rgba(0,0,0,0.2)] ${darkMode ? "bg-zinc-900 border border-zinc-700/50" : "bg-[#FDFBF7] border border-stone-200"}`}
+                    className={`p-4 sm:p-6 md:p-8 w-[92%] sm:w-full max-w-lg max-h-[85vh] sm:max-h-[80vh] my-auto mx-auto relative flex flex-col gap-4 rounded-[28px] shadow-[0_24px_50px_rgba(0,0,0,0.2)] ${darkMode ? "bg-zinc-900 border border-zinc-700/50" : "bg-[#FDFBF7] border border-stone-200"}`}
                   >
                     {/* Top-right X dismiss button */}
                     <button
@@ -5844,13 +5844,13 @@ useEffect(() => {
                         playClickSound();
                         setShowGameOverModal(false);
                       }}
-                      className={`absolute top-4 right-4 p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-90 z-10 ${darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"}`}
+                      className={`absolute top-4 right-4 p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 z-10 ${darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"}`}
                       title="Close"
                     >
                       <X className="w-4 h-4" strokeWidth={2.5} />
                     </button>
                     
-                    <div className="flex flex-col items-center gap-1.5 text-center">
+                    <div className="flex flex-col items-center gap-1.5 text-center shrink-0">
                       <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${darkMode ? "bg-purple-900/40 text-purple-300" : "bg-[#F3E8FF] text-[#6B21A8]"}`}>
                         {difficulty} • Match Results
                       </span>
@@ -5859,299 +5859,302 @@ useEffect(() => {
                       </h3>
                     </div>
 
-                    <div className={`w-full h-px ${darkMode ? "bg-zinc-800" : "bg-stone-200"}`} />
+                    <div className={`w-full h-px shrink-0 ${darkMode ? "bg-zinc-800" : "bg-stone-200"}`} />
 
-                    {/* SCROLLABLE LEADERBOARD LIST */}
-                    <div className="flex flex-col gap-2.5 max-h-[40vh] sm:max-h-[50vh] overflow-y-auto no-scrollbar pb-2 px-1">
-                      {(() => {
-                        const didCurrentPlayerFail = mistakeLimitEnabled && 
-                          (boardState.maxMistakesLimit === 0 
-                            ? boardState.currentMistakesCount > 0 
-                            : boardState.currentMistakesCount >= boardState.maxMistakesLimit);
-                        
-                        // Map of players keyed by their unique user ID to avoid duplications after background sync completes
-                        const resultsMap = new Map<string, any>();
+                    {/* SCROLLABLE INNER CONTENT SECTION */}
+                    <div className="flex-1 overflow-y-auto pr-0.5 no-scrollbar flex flex-col gap-4">
+                      {/* Leaderboard list wrapper */}
+                      <div className="flex flex-col gap-2.5">
+                        {(() => {
+                          const didCurrentPlayerFail = mistakeLimitEnabled && 
+                            (boardState.maxMistakesLimit === 0 
+                              ? boardState.currentMistakesCount > 0 
+                              : boardState.currentMistakesCount >= boardState.maxMistakesLimit);
+                          
+                          // Map of players keyed by their unique user ID to avoid duplications after background sync completes
+                          const resultsMap = new Map<string, any>();
  
-                        // 1. Seed our local player results
-                        const isConfigured = checkIsDisplayNameConfigured();
-                        const localMe = {
-                          id: userProfile?.id || 'me',
-                          name: isConfigured && userProfile?.name ? userProfile.name : "You",
-                          time: didCurrentPlayerFail ? 9999 : sessionSeconds,
-                          mistakes: boardState.currentMistakesCount,
-                          failed: didCurrentPlayerFail,
-                          isMe: true,
-                          isReal: true,
-                          isPending: false
-                        };
-                        resultsMap.set(localMe.id, localMe);
- 
-                        // 2. Overlay real synced results downloaded from our backend server
-                        syncedLeaderboard.forEach(r => {
-                          const isCurrentUser = r.userId === userProfile?.id;
-                          resultsMap.set(r.userId, {
-                            id: r.userId,
-                            name: r.playerName,
-                            time: !r.isWon ? 9999 : Number(r.timeSec),
-                            mistakes: Number(r.mistakes),
-                            failed: !r.isWon,
-                            isMe: isCurrentUser,
+                          // 1. Seed our local player results
+                          const isConfigured = checkIsDisplayNameConfigured();
+                          const localMe = {
+                            id: userProfile?.id || 'me',
+                            name: isConfigured && userProfile?.name ? userProfile.name : "You",
+                            time: didCurrentPlayerFail ? 9999 : sessionSeconds,
+                            mistakes: boardState.currentMistakesCount,
+                            failed: didCurrentPlayerFail,
+                            isMe: true,
                             isReal: true,
-                            isPending: !isCurrentUser ? !!r.isPending : false
+                            isPending: false
+                          };
+                          resultsMap.set(localMe.id, localMe);
+ 
+                          // 2. Overlay real synced results downloaded from our backend server
+                          syncedLeaderboard.forEach(r => {
+                            const isCurrentUser = r.userId === userProfile?.id;
+                            resultsMap.set(r.userId, {
+                              id: r.userId,
+                              name: r.playerName,
+                              time: !r.isWon ? 9999 : Number(r.timeSec),
+                              mistakes: Number(r.mistakes),
+                              failed: !r.isWon,
+                              isMe: isCurrentUser,
+                              isReal: true,
+                              isPending: !isCurrentUser ? !!r.isPending : false
+                            });
                           });
-                        });
  
-                        const results = Array.from(resultsMap.values());
+                          const results = Array.from(resultsMap.values());
  
-                        // Sort results: Completed (wins) first, then completed (failed), then pending
-                        results.sort((a, b) => {
-                          const aPending = !!a.isPending;
-                          const bPending = !!b.isPending;
-                          
-                          if (aPending !== bPending) {
-                            return aPending ? 1 : -1; // completed first, pending last
-                          }
-                          
-                          if (a.failed !== b.failed) {
-                            return a.failed ? 1 : -1; // completed wins first, completed failures next
-                          }
-                          if (a.time !== b.time) return a.time - b.time;
-                          return a.mistakes - b.mistakes;
-                        });
+                          // Sort results: Completed (wins) first, then completed (failed), then pending
+                          results.sort((a, b) => {
+                            const aPending = !!a.isPending;
+                            const bPending = !!b.isPending;
+                            
+                            if (aPending !== bPending) {
+                              return aPending ? 1 : -1; // completed first, pending last
+                            }
+                            
+                            if (a.failed !== b.failed) {
+                              return a.failed ? 1 : -1; // completed wins first, completed failures next
+                            }
+                            if (a.time !== b.time) return a.time - b.time;
+                            return a.mistakes - b.mistakes;
+                          });
  
-                        return results.map((player, idx) => {
-                          const isPending = !!player.isPending;
-                          const medal = isPending ? "⏳" : idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "";
-                          const positionStr = isPending ? "" : idx === 0 ? "1st" : idx === 1 ? "2nd" : idx === 2 ? "3rd" : `${idx + 1}th`;
-                          
-                          return (
-                            <div 
-                              key={player.id}
-                              className={`flex items-center justify-between p-3 sm:p-4 rounded-2xl transition-all ${
-                                player.isMe 
-                                  ? (darkMode ? "bg-[#1e1b4b]/60 border border-indigo-900/50 shadow-md" : "bg-[#EEF2FF] border border-[#C7D2FE] shadow-[0_4px_12px_rgba(99,102,241,0.05)]") 
-                                  : (darkMode ? "bg-zinc-800/40" : "bg-stone-50")
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className={`font-mono text-sm sm:text-base font-black w-8 text-center ${
-                                  isPending ? "text-amber-500 animate-pulse" : idx === 0 ? "text-yellow-500" : idx === 1 ? "text-slate-400" : idx === 2 ? "text-amber-700" : darkMode ? "text-zinc-600" : "text-stone-400"
-                                }`}>
-                                  {medal || positionStr}
-                                </span>
-                                <div className="flex flex-col">
-                                  <span className={`font-sans font-bold text-sm sm:text-base leading-none flex items-center gap-1.5 ${player.isMe ? (darkMode ? "text-indigo-300" : "text-indigo-950") : (darkMode ? "text-zinc-200" : "text-stone-850")}`}>
-                                    {player.name}
-                                    {player.isMe && <span className="text-[10px] bg-indigo-500/20 text-indigo-500 px-1.5 py-0.5 rounded uppercase tracking-wider font-black">You</span>}
-                                    {player.isReal && !player.isMe && !isPending && (
-                                      <span className="text-[9px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">Synced ✓</span>
-                                    )}
-                                    {isPending && (
-                                      <span className="text-[9px] bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded uppercase tracking-wider font-bold animate-pulse">Playing</span>
-                                    )}
-                                  </span>
-                                  <span className={`font-sans text-[10px] mt-1.5 uppercase font-bold tracking-wider ${darkMode ? "text-zinc-500" : "text-stone-500"}`}>
-                                    {isPending ? "Solving Puzzle..." : player.failed ? `Hit Limits` : `${player.mistakes} Mistakes`}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="flex flex-col items-end justify-center">
-                                  {isPending ? (
-                                    <span className={`font-sans font-black text-xs sm:text-sm uppercase tracking-widest ${darkMode ? "text-amber-400/80" : "text-amber-600"} animate-pulse`}>
-                                      Result Pending
-                                    </span>
-                                  ) : player.failed ? (
-                                    <span className="font-sans font-black text-xs sm:text-sm text-red-500 uppercase tracking-widest">Fail</span>
-                                  ) : (
-                                    <span className={`font-mono font-medium text-sm sm:text-base ${player.isMe ? (darkMode ? "text-indigo-200" : "text-indigo-950") : (darkMode ? "text-zinc-300" : "text-stone-700")}`}>
-                                      {formatTimer(player.time)}
-                                    </span>
-                                  )}
-                                </div>
-                                {!player.isMe && (
-                                  (() => {
-                                    const localRecord = multiplayerPlayers.find(p => p.id === player.id);
-                                    const isFriend = localRecord ? localRecord.isFriend : false;
-                                    return (
-                                      <button
-                                        onClick={() => handleToggleFriend(player.id, player.name)}
-                                        title={isFriend ? "Remove Friend" : "Add Friend"}
-                                        className={`p-1.5 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center shrink-0 ml-1 ${
-                                          isFriend
-                                            ? (darkMode ? "bg-zinc-700/50 text-stone-300 hover:bg-zinc-600" : "bg-stone-200/50 text-stone-600 hover:bg-stone-300")
-                                            : (darkMode ? "bg-purple-900/30 text-purple-300 hover:bg-purple-900/50" : "bg-purple-50 text-purple-750 hover:bg-purple-100")
-                                        }`}
-                                      >
-                                        {isFriend ? (
-                                          <Minus className="w-3 h-3 stroke-[3]" />
-                                        ) : (
-                                          <Plus className="w-3 h-3 stroke-[3]" />
-                                        )}
-                                      </button>
-                                    );
-                                  })()
-                                )}
-                              </div>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-
-                    {/* INTERACTIVE MATCH RULES CONFIG FOR REMATCH */}
-                    <div className={`p-4 rounded-2xl flex flex-col gap-3.5 select-none ${
-                      darkMode ? "bg-zinc-850/65 text-stone-300 border border-zinc-800/80" : "bg-stone-50 text-stone-850 border border-stone-200/60"
-                    }`}>
-                      <span className="font-sans font-black uppercase tracking-wider text-[10px] opacity-75">
-                        Rematch Settings Config:
-                      </span>
-                      
-                      {/* Mistake Limit Row (Strictly 0 -> 3 -> 5) */}
-                      <div className="flex gap-2">
-                        {[0, 3, 5].map(m => {
-                          const isSelected = challengeMistakeLimit === m;
-                          return (
-                            <button
-                              key={m}
-                              onClick={() => { playClickSound(); setChallengeMistakeLimit(m); }}
-                              className={`flex-1 py-2 font-mono text-[9px] sm:text-[10px] rounded-lg transition-all duration-150 cursor-pointer active:scale-95 border-none font-bold ${
-                                isSelected
-                                  ? "bg-[#0284c7] text-white"
-                                  : (darkMode ? "bg-[#0284c7]/20 text-sky-200 hover:bg-[#0284c7]/45" : "bg-sky-100/70 text-sky-700 hover:bg-sky-100")
-                              }`}
-                            >
-                              {m === 0 ? "0 Mistakes (Sudden Death)" : `${m} Mistakes`}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Hint Limit Row (Strictly 0 -> 3 -> 5) */}
-                      <div className="flex gap-2">
-                        {[0, 3, 5].map(h => {
-                          const isSelected = challengeHintLimit === h;
-                          return (
-                            <button
-                              key={h}
-                              onClick={() => { playClickSound(); setChallengeHintLimit(h); }}
-                              className={`flex-1 py-2 font-mono text-[9px] sm:text-[10px] rounded-lg transition-all duration-150 cursor-pointer active:scale-95 border-none font-bold ${
-                                isSelected
-                                  ? "bg-emerald-600 text-white"
-                                  : (darkMode ? "bg-emerald-900/35 text-emerald-300 hover:bg-emerald-900/55" : "bg-emerald-100/70 text-emerald-750 hover:bg-emerald-100")
-                              }`}
-                            >
-                              {h === 0 ? "0 Hints (Hardcore)" : `${h} Hints`}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* INTEGRATED PARTICIPANTS INVITES & LOBBY */}
-                    <div className={`p-4 rounded-2xl flex flex-col gap-3 select-none ${
-                      darkMode ? "bg-zinc-850/35 text-stone-300 border border-zinc-800/80" : "bg-stone-50/50 text-stone-850 border border-stone-200/50"
-                    }`}>
-                      <span className="font-sans font-black uppercase tracking-wider text-[10px] opacity-75">
-                        Rematch Lobby Invites:
-                      </span>
-                      
-                      {rematchParticipants.length === 0 ? (
-                        <span className="text-xs italic text-stone-500 py-1 text-center">No other participants to invite.</span>
-                      ) : (
-                        <div className="flex flex-col gap-2 max-h-40 overflow-y-auto no-scrollbar">
-                          {rematchParticipants.map((p) => {
-                            const hasInvited = rematchInvitedPlayers.has(p.id);
+                          return results.map((player, idx) => {
+                            const isPending = !!player.isPending;
+                            const medal = isPending ? "⏳" : idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "";
+                            const positionStr = isPending ? "" : idx === 0 ? "1st" : idx === 1 ? "2nd" : idx === 2 ? "3rd" : `${idx + 1}th`;
+                            
                             return (
                               <div 
-                                key={p.id}
-                                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
-                                  darkMode 
-                                    ? "bg-zinc-900/40 border-zinc-850 hover:bg-zinc-900/80" 
-                                    : "bg-white border-stone-200/50 hover:bg-stone-50/50"
+                                key={player.id}
+                                className={`flex items-center justify-between p-3 rounded-2xl transition-all ${
+                                  player.isMe 
+                                    ? (darkMode ? "bg-[#1e1b4b]/60 border border-indigo-900/50 shadow-md" : "bg-[#EEF2FF] border border-[#C7D2FE] shadow-[0_4px_12px_rgba(99,102,241,0.05)]") 
+                                    : (darkMode ? "bg-zinc-800/40" : "bg-stone-55")
                                 }`}
                               >
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                                  <span className="font-sans font-bold text-xs text-stone-850 dark:text-stone-150">
-                                    {p.name}
+                                <div className="flex items-center gap-3">
+                                  <span className={`font-mono text-sm sm:text-base font-black w-8 text-center ${
+                                    isPending ? "text-amber-500 animate-pulse" : idx === 0 ? "text-yellow-500" : idx === 1 ? "text-slate-400" : idx === 2 ? "text-amber-700" : darkMode ? "text-zinc-600" : "text-stone-400"
+                                  }`}>
+                                    {medal || positionStr}
                                   </span>
+                                  <div className="flex flex-col">
+                                    <span className={`font-sans font-bold text-sm leading-none flex items-center gap-1.5 ${player.isMe ? (darkMode ? "text-indigo-300" : "text-indigo-950") : (darkMode ? "text-zinc-200" : "text-stone-850")}`}>
+                                      {player.name}
+                                      {player.isMe && <span className="text-[9px] bg-indigo-500/20 text-indigo-500 px-1.5 py-0.5 rounded uppercase tracking-wider font-black">You</span>}
+                                      {player.isReal && !player.isMe && !isPending && (
+                                        <span className="text-[9px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">Synced ✓</span>
+                                      )}
+                                      {isPending && (
+                                        <span className="text-[9px] bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded uppercase tracking-wider font-bold animate-pulse">Playing</span>
+                                      )}
+                                    </span>
+                                    <span className={`font-sans text-[10px] mt-1.5 uppercase font-bold tracking-wider ${darkMode ? "text-zinc-500" : "text-stone-500"}`}>
+                                      {isPending ? "Solving Puzzle..." : player.failed ? `Hit Limits` : `${player.mistakes} Mistakes`}
+                                    </span>
+                                  </div>
                                 </div>
-                                
-                                <button
-                                  onClick={() => {
-                                    playClickSound();
-                                    setRematchInvitedPlayers(prev => {
-                                      const next = new Set(prev);
-                                      next.add(p.id);
-                                      return next;
-                                    });
-                                    handleInviteFriend(p.id);
-                                    addLog(`✉️ Re-invited ${p.name} to the rematch lobby.`);
-                                  }}
-                                  className={`px-2.5 py-1 font-sans text-[9px] font-black uppercase tracking-wider rounded-lg border-none cursor-pointer transition-all active:scale-95 ${
-                                    hasInvited 
-                                      ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 cursor-not-allowed" 
-                                      : (darkMode ? "bg-purple-900/30 text-purple-300 hover:bg-purple-900/50" : "bg-purple-50 text-purple-800 hover:bg-purple-100")
-                                  }`}
-                                  disabled={hasInvited}
-                                >
-                                  {hasInvited ? "Invited" : "Invite"}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex flex-col items-end justify-center">
+                                    {isPending ? (
+                                      <span className={`font-sans font-black text-xs uppercase tracking-widest ${darkMode ? "text-amber-400/80" : "text-amber-600"} animate-pulse`}>
+                                        Result Pending
+                                      </span>
+                                    ) : player.failed ? (
+                                      <span className="font-sans font-black text-xs text-red-500 uppercase tracking-widest">Fail</span>
+                                    ) : (
+                                      <span className={`font-mono font-medium text-sm ${player.isMe ? (darkMode ? "text-indigo-200" : "text-indigo-950") : (darkMode ? "text-zinc-300" : "text-stone-700")}`}>
+                                        {formatTimer(player.time)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {!player.isMe && (
+                                    (() => {
+                                      const localRecord = multiplayerPlayers.find(p => p.id === player.id);
+                                      const isFriend = localRecord ? localRecord.isFriend : false;
+                                      return (
+                                        <button
+                                          onClick={() => handleToggleFriend(player.id, player.name)}
+                                          title={isFriend ? "Remove Friend" : "Add Friend"}
+                                          className={`p-1.5 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center shrink-0 ml-1 ${
+                                            isFriend
+                                              ? (darkMode ? "bg-zinc-700/50 text-stone-300 hover:bg-zinc-600" : "bg-stone-200/50 text-stone-600 hover:bg-stone-300")
+                                              : (darkMode ? "bg-purple-900/30 text-purple-300 hover:bg-purple-900/50" : "bg-purple-50 text-purple-750 hover:bg-purple-100")
+                                          }`}
+                                        >
+                                          {isFriend ? (
+                                            <Minus className="w-3 h-3 stroke-[3]" />
+                                          ) : (
+                                            <Plus className="w-3 h-3 stroke-[3]" />
+                                          )}
+                                        </button>
+                                      );
+                                    })()
+                                  )}
+                                </div>
                               </div>
+                            );
+                          });
+                        })()}
+                      </div>
+ 
+                      {/* INTERACTIVE MATCH RULES CONFIG FOR REMATCH */}
+                      <div className={`p-4 rounded-2xl flex flex-col gap-3.5 select-none ${
+                        darkMode ? "bg-zinc-850/65 text-stone-300 border border-zinc-800/80" : "bg-stone-50 text-stone-850 border border-stone-200/60"
+                      }`}>
+                        <span className="font-sans font-black uppercase tracking-wider text-[10px] opacity-75">
+                          Rematch Settings Config:
+                        </span>
+                        
+                        {/* Mistake Limit Row (Strictly 0 -> 3 -> 5) */}
+                        <div className="flex gap-2">
+                          {[0, 3, 5].map(m => {
+                            const isSelected = challengeMistakeLimit === m;
+                            return (
+                              <button
+                                key={m}
+                                onClick={() => { playClickSound(); setChallengeMistakeLimit(m); }}
+                                className={`flex-1 py-2 font-mono text-[9px] sm:text-[10px] rounded-lg transition-all duration-150 cursor-pointer active:scale-95 border-none font-bold ${
+                                  isSelected
+                                    ? "bg-[#0284c7] text-white"
+                                    : (darkMode ? "bg-[#0284c7]/20 text-sky-200 hover:bg-[#0284c7]/45" : "bg-sky-100/70 text-sky-700 hover:bg-sky-100")
+                                }`}
+                              >
+                                {m === 0 ? "0 Mistakes (Sudden Death)" : `${m} Mistakes`}
+                              </button>
                             );
                           })}
                         </div>
-                      )}
-
-                      <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                        {/* One click re-invite everyone button */}
-                        <button
-                          onClick={() => {
-                            playClickSound();
-                            const allIds = rematchParticipants.map(r => r.id);
-                            setRematchInvitedPlayers(prev => {
-                              const next = new Set(prev);
-                              allIds.forEach(id => next.add(id));
-                              return next;
-                            });
-                            rematchParticipants.forEach(p => {
-                              handleInviteFriend(p.id);
-                              addLog(`✉️ Re-invited ${p.name} to the rematch lobby.`);
-                            });
-                            showToast("Dispatched re-invites to all previous participants!");
-                          }}
-                          className={`flex-1 py-2 px-3 font-sans text-[10px] font-bold uppercase tracking-wider rounded-xl cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 border ${
-                            darkMode 
-                              ? "bg-zinc-900 border-amber-950 hover:bg-zinc-850 text-[#FBBF24]" 
-                              : "bg-[#FEF3C7] hover:bg-[#FDE68A] text-[#92400E] border-amber-200"
-                          }`}
-                          disabled={rematchParticipants.length === 0}
-                        >
-                          <Users className="w-3.5 h-3.5" />
-                          Re-invite All 
-                        </button>
-
-                        {/* Share Rematch Link */}
-                        <button
-                          onClick={async () => {
-                            playClickSound();
-                            const seedVal = boardState?.seed || Math.floor(Math.random() * 900000) + 100000;
-                            const targetId = rematchGameId || `SUDOKU-${seedVal}-${challengeDifficulty}-M${challengeMistakeLimit}-H${challengeHintLimit}-T${challengeTimerEnabled ? 1 : 0}`;
-                            await shareChallengeLink(targetId, `Join my Sudoku Rematch! Challenge link:`);
-                          }}
-                          className={`flex-1 py-2 px-3 font-sans text-[10px] font-bold uppercase tracking-wider rounded-xl cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 border ${
-                            darkMode 
-                              ? "bg-zinc-900 border-purple-950 hover:bg-zinc-850 text-[#C084FC]" 
-                              : "bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8] border-purple-200"
-                          }`}
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                          Share Link
-                        </button>
+ 
+                        {/* Hint Limit Row (Strictly 0 -> 3 -> 5) */}
+                        <div className="flex gap-2">
+                          {[0, 3, 5].map(h => {
+                            const isSelected = challengeHintLimit === h;
+                            return (
+                              <button
+                                key={h}
+                                onClick={() => { playClickSound(); setChallengeHintLimit(h); }}
+                                className={`flex-1 py-2 font-mono text-[9px] sm:text-[10px] rounded-lg transition-all duration-150 cursor-pointer active:scale-95 border-none font-bold ${
+                                  isSelected
+                                    ? "bg-emerald-600 text-white"
+                                    : (darkMode ? "bg-emerald-900/35 text-emerald-300 hover:bg-emerald-900/55" : "bg-emerald-100/70 text-emerald-750 hover:bg-emerald-100")
+                                }`}
+                              >
+                                {h === 0 ? "0 Hints (Hardcore)" : `${h} Hints`}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+ 
+                      {/* INTEGRATED PARTICIPANTS INVITES & LOBBY */}
+                      <div className={`p-4 rounded-2xl flex flex-col gap-3 select-none ${
+                        darkMode ? "bg-zinc-850/35 text-stone-300 border border-zinc-800/80" : "bg-stone-50/50 text-stone-850 border border-stone-200/50"
+                      }`}>
+                        <span className="font-sans font-black uppercase tracking-wider text-[10px] opacity-75">
+                          Rematch Lobby Invites:
+                        </span>
+                        
+                        {rematchParticipants.length === 0 ? (
+                          <span className="text-xs italic text-stone-500 py-1 text-center">No other participants to invite.</span>
+                        ) : (
+                          <div className="flex flex-col gap-2 max-h-32 sm:max-h-40 overflow-y-auto pr-1 no-scrollbar">
+                            {rematchParticipants.map((p) => {
+                              const hasInvited = rematchInvitedPlayers.has(p.id);
+                              return (
+                                <div 
+                                  key={p.id}
+                                  className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                                    darkMode 
+                                      ? "bg-zinc-900/40 border-zinc-850 hover:bg-zinc-900/80" 
+                                      : "bg-white border-stone-200/50 hover:bg-stone-50/50"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                    <span className="font-sans font-bold text-xs text-stone-850 dark:text-stone-150">
+                                      {p.name}
+                                    </span>
+                                  </div>
+                                  
+                                  <button
+                                    onClick={() => {
+                                      playClickSound();
+                                      setRematchInvitedPlayers(prev => {
+                                        const next = new Set(prev);
+                                        next.add(p.id);
+                                        return next;
+                                      });
+                                      handleInviteFriend(p.id);
+                                      addLog(`✉️ Re-invited ${p.name} to the rematch lobby.`);
+                                    }}
+                                    className={`px-2.5 py-1 font-sans text-[9px] font-black uppercase tracking-wider rounded-lg border-none cursor-pointer transition-all active:scale-95 ${
+                                      hasInvited 
+                                        ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 cursor-not-allowed" 
+                                        : (darkMode ? "bg-purple-900/30 text-purple-300 hover:bg-purple-900/50" : "bg-purple-50 text-purple-800 hover:bg-purple-100")
+                                    }`}
+                                    disabled={hasInvited}
+                                  >
+                                    {hasInvited ? "Invited" : "Invite"}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+ 
+                        <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                          {/* One click re-invite everyone button */}
+                          <button
+                            onClick={() => {
+                              playClickSound();
+                              const allIds = rematchParticipants.map(r => r.id);
+                              setRematchInvitedPlayers(prev => {
+                                const next = new Set(prev);
+                                allIds.forEach(id => next.add(id));
+                                return next;
+                              });
+                              rematchParticipants.forEach(p => {
+                                handleInviteFriend(p.id);
+                                addLog(`✉️ Re-invited ${p.name} to the rematch lobby.`);
+                              });
+                              showToast("Dispatched re-invites to all previous participants!");
+                            }}
+                            className={`flex-1 py-2 px-3 font-sans text-[10px] font-bold uppercase tracking-wider rounded-xl cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 border ${
+                              darkMode 
+                                ? "bg-zinc-900 border-amber-950 hover:bg-zinc-850 text-[#FBBF24]" 
+                                : "bg-[#FEF3C7] hover:bg-[#FDE68A] text-[#92400E] border-amber-200"
+                            }`}
+                            disabled={rematchParticipants.length === 0}
+                          >
+                            <Users className="w-3.5 h-3.5" />
+                            Re-invite All 
+                          </button>
+ 
+                          {/* Share Rematch Link */}
+                          <button
+                            onClick={async () => {
+                              playClickSound();
+                              const seedVal = boardState?.seed || Math.floor(Math.random() * 900000) + 100000;
+                              const targetId = rematchGameId || `SUDOKU-${seedVal}-${challengeDifficulty}-M${challengeMistakeLimit}-H${challengeHintLimit}-T${challengeTimerEnabled ? 1 : 0}`;
+                              await shareChallengeLink(targetId, `Join my Sudoku Rematch! Challenge link:`);
+                            }}
+                            className={`flex-1 py-2 px-3 font-sans text-[10px] font-bold uppercase tracking-wider rounded-xl cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 border ${
+                              darkMode 
+                                ? "bg-zinc-900 border-purple-950 hover:bg-zinc-850 text-[#C084FC]" 
+                                : "bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8] border-purple-200"
+                            }`}
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                            Share Link
+                          </button>
+                        </div>
                       </div>
                     </div>
-
+ 
                     {/* Action buttons row */}
                     <div className="flex gap-2.5 w-full pt-4 border-t border-stone-200/50 dark:border-zinc-800/50 mt-1 shrink-0">
                       {/* Button 1: Back Arrow */}
@@ -6166,7 +6169,7 @@ useEffect(() => {
                       >
                          <ArrowLeft className="w-7 h-7" strokeWidth={1.5} />
                       </button>
-
+ 
                       {/* Button 2: Replay Same Board */}
                       <button
                         onClick={() => {
@@ -6198,7 +6201,7 @@ useEffect(() => {
                       >
                          <RotateCcw className="w-7 h-7" strokeWidth={1.5} />
                       </button>
-
+ 
                       {/* Button 3: New Game / Rematch */}
                       <button
                         onClick={() => {
@@ -6208,7 +6211,7 @@ useEffect(() => {
                           const newSeed = Math.floor(Math.random() * 900000) + 100000;
                           
                           addLog(`⚔️ Initializing Multiplayer Challenge Rematch (Seed #${newSeed})...`);
-
+ 
                           // Pre-populate rematch participants list in case user starts immediately
                           const othersList: Array<{ id: string; name: string; isReal: boolean }> = [];
                           syncedLeaderboard.forEach(r => {
@@ -6218,16 +6221,16 @@ useEffect(() => {
                           });
                           setLastGameParticipants(othersList);
                           setRematchParticipants(othersList);
-
+ 
                           // Start fresh local synced leaderboard
                           setSyncedLeaderboard([]);
                           const nextGameId = `SUDOKU-${newSeed}-${challengeDifficulty}-M${challengeMistakeLimit}-H${challengeHintLimit}-T${challengeTimerEnabled ? 1 : 0}`;
                           setRematchGameId(nextGameId);
-
+ 
                           // Trigger brand new unique puzzle generation inside challenge mode
                           generateAndSetNewPuzzle(challengeDifficulty, newSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit);
                           setIsTimerPaused(false);
-
+ 
                           // Launch game instantly
                           setShowGameOverModal(false);
                           navigateToScreen("game");
@@ -6238,26 +6241,6 @@ useEffect(() => {
                          <Shuffle className="w-7 h-7" strokeWidth={1.5} />
                       </button>
                     </div>
-
-                    {/* Challenge Friends Button */}
-                    <button
-                      onClick={async () => {
-                        playClickSound();
-                        const isConfigured = checkIsDisplayNameConfigured();
-                        if (!isConfigured) {
-                          setDisplayNameCallbackAction("END_GAME_SHARE");
-                          setShowDisplayNameModal(true);
-                        } else {
-                          await executeEndGameShareAction();
-                        }
-                      }}
-                      className={`w-full py-4 px-6 rounded-[24px] flex items-center justify-center gap-2 transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer font-bold mt-2 ${darkMode ? "bg-blue-900/40 text-blue-200 border border-blue-900/50 hover:bg-blue-900/60" : "bg-[#DBEAFE] text-[#1E3A8A] hover:bg-[#BFDBFE]"}`}
-                    >
-                      <Share2 className="w-5 h-5" strokeWidth={2} />
-                      <span>Challenge Friends with Your Best Time</span>
-                      <Copy className="w-5 h-5 ml-auto opacity-70" strokeWidth={2} />
-                    </button>
-
                   </motion.div>
                 </div>
               )}
@@ -6337,7 +6320,7 @@ useEffect(() => {
                       >
                          <RotateCcw className="w-7 h-7" strokeWidth={1.5} />
                       </button>
-
+ 
                       {/* Button 3: Start New Puzzle */}
                       <button
                         onClick={() => {
@@ -6352,25 +6335,6 @@ useEffect(() => {
                          <Shuffle className="w-7 h-7" strokeWidth={1.5} />
                       </button>
                     </div>
-
-                    {/* Challenge Friends Button */}
-                    <button
-                      onClick={async () => {
-                        playClickSound();
-                        const isConfigured = checkIsDisplayNameConfigured();
-                        if (!isConfigured) {
-                          setDisplayNameCallbackAction("END_GAME_SHARE");
-                          setShowDisplayNameModal(true);
-                        } else {
-                          await executeEndGameShareAction();
-                        }
-                      }}
-                      className={`w-full py-4 px-6 rounded-[24px] flex items-center justify-center gap-2 transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer font-bold mt-2 ${darkMode ? "bg-blue-900/40 text-blue-200 border border-blue-900/50 hover:bg-blue-900/60" : "bg-[#DBEAFE] text-[#1E3A8A] hover:bg-[#BFDBFE]"}`}
-                    >
-                      <Share2 className="w-5 h-5" strokeWidth={2} />
-                      <span>Challenge Friends with Your Best Time</span>
-                      <Copy className="w-5 h-5 ml-auto opacity-70" strokeWidth={2} />
-                    </button>
                   </motion.div>
                 </div>
               )}
