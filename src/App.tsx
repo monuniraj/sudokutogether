@@ -58,6 +58,7 @@ import {
   X,
   Clock,
   BellOff,
+  Bell,
   Minus,
   Home,
   KeyRound,
@@ -1558,6 +1559,9 @@ useEffect(() => {
   const [rematchGameId, setRematchGameId] = useState<string>("");
   const [rematchInvitedPlayers, setRematchInvitedPlayers] = useState<Set<string>>(new Set());
 
+  // Bell Invites modal
+  const [showBellInvitesModal, setShowBellInvitesModal] = useState<boolean>(false);
+
   // Issue 7: Friend System Identity states
   const [showLoginRequiredModal, setShowLoginRequiredModal] = useState<boolean>(false);
   const [loginRequiredPurpose, setLoginRequiredPurpose] = useState<string>("");
@@ -2064,52 +2068,105 @@ useEffect(() => {
 
   // Real-time listener for incoming invites from Firestore
   useEffect(() => {
-    const userId = userProfile?.id;
-    if (!userId) return;
+    const user = userProfile ? { uid: userProfile.id } : null;
+    if (!user?.uid) return;
 
-    console.log(`[Firestore] Subscribing to incoming invites for user: ${userId}`);
+    console.log(`[Firestore] Subscribing to incoming invites for user: ${user.uid}`);
     const invitesCol = collection(db, "invites");
-    const q = query(
-      invitesCol,
-      where("toUserId", "==", userId),
-      where("status", "==", "pending")
-    );
+    
+    const handleSnapshot = (snapshot: any) => {
+      snapshot.docChanges().forEach((change: any) => {
+        const inviteData = change.doc.data();
+        const gameId = inviteData.gameId || "";
+        const inviteId = change.doc.id;
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === "added") {
-            const inviteData = change.doc.data();
-            
-            // Extract the timestamp to check if it's a new invite
-            const ts = inviteData.timestamp;
-            const inviteTime = ts ? ts.toMillis() : Date.now();
-            
-            // Only process new invites sent after the app loaded (with a small safety buffer)
-            if (inviteTime > sessionStartTime - 5000) {
-              if (notificationsEnabled) {
-                if (document.visibilityState === "hidden") {
-                  triggerBackgroundNotification(inviteData);
-                } else {
-                  // Play audio chime
-                  playInviteChime();
-                  // Set active invite to show the toast banner
-                  setActiveInviteNotification(inviteData);
-                }
+        if (change.type === "added") {
+          const ts = inviteData.timestamp;
+          const inviteTime = ts ? ts.toMillis() : Date.now();
+          
+          const matchDiff = gameId.match(/-EASY|-MEDIUM|-HARD|-EXPERT/i);
+          const difficulty = matchDiff ? matchDiff[0].replace("-", "").toUpperCase() : "EASY";
+          const matchSeed = gameId.match(/SUDOKU-(\d+)/i);
+          const seed = matchSeed ? parseInt(matchSeed[1], 10) : 123456;
+          const matchMistakes = gameId.match(/-M(\d+)/i);
+          const maxMistakes = matchMistakes ? parseInt(matchMistakes[1], 10) : 3;
+          const matchHint = gameId.match(/-H(\d+)/i);
+          const hintLimit = matchHint ? parseInt(matchHint[1], 10) : 3;
+          const matchTimer = gameId.match(/-T(\d+)/i);
+          const timerEnabled = matchTimer ? matchTimer[1] === "1" : true;
+          
+          const newPending = {
+            id: gameId,
+            inviteId: inviteId,
+            senderName: inviteData.fromName || "Player",
+            difficulty,
+            seed,
+            maxMistakes,
+            hintLimit,
+            timerEnabled,
+            password: inviteData.password || "",
+            sentAt: inviteTime
+          };
+
+          setPendingChallenges(prev => {
+            if (prev.some(p => p.inviteId === inviteId || p.id === gameId)) return prev;
+            const updated = [newPending, ...prev].slice(0, 10);
+            try {
+              localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+          });
+
+          if (inviteTime > sessionStartTime - 5000) {
+            if (notificationsEnabled) {
+              if (document.visibilityState === "hidden") {
+                triggerBackgroundNotification(inviteData);
+              } else {
+                playInviteChime();
+                setActiveInviteNotification({
+                  id: inviteId,
+                  fromName: inviteData.fromName || "Player",
+                  gameId,
+                  password: inviteData.password || "",
+                  recipientId: inviteData.recipientId || inviteData.toUserId || user.uid,
+                  toUserId: inviteData.toUserId || inviteData.recipientId || user.uid,
+                  status: inviteData.status || "pending"
+                });
               }
             }
           }
-        });
-      },
-      (err) => {
-        console.error("[Firestore] Invites listener error:", err);
-      }
-    );
+        } else if (change.type === "modified") {
+          if (inviteData.status !== "pending") {
+            setPendingChallenges(prev => {
+              const updated = prev.filter(p => p.inviteId !== inviteId && p.id !== gameId);
+              try {
+                localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+              } catch (e) {}
+              return updated;
+            });
+          }
+        } else if (change.type === "removed") {
+          setPendingChallenges(prev => {
+            const updated = prev.filter(p => p.inviteId !== inviteId && p.id !== gameId);
+            try {
+              localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+          });
+        }
+      });
+    };
+
+    const q1 = query(invitesCol, where("toUserId", "==", user.uid), where("status", "==", "pending"));
+    const unsubscribe1 = onSnapshot(q1, handleSnapshot);
+
+    const q2 = query(invitesCol, where("recipientId", "==", user.uid), where("status", "==", "pending"));
+    const unsubscribe2 = onSnapshot(q2, handleSnapshot);
 
     return () => {
-      console.log(`[Firestore] Unsubscribing from incoming invites for user: ${userId}`);
-      unsubscribe();
+      console.log(`[Firestore] Unsubscribing from incoming invites for user: ${user.uid}`);
+      unsubscribe1();
+      unsubscribe2();
     };
   }, [userProfile?.id, notificationsEnabled, sessionStartTime]);
 
@@ -2431,7 +2488,72 @@ useEffect(() => {
     }
   };
 
+  const handleAcceptAndPlayBellInvite = async (challenge: PendingChallenge) => {
+    playClickSound();
+    
+    // 1. Update Firestore invite status to accepted
+    if (challenge.inviteId) {
+      try {
+        await updateDoc(doc(db, "invites", challenge.inviteId), { status: "accepted" });
+      } catch (err) {
+        console.error("Failed to update invite to accepted:", err);
+      }
+    }
+    
+    // 2. Clear from pending local challenges list
+    setPendingChallenges(prev => {
+      const updated = prev.filter(p => p.id !== challenge.id);
+      try {
+        localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // 3. Close the modal
+    setShowBellInvitesModal(false);
+
+    // 4. Initialize board and launch game immediately!
+    const difficultyVal = challenge.difficulty as Difficulty;
+    const mistakesVal = challenge.maxMistakes;
+    const timerVal = challenge.timerEnabled;
+    const hintVal = challenge.hintLimit ?? 3;
+
+    setChallengeSeed(challenge.seed);
+    setChallengeDifficulty(difficultyVal);
+    setChallengeMistakeLimit(mistakesVal);
+    setChallengeTimerEnabled(timerVal);
+    setChallengeHintLimit(hintVal);
+    setChallengeMode(true);
+
+    generateAndSetNewPuzzle(difficultyVal, challenge.seed, mistakesVal, timerVal, hintVal);
+    setSessionSeconds(0);
+    setIsTimerPaused(false);
+    navigateToScreen("game");
+    addLog(`✓ Accepted challenge duel #${challenge.seed} via Bell Notification center!`);
+  };
+
+  const handleDeclineBellInvite = async (challenge: PendingChallenge) => {
+    playClickSound();
+    if (challenge.inviteId) {
+      try {
+        await updateDoc(doc(db, "invites", challenge.inviteId), { status: "declined" });
+      } catch (err) {
+        console.error("Failed to decline invite in DB:", err);
+      }
+    }
+    setPendingChallenges(prev => {
+      const updated = prev.filter(p => p.id !== challenge.id);
+      try {
+        localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    showToast("Challenge invitation declined.");
+  };
+
   const registerPushNotifications = async () => {
+    const user = userProfile ? { uid: userProfile.id } : null;
+    if (!user?.uid) return;
     if (!notificationsEnabled) return;
     
     try {
@@ -2523,6 +2645,10 @@ useEffect(() => {
 
   // Set up push notification listeners
   useEffect(() => {
+    const user = userProfile ? { uid: userProfile.id } : null;
+    if (!user?.uid) return;
+    if (!notificationsEnabled) return;
+
     let pushRegListener: any = null;
     let pushErrListener: any = null;
     let pushRecListener: any = null;
@@ -2530,72 +2656,80 @@ useEffect(() => {
     let localActListener: any = null;
 
     const setupListeners = async () => {
-      if (Capacitor.isNativePlatform()) {
-        pushRegListener = await PushNotifications.addListener('registration', (token) => {
-          console.log("[Push] Native registration success. Token:", token.value);
-          saveFcmToken(token.value);
-        });
+      try {
+        if (Capacitor.isNativePlatform()) {
+          pushRegListener = await PushNotifications.addListener('registration', (token) => {
+            console.log("[Push] Native registration success. Token:", token.value);
+            saveFcmToken(token.value);
+          });
 
-        pushErrListener = await PushNotifications.addListener('registrationError', (err) => {
-          console.error("[Push] Native registration error:", err);
-        });
+          pushErrListener = await PushNotifications.addListener('registrationError', (err) => {
+            console.error("[Push] Native registration error:", err);
+          });
 
-        pushRecListener = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
-          console.log("[Push] Native push received in foreground/background:", notification);
-          if (notificationsEnabled) {
-            playInviteChime();
-            const { gameId, password, senderName } = notification.data || {};
-            if (gameId) {
-              setActiveInviteNotification({
-                id: notification.id || Math.random().toString(),
-                fromName: senderName || "Player",
-                gameId,
-                password: password || ""
-              });
+          pushRecListener = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+            console.log("[Push] Native push received in foreground/background:", notification);
+            if (notificationsEnabled) {
+              playInviteChime();
+              const { gameId, password, senderName } = notification.data || {};
+              if (gameId) {
+                setActiveInviteNotification({
+                  id: notification.id || Math.random().toString(),
+                  fromName: senderName || "Player",
+                  gameId,
+                  password: password || ""
+                });
+              }
             }
-          }
-        });
+          });
 
-        pushActListener = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-          console.log("[Push] Native push action performed:", action);
-          const { gameId, password, senderName } = action.notification.data || {};
-          if (gameId) {
-            handleLoadChallengeFromId(gameId, password, senderName);
-          }
-        });
+          pushActListener = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+            console.log("[Push] Native push action performed:", action);
+            const { gameId, password, senderName } = action.notification.data || {};
+            if (gameId) {
+              handleLoadChallengeFromId(gameId, password, senderName);
+            }
+          });
 
-        localActListener = await LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
-          console.log("[Push] Native local action performed:", action);
-          const { gameId, password, senderName } = action.notification.extra || {};
-          if (gameId) {
-            handleLoadChallengeFromId(gameId, password, senderName);
-          }
-        });
-      } else {
-        const handleServiceWorkerMessage = (event: MessageEvent) => {
-          if (event.data && event.data.type === 'navigate_invite') {
-            console.log("[Push] Web push action received from SW:", event.data);
-            const { gameId, password, senderName } = event.data;
-            handleLoadChallengeFromId(gameId, password, senderName);
-          }
-        };
-        navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
-        return () => {
-          navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
-        };
+          localActListener = await LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+            console.log("[Push] Native local action performed:", action);
+            const { gameId, password, senderName } = action.notification.extra || {};
+            if (gameId) {
+              handleLoadChallengeFromId(gameId, password, senderName);
+            }
+          });
+        } else {
+          const handleServiceWorkerMessage = (event: MessageEvent) => {
+            if (event.data && event.data.type === 'navigate_invite') {
+              console.log("[Push] Web push action received from SW:", event.data);
+              const { gameId, password, senderName } = event.data;
+              handleLoadChallengeFromId(gameId, password, senderName);
+            }
+          };
+          navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+          return () => {
+            navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+          };
+        }
+      } catch (err) {
+        console.error("[Push] Error setting up listeners:", err);
       }
     };
 
     setupListeners();
 
     return () => {
-      if (pushRegListener) pushRegListener.remove();
-      if (pushErrListener) pushErrListener.remove();
-      if (pushRecListener) pushRecListener.remove();
-      if (pushActListener) pushActListener.remove();
-      if (localActListener) localActListener.remove();
+      try {
+        if (pushRegListener) pushRegListener.remove();
+        if (pushErrListener) pushErrListener.remove();
+        if (pushRecListener) pushRecListener.remove();
+        if (pushActListener) pushActListener.remove();
+        if (localActListener) localActListener.remove();
+      } catch (err) {
+        console.error("[Push] Error cleaning up listeners:", err);
+      }
     };
-  }, [notificationsEnabled]);
+  }, [userProfile?.id, notificationsEnabled]);
 
   // Trigger push registration when setting is enabled
   useEffect(() => {
@@ -2639,16 +2773,20 @@ useEffect(() => {
       if (!audioCtx) return;
 
       const playNote = (freq: number, start: number, duration: number) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(freq, start);
-        gain.gain.setValueAtTime(0.08, start);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
-        osc.start(start);
-        osc.stop(start + duration);
+        try {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.08, start);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+          osc.start(start);
+          osc.stop(start + duration);
+        } catch (noteErr) {
+          console.warn("Audio chime note play blocked:", noteErr);
+        }
       };
 
       const now = audioCtx.currentTime;
@@ -4895,6 +5033,26 @@ useEffect(() => {
 
           {/* Right Actions: Clean main header with only Settings gear! */}
           <div className="flex items-center gap-2">
+            {/* Bell Icon (Only on Home Screen and if there are pending invites) */}
+            {currentScreen === "home" && pendingChallenges.length > 0 && (
+              <button
+                onClick={() => {
+                  playClickSound();
+                  setShowBellInvitesModal(true);
+                }}
+                className={`relative p-2.5 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${
+                  darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"
+                }`}
+                title="Notifications"
+                id="global-top-right-bell-button"
+              >
+                <Bell className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-black text-white shadow-sm font-mono">
+                  {pendingChallenges.length}
+                </span>
+              </button>
+            )}
+
             {/* Settings Gear */}
             <button
               onClick={() => {
@@ -10516,6 +10674,121 @@ useEffect(() => {
               <div className="flex flex-col text-left">
                 <span className="font-sans font-black text-sm uppercase tracking-tight leading-none text-[#135236]">Notebook Synced!</span>
                 <span className="text-[10px] text-[#135236]/80 mt-1 font-sans font-medium">Your progress is now linked securely to Google cloud node.</span>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🔔 BELL NOTIFICATIONS MODAL OVERLAY */}
+      <AnimatePresence>
+        {showBellInvitesModal && (
+          <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+            {/* Backdrop click dismisser */}
+            <div 
+              className="absolute inset-0 cursor-pointer" 
+              onClick={() => {
+                playClickSound();
+                setShowBellInvitesModal(false);
+              }} 
+            />
+
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className={`relative w-full max-w-md rounded-3xl p-6 border-none flex flex-col gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.15)] select-none z-[100001] transition-all duration-300 ${
+                darkMode ? "bg-zinc-900 text-stone-100" : "bg-white text-stone-850"
+              }`}
+            >
+              <div className="flex justify-between items-center pb-2 border-b border-stone-200/50 dark:border-zinc-800/50">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-indigo-500" />
+                  <h3 className="font-sans font-black text-base uppercase tracking-wider">
+                    Challenge Invites
+                  </h3>
+                </div>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setShowBellInvitesModal(false);
+                  }}
+                  className={`p-1 rounded-full border-none cursor-pointer hover:bg-stone-100 dark:hover:bg-zinc-800 transition-all ${
+                    darkMode ? "text-stone-400" : "text-stone-600"
+                  }`}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Scrollable list */}
+              <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-3.5 max-h-[50vh] pr-0.5">
+                {pendingChallenges.length === 0 ? (
+                  <div className="py-12 text-center text-stone-500 font-sans text-sm italic">
+                    No pending challenge invites.
+                  </div>
+                ) : (
+                  pendingChallenges.map((challenge) => (
+                    <div 
+                      key={challenge.id} 
+                      className={`p-4 rounded-2xl flex flex-col gap-3 border transition-all ${
+                        darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-300" : "bg-slate-50/80 border-stone-200/60 text-stone-850"
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex flex-col text-left">
+                          <span className={`text-[10px] font-black uppercase tracking-wider ${
+                            challenge.difficulty === "EASY" ? "text-emerald-500" :
+                            challenge.difficulty === "MEDIUM" ? "text-amber-500" :
+                            challenge.difficulty === "HARD" ? "text-purple-500" : "text-rose-500"
+                          }`}>
+                            {challenge.difficulty} Duel
+                          </span>
+                          <span className="font-sans text-xs font-bold mt-0.5">
+                            Invited by <strong className="font-extrabold">{challenge.senderName}</strong>
+                          </span>
+                        </div>
+                        {challenge.sentAt && (
+                          <span className="text-[9px] font-mono opacity-70">
+                            {new Date(challenge.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1.5 text-[9px] font-sans p-2 rounded-xl bg-stone-500/5 text-center">
+                        <div>
+                          <span className="block opacity-65 uppercase font-bold text-[8px]">Mistakes</span>
+                          <span className="font-black text-rose-500">{challenge.maxMistakes === 0 ? "0 (Sudden Death)" : challenge.maxMistakes < 999 ? `${challenge.maxMistakes} Limit` : "None"}</span>
+                        </div>
+                        <div>
+                          <span className="block opacity-65 uppercase font-bold text-[8px]">Hints</span>
+                          <span className="font-black text-emerald-500">{challenge.hintLimit ?? 3} Limit</span>
+                        </div>
+                        <div>
+                          <span className="block opacity-65 uppercase font-bold text-[8px]">Timer</span>
+                          <span className="font-black">{challenge.timerEnabled ? "Visible" : "Hidden"}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 w-full mt-0.5">
+                        <button
+                          onClick={() => handleDeclineBellInvite(challenge)}
+                          className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 ${
+                            darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
+                          }`}
+                        >
+                          Decline
+                        </button>
+                        <button
+                          onClick={() => handleAcceptAndPlayBellInvite(challenge)}
+                          className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 text-white bg-indigo-600 hover:bg-indigo-700"
+                        >
+                          Accept & Play
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </motion.div>
           </div>
