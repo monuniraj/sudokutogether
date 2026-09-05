@@ -1760,6 +1760,61 @@ useEffect(() => {
     return game;
   };
 
+  const formatMatchTimestamp = (dateStrOrTimestamp?: string | number): string => {
+    if (!dateStrOrTimestamp) return "Saved Config";
+    let d: Date;
+    if (typeof dateStrOrTimestamp === "number") {
+      d = new Date(dateStrOrTimestamp);
+    } else {
+      const parsedTime = Date.parse(dateStrOrTimestamp);
+      if (!isNaN(parsedTime)) {
+        d = new Date(parsedTime);
+      } else {
+        return dateStrOrTimestamp;
+      }
+    }
+    const diffMs = Date.now() - d.getTime();
+    if (diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000) {
+      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } else {
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  };
+
+  const formatInviteTimestamp = (timestamp?: any): string => {
+    if (!timestamp) return "Just now";
+    let d: Date;
+    if (typeof timestamp === "number") {
+      d = new Date(timestamp);
+    } else if (timestamp?.toMillis && typeof timestamp.toMillis === "function") {
+      d = new Date(timestamp.toMillis());
+    } else if (timestamp?.toDate && typeof timestamp.toDate === "function") {
+      d = timestamp.toDate();
+    } else if (typeof timestamp === "string") {
+      const parsedTime = Date.parse(timestamp);
+      if (!isNaN(parsedTime)) {
+        d = new Date(parsedTime);
+      } else {
+        const numParsed = Number(timestamp);
+        if (!isNaN(numParsed) && numParsed > 0) {
+          d = new Date(numParsed);
+        } else {
+          return "Just now";
+        }
+      }
+    } else {
+      return "Just now";
+    }
+    if (isNaN(d.getTime())) return "Just now";
+
+    const diffMs = Date.now() - d.getTime();
+    if (diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000) {
+      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } else {
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  };
+
   const resolveParticipantsForSave = (game: CompletedGame): any[] | undefined => {
     return game.participants || getCachedLeaderboard(game.id) || (game.id === activeGameId ? syncedLeaderboard : undefined);
   };
@@ -1770,7 +1825,7 @@ useEffect(() => {
       if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.slice(0, 10);
+          return parsed.slice(0, 20);
         }
       }
       return [];
@@ -1785,7 +1840,19 @@ useEffect(() => {
       if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.slice(0, 10);
+          const now = Date.now();
+          const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+          const filtered = parsed.filter((g: any) => {
+            const isGuest = !g.userId || g.userId === "GUEST_ANON" || g.userId.startsWith("GUEST_");
+            if (isGuest && g.date) {
+              const gameTime = Date.parse(g.date);
+              if (!isNaN(gameTime) && now - gameTime > NINETY_DAYS_MS) {
+                return false;
+              }
+            }
+            return true;
+          });
+          return filtered.slice(0, 10);
         }
       }
       return [];
@@ -1800,7 +1867,14 @@ useEffect(() => {
       if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.sort((a: any, b: any) => (b.sentAt || 0) - (a.sentAt || 0)).slice(0, 10);
+          return parsed
+            .filter((c: any) => c && (c.id || c.inviteId || c.senderName))
+            .sort((a: any, b: any) => {
+              const timeA = typeof a.sentAt === "number" ? a.sentAt : (Date.parse(a.receivedAt || a.sentAt) || 0);
+              const timeB = typeof b.sentAt === "number" ? b.sentAt : (Date.parse(b.receivedAt || b.sentAt) || 0);
+              return timeB - timeA;
+            })
+            .slice(0, 10);
         }
       }
       return [];
@@ -2239,7 +2313,9 @@ useEffect(() => {
 
           setPendingChallenges(prev => {
             if (prev.some(p => p.inviteId === inviteId || p.id === (roomCode || gameId))) return prev;
-            const updated = [newPending, ...prev].slice(0, 10);
+            const updated = [newPending, ...prev]
+              .sort((a, b) => (b.sentAt || 0) - (a.sentAt || 0))
+              .slice(0, 10);
             try {
               localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
             } catch (e) {}
@@ -3597,7 +3673,7 @@ useEffect(() => {
       timeSec: timeToShare,
       mistakes: boardState ? boardState.currentMistakesCount : 0,
       isWon: isWon,
-      date: new Date().toLocaleDateString()
+      date: new Date().toISOString()
     };
     submitGameResult(rBody);
 
@@ -3636,7 +3712,7 @@ useEffect(() => {
       timeSec: historyChallengeGame.timeSec,
       mistakes: historyChallengeGame.mistakes,
       isWon: historyChallengeGame.isWon,
-      date: historyChallengeGame.date || new Date().toLocaleDateString()
+      date: historyChallengeGame.date || new Date().toISOString()
     };
     submitGameResult(rBody);
 
@@ -4059,7 +4135,7 @@ useEffect(() => {
         mistakes: finalMistakes,
         maxMistakes: boardState ? boardState.maxMistakesLimit : 3,
         isWon: isWon,
-        date: new Date().toLocaleDateString(),
+        date: new Date().toISOString(),
         isChallenge: challengeMode,
         seed: gameSeed,
         userId: userProfile?.id || "GUEST_ANON",
@@ -4090,7 +4166,7 @@ useEffect(() => {
       timeSec: sessionSeconds,
       mistakes: finalMistakes,
       isWon: isWon,
-      date: new Date().toLocaleDateString()
+      date: new Date().toISOString()
     };
 
     submitGameResult(rBody);
@@ -4157,9 +4233,9 @@ useEffect(() => {
         addLog(`📌 Puzzle #${game.seed || game.id} unsaved.`);
         return filtered;
       } else {
-        if (prev.length >= 10) {
+        if (prev.length >= 20) {
           showToast("Storage full. Please unsave an older match to save this one.");
-          addLog(`⚠️ Attempted save failed: Saved list reached hard cap limit of 10 entries.`);
+          addLog(`⚠️ Attempted save failed: Saved list reached hard cap limit of 20 entries.`);
           return prev;
         }
         
@@ -7738,7 +7814,7 @@ useEffect(() => {
                               </span>
                               
                               <span className="font-sans text-xs md:text-sm font-medium text-stone-500">
-                                {game.date}
+                                {formatMatchTimestamp(game.date)}
                               </span>
                             </div>
 
@@ -7825,7 +7901,7 @@ useEffect(() => {
                               </span>
                               
                               <span className="font-sans text-xs md:text-sm font-medium text-stone-500">
-                                {game.date || "Saved Config"}
+                                {formatMatchTimestamp(game.date)}
                               </span>
                             </div>
 
@@ -10707,72 +10783,112 @@ useEffect(() => {
 
               {/* Scrollable list */}
               <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-3.5 max-h-[50vh] pr-0.5">
-                {pendingChallenges.length === 0 ? (
-                  <div className="py-12 text-center text-stone-500 font-sans text-sm italic">
-                    No pending challenge invites.
-                  </div>
-                ) : (
-                  pendingChallenges.map((challenge) => (
-                    <div 
-                      key={challenge.id} 
-                      className={`p-4 rounded-2xl flex flex-col gap-3 border transition-all ${
-                        darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-300" : "bg-slate-50/80 border-stone-200/60 text-stone-850"
-                      }`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex flex-col text-left">
-                          <span className={`text-[10px] font-black uppercase tracking-wider ${
-                            challenge.difficulty === "EASY" ? "text-emerald-500" :
-                            challenge.difficulty === "MEDIUM" ? "text-amber-500" :
-                            challenge.difficulty === "HARD" ? "text-purple-500" : "text-rose-500"
-                          }`}>
-                            {challenge.difficulty} Duel
-                          </span>
-                          <span className="font-sans text-xs font-bold mt-0.5">
-                            Invited by <strong className="font-extrabold">{challenge.senderName}</strong>
-                          </span>
-                        </div>
-                        {challenge.sentAt && (
+                {(() => {
+                  const sortedInvites = [...pendingChallenges]
+                    .filter((invite: any) => {
+                      if (!invite) return false;
+                      const hasId = Boolean(invite.id || invite.inviteId || invite.roomCode || invite.gameId);
+                      const hasSender = Boolean(invite.senderName || invite.fromName || invite.hostName);
+                      return hasId || hasSender;
+                    })
+                    .sort((a: any, b: any) => {
+                      const getMs = (inv: any) => {
+                        if (!inv) return 0;
+                        if (typeof inv.sentAt === "number") return inv.sentAt;
+                        if (typeof inv.timestamp === "number") return inv.timestamp;
+                        if (inv.timestamp?.toMillis && typeof inv.timestamp.toMillis === "function") return inv.timestamp.toMillis();
+                        if (inv.timestamp?.toDate && typeof inv.timestamp.toDate === "function") return inv.timestamp.toDate().getTime();
+                        if (inv.createdAt?.toMillis && typeof inv.createdAt.toMillis === "function") return inv.createdAt.toMillis();
+                        if (inv.createdAt?.toDate && typeof inv.createdAt.toDate === "function") return inv.createdAt.toDate().getTime();
+                        if (inv.sentAt) {
+                          const p = Date.parse(inv.sentAt);
+                          if (!isNaN(p)) return p;
+                        }
+                        if (inv.receivedAt) {
+                          const p = Date.parse(inv.receivedAt);
+                          if (!isNaN(p)) return p;
+                        }
+                        return 0;
+                      };
+                      return getMs(b) - getMs(a);
+                    })
+                    .slice(0, 10);
+
+                  if (sortedInvites.length === 0) {
+                    return (
+                      <div className="py-12 text-center text-stone-500 font-sans text-sm italic">
+                        No pending challenge invites.
+                      </div>
+                    );
+                  }
+
+                  return sortedInvites.map((challenge) => {
+                    const senderDisplayName = challenge.senderName || (challenge as any).fromName || (challenge as any).hostName || "Player";
+                    const challengeDifficulty = challenge.difficulty || "MEDIUM";
+                    const timestampVal = challenge.sentAt ?? (challenge as any).timestamp ?? (challenge as any).createdAt ?? challenge.receivedAt;
+
+                    return (
+                      <div 
+                        key={challenge.inviteId || challenge.id || `inv-${Math.random()}`} 
+                        className={`p-4 rounded-2xl flex flex-col gap-3 border transition-all ${
+                          darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-300" : "bg-slate-50/80 border-stone-200/60 text-stone-850"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex flex-col text-left">
+                            <span className={`text-[10px] font-black uppercase tracking-wider ${
+                              challengeDifficulty === "EASY" ? "text-emerald-500" :
+                              challengeDifficulty === "MEDIUM" ? "text-amber-500" :
+                              challengeDifficulty === "HARD" ? "text-purple-500" : "text-rose-500"
+                            }`}>
+                              {challengeDifficulty} Duel
+                            </span>
+                            <span className="font-sans text-xs font-bold mt-0.5">
+                              Invited by <strong className="font-extrabold">{senderDisplayName}</strong>
+                            </span>
+                          </div>
                           <span className="text-[9px] font-mono opacity-70">
-                            {new Date(challenge.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {formatInviteTimestamp(timestampVal)}
                           </span>
-                        )}
-                      </div>
+                        </div>
 
-                      <div className="grid grid-cols-3 gap-1.5 text-[9px] font-sans p-2 rounded-xl bg-stone-500/5 text-center">
-                        <div>
-                          <span className="block opacity-65 uppercase font-bold text-[8px]">Mistakes</span>
-                          <span className="font-black text-rose-500">{challenge.maxMistakes === 0 ? "0 (Sudden Death)" : challenge.maxMistakes < 999 ? `${challenge.maxMistakes} Limit` : "None"}</span>
+                        <div className="grid grid-cols-3 gap-1.5 text-[9px] font-sans p-2 rounded-xl bg-stone-500/5 text-center">
+                          <div>
+                            <span className="block opacity-65 uppercase font-bold text-[8px]">Mistakes</span>
+                            <span className="font-black text-rose-500">
+                              {challenge.maxMistakes === 0 ? "0 (Sudden Death)" : (challenge.maxMistakes !== undefined && challenge.maxMistakes < 999) ? `${challenge.maxMistakes} Limit` : "None"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block opacity-65 uppercase font-bold text-[8px]">Hints</span>
+                            <span className="font-black text-emerald-500">{challenge.hintLimit ?? 3} Limit</span>
+                          </div>
+                          <div>
+                            <span className="block opacity-65 uppercase font-bold text-[8px]">Timer</span>
+                            <span className="font-black">{challenge.timerEnabled ? "Visible" : "Hidden"}</span>
+                          </div>
                         </div>
-                        <div>
-                          <span className="block opacity-65 uppercase font-bold text-[8px]">Hints</span>
-                          <span className="font-black text-emerald-500">{challenge.hintLimit ?? 3} Limit</span>
-                        </div>
-                        <div>
-                          <span className="block opacity-65 uppercase font-bold text-[8px]">Timer</span>
-                          <span className="font-black">{challenge.timerEnabled ? "Visible" : "Hidden"}</span>
-                        </div>
-                      </div>
 
-                      <div className="flex gap-2 w-full mt-0.5">
-                        <button
-                          onClick={() => handleDeclineBellInvite(challenge)}
-                          className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 ${
-                            darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
-                          }`}
-                        >
-                          Decline
-                        </button>
-                        <button
-                          onClick={() => handleAcceptAndPlayBellInvite(challenge)}
-                          className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 text-white bg-indigo-600 hover:bg-indigo-700"
-                        >
-                          Accept & Play
-                        </button>
+                        <div className="flex gap-2 w-full mt-0.5">
+                          <button
+                            onClick={() => handleDeclineBellInvite(challenge)}
+                            className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 ${
+                              darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
+                            }`}
+                          >
+                            Decline
+                          </button>
+                          <button
+                            onClick={() => handleAcceptAndPlayBellInvite(challenge)}
+                            className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 text-white bg-indigo-600 hover:bg-indigo-700"
+                          >
+                            Accept & Play
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
-                )}
+                    );
+                  });
+                })()}
               </div>
             </motion.div>
           </div>

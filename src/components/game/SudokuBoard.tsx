@@ -6,26 +6,31 @@ export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 export const DIFFICULTY_GRID_THEMES: Record<Difficulty, {
   activeCell: { light: string; dark: string };
   crosshair: { light: string; dark: string };
+  paintCrosshair: { light: string; dark: string };
   identical: { light: string; dark: string };
 }> = {
   EASY: {
     activeCell: { light: "#86EFAC", dark: "#064e3b" },
-    crosshair: { light: "rgba(134, 239, 172, 0.15)", dark: "rgba(6, 78, 59, 0.28)" },
+    crosshair: { light: "rgba(34, 197, 94, 0.07)", dark: "rgba(6, 78, 59, 0.15)" },
+    paintCrosshair: { light: "rgba(34, 197, 94, 0.025)", dark: "rgba(6, 78, 59, 0.05)" },
     identical: { light: "#D1FAE5", dark: "#022c22" },
   },
   MEDIUM: {
     activeCell: { light: "#FEF08A", dark: "#713f12" },
-    crosshair: { light: "rgba(253, 224, 71, 0.15)", dark: "rgba(113, 63, 18, 0.28)" },
+    crosshair: { light: "rgba(234, 179, 8, 0.07)", dark: "rgba(113, 63, 18, 0.15)" },
+    paintCrosshair: { light: "rgba(234, 179, 8, 0.025)", dark: "rgba(113, 63, 18, 0.05)" },
     identical: { light: "#FFF99D", dark: "#451a03" },
   },
   HARD: {
     activeCell: { light: "#D8B4FE", dark: "#581c87" },
-    crosshair: { light: "rgba(216, 180, 254, 0.15)", dark: "rgba(88, 28, 135, 0.28)" },
+    crosshair: { light: "rgba(168, 85, 247, 0.07)", dark: "rgba(88, 28, 135, 0.15)" },
+    paintCrosshair: { light: "rgba(168, 85, 247, 0.025)", dark: "rgba(88, 28, 135, 0.05)" },
     identical: { light: "#F3E8FF", dark: "#2e1065" },
   },
   EXPERT: {
     activeCell: { light: "#F9A8D4", dark: "#881337" },
-    crosshair: { light: "rgba(249, 168, 212, 0.15)", dark: "rgba(136, 19, 55, 0.28)" },
+    crosshair: { light: "rgba(244, 63, 94, 0.07)", dark: "rgba(136, 19, 55, 0.15)" },
+    paintCrosshair: { light: "rgba(244, 63, 94, 0.025)", dark: "rgba(136, 19, 55, 0.05)" },
     identical: { light: "#FFE4E6", dark: "#4c0519" },
   },
 };
@@ -109,6 +114,10 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
     ? (currentDiff === "EASY" ? "border-b-[#064e3b]/30" : currentDiff === "MEDIUM" ? "border-b-[#713f12]/30" : currentDiff === "HARD" ? "border-b-[#581c87]/30" : "border-b-[#881337]/30")
     : (currentDiff === "EASY" ? "border-b-[#065f46]/20" : currentDiff === "MEDIUM" ? "border-b-[#854d0e]/20" : currentDiff === "HARD" ? "border-b-[#6b21a8]/20" : "border-b-[#9d174d]/20");
 
+  // In Number-First mode with locked brush digit, apply ultra-soft crosshair background
+  const isPaintModeActiveWithNumber = isNumberFirstInputMode && lockedNum !== null;
+  const allowCrosshairs = highlightAreas;
+
   return (
     <div 
       className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden rounded-none transition-colors duration-200 ${darkMode ? "bg-zinc-950 border-t-[3px] border-l-[3px]" : "bg-white border-t-[3px] border-l-[3px]"} ${darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#064e3b]/60" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#713f12]/60" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#581c87]/60" : "border-[#881337]/60") : ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#065f46]/40" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#854d0e]/40" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#6b21a8]/40" : "border-[#9d174d]/40")}`}
@@ -148,7 +157,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           const isSelected = boardState.selectedRow === r && boardState.selectedCol === c;
           
           let isHighlightedSibling = false;
-          if (highlightAreas && boardState.selectedRow !== null && boardState.selectedCol !== null) {
+          if (allowCrosshairs && boardState.selectedRow !== null && boardState.selectedCol !== null) {
             const isRowSibling = boardState.selectedRow === r;
             const isColSibling = boardState.selectedCol === c;
             const isBoxSibling = 
@@ -173,8 +182,23 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           let cellBgClass = "";
           let cellBgStyle: React.CSSProperties = {};
 
-          if (isMistake) {
-            cellBgClass = darkMode ? "bg-[#4c0519]/40 border border-rose-900/30" : "bg-[#FFE4E6]";
+          if (isSelected && isMistake) {
+            // Distinct deep error highlight for active selected mistake cell
+            if (darkMode) {
+              cellBgStyle = { backgroundColor: "#881337" };
+              cellBgClass = "text-white ring-2 ring-inset ring-rose-400 font-black animate-pulse";
+            } else {
+              cellBgStyle = { backgroundColor: "#fca5a5" };
+              cellBgClass = "ring-2 ring-inset ring-rose-500 font-black text-rose-950";
+            }
+          } else if (isMistake) {
+            // Soft unselected mistake background
+            if (darkMode) {
+              cellBgClass = "bg-[#4c0519]/40 border border-rose-900/30 text-rose-400";
+            } else {
+              cellBgStyle = { backgroundColor: "#fee2e2" };
+              cellBgClass = "text-rose-600";
+            }
           } else if (isSelected) {
             cellBgStyle = {
               backgroundColor: darkMode ? diffTheme.activeCell.dark : diffTheme.activeCell.light,
@@ -186,8 +210,11 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
             };
             if (darkMode) cellBgClass = "text-white";
           } else if (isHighlightedSibling) {
+            const crosshairBg = isPaintModeActiveWithNumber
+              ? (darkMode ? diffTheme.paintCrosshair.dark : diffTheme.paintCrosshair.light)
+              : (darkMode ? diffTheme.crosshair.dark : diffTheme.crosshair.light);
             cellBgStyle = {
-              backgroundColor: darkMode ? diffTheme.crosshair.dark : diffTheme.crosshair.light,
+              backgroundColor: crosshairBg,
             };
           } else {
             cellBgClass = darkMode ? "bg-zinc-900/60" : "bg-white";
@@ -221,7 +248,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                     cell.isOriginalClue 
                       ? (darkMode ? "text-white font-sans font-normal" : "text-stone-900 font-sans font-normal")
                       : isMistake
-                        ? (darkMode ? "text-rose-400 handwriting font-black animate-pulse" : "text-rose-600 handwriting font-black")
+                        ? (darkMode ? "text-rose-300 handwriting font-black animate-pulse" : "text-rose-700 handwriting font-black")
                         : (darkMode ? "text-[#38bdf8] handwriting font-normal" : "text-[#2B6CB0] handwriting font-normal")
                   }`}
                   style={{
