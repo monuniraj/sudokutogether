@@ -8,6 +8,8 @@ import { JoinRoomModal } from "./components/modals/JoinRoomModal";
 import { MultiplayerForkModal } from "./components/modals/MultiplayerForkModal";
 import { CreateChallengeModal } from "./components/modals/CreateChallengeModal";
 import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
+import { SudokuBoard } from "./components/game/SudokuBoard";
+import { SudokuKeypad } from "./components/game/SudokuKeypad";
 import {
   doc,
   setDoc,
@@ -6336,207 +6338,41 @@ useEffect(() => {
 
                   {/* 2. CENTER CANVAS: Corner-to-Corner Sudoku grid with custom border hierarchy and height-aware sizing */}
                   <div className="w-full flex items-center justify-center p-0.5 overflow-hidden relative rounded-none">
-                    {boardState ? (
-                      <div 
-                        className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden rounded-none transition-colors duration-200 ${darkMode ? "bg-zinc-950 border-t-[3px] border-l-[3px]" : "bg-white border-t-[3px] border-l-[3px]"} ${darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#064e3b]/60" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#713f12]/60" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#581c87]/60" : "border-[#881337]/60") : ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#065f46]/40" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#854d0e]/40" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#6b21a8]/40" : "border-[#9d174d]/40")}`}
-                        style={{ 
-                          boxShadow: darkMode ? "0 4px 20px rgba(0,0,0,0.6)" : "0 4px 20px rgba(43,108,176,0.03)",
-                          width: "100%",
-                          maxWidth: "100%",
-                          margin: "0 auto",
-                        }}
-                      >
-                        
-                        {/* PAUSE SCREEN OVERLAY */}
-                        {isTimerPaused && (
-                          <div className={`absolute inset-0 ${darkMode ? "bg-zinc-950/95 text-zinc-100" : "bg-[#FDFBF7]/95 text-stone-900"} backdrop-blur-xs z-45 flex flex-col items-center justify-center gap-3 rounded-xl`}>
-                            <span className="text-3xl">⏸️</span>
-                            <span className={`font-sans font-black text-xs uppercase tracking-widest ${darkMode ? "text-zinc-100" : "text-[#1E1E1E]"}`}>Sudoku Paused</span>
-                            <button
-                              onClick={() => {
-                                playClickSound();
-                                setIsTimerPaused(false);
-                              }}
-                              className={`border-none py-2 px-5 rounded-xl font-sans text-xs font-black uppercase tracking-wider cursor-pointer shadow-md transition-all active:scale-98 ${darkMode ? "bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white" : "bg-[#2B6CB0] hover:bg-[#1D4ED8] text-white"}`}
-                            >
-                              Resume Session
-                            </button>
-                          </div>
-                        )}
-                        
-                        {Array.from({ length: 9 }).map((_, r) =>
-                          Array.from({ length: 9 }).map((_, c) => {
-                            const cell = boardState.grid[r][c];
-                              
-                              const isMistake = cell.value !== 0 && 
-                                !cell.isOriginalClue && 
-                                solutionGrid[r] && 
-                                cell.value !== solutionGrid[r][c];
-
-                              const isSelected = boardState.selectedRow === r && boardState.selectedCol === c;
-                              
-                              let isHighlightedSibling = false;
-                              if (highlightAreas && boardState.selectedRow !== null && boardState.selectedCol !== null) {
-                                const isRowSibling = boardState.selectedRow === r;
-                                const isColSibling = boardState.selectedCol === c;
-                                const isBoxSibling = 
-                                  Math.floor(boardState.selectedRow / 3) === Math.floor(r / 3) && 
-                                  Math.floor(boardState.selectedCol / 3) === Math.floor(c / 3);
-                                isHighlightedSibling = (isRowSibling || isColSibling || isBoxSibling) && !isSelected;
-                              }
-
-                              const selectedCellValue = (boardState.selectedRow !== null && boardState.selectedCol !== null)
-                                ? boardState.grid[boardState.selectedRow][boardState.selectedCol].value
-                                : 0;
-
-                              const activeSelectedNumber = (isNumberFirstInputMode && lockedNum !== null)
-                                ? lockedNum
-                                : selectedCellValue;
-
-                              const isIdenticalValue = highlightIdentical && 
-                                activeSelectedNumber !== 0 && 
-                                cell.value === activeSelectedNumber && 
-                                !isSelected;
-
-                              const currentDiff = ((boardState.difficulty || difficulty).toUpperCase()) as Difficulty;
-                              const diffTheme = DIFFICULTY_GRID_THEMES[currentDiff] || DIFFICULTY_GRID_THEMES.EASY;
-
-                              let cellBgClass = "";
-                              let cellBgStyle: React.CSSProperties = {};
-
-                              if (isMistake) {
-                                cellBgClass = darkMode ? "bg-[#4c0519]/40 border border-rose-900/30" : "bg-[#FFE4E6]";
-                              } else if (isSelected) {
-                                cellBgStyle = {
-                                  backgroundColor: darkMode ? diffTheme.activeCell.dark : diffTheme.activeCell.light,
-                                };
-                                if (darkMode) cellBgClass = "text-white animate-pulse";
-                              } else if (isIdenticalValue) {
-                                cellBgStyle = {
-                                  backgroundColor: darkMode ? diffTheme.identical.dark : diffTheme.identical.light,
-                                };
-                                if (darkMode) cellBgClass = "text-white";
-                              } else if (isHighlightedSibling) {
-                                cellBgStyle = {
-                                  backgroundColor: darkMode ? diffTheme.crosshair.dark : diffTheme.crosshair.light,
-                                };
-                              } else {
-                                cellBgClass = darkMode ? "bg-zinc-900/60" : "bg-white";
-                              }
-
-                              // Precise line weight styling: 3x3 and outer perimeter boundaries get exact identical 3px thick border, others get thin 0.75px borders
-                              let borderClasses = "";
-                              const heavyBorderR = darkMode 
-                                ? (currentDiff === "EASY" ? "border-r-[#064e3b]/60" : currentDiff === "MEDIUM" ? "border-r-[#713f12]/60" : currentDiff === "HARD" ? "border-r-[#581c87]/60" : "border-r-[#881337]/60")
-                                : (currentDiff === "EASY" ? "border-r-[#065f46]/40" : currentDiff === "MEDIUM" ? "border-r-[#854d0e]/40" : currentDiff === "HARD" ? "border-r-[#6b21a8]/40" : "border-r-[#9d174d]/40");
-                              const heavyBorderB = darkMode 
-                                ? (currentDiff === "EASY" ? "border-b-[#064e3b]/60" : currentDiff === "MEDIUM" ? "border-b-[#713f12]/60" : currentDiff === "HARD" ? "border-b-[#581c87]/60" : "border-b-[#881337]/60")
-                                : (currentDiff === "EASY" ? "border-b-[#065f46]/40" : currentDiff === "MEDIUM" ? "border-b-[#854d0e]/40" : currentDiff === "HARD" ? "border-b-[#6b21a8]/40" : "border-b-[#9d174d]/40");
-
-                              const lightBorderR = darkMode
-                                ? (currentDiff === "EASY" ? "border-r-[#064e3b]/30" : currentDiff === "MEDIUM" ? "border-r-[#713f12]/30" : currentDiff === "HARD" ? "border-r-[#581c87]/30" : "border-r-[#881337]/30")
-                                : (currentDiff === "EASY" ? "border-r-[#065f46]/20" : currentDiff === "MEDIUM" ? "border-r-[#854d0e]/20" : currentDiff === "HARD" ? "border-r-[#6b21a8]/20" : "border-r-[#9d174d]/20");
-                                
-                              const lightBorderB = darkMode
-                                ? (currentDiff === "EASY" ? "border-b-[#064e3b]/30" : currentDiff === "MEDIUM" ? "border-b-[#713f12]/30" : currentDiff === "HARD" ? "border-b-[#581c87]/30" : "border-b-[#881337]/30")
-                                : (currentDiff === "EASY" ? "border-b-[#065f46]/20" : currentDiff === "MEDIUM" ? "border-b-[#854d0e]/20" : currentDiff === "HARD" ? "border-b-[#6b21a8]/20" : "border-b-[#9d174d]/20");
-
-                              if (c === 2 || c === 8 || c === 5) {
-                                borderClasses += ` border-r-[3px] ${heavyBorderR}`;
-                              } else {
-                                borderClasses += ` border-r-[0.75px] ${lightBorderR}`;
-                              }
-
-                              if (r === 2 || r === 8 || r === 5) {
-                                borderClasses += ` border-b-[3px] ${heavyBorderB}`;
-                              } else {
-                                borderClasses += ` border-b-[0.75px] ${lightBorderB}`;
-                              }
-
-                              return (
-                                <div
-                                  key={`${r}-${c}`}
-                                  onClick={() => {
-                                    if (visualizingBacktrack || isTimerPaused) return;
-                                    if (boardState?.isGameOver) {
-                                      setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
-                                      return;
-                                    }
-                                    playClickSound();
-                                    setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
-
-                                    if (isNumberFirstInputMode) {
-                                      if (cell.value !== 0) {
-                                        // Tapping any filled cell immediately sets that number as the active brush digit
-                                        setLockedNum(cell.value);
-                                        addLog(`🎨 Selected paint digit ${cell.value} from grid cell. Click empty cells to fast fill!`);
-                                      } else if (lockedNum !== null && !cell.isOriginalClue) {
-                                        // Fast fill empty cell with the active brush digit
-                                        handleValueInput(lockedNum, r, c);
-                                      }
-                                    }
-                                  }}
-                                  style={cellBgStyle}
-                                  className={`aspect-square relative cursor-pointer select-none ${cellBgClass} ${borderClasses} p-0 overflow-hidden flex items-center justify-center`}
-                                >
-                                  {cell.value !== 0 ? (
-                                    <div 
-                                      className={`absolute inset-0 flex items-center justify-center text-center select-none ${
-                                        cell.isOriginalClue 
-                                          ? (darkMode ? "text-white font-sans font-normal" : "text-stone-900 font-sans font-normal")
-                                          : isMistake
-                                            ? (darkMode ? "text-rose-400 handwriting font-black animate-pulse" : "text-rose-600 handwriting font-black")
-                                            : (darkMode ? "text-[#38bdf8] handwriting font-normal" : "text-[#2B6CB0] handwriting font-normal")
-                                      }`}
-                                      style={{
-                                        fontSize: cell.isOriginalClue 
-                                          ? "clamp(22px, min(7.5vw, 6.5vh), 42px)" 
-                                          : "clamp(26px, min(9.5vw, 8.5vh), 50px)"
-                                      }}
-                                    >
-                                      {cell.value}
-                                    </div>
-                                  ) : (
-                                    /* Soft muted light grey note digits */
-                                    <div 
-                                      className={`absolute inset-px grid grid-cols-3 p-[2px] font-mono leading-none ${darkMode ? "text-sky-400/50" : "text-[#2B6CB0]/55"}`}
-                                      style={{
-                                        fontSize: "clamp(6px, min(1.8vw, 1.4vh), 12px)",
-                                        lineHeight: "1.1"
-                                      }}
-                                    >
-                                      {Array.from({ length: 9 }).map((_, id) => {
-                                        const cand = id + 1;
-                                        const hasNote = cell.notes.has(cand);
-                                        return (
-                                          <div key={id} className={`flex items-center justify-center text-center font-bold ${
-                                            hasNote 
-                                              ? (darkMode ? "text-sky-400/90 font-black font-sans" : "text-[#2B6CB0]/85 font-black font-sans") 
-                                              : "opacity-0"
-                                          }`}>
-                                            {cand}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })
-                          )
+                    <SudokuBoard
+                      boardState={boardState}
+                      difficulty={difficulty}
+                      solutionGrid={solutionGrid}
+                      isTimerPaused={isTimerPaused}
+                      onResumeSession={() => setIsTimerPaused(false)}
+                      visualizingBacktrack={visualizingBacktrack}
+                      highlightAreas={highlightAreas}
+                      highlightIdentical={highlightIdentical}
+                      isNumberFirstInputMode={isNumberFirstInputMode}
+                      lockedNum={lockedNum}
+                      darkMode={darkMode}
+                      playClickSound={playClickSound}
+                      onCellClick={(r, c) => {
+                        if (visualizingBacktrack || isTimerPaused) return;
+                        if (boardState?.isGameOver) {
+                          setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
+                          return;
                         }
-                      </div>
-                    ) : (
-                      <div className="w-full max-w-[420px] aspect-square flex flex-col items-center justify-center bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-2xl shadow-xl border border-stone-200/50 dark:border-zinc-800 p-8 my-auto select-none">
-                        <RefreshCw className="w-10 h-10 animate-spin text-sky-500 mb-3" />
-                        <span className="font-mono text-sm font-black tracking-widest text-stone-800 dark:text-stone-100 uppercase">
-                          ENTERING MATCH...
-                        </span>
-                        <span className="text-xs text-stone-400 dark:text-zinc-500 font-mono mt-1">
-                          Synchronizing Sudoku arena
-                        </span>
-                      </div>
-                    )}
+                        playClickSound();
+                        setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
+
+                        if (isNumberFirstInputMode) {
+                          const cell = boardState?.grid[r][c];
+                          if (cell && cell.value !== 0) {
+                            // Tapping any filled cell immediately sets that number as the active brush digit
+                            setLockedNum(cell.value);
+                            addLog(`🎨 Selected paint digit ${cell.value} from grid cell. Click empty cells to fast fill!`);
+                          } else if (lockedNum !== null && cell && !cell.isOriginalClue) {
+                            // Fast fill empty cell with the active brush digit
+                            handleValueInput(lockedNum, r, c);
+                          }
+                        }
+                      }}
+                    />
                   </div>
                 </div>
                 </div>
@@ -6621,147 +6457,36 @@ useEffect(() => {
                     </div>
                   </div>
 
-                  {/* 2. UTILITY BUTTONS: Position the 'Undo', 'Erase', 'Notes' (toggle), and 'Hint' buttons in a single horizontal row immediately below indicators */}
-                  <div className="shrink-0 w-full flex flex-col mt-1 px-0.5 overflow-visible" id="game-utility-buttons-deck">
-                    <div className="grid grid-cols-4 gap-2 lg:gap-2 xl:gap-2.5 relative z-10 w-full overflow-visible">
-                      
-                      {/* UNDO BUTTON: pastel Light Blue with active dark state and reduced shadow */}
-                      <button
-                        onClick={() => { playClickSound(); handleUndo(); }}
-                        disabled={!boardState || boardState.isGameOver || history.length === 0}
-                        className={`aspect-[1.12/1] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] flex flex-col items-center justify-center gap-0.5 active:scale-95 active:shadow-none border-none shadow-md ${darkMode ? "bg-zinc-900 border border-sky-950 hover:bg-zinc-850 text-[#38BDF8] active:bg-zinc-800" : "bg-[#E0F2FE] hover:bg-[#bae6fd] active:bg-[#C0E8FF] text-[#0369A1] shadow-[0_8px_16px_rgba(3,105,161,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"}`}
-                      >
-                        <RotateCcw className={`w-[16px] h-[16px] xl:w-[18px] xl:h-[18px] stroke-[2.5] ${darkMode ? "text-[#38BDF8]" : "text-[#0369A1]"}`} />
-                        <span className="text-[9px] xl:text-[10px] font-sans font-extrabold tracking-wider uppercase leading-none mt-1">
-                          Undo
-                        </span>
-                      </button>
-
-                      {/* ERASE BUTTON: pastel Light Pink with active dark state and reduced shadow */}
-                      <button
-                        onClick={() => { playClickSound(); handleClearCell(); }}
-                        disabled={!boardState || boardState.isGameOver}
-                        className={`aspect-[1.12/1] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] flex flex-col items-center justify-center gap-0.5 active:scale-95 active:shadow-none border-none shadow-md ${darkMode ? "bg-zinc-900 border border-pink-950 hover:bg-zinc-850 text-[#F472B6] active:bg-zinc-800" : "bg-[#FCE7F3] hover:bg-[#FBCFE8] active:bg-[#F9A8D4] text-[#9D174D] shadow-[0_8px_16px_rgba(157,23,77,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"}`}
-                      >
-                        <Trash2 className={`w-[16px] h-[16px] xl:w-[18px] xl:h-[18px] ${darkMode ? "text-[#F472B6]" : "text-[#9D174D]"}`} />
-                        <span className="text-[9px] xl:text-[10px] font-sans font-extrabold tracking-wider uppercase leading-none mt-1">
-                          Erase
-                        </span>
-                      </button>
-
-                      {/* NOTES ON/OFF BUTTON: pastel Light Purple or active Yellow with active pressed states */}
-                      <button
-                        onClick={() => { playClickSound(); setPencilMode(!pencilMode); }}
-                        disabled={!boardState || boardState.isGameOver}
-                        className={`aspect-[1.12/1] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] flex flex-col items-center justify-center gap-0.5 active:scale-95 active:shadow-none border-none shadow-md ${
-                          darkMode 
-                            ? (pencilMode 
-                                ? "bg-[#713f12] hover:bg-[#854d0e] active:bg-[#854d0e] text-[#facc15] font-black border border-yellow-950" 
-                                : "bg-zinc-900 hover:bg-zinc-850 active:bg-zinc-800 text-[#C084FC] border border-purple-950")
-                            : (pencilMode 
-                                ? "bg-[#FFF99D] hover:bg-[#FEF08A] active:bg-[#FDE047] text-[#854D0E] font-black shadow-[0_8px_16px_rgba(133,77,14,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" 
-                                : "bg-[#F3E8FF] hover:bg-[#E9D5FF] active:bg-[#D8B4FE] text-[#6B21A8] shadow-[0_8px_16px_rgba(107,33,168,0.06),_0_2px_4px_rgba(0,0,0,0.02)]")
-                        }`}
-                      >
-                        <Pencil className="w-[16px] h-[16px] xl:w-[18px] xl:h-[18px]" />
-                        <span className="text-[9px] xl:text-[10px] font-sans font-extrabold tracking-wider uppercase leading-none mt-1">
-                          Notes {pencilMode ? "ON" : "OFF"}
-                        </span>
-                      </button>
-
-                      {/* HINT BUTTON: pastel Light Green with active pressed states */}
-                      <button
-                        onClick={() => { playClickSound(); triggerSmartHint(); }}
-                        disabled={!boardState || boardState.isGameOver}
-                        className={`aspect-[1.12/1] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] flex flex-col items-center justify-center gap-0.5 active:scale-95 active:shadow-none border-none shadow-md ${darkMode ? "bg-zinc-900 border border-emerald-950 hover:bg-zinc-850 text-[#34D399] active:bg-[#135236]" : "bg-[#E6F4EA] hover:bg-[#D1FAE5] text-[#135236] shadow-[0_8px_16px_rgba(19,82,54,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"}`}
-                      >
-                        <div className="relative pointer-events-none flex items-center justify-center">
-                          <Lightbulb className={`w-[16px] h-[16px] xl:w-[18px] xl:h-[18px] ${darkMode ? "text-[#34D399]" : "text-[#135236]"}`} />
-                          <span className={`absolute -top-1.5 -right-2 text-[7px] font-mono font-black rounded-full h-3.5 w-3.5 border flex items-center justify-center shadow-sm ${darkMode ? "bg-[#FBCFE8] text-[#831843] border-[#FBCFE8]" : "bg-[#FCE7F3] text-[#9D174D] border-white"}`}>
-                            {boardState && boardState.maxHintsLimit !== undefined ? Math.max(0, boardState.maxHintsLimit - boardState.hintsCount) : hintInventory}
-                          </span>
-                        </div>
-                        <span className="text-[9px] xl:text-[10px] font-sans font-extrabold tracking-wider uppercase leading-none mt-1">
-                          Hint
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 3. NUMBER PAD: Arrange the numbers 1-9 in a 3x3 grid below the utility buttons on desktop, horizontal row on mobile */}
-                  <div className="shrink-0 w-full mt-1 lg:mt-2 pb-0.5 overflow-visible px-1 sm:px-0" id="game-number-pad-deck">
-                    <div className="grid grid-cols-9 lg:grid-cols-3 gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5 w-full select-none overflow-visible">
-                      {Array.from({ length: 9 }).map((_, i) => {
-                        const num = i + 1;
-                        const selectedVal = (boardState && boardState.selectedRow !== null && boardState.selectedCol !== null)
-                          ? boardState.grid[boardState.selectedRow][boardState.selectedCol].value
-                          : 0;
-                        const isLocked = isNumberFirstInputMode && (lockedNum === num);
-                        
-                        let remainingCount = 9;
-                        if (boardState) {
-                          let count = 0;
-                          for (let r = 0; r < 9; r++) {
-                            for (let c = 0; c < 9; c++) {
-                              if (boardState.grid[r][c].value === num) {
-                                count++;
-                              }
-                            }
-                          }
-                          remainingCount = 9 - count;
+                  {/* 2 & 3. KEYPAD & CONTROLS DECK */}
+                  <SudokuKeypad
+                    boardState={boardState}
+                    historyLength={history.length}
+                    pencilMode={pencilMode}
+                    onTogglePencilMode={() => setPencilMode(!pencilMode)}
+                    onUndo={handleUndo}
+                    onErase={handleClearCell}
+                    onHint={triggerSmartHint}
+                    hintInventory={hintInventory}
+                    onNumberSelect={(num) => {
+                      if (isNumberFirstInputMode) {
+                        if (lockedNum === num) {
+                          setLockedNum(null);
+                          addLog(`🔓 Unlocked digit ${num}.`);
+                        } else {
+                          setLockedNum(num);
+                          addLog(`🎨 Selected paint digit ${num}. Tap empty cells to fast fill!`);
                         }
-
-                        return (
-                          <button
-                            key={num}
-                            onClick={() => {
-                              playClickSound();
-                              if (isNumberFirstInputMode) {
-                                if (lockedNum === num) {
-                                  setLockedNum(null);
-                                  addLog(`🔓 Unlocked digit ${num}.`);
-                                } else {
-                                  setLockedNum(num);
-                                  addLog(`🎨 Selected paint digit ${num}. Tap empty cells to fast fill!`);
-                                }
-                              } else {
-                                handleValueInput(num);
-                              }
-                            }}
-                            disabled={!boardState || boardState.isGameOver || visualizingBacktrack || remainingCount <= 0}
-                            className={`aspect-[1/1.55] lg:aspect-[1/1.15] w-full relative flex items-center justify-center font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none transition-all rounded-xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
-                              isLocked 
-                                ? (darkMode 
-                                    ? "bg-[#713f12] text-[#facc15] active:bg-[#854d0e] border border-yellow-950" 
-                                    : "bg-[#FFF99D] text-[#854D0E] active:bg-[#FDE047] shadow-[0_8px_16px_rgba(133,77,14,0.12),_0_2px_4px_rgba(0,0,0,0.02)]")
-                                : (darkMode 
-                                    ? "bg-[#1E1E26] text-sky-450 hover:bg-[#252530] border border-zinc-805 shadow-[0_4px_10px_rgba(0,0,0,0.4)]" 
-                                    : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")
-                            }`}
-                          >
-                            <div className="flex flex-col items-center justify-center absolute inset-0">
-                              <span 
-                                className="leading-none flex items-center justify-center"
-                                style={{ fontSize: "clamp(20px, min(6.5vw, 5.5vh), 38px)" }}
-                              >
-                                {num}
-                              </span>
-                              {showRemainingNumbers && (
-                                <span className={`text-[9px] lg:text-xs xl:text-sm font-mono leading-none mt-1 lg:mt-1.5 font-bold ${remainingCount <= 0 ? "opacity-30" : "opacity-70"}`}>
-                                  {remainingCount > 0 ? remainingCount : 0}
-                                </span>
-                              )}
-                            </div>
-                            {isLocked && (
-                              <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[6px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-black z-10">
-                                ✓
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                      } else {
+                        handleValueInput(num);
+                      }
+                    }}
+                    lockedNum={lockedNum}
+                    isNumberFirstInputMode={isNumberFirstInputMode}
+                    showRemainingNumbers={showRemainingNumbers}
+                    visualizingBacktrack={visualizingBacktrack}
+                    darkMode={darkMode}
+                    playClickSound={playClickSound}
+                  />
 
                   {/* 4. ACTION BUTTON: 'New Game' button at the bottom of the right panel, spanning the width of the number pad on desktop */}
                   <button
