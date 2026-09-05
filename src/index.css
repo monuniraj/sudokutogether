@@ -9,6 +9,11 @@
 }
 
 @layer base {
+  html, body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+  }
+
   /* Completely hide standard scrollbars everywhere while enabling scroll actions */
   html, body, div, section, main {
     scrollbar-width: none; /* Firefox */

@@ -1,14 +1,82 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-  // Configure middleware to parse JSON bodies
-  app.use(express.json());
+  // Security Headers Middleware
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    next();
+  });
+
+  // CORS Middleware
+  const ALLOWED_ORIGIN_PATTERNS = [
+    /^https:\/\/sudoku-together-mode\.web\.app$/,
+    /^https:\/\/sudoku-together-mode\.firebaseapp\.com$/,
+    /^http:\/\/localhost(:\d+)?$/,
+    /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+    /^capacitor:\/\/localhost$/
+  ];
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      const isAllowed = ALLOWED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
+      if (isAllowed) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      }
+    }
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
+    }
+    next();
+  });
+
+  // Simple in-memory rate limiter (60 requests per minute per IP for API routes)
+  const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+  const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+  const RATE_LIMIT_MAX_REQUESTS = 60;
+
+  const apiRateLimiter = (req: Request, res: Response, next: NextFunction) => {
+    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0].trim() || req.socket.remoteAddress || "unknown";
+    const now = Date.now();
+    const clientData = rateLimitMap.get(ip);
+
+    if (!clientData || now > clientData.resetAt) {
+      rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+      return next();
+    }
+
+    if (clientData.count >= RATE_LIMIT_MAX_REQUESTS) {
+      return res.status(429).json({ error: "Too many requests. Please slow down." });
+    }
+
+    clientData.count++;
+    next();
+  };
+
+  // Periodic cleanup of rate limiter entries
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, data] of rateLimitMap.entries()) {
+      if (now > data.resetAt) {
+        rateLimitMap.delete(ip);
+      }
+    }
+  }, 5 * 60 * 1000);
+
+  // Configure middleware to parse JSON bodies with 10kb limit to prevent payload DoS
+  app.use(express.json({ limit: "10kb" }));
 
   // API router setup before Vite middleware mounts
   app.get("/api/health", (req, res) => {
@@ -33,7 +101,6 @@ async function startServer() {
         const raw = fs.readFileSync(DATA_FILE, "utf8");
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          // Automatically migrate legacy array structure to new seed-based dictionary
           const migrated: Record<string, Record<string, any>> = {};
           for (const record of parsed) {
             const seed = getSeedFromId(record.challengeId);
@@ -99,8 +166,12 @@ async function startServer() {
   cleanupOldResults();
 
   // Retrieve shared real leaderboard entries for a specific challenge ID / seed
-  app.get("/api/challenges/:challengeId/leaderboard", (req, res) => {
+  app.get("/api/challenges/:challengeId/leaderboard", apiRateLimiter, (req, res) => {
     const { challengeId } = req.params;
+    if (!challengeId || typeof challengeId !== "string" || challengeId.length > 100) {
+      return res.status(400).json({ error: "Invalid challenge ID parameter." });
+    }
+
     const seed = getSeedFromId(challengeId);
     const db = readResults();
     
@@ -113,14 +184,14 @@ async function startServer() {
       const bPending = !!b.isPending;
 
       if (aPending !== bPending) {
-        return aPending ? 1 : -1; // completed first, pending last
+        return aPending ? 1 : -1;
       }
 
       const aWon = !!a.isWon;
       const bWon = !!b.isWon;
 
       if (aWon !== bWon) {
-        return aWon ? -1 : 1; // wins first
+        return aWon ? -1 : 1;
       }
 
       if (aWon) {
@@ -136,13 +207,20 @@ async function startServer() {
   });
 
   // Register that a player has opened and joined a challenge
-  app.post("/api/challenges/join", (req, res) => {
+  app.post("/api/challenges/join", apiRateLimiter, (req, res) => {
     const { challengeId, userId, playerName } = req.body;
 
-    if (!challengeId || !userId || !playerName) {
-      return res.status(400).json({ error: "Missing required properties: challengeId, userId, playerName." });
+    if (!challengeId || typeof challengeId !== "string" || challengeId.length > 100) {
+      return res.status(400).json({ error: "Invalid or missing challengeId." });
+    }
+    if (!userId || typeof userId !== "string" || userId.length > 100) {
+      return res.status(400).json({ error: "Invalid or missing userId." });
+    }
+    if (!playerName || typeof playerName !== "string" || playerName.trim().length === 0 || playerName.length > 50) {
+      return res.status(400).json({ error: "Invalid or missing playerName." });
     }
 
+    const sanitizedName = playerName.trim().slice(0, 50);
     const seed = getSeedFromId(challengeId);
     const db = readResults();
 
@@ -158,7 +236,7 @@ async function startServer() {
     const newRecord = {
       challengeId,
       userId,
-      playerName: playerName.trim(),
+      playerName: sanitizedName,
       timeSec: 0,
       mistakes: 0,
       isWon: false,
@@ -173,11 +251,28 @@ async function startServer() {
   });
 
   // Submit / synchronize a completion result for a challenge / seed
-  app.post("/api/challenges/submit", (req, res) => {
+  app.post("/api/challenges/submit", apiRateLimiter, (req, res) => {
     const { challengeId, userId, playerName, timeSec, mistakes, isWon, date } = req.body;
 
-    if (!challengeId || !userId || !playerName) {
-      return res.status(400).json({ error: "Missing required properties: challengeId, userId, playerName." });
+    if (!challengeId || typeof challengeId !== "string" || challengeId.length > 100) {
+      return res.status(400).json({ error: "Invalid or missing challengeId." });
+    }
+    if (!userId || typeof userId !== "string" || userId.length > 100) {
+      return res.status(400).json({ error: "Invalid or missing userId." });
+    }
+    if (!playerName || typeof playerName !== "string" || playerName.trim().length === 0 || playerName.length > 50) {
+      return res.status(400).json({ error: "Invalid or missing playerName." });
+    }
+
+    const sanitizedName = playerName.trim().slice(0, 50);
+    const parsedTime = Number(timeSec);
+    const parsedMistakes = Number(mistakes);
+
+    if (isNaN(parsedTime) || parsedTime < 0 || parsedTime > 86400) {
+      return res.status(400).json({ error: "timeSec must be a valid number between 0 and 86400." });
+    }
+    if (isNaN(parsedMistakes) || parsedMistakes < 0 || parsedMistakes > 999) {
+      return res.status(400).json({ error: "mistakes must be a valid number between 0 and 999." });
     }
 
     const seed = getSeedFromId(challengeId);
@@ -190,12 +285,12 @@ async function startServer() {
     const newRecord = {
       challengeId,
       userId,
-      playerName: playerName.trim(),
-      timeSec: Number(timeSec),
-      mistakes: Number(mistakes),
-      isWon: !!isWon,
+      playerName: sanitizedName,
+      timeSec: parsedTime,
+      mistakes: parsedMistakes,
+      isWon: Boolean(isWon),
       isPending: false,
-      date: date || new Date().toLocaleDateString(),
+      date: typeof date === "string" ? date.slice(0, 30) : new Date().toLocaleDateString(),
       timestamp: Date.now()
     };
 
@@ -219,7 +314,7 @@ async function startServer() {
   });
 
   // Server-side safety filter and name validator using precise string sanitization
-  app.post("/api/validate-name", (req, res) => {
+  app.post("/api/validate-name", apiRateLimiter, (req, res) => {
     const { name } = req.body;
     
     if (!name || typeof name !== "string") {
@@ -230,6 +325,13 @@ async function startServer() {
     }
 
     const trimmedName = name.trim();
+
+    if (trimmedName.length === 0 || trimmedName.length > 30) {
+      return res.json({
+        isValid: false,
+        error: "Name must be between 1 and 30 characters."
+      });
+    }
 
     // Safety validation requirement: Alphanumeric characters and spaces only
     const alphanumericRegex = /^[a-zA-Z0-9\s]+$/;
@@ -252,7 +354,6 @@ async function startServer() {
       "nigg", "fag", "retard", "scum", "bollocks", "wanker", "piss"
     ];
 
-    // Check robust boundary checks and substring checks
     for (const badWord of restrictedList) {
       if (lowerName.includes(badWord)) {
         return res.json({ 

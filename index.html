@@ -1,6 +1,41 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- INVITE PARAM RESCUE: Captures challenge URL params synchronously before React/SW
+         swallows them. Runs before any framework code, persists into sessionStorage.
+         This is the canonical PWA deep-link fix pattern. -->
+    <script>
+      (function() {
+        try {
+          var p = new URLSearchParams(window.location.search);
+          var c = p.get('challenge') || p.get('gameId') || p.get('c') || p.get('room');
+          if (c) {
+            sessionStorage.setItem('sudoku_invite_challenge', c);
+            sessionStorage.setItem('sudoku_invite_pw', p.get('pw') || p.get('password') || '');
+            sessionStorage.setItem('sudoku_invite_sender', p.get('sender') || p.get('senderName') || p.get('invitedBy') || '');
+          }
+          // Also rescue hash-embedded params (e.g. /#?challenge=...)
+          if (!c && window.location.hash) {
+            var hi = window.location.hash.indexOf('?');
+            if (hi !== -1) {
+              var hp = new URLSearchParams(window.location.hash.substring(hi + 1));
+              var hc = hp.get('challenge') || hp.get('gameId') || hp.get('c') || hp.get('room');
+              if (hc) {
+                sessionStorage.setItem('sudoku_invite_challenge', hc);
+                sessionStorage.setItem('sudoku_invite_pw', hp.get('pw') || hp.get('password') || '');
+                sessionStorage.setItem('sudoku_invite_sender', hp.get('sender') || hp.get('senderName') || '');
+              }
+            } else {
+              var cleanHash = window.location.hash.replace(/^[#\/]+/, '');
+              if (cleanHash.startsWith('SUDOKU-')) {
+                sessionStorage.setItem('sudoku_invite_challenge', cleanHash);
+              }
+            }
+          }
+        } catch(e) {}
+      })();
+    </script>
+
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2107539674074275"
      crossorigin="anonymous"></script>
 
@@ -13,7 +48,7 @@
     <meta name="google-site-verification" content="sqIwQ2v9K8H79kxv0pC-x3PH3lN1bNACTXQmO-Tvje0" />
 
     <meta name="description" content="Play classic Sudoku together with friends in real-time multiplayer mode. Challenge friends on identical boards, track stats, and improve logical reasoning.">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
     <!-- Open Graph Metadata -->
     <meta property="og:title" content="Sudoku Together Mode - Play Sudoku Online with Friends" />

@@ -1,26 +1,80 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Helper functions
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
     // Challenge leaderboard results
     match /challenge_results/{challengeId}/participants/{userId} {
-      // Anyone can read leaderboard entries
+      // Anyone can read public leaderboard entries
       allow read: if true;
-      // Only allow writes where the document key matches the userId in the payload
-      // or unauthenticated guests (since app uses guest IDs, not Firebase Auth)
-      allow write: if true;
+
+      // Disallow document deletion to prevent griefing
+      allow delete: if false;
+
+      // Restrict create & update with strict schema validation
+      allow create: if request.resource.data.userId == userId
+                    && isValidString(request.resource.data.challengeId, 1, 100)
+                    && isValidString(request.resource.data.playerName, 1, 50)
+                    && request.resource.data.timeSec is number
+                    && request.resource.data.timeSec >= 0
+                    && request.resource.data.timeSec <= 86400
+                    && request.resource.data.mistakes is number
+                    && request.resource.data.mistakes >= 0
+                    && request.resource.data.mistakes <= 999
+                    && request.resource.data.isWon is bool
+                    && request.resource.data.isPending is bool;
+
+      allow update: if request.resource.data.userId == userId
+                    && isValidString(request.resource.data.playerName, 1, 50)
+                    && request.resource.data.timeSec is number
+                    && request.resource.data.timeSec >= 0
+                    && request.resource.data.mistakes is number
+                    && request.resource.data.mistakes >= 0
+                    && request.resource.data.isWon is bool
+                    && request.resource.data.isPending is bool;
     }
 
     // Invitations collection for real-time multiplayer invites
     match /invites/{inviteId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow delete: if false;
+
+      allow create: if isValidString(request.resource.data.fromUserId, 1, 100)
+                    && isValidString(request.resource.data.toUserId, 1, 100)
+                    && (('roomCode' in request.resource.data && isValidString(request.resource.data.roomCode, 1, 120)) || ('gameId' in request.resource.data && isValidString(request.resource.data.gameId, 1, 120)))
+                    && request.resource.data.status in ['pending', 'accepted', 'declined'];
+
+      allow update: if request.resource.data.status in ['pending', 'accepted', 'declined'];
     }
 
     // User profiles, FCM tokens, and past players subcollections
     match /users/{userId} {
-      allow read, write: if true;
-      match /{allSubcollections=**} {
-        allow read, write: if true;
+      allow read: if true;
+      allow delete: if false;
+      allow create, update: if (request.resource.data.id == userId || !('id' in request.resource.data))
+                            && (!('name' in request.resource.data) || isValidString(request.resource.data.name, 1, 50));
+
+      match /past_players/{playerId} {
+        allow read: if true;
+        allow delete: if false;
+        allow create, update: if isValidString(request.resource.data.id, 1, 100)
+                              && (!('name' in request.resource.data) || isValidString(request.resource.data.name, 1, 50))
+                              && (!('isFriend' in request.resource.data) || request.resource.data.isFriend is bool);
       }
+    }
+
+    // Multiplayer Rooms for lock status, settings, and join codes
+    match /rooms/{roomCode} {
+      allow read: if true;
+      allow delete: if false;
+      allow create, update: if isValidString(roomCode, 1, 30)
+                            && (!('isLocked' in request.resource.data) || request.resource.data.isLocked is bool);
     }
   }
 }
+
+

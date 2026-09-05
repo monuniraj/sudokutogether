@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Privacy Policy - Sudoku Together Mode</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="canonical" href="https://sudoku-together-mode.web.app/privacy.html" />
+    <meta name="description" content="Privacy Policy for Sudoku Together Mode - GDPR, CCPA/CPRA, COPPA, and Google AdSense compliance disclosures." />
+    <style>
+      :root {
+        --bg-color: #fdfbf7;
+        --text-color: #1e1e1e;
+        --card-bg: #ffffff;
+        --border-color: #e5e7eb;
+        --primary-color: #0369a1;
+        --accent-color: #0284c7;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-color: #18181b;
+          --text-color: #e5e5e5;
+          --card-bg: #27272a;
+          --border-color: #3f3f46;
+          --primary-color: #38bdf8;
+          --accent-color: #7dd3fc;
+        }
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        line-height: 1.6;
+        margin: 0;
+        padding: 24px 16px;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        padding: 32px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      }
+      h1 { font-size: 1.75rem; color: var(--primary-color); margin-top: 0; }
+      h2 { font-size: 1.25rem; color: var(--primary-color); margin-top: 28px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
+      h3 { font-size: 1rem; margin-top: 20px; }
+      p, li { font-size: 0.95rem; }
+      a { color: var(--primary-color); text-decoration: underline; word-break: break-all; }
+      a:hover { color: var(--accent-color); }
+      .meta { font-size: 0.85rem; color: #71717a; margin-bottom: 20px; }
+      .highlight-box {
+        background-color: rgba(2, 132, 199, 0.08);
+        border-left: 4px solid var(--primary-color);
+        padding: 14px 18px;
+        border-radius: 0 10px 10px 0;
+        margin: 16px 0;
+        font-size: 0.9rem;
+      }
+      ul { padding-left: 20px; }
+      li { margin-bottom: 6px; }
+      .footer {
+        margin-top: 36px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-color);
+        font-size: 0.85rem;
+        text-align: center;
+        color: #71717a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Privacy Policy</h1>
+      <div class="meta"><strong>Effective Date:</strong> August 12, 2026 | <strong>Version:</strong> 2.4 | <strong>Platform:</strong> Web & Android App</div>
+
+      <p>
+        At <strong>Sudoku Together Mode</strong> (accessible from <a href="https://sudoku-together-mode.web.app">https://sudoku-together-mode.web.app</a> and the official Android mobile application), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed, and how we uphold global privacy standards including the <strong>General Data Protection Regulation (GDPR)</strong>, the <strong>California Consumer Privacy Act (CCPA/CPRA)</strong>, the <strong>Children's Online Privacy Protection Act (COPPA)</strong>, <strong>Google Play Store Data Safety Policies</strong>, and <strong>Google AdSense Program Policies</strong>.
+      </p>
+
+      <h2>1. Information Collection & Storage Architecture</h2>
+      <p>We operate on strict data minimization principles, clearly distinguishing between client-only local data and cloud database records:</p>
+      <ul>
+        <li>
+          <strong>Client-Side Local Storage (Browser & Device Only):</strong> Standard browser <code>localStorage</code> is used strictly on your device to persist UI preferences (Dark Mode, sound synthesis, haptics), mistake counter limits, timer visibility, active puzzle board state/notes, and saved single-player games. <em>This data remains on your device and is never sold, shared, or transmitted to third-party marketing entities.</em>
+        </li>
+        <li>
+          <strong>Google Cloud Firestore (Real-Time Multiplayer & Leaderboards):</strong> When participating in multiplayer challenges or global matches, the following non-sensitive game parameters are stored on Google Cloud Firestore:
+          <ul>
+            <li>Anonymous Challenge ID, seed number, and difficulty level.</li>
+            <li>Player display nickname (user-chosen alphanumeric string) and user ID.</li>
+            <li>Match performance metrics: Completion time (seconds), mistake count, and win/loss completion status.</li>
+            <li>Multiplayer room invitations (sender ID, recipient ID, game ID, status: pending/accepted/declined).</li>
+            <li>Firebase Cloud Messaging (FCM) push notification tokens (if opted-in, used strictly to alert you of incoming match invites).</li>
+            <li>Recent opponent player list (for 1-click rematch invitations).</li>
+          </ul>
+        </li>
+        <li>
+          <strong>Infrastructure & Diagnostic Server Logs:</strong> Standard web server request logs (including IP addresses, browser user-agent, timestamps, and rate limiting metrics) are processed automatically by Google Firebase Hosting and our Express server solely for operational security, DDoS prevention, and rate-limiting integrity.
+        </li>
+      </ul>
+
+      <h2>2. Google AdSense & Third-Party Cookies</h2>
+      <p>
+        We partner with third-party advertising vendors, including <strong>Google LLC (Google AdSense)</strong>, to serve advertisements when you visit our website. Third-party advertising networks use cookies, web beacons, and device identifiers to measure ad performance and serve advertisements based on your prior visits to this website or other websites on the Internet.
+      </p>
+      
+      <div class="highlight-box">
+        <strong>🍪 Advertising Cookie Transparency & Opt-Out Portals:</strong>
+        <p>
+          Google's use of advertising cookies enables it and its partners to serve ads to our users based on their visit to our sites and/or other sites on the Internet. You have the full right to opt out of personalized advertising at any time through the following official privacy portals:
+        </p>
+        <ul>
+          <li><strong>Google Ads Settings:</strong> <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer">https://www.google.com/settings/ads</a></li>
+          <li><strong>Network Advertising Initiative (NAI):</strong> <a href="https://optout.networkadvertising.org/" target="_blank" rel="noopener noreferrer">https://optout.networkadvertising.org/</a></li>
+          <li><strong>Digital Advertising Alliance (DAA / AboutAds):</strong> <a href="https://optout.aboutads.info/" target="_blank" rel="noopener noreferrer">https://optout.aboutads.info/</a></li>
+          <li><strong>European Interactive Digital Advertising Alliance (EDAA):</strong> <a href="https://www.youronlinechoices.eu/" target="_blank" rel="noopener noreferrer">https://www.youronlinechoices.eu/</a></li>
+        </ul>
+      </div>
+
+      <p>
+        <strong>Ad Traffic & Quality Protection:</strong> Automated bots, click-farms, repeated manual ad clicks, ad-block tampering, or proxy manipulations are strictly prohibited and actively filtered to preserve ecosystem integrity.
+      </p>
+
+      <h2>3. GDPR Rights (European Economic Area & UK)</h2>
+      <p>
+        Under the European Union General Data Protection Regulation (GDPR), users located in the EEA and UK possess statutory rights including:
+      </p>
+      <ul>
+        <li><strong>Right of Access:</strong> Request a copy of your stored player and leaderboard records.</li>
+        <li><strong>Right to Rectification:</strong> Update or modify your player display nickname at any time in-game.</li>
+        <li><strong>Right to Erasure ("Right to be Forgotten"):</strong> Instantly delete all your Firestore data and local storage via the in-app <em>"Delete Account & Data"</em> button or by emailing <a href="mailto:sudokutogethermode@gmail.com">sudokutogethermode@gmail.com</a>.</li>
+        <li><strong>Right to Data Portability & Restriction:</strong> Request restrictions or export of your match telemetry.</li>
+      </ul>
+
+      <h2>4. California Privacy Rights (CCPA / CPRA)</h2>
+      <p>
+        Under the California Consumer Privacy Act as amended by the CPRA, California residents are entitled to know what data categories are collected and to request data deletion. <strong>We do NOT sell or share your personal information</strong> with third parties for monetary or commercial consideration.
+      </p>
+
+      <h2>5. Children's Privacy Protection (COPPA)</h2>
+      <p>
+        Protecting the privacy of young children is especially important. Sudoku Together Mode does not knowingly collect or solicit personally identifiable information from children under the age of 13 (or under 16 in the EEA/UK). Our game does not require real names, physical addresses, or phone numbers to play. If a parent or guardian believes their child has submitted personal information to our servers, please contact us immediately at <a href="mailto:sudokutogethermode@gmail.com">sudokutogethermode@gmail.com</a> and we will expeditiously remove such records.
+      </p>
+
+      <h2>6. Data Retention & Security Controls</h2>
+      <p>
+        Multiplayer challenge match records older than 30 days are pruned automatically from our databases. All client-to-server traffic is encrypted in transit using industry-standard TLS/HTTPS protocols. Strict Firestore security rules enforce document-level ownership and prevent unauthorized data tampering.
+      </p>
+
+      <h2>7. Contact Us</h2>
+      <p>
+        For any questions regarding this Privacy Policy or our data handling practices, please contact our Data Protection desk:
+      </p>
+      <div class="highlight-box">
+        <strong>Email:</strong> <a href="mailto:sudokutogethermode@gmail.com">sudokutogethermode@gmail.com</a><br />
+        <strong>Response Turnaround:</strong> Within 24 to 48 business hours.
+      </div>
+
+      <div class="footer">
+        <a href="/">← Return to Sudoku Together Game</a> | <a href="/terms.html">Terms of Service</a>
+        <br /><br />
+        © 2026 Sudoku Together Mode. All rights reserved.
+      </div>
+    </div>
+  </body>
+</html>
