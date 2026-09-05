@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { db } from "./firebase";
+import { RulesModal } from "./components/modals/RulesModal";
+import { SettingsModal } from "./components/modals/SettingsModal";
+import { StatsModal } from "./components/modals/StatsModal";
 import {
   doc,
   setDoc,
@@ -7695,827 +7698,74 @@ useEffect(() => {
 
           {/* PANE 3: ADVANCED PREFERENCES SCREEN */}
           {currentScreen === "settings" && (
-            <div 
-              className={`${
-                fromGameplaySettings 
-                  ? `fixed inset-0 w-screen h-screen z-50 p-6 flex flex-col items-center justify-start overflow-y-auto pt-[calc(80px+env(safe-area-inset-top,0px))] lg:pt-[85px] ${darkMode ? "bg-[#121212] paper-pattern-dark" : "bg-[#FDFBF7] paper-pattern"}` 
-                  : "flex-1 w-full flex flex-col items-center justify-start p-4 md:p-6 overflow-y-auto pb-24 pt-[calc(80px+env(safe-area-inset-top,0px))] lg:pt-[85px]"
-              } select-none selection:bg-[#E0F2FE]`}
-              style={{ minHeight: 0 }}
-            >
-              
-              {/* Pink Back Tag Arrow Button - only visible if entered from gameplay options */}
-               {fromGameplaySettings && (
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    setCurrentScreen("game");
-                  }}
-                  className="absolute top-4 left-4 bg-[#FCE7F3] hover:bg-[#FBCFE8] text-[#9D174D] border-none px-4 py-2.5 text-xs font-black uppercase rounded-xl cursor-pointer shadow-[0_4px_12px_rgba(157,23,77,0.06),_0_2px_4px_rgba(0,0,0,0.02)] transition-all active:scale-95 flex items-center justify-center gap-1.5 z-50 mb-6"
-                >
-                  ◀ BACK
-                </button>
-              )}
-
-              {/* Directly sit on main background, wrapped in a max-w-sm utility shell for responsive centering and flex spacing */}
-              <div className={`w-full max-w-sm lg:max-w-4xl mx-auto flex flex-col lg:grid lg:grid-cols-2 lg:items-start gap-5 lg:gap-6 ${fromGameplaySettings ? "mt-3" : ""}`} id="settings-screen-inner-container">
-                
-                {/* 👤 PLAYER IDENTITY DISPLAY NAME CARD */}
-                <div 
-                  className={`p-5 rounded-2xl flex flex-col gap-4 text-left font-sans border-none shadow-md lg:col-span-2 ${darkMode ? "bg-[#3b0764]/20 border border-[#f5f3ff]/15 text-[#d8b4fe]" : "bg-[#f3e8ff]/60 lg:bg-[#FDFBF7] text-[#6b21a8] shadow-[0_8px_30px_rgba(107,33,168,0.04)]"}`}
-                >
-                  <div className={`flex items-center justify-between p-3 rounded-xl border ${darkMode ? "bg-zinc-950/45 border-purple-900/20" : "bg-white/60 border-purple-200/40"}`}>
-                    <div className="flex items-center gap-3">
-                      <div 
-                        className="w-10 h-10 rounded-full border-none flex items-center justify-center text-md font-sans font-black text-white shrink-0 shadow-sm"
-                        style={{ backgroundColor: userProfile?.avatarColor || "#8B5CF6" }}
-                      >
-                        {userProfile?.name ? userProfile.name.charAt(0).toUpperCase() : "V"}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className={`text-[10px] font-mono font-black uppercase tracking-wider ${darkMode ? "text-purple-300" : "text-purple-700"}`}>Display Name</span>
-                        <span className={`font-sans font-bold text-sm ${darkMode ? "text-stone-100" : "text-purple-950"}`}>
-                          {userProfile?.name && userProfile.name !== "Anonymous Voyager" && userProfile.name !== "Guest Voyager" && userProfile.name !== "Guest Solver"
-                            ? userProfile.name 
-                            : "Anonymous Voyager"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        const currentName = (userProfile?.name && userProfile.name !== "Anonymous Voyager" && userProfile.name !== "Guest Voyager" && userProfile.name !== "Guest Solver") 
-                          ? userProfile.name 
-                          : "";
-                        setEnteredDisplayName(currentName);
-                        setDisplayNameCallbackAction(null);
-                        setDisplayNameError(null);
-                        setShowDisplayNameModal(true);
-                      }}
-                      className={`p-2 rounded-full border-none cursor-pointer transition-all hover:bg-purple-200/50 dark:hover:bg-purple-950/40 active:scale-95 text-purple-700 dark:text-purple-300 flex items-center justify-center`}
-                      title="Edit Display Name"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {/* Google Credentials Sync Section rendered directly inside the main card */}
-                  {userProfile?.isSynced ? (
-                    <div className="flex flex-col gap-2.5">
-                      <div className={`p-3 rounded-xl border ${darkMode ? "bg-purple-950/40 border-purple-800/30 text-purple-100" : "bg-white border border-purple-200/60 text-purple-950"}`}>
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block animate-pulse" />
-                          <span className="text-xs font-sans font-bold text-purple-600 dark:text-purple-400">
-                            Synced Securely ✓
-                          </span>
-                        </div>
-                        <span className={`text-[11px] font-mono mt-1 select-all truncate block ${darkMode ? "text-purple-200" : "text-purple-900"}`}>
-                          {userProfile?.email || "sudokutogethermode@gmail.com"}
-                        </span>
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          playClickSound();
-                          setUserProfile({
-                            id: "GUEST_" + Math.floor(10000 + Math.random() * 90000),
-                            name: "Guest Voyager",
-                            avatarColor: "#6B7280",
-                            isSynced: false
-                          });
-                          localStorage.removeItem("sudoku_userProfile");
-                          localStorage.removeItem("sudoku_is_display_name_configured");
-                          addLog("👤 Profile disconnected from cloud sync.");
-                        }}
-                        className={`w-full font-sans text-[10px] lg:text-[12px] font-black uppercase tracking-wider py-2.5 lg:py-3 border-none rounded-xl active:scale-[0.98] transition-all text-center cursor-pointer ${darkMode ? "bg-purple-950/50 hover:bg-purple-950/80 text-purple-200 border border-purple-800/30" : "bg-purple-100 hover:bg-purple-200 text-purple-950"}`}
-                      >
-                        Disconnect Sync
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-1.5 w-full select-none">
-                      <button
-                        disabled
-                        className={`w-full flex items-center justify-center gap-2 font-sans text-[10.5px] lg:text-[13px] font-black uppercase tracking-wider py-2.5 lg:py-3.5 px-4 rounded-xl transition-all text-center border-none opacity-50 cursor-not-allowed ${darkMode ? "bg-zinc-800 text-stone-500" : "bg-stone-100 text-stone-400"}`}
-                      >
-                        <svg className="w-3.5 h-3.5 lg:w-4 lg:h-4 shrink-0 bg-[#A8A29E]/30 p-0.5 rounded-full grayscale opacity-50" viewBox="0 0 24 24">
-                          <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                          <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                          <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                          <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                        </svg>
-                        <span>Connect Google Account</span>
-                      </button>
-                      <p className="text-[10px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-normal font-sans text-center">
-                        Cloud synchronization across devices will be available in a future update.
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-5 lg:gap-6">
-                  {/* CATEGORY 1: [GENERAL PREFERENCES] */}
-                  <div 
-                    className={`p-5 rounded-xl flex flex-col gap-4 text-left font-sans border-none shadow-md ${darkMode ? "bg-[#0c4a6e]/20 border border-[#bae6fd]/15 text-[#bae6fd]" : "bg-[#E0F2FE]/60 lg:bg-[#FDFBF7] text-[#0369A1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]"}`}
-                  >
-                  <span className={`text-base font-bold tracking-tight leading-none ${darkMode ? "text-sky-300" : "text-[#0369A1]"}`}>
-                    GENERAL PREFERENCES
-                  </span>
-                  
-                  {/* Dark Mode Theme */}
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm font-medium ${darkMode ? "text-stone-300" : "text-stone-850"}`}>Dark Mode Theme</span>
-                    <button
-                      onClick={() => { playClickSound(); setDarkMode(!darkMode); }}
-                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${darkMode ? "bg-sky-500 active:bg-sky-600 shadow-none" : "bg-[#BAE6FD] active:bg-[#90cdf4] shadow-sm active:shadow-none"}`}
-                    >
-                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${darkMode ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                  </div>
-
-                  {/* Sound Effects */}
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm font-medium ${darkMode ? "text-stone-300" : "text-stone-850"}`}>Sound Effects</span>
-                    <button
-                      onClick={() => { setSoundEffects(!soundEffects); }}
-                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${soundEffects ? (darkMode ? "bg-sky-500" : "bg-[#0369A1] active:bg-[#025a8b] shadow-none") : (darkMode ? "bg-zinc-850" : "bg-[#BAE6FD] active:bg-[#90cdf4] shadow-sm active:shadow-none")}`}
-                    >
-                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${soundEffects ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                  </div>
-
-                  {/* Haptic Vibrations */}
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm font-medium ${darkMode ? "text-stone-300" : "text-stone-850"}`}>Haptic Vibrations</span>
-                    <button
-                      onClick={() => { playClickSound(); setVibrations(!vibrations); }}
-                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${vibrations ? (darkMode ? "bg-sky-500" : "bg-[#0369A1] active:bg-[#025a8b] shadow-none") : (darkMode ? "bg-zinc-850" : "bg-[#BAE6FD] active:bg-[#90cdf4] shadow-sm active:shadow-none")}`}
-                    >
-                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${vibrations ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                  </div>
-
-                  {/* Push Notifications */}
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm font-medium ${darkMode ? "text-stone-300" : "text-stone-850"}`}>Push Notifications</span>
-                    <button
-                      onClick={() => { playClickSound(); setNotificationsEnabled(!notificationsEnabled); }}
-                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${notificationsEnabled ? (darkMode ? "bg-sky-500" : "bg-[#0369A1] active:bg-[#025a8b] shadow-none") : (darkMode ? "bg-zinc-850" : "bg-[#BAE6FD] active:bg-[#90cdf4] shadow-sm active:shadow-none")}`}
-                    >
-                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${notificationsEnabled ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                  </div>
-                </div>
-
-{/* CATEGORY 3: [SMART ASSISTANTS] */}
-                <div 
-                  className={`p-5 rounded-xl flex flex-col gap-4 text-left font-sans border-none shadow-md ${darkMode ? "bg-[#4c0519]/25 border border-[#fecdd3]/15 text-[#fecdd3]" : "bg-[#FCE7F3]/60 lg:bg-[#FDFBF7] text-stone-850 shadow-[0_8px_30px_rgba(157,23,77,0.03)]"}`}
-                >
-                  <span className={`text-base font-bold tracking-tight leading-none ${darkMode ? "text-pink-300" : "text-[#9D174D]"}`}>
-                    SMART ASSISTANTS
-                  </span>
-
-                  {/* Highlight Identical */}
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>Highlight Identical</span>
-                    <button
-                      onClick={() => { playClickSound(); setHighlightIdentical(!highlightIdentical); }}
-                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${highlightIdentical ? (darkMode ? "bg-pink-500" : "bg-[#9D174D] active:bg-[#7e123d] shadow-none") : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"}`}
-                    >
-                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${highlightIdentical ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                  </div>
-
-                  {/* Remaining Numbers */}
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>Remaining Numbers</span>
-                    <button
-                      onClick={() => { playClickSound(); setShowRemainingNumbers(!showRemainingNumbers); }}
-                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${showRemainingNumbers ? (darkMode ? "bg-pink-500" : "bg-[#9D174D] active:bg-[#7e123d] shadow-none") : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"}`}
-                    >
-                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${showRemainingNumbers ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                  </div>
-
-                  {/* Highlight Area */}
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>Highlight Area</span>
-                    <button
-                      onClick={() => { playClickSound(); setHighlightAreas(!highlightAreas); }}
-                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${highlightAreas ? (darkMode ? "bg-pink-500" : "bg-[#9D174D] active:bg-[#7e123d] shadow-none") : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"}`}
-                    >
-                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${highlightAreas ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                  </div>
-
-                  {/* Auto-Remove Notes */}
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>Auto-Remove Notes</span>
-                    <button
-                      onClick={() => { playClickSound(); setIsAutoRemoveNotesEnabled(!isAutoRemoveNotesEnabled); }}
-                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${isAutoRemoveNotesEnabled ? (darkMode ? "bg-pink-500" : "bg-[#9D174D] active:bg-[#7e123d] shadow-none") : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"}`}
-                    >
-                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${isAutoRemoveNotesEnabled ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                  </div>
-
-                  {/* Paint Mode */}
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>Paint Mode</span>
-                    <button
-                      onClick={() => { playClickSound(); setIsNumberFirstInputMode(!isNumberFirstInputMode); }}
-                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${isNumberFirstInputMode ? (darkMode ? "bg-pink-500" : "bg-[#9D174D] active:bg-[#7e123d] shadow-none") : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"}`}
-                    >
-                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${isNumberFirstInputMode ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                  </div>
-                </div>
-
-                </div>
-
-                <div className="flex flex-col gap-5 lg:gap-6">
-{/* CATEGORY 2: [GAMEPLAY RULES] */}
-                <div 
-                  className={`p-5 rounded-xl flex flex-col gap-4 text-left font-sans border-none shadow-md ${darkMode ? "bg-[#064e3b]/25 border border-[#a7f3d0]/15 text-[#a7f3d0]" : "bg-[#E6F4EA]/60 lg:bg-[#FDFBF7] text-stone-850 shadow-[0_8px_30px_rgba(3,105,161,0.02)]"}`}
-                >
-                  <span className={`text-base font-bold tracking-tight leading-none ${darkMode ? "text-emerald-300" : "text-[#135236]"}`}>
-                    GAMEPLAY RULES
-                  </span>
-
-                  {/* Active Timer Clock */}
-                  <div className={`flex items-center justify-between ${challengeMode ? "opacity-60 select-none" : ""}`}>
-                    <div className="flex flex-col">
-                      <span className={`text-sm font-medium ${darkMode ? "text-[#a7f3d0]/90" : "text-stone-850"}`}>Active Timer Clock</span>
-                      {challengeMode && (
-                        <span className="text-[10px] text-red-500 font-black tracking-wide mt-0.5 flex items-center gap-0.5">🔒 LOCKED BY CHALLENGE</span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => { if (challengeMode) return; playClickSound(); setTimerEnabled(!timerEnabled); }}
-                      disabled={challengeMode}
-                      className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none ${challengeMode ? "cursor-not-allowed opacity-80" : "cursor-pointer active:scale-95"} ${timerEnabled ? (darkMode ? "bg-emerald-500" : "bg-[#135236] active:bg-[#0e3c28] shadow-none") : "bg-[#D1FAE5] active:bg-[#a7f3d0] shadow-sm active:shadow-none"}`}
-                    >
-                      <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${timerEnabled ? "translate-x-5" : "translate-x-0"}`} />
-                    </button>
-                  </div>
-
-                  {/* Strict Mistake Limit */}
-                  <div className={`flex flex-col gap-1 ${challengeMode ? "opacity-60 select-none" : ""}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className={`text-sm font-medium ${darkMode ? "text-[#a7f3d0]/90" : "text-stone-850"}`}>Strict Mistake Limit</span>
-                        {challengeMode && (
-                          <span className="text-[10px] text-red-500 font-black tracking-wide mt-0.5 flex items-center gap-0.5">🔒 LOCKED TO {boardState?.maxMistakesLimit ?? challengeMistakeLimit} ERRORS</span>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => { if (challengeMode) return; playClickSound(); setMistakeLimitEnabled(!mistakeLimitEnabled); }}
-                        disabled={challengeMode}
-                        className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none ${challengeMode ? "cursor-not-allowed opacity-80" : "cursor-pointer active:scale-95"} ${mistakeLimitEnabled ? (darkMode ? "bg-emerald-500" : "bg-[#135236] active:bg-[#0e3c28] shadow-none") : "bg-[#D1FAE5] active:bg-[#a7f3d0] shadow-sm active:shadow-none"}`}
-                      >
-                        <div className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${mistakeLimitEnabled ? "translate-x-5" : "translate-x-0"}`} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Support and Identity Section */}
-                <div 
-                  className={`p-5 rounded-2xl flex flex-col gap-4 text-left font-sans border-none shadow-md ${darkMode ? "bg-[#78350f]/20 border border-[#fde68a]/15 text-[#fde68a]" : "bg-[#FEF3C7]/60 lg:bg-[#FDFBF7] text-amber-950 shadow-[0_8px_30px_rgba(180,83,9,0.04)]"}`}
-                >
-                  <span className={`text-[10.5px] font-mono font-black uppercase tracking-wider border-b pb-1.5 ${darkMode ? "text-amber-300 border-[#fde68a]/20" : "text-amber-800 border-amber-200"}`}>
-                    Support & Info
-                  </span>
-                  
-                  <div className="flex flex-col gap-2 font-mono">
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setShowHowToPlayModal(true);
-                      }}
-                      className={`w-full py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${darkMode ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-200" : "bg-white hover:bg-amber-50 text-amber-950"}`}
-                    >
-                      <span>How to Play</span>
-                      <svg className="w-3.5 h-3.5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setActiveCompliancePage("terms");
-                      }}
-                      className={`w-full py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${darkMode ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-200" : "bg-white hover:bg-amber-50 text-amber-950"}`}
-                    >
-                      <span>Terms of Service</span>
-                      <svg className="w-3.5 h-3.5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setActiveCompliancePage("privacy");
-                      }}
-                      className={`w-full py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${darkMode ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-200" : "bg-white hover:bg-amber-50 text-amber-950"}`}
-                    >
-                      <span>Privacy Policy</span>
-                      <svg className="w-3.5 h-3.5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setActiveCompliancePage("about");
-                      }}
-                      className={`w-full py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${darkMode ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-200" : "bg-white hover:bg-amber-50 text-amber-950"}`}
-                    >
-                      <span>About Us</span>
-                      <svg className="w-3.5 h-3.5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setActiveCompliancePage("contact");
-                      }}
-                      className={`w-full py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${darkMode ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-200" : "bg-white hover:bg-amber-50 text-amber-950"}`}
-                    >
-                      <span>Contact Support</span>
-                      <svg className="w-3.5 h-3.5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        if (!userProfile?.isSynced) {
-                          alert("No account data found. Since you are not logged in, there is no account or personal data to delete.");
-                        } else {
-                          setShowDeleteAccountModal(true);
-                        }
-                      }}
-                      className={`w-full mt-2 py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${darkMode ? "bg-red-900/40 hover:bg-red-900/60 text-red-300" : "bg-red-50 hover:bg-red-100 text-red-700"}`}
-                    >
-                      <span>Delete Account & Data</span>
-                      <svg className="w-3.5 h-3.5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setShowResetSettingsModal(true);
-                      }}
-                      className={`w-full mt-2 py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${darkMode ? "bg-stone-800/40 hover:bg-stone-800/60 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-700"}`}
-                    >
-                      <span>Reset Settings</span>
-                      <svg className="w-3.5 h-3.5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+            <SettingsModal
+              fromGameplaySettings={fromGameplaySettings}
+              darkMode={darkMode}
+              setDarkMode={setDarkMode}
+              soundEffects={soundEffects}
+              setSoundEffects={setSoundEffects}
+              vibrations={vibrations}
+              setVibrations={setVibrations}
+              notificationsEnabled={notificationsEnabled}
+              setNotificationsEnabled={setNotificationsEnabled}
+              highlightIdentical={highlightIdentical}
+              setHighlightIdentical={setHighlightIdentical}
+              showRemainingNumbers={showRemainingNumbers}
+              setShowRemainingNumbers={setShowRemainingNumbers}
+              highlightAreas={highlightAreas}
+              setHighlightAreas={setHighlightAreas}
+              isAutoRemoveNotesEnabled={isAutoRemoveNotesEnabled}
+              setIsAutoRemoveNotesEnabled={setIsAutoRemoveNotesEnabled}
+              isNumberFirstInputMode={isNumberFirstInputMode}
+              setIsNumberFirstInputMode={setIsNumberFirstInputMode}
+              timerEnabled={timerEnabled}
+              setTimerEnabled={setTimerEnabled}
+              mistakeLimitEnabled={mistakeLimitEnabled}
+              setMistakeLimitEnabled={setMistakeLimitEnabled}
+              challengeMode={challengeMode}
+              boardState={boardState}
+              challengeMistakeLimit={challengeMistakeLimit}
+              userProfile={userProfile}
+              setUserProfile={setUserProfile}
+              playClickSound={playClickSound}
+              addLog={addLog}
+              onBackToGame={() => setCurrentScreen("game")}
+              onOpenDisplayNameModal={() => {
+                const currentName = (userProfile?.name && userProfile.name !== "Anonymous Voyager" && userProfile.name !== "Guest Voyager" && userProfile.name !== "Guest Solver") 
+                  ? userProfile.name 
+                  : "";
+                setEnteredDisplayName(currentName);
+                setDisplayNameCallbackAction(null);
+                setDisplayNameError(null);
+                setShowDisplayNameModal(true);
+              }}
+              onOpenHowToPlay={() => setShowHowToPlayModal(true)}
+              onOpenCompliancePage={(page) => setActiveCompliancePage(page)}
+              onOpenDeleteAccountModal={() => setShowDeleteAccountModal(true)}
+              onOpenResetSettingsModal={() => setShowResetSettingsModal(true)}
+            />
+          )}
 
           {/* PANE 4: STATUS SCREEN */}
           {currentScreen === "status" && (
-            <div className={`p-4 md:p-8 flex-1 w-full flex flex-col items-center justify-start overflow-y-auto pb-10 select-none pt-[calc(85px+env(safe-area-inset-top,0px))] lg:pt-[130px] transition-colors duration-300 ${
-              darkMode ? "text-stone-200" : "bg-[#FDFBF7] text-stone-900"
-            }`}>
-              
-              {/* Content list */}
-              <div className="flex-1 w-full max-w-sm mx-auto flex flex-col gap-6 justify-center items-center pb-6" id="status-screen-inner-container">
-                
-                {/* 📊 Player Statistics Bento-Grid (All visual, beautifully crafted!) */}
-                <div className="w-full grid grid-cols-2 gap-4 shrink-0">
-                  
-                  {/* Gauge Card: Win Rate */}
-                  <div 
-                    className={`p-5 flex flex-col items-center justify-center text-center relative rounded-2xl transition-all duration-300 ${
-                      darkMode 
-                        ? "bg-[#0c4a6e]/20 border border-[#f5f3ff]/15 text-sky-200" 
-                        : "bg-[#E0F2FE]/60 border-none shadow-[0_4px_20px_rgba(3,105,161,0.06)]"
-                    }`}
-                  >
-                    <span className={`text-xs md:text-sm font-semibold uppercase tracking-widest mb-3 ${
-                      darkMode ? "text-sky-300" : "text-[#0369A1]"
-                    }`}>Win Rate</span>
-                    <div className="relative w-16 h-16 flex items-center justify-center">
-                      <svg className="w-full h-full transform -rotate-90">
-                        <circle cx="32" cy="32" r="26" stroke={darkMode ? "rgba(56,189,248,0.1)" : "rgba(3,105,161,0.08)"} strokeWidth="5" fill="transparent" />
-                        <circle 
-                          cx="32" cy="32" r="26" 
-                          stroke={darkMode ? "#38BDF8" : "#0369A1"} 
-                          strokeWidth="5" fill="transparent" 
-                          strokeDasharray={2 * Math.PI * 26} 
-                          strokeDashoffset={2 * Math.PI * 26 * (1 - winsCount / Math.max(1, gamesPlayed))} 
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <span className={`absolute text-lg md:text-xl font-semibold font-sans ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
-                        {Math.round((winsCount / Math.max(1, gamesPlayed)) * 100)}%
-                      </span>
-                    </div>
-                    <span className={`text-xs font-sans mt-3.5 font-bold uppercase tracking-wider leading-none ${
-                      darkMode ? "text-[#38BDF8]" : "text-[#0369A1]"
-                    }`}>
-                      {winsCount} Wins / {gamesPlayed} Plays
-                    </span>
-                  </div>
-
-                  {/* Personal Best Records Card */}
-                  <div 
-                    className={`p-5 flex flex-col text-left font-sans rounded-2xl justify-between h-full transition-all duration-300 ${
-                      darkMode 
-                        ? "bg-[#2e1065]/20 border border-[#f5f3ff]/15 text-purple-200" 
-                        : "bg-[#F3E8FF]/60 border-none shadow-[0_4px_20px_rgba(107,33,168,0.06)]"
-                    }`}
-                  >
-                    <div>
-                      <span className={`text-xs md:text-sm font-semibold uppercase tracking-widest block mb-4 ${
-                        darkMode ? "text-purple-300" : "text-[#6B21A8]"
-                      }`}>Personal Bests</span>
-                      
-                      <div className="flex flex-col gap-2.5">
-                        {[
-                          { label: "Easy", timeSec: bestTimes.EASY, fallback: "--:--", colorClass: "text-[#065F46] dark:text-emerald-400" },
-                          { label: "Medium", timeSec: bestTimes.MEDIUM, fallback: "--:--", colorClass: "text-[#854D0E] dark:text-amber-400" },
-                          { label: "Hard", timeSec: bestTimes.HARD, fallback: "--:--", colorClass: "text-[#6B21A8] dark:text-purple-400" },
-                          { label: "Expert", timeSec: bestTimes.EXPERT, fallback: "--:--", colorClass: "text-[#0369A1] dark:text-sky-400" }
-                        ].map((tier) => {
-                          let displayStr = tier.fallback;
-                          if (tier.timeSec && tier.timeSec > 0) {
-                             const mins = Math.floor(tier.timeSec / 60);
-                             const secs = tier.timeSec % 60;
-                             displayStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-                          }
-                          
-                          return (
-                            <div key={tier.label} className="flex items-center justify-between text-[11px] font-sans">
-                              <span className={`font-semibold uppercase tracking-wider text-xs ${darkMode ? "text-purple-300/80" : "text-purple-700/85"}`}>{tier.label}</span>
-                              <span className={`font-mono font-bold text-sm ${darkMode ? "text-purple-200" : "text-[#6B21A8]"}`}>
-                                {displayStr}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ⚔️ DUAL-SECTION COMPETE HISTORY MODULE */}
-                <div 
-                  className={`w-full rounded-2xl flex flex-col font-sans shrink-0 overflow-hidden transition-all duration-300 ${
-                    darkMode 
-                      ? "bg-[#9d174d]/20 border border-[#f5f3ff]/15 text-[#fbcfe8]" 
-                      : "bg-[#FDF2F8]/45 border-none shadow-[0_4px_20px_rgba(219,39,119,0.02)]"
-                  }`}
-                  id="game-history-tabs-container"
-                >
-                  {/* Tab Selectors - Borderless, clean negative space inside */}
-                  <div className={`grid grid-cols-3 p-1.5 font-sans text-xs flex items-center justify-center font-semibold uppercase tracking-wider gap-0.5 ${
-                    darkMode ? "bg-[#9d174d]/5" : "bg-[#FDF2F8]/20"
-                  }`}>
-                    <button
-                      onClick={() => handleSelectHistoryTab("completed")}
-                      className={`py-2 px-1.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center gap-1.5 uppercase font-bold tracking-wider ${
-                        activeHistoryTab === "completed"
-                          ? (darkMode ? "bg-[#9d174d]/55 text-[#fbcfe8]" : "bg-[#FCE7F3] text-[#9D174D] shadow-xs")
-                          : (darkMode ? "text-pink-400/70 hover:text-[#fbcfe8] bg-transparent" : "text-pink-600/75 hover:text-[#9D174D] bg-transparent")
-                      }`}
-                    >
-                      <span>History</span>
-                      <span className={`text-[9.5px] px-1.5 py-0.25 rounded-md ${
-                        darkMode ? "bg-[#9d174d]/45 text-[#fbcfe8]/80" : "bg-pink-100/50 text-[#9D174D]/80"
-                      }`}>
-                        {completedGames.length}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => handleSelectHistoryTab("saved")}
-                      className={`py-2 px-1.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center gap-1.5 uppercase font-bold tracking-wider ${
-                        activeHistoryTab === "saved"
-                          ? (darkMode ? "bg-[#9d174d]/55 text-[#fbcfe8]" : "bg-[#FCE7F3] text-[#9D174D] shadow-xs")
-                          : (darkMode ? "text-pink-400/70 hover:text-[#fbcfe8] bg-transparent" : "text-pink-600/75 hover:text-[#9D174D] bg-transparent")
-                      }`}
-                    >
-                      <span>Saved</span>
-                      <span className={`text-[9.5px] px-1.5 py-0.25 rounded-md ${
-                        darkMode ? "bg-[#9d174d]/45 text-[#fbcfe8]/80" : "bg-pink-100/50 text-[#9D174D]/80"
-                      }`}>
-                        {savedGames.length}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => handleSelectHistoryTab("friends")}
-                      className={`py-2 px-1.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center gap-1.5 uppercase font-bold tracking-wider ${
-                        activeHistoryTab === "friends"
-                          ? (darkMode ? "bg-[#9d174d]/55 text-[#fbcfe8]" : "bg-[#FCE7F3] text-[#9D174D] shadow-xs")
-                          : (darkMode ? "text-pink-400/70 hover:text-[#fbcfe8] bg-transparent" : "text-pink-600/75 hover:text-[#9D174D] bg-transparent")
-                      }`}
-                    >
-                      <span>Friends</span>
-                      <span className={`text-[9.5px] px-1.5 py-0.25 rounded-md ${
-                        darkMode ? "bg-[#9d174d]/45 text-[#fbcfe8]/80" : "bg-pink-100/50 text-[#9D174D]/80"
-                      }`}>
-                        {multiplayerPlayers.filter(p => p.isFriend).length}
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* Tab Panels */}
-                  <div className="p-4 flex flex-col gap-3 max-h-[300px] overflow-y-auto custom-scrollbar text-left font-sans">
-                    {activeHistoryTab === "completed" ? (
-                      completedGames.length === 0 ? (
-                        <div className="py-8 text-center text-stone-500 font-sans text-xs">
-                          No completed games yet.
-                        </div>
-                      ) : (
-                        completedGames.map((game) => (
-                          <div 
-                            key={game.id} 
-                            className={`p-3.5 rounded-xl border flex flex-col gap-2 transition-all text-xs ${
-                              darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-300" : "bg-stone-50/40 border-stone-200/50 text-stone-850"
-                            }`}
-                          >
-                            <div className="flex justify-between items-center">
-                              <span className={`text-xs font-sans font-black uppercase tracking-wider px-2 py-0.5 rounded ${
-                                game.isWon 
-                                  ? (darkMode ? "bg-emerald-950/20 text-emerald-400" : "bg-emerald-100 text-emerald-850")
-                                  : (darkMode ? "bg-rose-950/20 text-rose-450" : "bg-rose-100 text-rose-850")
-                              }`}>
-                                {game.isWon ? "✓ Won" : "✗ Failed"}
-                              </span>
-                              
-                              <span className="font-sans text-xs md:text-sm font-medium text-stone-500">
-                                {game.date}
-                              </span>
-                            </div>
-
-                            <div className="flex justify-between items-center">
-                              <div className="flex flex-col text-left">
-                                <div className="flex items-center gap-1.5 mb-1 bg-transparent">
-                                  <span className={`text-xs font-sans font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md ${
-                                    game.isChallenge
-                                      ? (darkMode ? "bg-[#2e1065] text-[#e9d5ff] border border-[#3b0764] shadow-[0_2px_8px_rgba(0,0,0,0.4)]" : "bg-[#F3E8FF] text-[#6B21A8] border border-[#D8B4FE] shadow-[0_2px_8px_rgba(107,33,168,0.06)]")
-                                      : (darkMode ? "bg-[#172554] text-[#dbeafe]" : "bg-[#eff6ff] text-[#172554]")
-                                  }`}>
-                                    {game.isChallenge ? "Multi" : "Solo"}
-                                  </span>
-                                </div>
-                                <span className={`font-sans font-black text-sm uppercase leading-none ${darkMode ? "text-stone-200" : "text-stone-850"}`}>
-                                  {game.difficulty}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-3.5 font-sans text-xs font-black">
-                                <div className="flex flex-col items-end leading-tight">
-                                  <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">Time</span>
-                                  <span>{formatTimer(game.timeSec)}</span>
-                                </div>
-                                <div className="flex flex-col items-end leading-tight">
-                                  <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">Errs</span>
-                                  <span className="text-rose-500">{game.mistakes}/{game.maxMistakes}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* 3 Equal-Width Action Buttons: Replay (mint green), Save/Saved (pastel yellow), Rankings (pastel rose) */}
-                            <div className="grid grid-cols-3 gap-1.5 mt-1.5 pt-2 border-t border-dashed border-stone-250 dark:border-zinc-800">
-                              <button
-                                onClick={() => handleReplayGame(game)}
-                                className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
-                                  darkMode ? "bg-emerald-950/40 text-emerald-300 hover:bg-emerald-950/60" : "bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#166534]"
-                                }`}
-                              >
-                                Replay
-                              </button>
-                              <button
-                                onClick={() => handleSaveGame(game)}
-                                className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
-                                  savedGames.some(r => r.id === game.id)
-                                    ? (darkMode ? "bg-yellow-950/50 text-yellow-300 font-black border border-yellow-800/40" : "bg-[#FEFCE8] text-[#854D0E] font-black border border-yellow-200")
-                                    : (darkMode ? "bg-yellow-950/30 text-yellow-400 hover:bg-yellow-950/50" : "bg-[#FEFCE8] hover:bg-[#FEF9C3] text-[#854D0E]")
-                                }`}
-                              >
-                                {savedGames.some(r => r.id === game.id) ? "Saved" : "Save"}
-                              </button>
-                              <button
-                                onClick={() => handleOpenRankings(game)}
-                                className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
-                                  darkMode ? "bg-rose-950/40 hover:bg-rose-950/60 text-rose-300" : "bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9F1239]"
-                                }`}
-                              >
-                                Rankings
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )
-                    ) : activeHistoryTab === "saved" ? (
-                      savedGames.length === 0 ? (
-                        <div className="py-8 text-center text-stone-500 font-sans text-xs">
-                          No saved games yet. Click Save on a completed game item to save it!
-                        </div>
-                      ) : (
-                        savedGames.map((game) => (
-                          <div 
-                            key={game.id} 
-                            className={`p-3.5 rounded-xl border flex flex-col gap-2 transition-all text-xs ${
-                              darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-300" : "bg-stone-50/40 border-stone-200/50 text-stone-850"
-                            }`}
-                          >
-                            <div className="flex justify-between items-center">
-                              <span className={`text-xs font-sans font-black uppercase tracking-wider px-2 py-0.5 rounded ${
-                                game.isWon 
-                                  ? (darkMode ? "bg-emerald-950/20 text-emerald-400" : "bg-emerald-100 text-emerald-850")
-                                  : (darkMode ? "bg-rose-950/20 text-rose-450" : "bg-rose-100 text-rose-850")
-                              }`}>
-                                {game.isWon ? "✓ Won" : "✗ Failed"}
-                              </span>
-                              
-                              <span className="font-sans text-xs md:text-sm font-medium text-stone-500">
-                                {game.date || "Saved Config"}
-                              </span>
-                            </div>
-
-                            <div className="flex justify-between items-center">
-                              <div className="flex flex-col text-left">
-                                <div className="flex items-center gap-1.5 mb-1 bg-transparent">
-                                  <span className={`text-xs font-sans font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md ${
-                                    game.isChallenge
-                                      ? (darkMode ? "bg-[#2e1065] text-[#e9d5ff] border border-[#3b0764] shadow-[0_2px_8px_rgba(0,0,0,0.4)]" : "bg-[#F3E8FF] text-[#6B21A8] border border-[#D8B4FE] shadow-[0_2px_8px_rgba(107,33,168,0.06)]")
-                                      : (darkMode ? "bg-[#172554] text-[#dbeafe]" : "bg-[#eff6ff] text-[#172554]")
-                                  }`}>
-                                    {game.isChallenge ? "Multi" : "Solo"}
-                                  </span>
-                                </div>
-                                <span className={`font-sans font-black text-sm uppercase leading-none ${darkMode ? "text-stone-200" : "text-stone-850"}`}>
-                                  {game.difficulty}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-3.5 font-sans text-xs font-black">
-                                <div className="flex flex-col items-end leading-tight">
-                                  <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">Time</span>
-                                  <span>{formatTimer(game.timeSec)}</span>
-                                </div>
-                                <div className="flex flex-col items-end leading-tight">
-                                  <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">Errs</span>
-                                  <span className="text-rose-500">{game.mistakes}/{game.maxMistakes}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* 3 Equal-Width Action Buttons: Replay (mint green), Unsave (pastel yellow), Rankings (pastel rose) */}
-                            <div className="grid grid-cols-3 gap-1.5 mt-1.5 pt-2 border-t border-dashed border-stone-250 dark:border-zinc-800">
-                              <button
-                                onClick={() => handleReplayGame(game)}
-                                className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
-                                  darkMode ? "bg-emerald-950/40 text-emerald-300 hover:bg-emerald-950/60" : "bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#166534]"
-                                }`}
-                              >
-                                Replay
-                              </button>
-                              <button
-                                onClick={() => handleSaveGame(game)}
-                                className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
-                                  darkMode ? "bg-yellow-950/30 text-yellow-400 hover:bg-yellow-950/50" : "bg-[#FEFCE8] hover:bg-[#FEF9C3] text-[#854D0E]"
-                                }`}
-                              >
-                                Unsave
-                              </button>
-                              <button
-                                onClick={() => handleOpenRankings(game)}
-                                className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
-                                  darkMode ? "bg-rose-950/40 hover:bg-rose-950/60 text-rose-300" : "bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9F1239]"
-                                }`}
-                              >
-                                Rankings
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )
-                    ) : (
-                      /* FRIENDS TAB PANEL */
-                      <div className="flex flex-col gap-4">
-                        {/* My Friends Section */}
-                        <div className="flex flex-col gap-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-stone-400 dark:text-stone-500">
-                              My Friends ({multiplayerPlayers.filter(p => p.isFriend).length})
-                            </span>
-                          </div>
-                          {multiplayerPlayers.filter(p => p.isFriend).length === 0 ? (
-                            <div className="py-4 text-center text-stone-400 dark:text-stone-500 font-sans text-xs">
-                              No friends added yet.
-                            </div>
-                          ) : (
-                            multiplayerPlayers.filter(p => p.isFriend).map(friend => (
-                              <div 
-                                key={friend.id}
-                                className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
-                                  darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-200" : "bg-stone-50/45 border-stone-200/50 text-stone-850"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5">
-                                  <div className="relative">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                                      darkMode ? "bg-purple-950/60 text-purple-300 border border-purple-800/40" : "bg-purple-100 text-purple-800 border border-purple-200"
-                                    }`}>
-                                      {friend.name ? friend.name.slice(0, 2).toUpperCase() : "PL"}
-                                    </div>
-                                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 ${
-                                      darkMode ? "border-zinc-900" : "border-white"
-                                    } ${friend.status === "online" ? "bg-emerald-500" : "bg-stone-400"}`} />
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span className="font-sans font-bold text-xs">{friend.name}</span>
-                                    <span className="text-[9.5px] text-stone-400 capitalize">{friend.status || "online"}</span>
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => handleToggleFriend(friend.id, friend.name)}
-                                  className="text-[10.5px] font-sans font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 border-none bg-transparent cursor-pointer transition-all active:scale-95 px-2 py-1"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ))
-                          )}
-                        </div>
-
-                        {/* Recent Players Section */}
-                        <div className="flex flex-col gap-2 pt-2 border-t border-dashed border-stone-200/40 dark:border-zinc-800">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-stone-400 dark:text-stone-500">
-                              Recent Players ({multiplayerPlayers.filter(p => !p.isFriend).length})
-                            </span>
-                          </div>
-                          {multiplayerPlayers.filter(p => !p.isFriend).length === 0 ? (
-                            <div className="py-4 text-center text-stone-400 dark:text-stone-500 font-sans text-xs">
-                              No recent players.
-                            </div>
-                          ) : (
-                            multiplayerPlayers.filter(p => !p.isFriend).map(player => {
-                              const isRequested = requestedFriendIds.includes(player.id);
-                              return (
-                                <div 
-                                  key={player.id}
-                                  className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
-                                    darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-200" : "bg-stone-50/45 border-stone-200/50 text-stone-850"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2.5">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                                      darkMode ? "bg-zinc-800 text-stone-300" : "bg-stone-150 text-stone-700"
-                                    }`}>
-                                      {player.name ? player.name.slice(0, 2).toUpperCase() : "PL"}
-                                    </div>
-                                    <div className="flex flex-col">
-                                      <span className="font-sans font-bold text-xs">{player.name}</span>
-                                      <span className="text-[9.5px] text-stone-400">Match Participant</span>
-                                    </div>
-                                  </div>
-                                  <button
-                                    disabled={isRequested}
-                                    onClick={() => handleAddRecentFriend(player)}
-                                    className={`py-1 px-2.5 rounded-lg border-none cursor-pointer transition-all active:scale-95 text-[10.5px] font-sans font-bold uppercase tracking-wider ${
-                                      isRequested
-                                        ? "bg-stone-200/50 text-stone-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed"
-                                        : (darkMode ? "bg-purple-950/60 text-purple-300 hover:bg-purple-900/80" : "bg-purple-100 text-purple-800 hover:bg-purple-200")
-                                    }`}
-                                  >
-                                    {isRequested ? "Requested" : "+ Add"}
-                                  </button>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <StatsModal
+              darkMode={darkMode}
+              winsCount={winsCount}
+              gamesPlayed={gamesPlayed}
+              bestTimes={bestTimes}
+              activeHistoryTab={activeHistoryTab}
+              handleSelectHistoryTab={handleSelectHistoryTab}
+              completedGames={completedGames}
+              savedGames={savedGames}
+              multiplayerPlayers={multiplayerPlayers}
+              requestedFriendIds={requestedFriendIds}
+              handleReplayGame={handleReplayGame}
+              handleSaveGame={handleSaveGame}
+              handleOpenRankings={handleOpenRankings}
+              handleToggleFriend={handleToggleFriend}
+              handleAddRecentFriend={handleAddRecentFriend}
+              formatTimer={formatTimer}
+            />
           )}
 
           {/* PANE: TOGETHER MODE SOCIAL DASHBOARD */}
@@ -11478,31 +10728,12 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showHowToPlayModal && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-            <div className="absolute inset-0 cursor-pointer" onClick={() => { playClickSound(); setShowHowToPlayModal(false); }} />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className={`relative w-full max-w-sm rounded-[16px] shadow-2xl overflow-hidden flex flex-col ${darkMode ? "bg-[#1E1E1E] border border-zinc-800" : "bg-[#FDFBF7]"}`}
-            >
-              <div className={`p-4 border-b flex justify-between items-center ${darkMode ? "border-zinc-800/60" : "border-stone-200/60"}`}>
-                <h3 className={`font-sans font-black text-lg ${darkMode ? "text-amber-200" : "text-amber-800"}`}>How to Play</h3>
-                <button onClick={() => { playClickSound(); setShowHowToPlayModal(false); }} className={`p-1.5 rounded-full border-none cursor-pointer hover:opacity-80 active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-stone-400" : "bg-stone-200 text-stone-500"}`}>
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-5 max-h-[60vh] overflow-y-auto">
-                <p className={`font-sans text-sm leading-relaxed ${darkMode ? "text-stone-300" : "text-stone-700"}`}>
-                  The goal of Sudoku Together is to fill the grid so that every row, column, and 3x3 box contains all numbers from 1 to 9. Each number can only appear once in each row, column, and 3x3 box. Use the Pencil tool to jot down potential numbers. Use the Eraser tool to correct mistakes. The game is complete once the grid is filled correctly. Stay calm and enjoy the journey.
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <RulesModal
+        isOpen={showHowToPlayModal}
+        onClose={() => setShowHowToPlayModal(false)}
+        darkMode={darkMode}
+        playClickSound={playClickSound}
+      />
 
       {/* MID-GAME MULTIPLAYER INVITE MODAL */}
       <AnimatePresence>
