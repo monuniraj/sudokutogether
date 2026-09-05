@@ -4,6 +4,10 @@ import { db } from "./firebase";
 import { RulesModal } from "./components/modals/RulesModal";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { StatsModal } from "./components/modals/StatsModal";
+import { JoinRoomModal } from "./components/modals/JoinRoomModal";
+import { MultiplayerForkModal } from "./components/modals/MultiplayerForkModal";
+import { CreateChallengeModal } from "./components/modals/CreateChallengeModal";
+import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
 import {
   doc,
   setDoc,
@@ -8923,731 +8927,89 @@ useEffect(() => {
 
             <AnimatePresence mode="wait" initial={false}>
               {/* 1. ROUTE SELECTION (LOBBY) */}
-              {showMultiplayerForkModal && (
-                <motion.div 
-                  key="multiplayer-fork-modal"
-                  initial={{ scale: 0.96, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.96, opacity: 0 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                  className={`relative w-full max-w-[400px] rounded-3xl p-5 border-none flex flex-col gap-4 select-none z-[10001] text-left transition-colors duration-300 ${
-                    darkMode ? "bg-[#1A1A1A] text-stone-200" : "bg-[#FDFBF7] text-stone-850"
-                  }`}
-                  style={{
-                    boxShadow: darkMode ? '0 10px 40px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.08)'
-                  }}
-                >
-                  {/* Header */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className={`text-[10px] font-sans font-black tracking-widest uppercase ${darkMode ? "text-purple-400" : "text-[#6B21A8]"}`}>
-                        Together Mode
-                      </span>
-                      <h3 className="text-xl font-sans font-black tracking-tight leading-none text-stone-850 dark:text-stone-100 mt-0.5">
-                        Multiplayer Lobby
-                      </h3>
-                    </div>
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setShowMultiplayerForkModal(false);
-                      }}
-                      className="p-1.5 rounded-full text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  {/* Routes Grid */}
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {/* Route 1: Create Room */}
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        openCreateRoomModal();
-                      }}
-                      className={`w-full py-3 px-4 rounded-2xl flex items-center justify-between border-none cursor-pointer transition-all duration-150 text-left shadow-xs active:scale-[0.98] ${
-                        darkMode 
-                          ? "bg-[#2e1065]/40 hover:bg-[#2e1065]/60 text-purple-200 border border-purple-900/40" 
-                          : "bg-[#F3E8FF] hover:bg-[#e9d5ff] active:bg-[#d8b4fe] text-[#6B21A8]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-xl flex items-center justify-center ${darkMode ? "bg-purple-900/60 text-purple-300" : "bg-white/80 text-[#6B21A8] shadow-xs"}`}>
-                          <Users className="w-5 h-5 stroke-[2.5]" />
-                        </div>
-                        <span className="font-sans font-black text-sm uppercase tracking-wider leading-none">
-                          Create Room
-                        </span>
-                      </div>
-                      <ChevronRight className="w-5 h-5 stroke-[2.5] opacity-60" />
-                    </button>
-
-                    {/* Route 2: Join Room */}
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setShowMultiplayerForkModal(false);
-                        setJoinRoomCodeInput("");
-                        setJoinRoomPinInput("");
-                        setJoinRoomError(null);
-                        setShowJoinRoomModal(true);
-                      }}
-                      className={`w-full py-3 px-4 rounded-2xl flex items-center justify-between border-none cursor-pointer transition-all duration-150 text-left shadow-xs active:scale-[0.98] ${
-                        darkMode 
-                          ? "bg-[#0c4a6e]/40 hover:bg-[#0c4a6e]/60 text-sky-200 border border-sky-900/40" 
-                          : "bg-[#E0F2FE] hover:bg-[#bae6fd] active:bg-[#7dd3fc] text-[#0369a1]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-xl flex items-center justify-center ${darkMode ? "bg-sky-900/60 text-sky-300" : "bg-white/80 text-[#0369a1] shadow-xs"}`}>
-                          <Grid3X3 className="w-5 h-5 stroke-[2.5]" />
-                        </div>
-                        <span className="font-sans font-black text-sm uppercase tracking-wider leading-none">
-                          Join Room
-                        </span>
-                      </div>
-                      <ChevronRight className="w-5 h-5 stroke-[2.5] opacity-60" />
-                    </button>
-                  </div>
-                </motion.div>
-              )}
+              <MultiplayerForkModal
+                isOpen={showMultiplayerForkModal}
+                onClose={() => setShowMultiplayerForkModal(false)}
+                onCreateRoom={() => openCreateRoomModal()}
+                onOpenJoinRoom={() => {
+                  setShowMultiplayerForkModal(false);
+                  setJoinRoomCodeInput("");
+                  setJoinRoomPinInput("");
+                  setJoinRoomError(null);
+                  setShowJoinRoomModal(true);
+                }}
+                darkMode={darkMode}
+                playClickSound={playClickSound}
+              />
 
               {/* 2. JOIN ROOM BY CODE */}
-              {showJoinRoomModal && (
-                <motion.div 
-                  key="multiplayer-join-modal"
-                  initial={{ scale: 0.96, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.96, opacity: 0 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                  className={`relative w-full max-w-[420px] rounded-3xl p-6 border-none flex flex-col gap-4 select-none z-[10001] text-left transition-colors duration-300 ${
-                    darkMode ? "bg-[#1A1A1A] text-stone-200" : "bg-[#FDFBF7] text-stone-850"
-                  }`}
-                  style={{
-                    boxShadow: darkMode ? '0 10px 40px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.08)'
-                  }}
-                >
-                  {/* Header */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col gap-0.5">
-                      <span className={`text-[10px] font-sans font-black tracking-widest uppercase ${darkMode ? "text-sky-400" : "text-[#0369a1]"}`}>
-                        Together Mode
-                      </span>
-                      <h3 className="text-xl font-sans font-black tracking-tight leading-none text-stone-850 dark:text-stone-100">
-                        Join Room
-                      </h3>
-                    </div>
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setShowJoinRoomModal(false);
-                      }}
-                      className="p-1.5 rounded-full text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <p className="text-xs font-sans text-stone-500 dark:text-stone-400">
-                    Ask your friend for their 6-digit room code to enter the match.
-                  </p>
-
-                  {/* 6-digit room code input */}
-                  <div className="flex flex-col gap-1.5 mt-1">
-                    <label className="font-sans font-bold text-2xs uppercase tracking-wider text-stone-400 dark:text-stone-500">
-                      6-Digit Room Code
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      placeholder="849201"
-                      value={joinRoomCodeInput}
-                      onChange={(e) => {
-                        const cleaned = e.target.value.replace(/[^0-9]/g, '');
-                        setJoinRoomCodeInput(cleaned);
-                        setJoinRoomError(null);
-                      }}
-                      className={`w-full py-3 px-4 rounded-xl text-center text-xl font-mono font-black tracking-[0.3em] border-none outline-none transition-colors ${
-                        darkMode 
-                          ? "bg-zinc-900 text-stone-100 placeholder-zinc-700 focus:ring-2 focus:ring-sky-500/50" 
-                          : "bg-stone-100 text-stone-850 placeholder-stone-400 focus:ring-2 focus:ring-sky-500/30 shadow-inner"
-                      }`}
-                    />
-                  </div>
-
-                  {/* Optional Room PIN input */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-sans font-bold text-2xs uppercase tracking-wider text-stone-400 dark:text-stone-500">
-                      4-Digit PIN (If Room Is Locked)
-                    </label>
-                    <input
-                      type="password"
-                      maxLength={4}
-                      placeholder="• • • •"
-                      value={joinRoomPinInput}
-                      onChange={(e) => {
-                        const cleaned = e.target.value.replace(/[^0-9]/g, '');
-                        setJoinRoomPinInput(cleaned);
-                        setJoinRoomError(null);
-                      }}
-                      className={`w-full py-2.5 px-4 rounded-xl text-center text-sm font-mono font-bold tracking-widest border-none outline-none transition-colors ${
-                        darkMode 
-                          ? "bg-zinc-900 text-stone-100 placeholder-zinc-700 focus:ring-2 focus:ring-sky-500/50" 
-                          : "bg-stone-100 text-stone-850 placeholder-stone-400 focus:ring-2 focus:ring-sky-500/30 shadow-inner"
-                      }`}
-                    />
-                  </div>
-
-                  {/* Error Message */}
-                  {joinRoomError && (
-                    <p className="text-xs font-sans font-bold text-rose-500 text-center -my-1">
-                      {joinRoomError}
-                    </p>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2.5 mt-2">
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setShowJoinRoomModal(false);
-                        setShowMultiplayerForkModal(true);
-                      }}
-                      className={`flex-1 py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer transition-all active:scale-98 ${
-                        darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-150 text-stone-700 hover:bg-stone-200"
-                      }`}
-                    >
-                      Back
-                    </button>
-                    <button
-                      disabled={joinRoomCodeInput.trim().length !== 6 || isJoiningRoomLoading}
-                      onClick={() => {
-                        playClickSound();
-                        handleExecuteJoinRoomByCode();
-                      }}
-                      className={`flex-2 py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer transition-all shadow-md active:scale-98 flex items-center justify-center gap-2 ${
-                        joinRoomCodeInput.trim().length === 6 && !isJoiningRoomLoading
-                          ? (darkMode ? "bg-[#0c4a6e] hover:bg-[#0369a1] text-sky-100" : "bg-[#E0F2FE] hover:bg-[#bae6fd] text-[#0369a1]")
-                          : "opacity-50 cursor-not-allowed bg-stone-200 dark:bg-zinc-800 text-stone-400"
-                      }`}
-                    >
-                      {isJoiningRoomLoading ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Play className="w-4 h-4 fill-current" />
-                      )}
-                      <span>{isJoiningRoomLoading ? "Joining..." : "Join Game"}</span>
-                    </button>
-                  </div>
-                </motion.div>
-              )}
+              <JoinRoomModal
+                isOpen={showJoinRoomModal}
+                onClose={() => setShowJoinRoomModal(false)}
+                onBack={() => {
+                  setShowJoinRoomModal(false);
+                  setShowMultiplayerForkModal(true);
+                }}
+                roomCodeInput={joinRoomCodeInput}
+                setRoomCodeInput={setJoinRoomCodeInput}
+                roomPinInput={joinRoomPinInput}
+                setRoomPinInput={setJoinRoomPinInput}
+                joinRoomError={joinRoomError}
+                setJoinRoomError={setJoinRoomError}
+                isJoiningRoomLoading={isJoiningRoomLoading}
+                onJoinRoom={handleExecuteJoinRoomByCode}
+                darkMode={darkMode}
+                playClickSound={playClickSound}
+              />
 
               {/* 3. CREATE / CHALLENGE SETUP */}
-              {showCreateChallengeModal && (
-                <motion.div 
-                  key="multiplayer-create-modal"
-                  initial={{ scale: 0.96, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.96, opacity: 0 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                  className={`relative w-[92%] max-w-md h-[70vh] rounded-3xl p-5 sm:p-6 border-none flex flex-col gap-4 select-none z-[10001] text-left transition-colors duration-300 ${
-                    darkMode ? "bg-[#1A1A1A] text-stone-200" : "bg-[#FDFBF7] text-stone-850"
-                  }`}
-                  style={{
-                    boxShadow: darkMode ? '0 10px 40px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.08)'
-                  }}
-                >
-                  {(() => {
-                    const activeRoomCode = String(challengeSeed || (boardState?.seed ? String(boardState.seed).slice(-6) : "849201")).padStart(6, '0').slice(-6);
-
-                    return (
-                      <>
-                        {/* 1. HEADER: ROOM CODE & LOCK STATUS */}
-                        <div className="flex flex-col gap-2 shrink-0 select-none">
-                          <div className="flex items-center justify-between">
-                            {/* Left: 6-digit room code */}
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs sm:text-sm font-sans font-black tracking-wider text-stone-850 dark:text-stone-100 flex items-center gap-1.5">
-                                <span className="text-stone-400 dark:text-stone-500 text-2xs uppercase font-bold">CODE:</span>
-                                <span className="font-mono tracking-widest text-sm sm:text-base select-all">{activeRoomCode}</span>
-                              </span>
-                              <button
-                                onClick={() => {
-                                  playClickSound();
-                                  copyToClipboard(activeRoomCode);
-                                  showCopiedToast("Room code copied!");
-                                }}
-                                title="Copy room code"
-                                className="p-1 rounded-lg text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-
-                            {/* Right: Lock toggle & Close button */}
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => {
-                                  playClickSound();
-                                  const next = !isRoomLocked;
-                                  setIsRoomLocked(next);
-                                  updateRoomSettingsInFirestore({ isLocked: next, pin: roomPin });
-                                }}
-                                className={`px-3 py-1.5 rounded-xl font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all duration-150 cursor-pointer border-none active:scale-95 flex items-center gap-1.5 select-none ${
-                                  isRoomLocked
-                                    ? (darkMode
-                                        ? "bg-[#4c0519] text-[#fecdd3] shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
-                                        : "bg-[#FFE4E6] text-[#9D174D] shadow-[0_8px_16px_rgba(157,23,77,0.06),_0_2px_4px_rgba(0,0,0,0.02)]")
-                                    : (darkMode
-                                        ? "bg-[#022c22] text-[#d1fae5] shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
-                                        : "bg-[#D1FAE5] text-[#065F46] shadow-[0_8px_16px_rgba(6,95,70,0.06),_0_2px_4px_rgba(0,0,0,0.02)]")
-                                }`}
-                              >
-                                {isRoomLocked ? (
-                                  <>
-                                    <Lock className="w-3.5 h-3.5 stroke-[2.5]" />
-                                    <span>LOCKED</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Unlock className="w-3.5 h-3.5 stroke-[2.5]" />
-                                    <span>UNLOCKED</span>
-                                  </>
-                                )}
-                              </button>
-
-                              <button 
-                                onClick={() => { playClickSound(); setShowCreateChallengeModal(false); }}
-                                className={`p-1.5 rounded-full border-none cursor-pointer transition-all active:scale-95 hover:scale-105 ${
-                                  darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-250" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
-                                }`}
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Revealed inline soft-bordered input if locked */}
-                          <AnimatePresence>
-                            {isRoomLocked && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.18 }}
-                                className="overflow-hidden"
-                              >
-                                <div className="flex items-center justify-between gap-2 px-3 py-2 mt-1 rounded-xl bg-stone-100/80 dark:bg-zinc-900/60 border border-stone-200/80 dark:border-zinc-800/80">
-                                  <span className="font-sans font-bold text-[10px] sm:text-xs uppercase tracking-wider text-stone-700 dark:text-stone-300">
-                                    SET 4-DIGIT PIN:
-                                  </span>
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    maxLength={4}
-                                    placeholder="_ _ _ _"
-                                    value={roomPin}
-                                    onChange={(e) => {
-                                      const cleaned = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
-                                      setRoomPin(cleaned);
-                                      updateRoomSettingsInFirestore({ isLocked: true, pin: cleaned });
-                                    }}
-                                    className="w-24 px-2 py-1 text-center font-mono font-black text-xs sm:text-sm tracking-widest rounded-lg border border-stone-300/80 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-stone-850 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-rose-400"
-                                  />
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-
-                        {/* 2. COMPACT SETTINGS 2x2 BALANCED GRID (HOMEPAGE PILL STYLING) */}
-                        <div className="relative z-[10010] shrink-0 select-none">
-                          {/* Invisible backdrop to dismiss open dropdown */}
-                          {openDropdown && (
-                            <div
-                              className="fixed inset-0 z-[10015] bg-transparent cursor-default"
-                              onClick={() => setOpenDropdown(null)}
-                            />
-                          )}
-
-                          <div className="grid grid-cols-2 gap-2.5 w-full">
-                            {/* Top-Left: Difficulty */}
-                            <div className="relative w-full">
-                              <button
-                                onClick={() => {
-                                  playClickSound();
-                                  setOpenDropdown(openDropdown === "difficulty" ? null : "difficulty");
-                                }}
-                                className={`w-full h-[38px] flex items-center justify-center gap-1 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none outline-none cursor-pointer transition-all duration-150 active:scale-95 ${
-                                  challengeDifficulty === "EASY"
-                                    ? (darkMode ? "bg-[#022c22] text-[#d1fae5] shadow-[0_8px_16px_rgba(0,0,0,0.4)]" : "bg-[#D1FAE5] text-[#065F46] shadow-[0_8px_16px_rgba(6,95,70,0.06),_0_2px_4px_rgba(0,0,0,0.02)]")
-                                    : challengeDifficulty === "MEDIUM"
-                                    ? (darkMode ? "bg-[#451a03] text-[#fef08a] shadow-[0_8px_16px_rgba(0,0,0,0.4)]" : "bg-[#FFF99D] text-[#854D0E] shadow-[0_8px_16px_rgba(133,77,14,0.06),_0_2px_4px_rgba(0,0,0,0.02)]")
-                                    : challengeDifficulty === "HARD"
-                                    ? (darkMode ? "bg-[#2e1065] text-[#e9d5ff] shadow-[0_8px_16px_rgba(0,0,0,0.4)]" : "bg-[#F3E8FF] text-[#6B21A8] shadow-[0_8px_16px_rgba(107,33,168,0.06),_0_2px_4px_rgba(0,0,0,0.02)]")
-                                    : (darkMode ? "bg-[#4c0519] text-[#fecdd3] shadow-[0_8px_16px_rgba(0,0,0,0.4)]" : "bg-[#FFE4E6] text-[#9D174D] shadow-[0_8px_16px_rgba(157,23,77,0.06),_0_2px_4px_rgba(0,0,0,0.02)]")
-                                }`}
-                              >
-                                <span className="truncate">
-                                  {challengeDifficulty === "EASY" ? "Easy" : challengeDifficulty === "MEDIUM" ? "Medium" : challengeDifficulty === "HARD" ? "Hard" : "Expert"} ▾
-                                </span>
-                              </button>
-
-                              {openDropdown === "difficulty" && (
-                                <div className="absolute top-full left-0 mt-1.5 w-full min-w-[140px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800">
-                                  {(["EASY", "MEDIUM", "HARD", "EXPERT"] as Difficulty[]).map(lvl => (
-                                    <button
-                                      key={lvl}
-                                      onClick={() => {
-                                        playClickSound();
-                                        setChallengeDifficulty(lvl);
-                                        setOpenDropdown(null);
-                                        updateRoomSettingsInFirestore({ difficulty: lvl });
-                                      }}
-                                      className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all ${
-                                        lvl === "EASY"
-                                          ? (darkMode ? "hover:bg-[#022c22] text-[#d1fae5]" : "hover:bg-[#D1FAE5] text-[#065F46]")
-                                          : lvl === "MEDIUM"
-                                          ? (darkMode ? "hover:bg-[#451a03] text-[#fef08a]" : "hover:bg-[#FFF99D] text-[#854D0E]")
-                                          : lvl === "HARD"
-                                          ? (darkMode ? "hover:bg-[#2e1065] text-[#e9d5ff]" : "hover:bg-[#F3E8FF] text-[#6B21A8]")
-                                          : (darkMode ? "hover:bg-[#4c0519] text-[#fecdd3]" : "hover:bg-[#FFE4E6] text-[#9D174D]")
-                                      } ${challengeDifficulty === lvl ? (darkMode ? "bg-zinc-800 font-black" : "bg-stone-100 font-black") : "bg-transparent"}`}
-                                    >
-                                      {lvl.charAt(0) + lvl.slice(1).toLowerCase()}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Top-Right: Mistakes */}
-                            <div className="relative w-full">
-                              <button
-                                onClick={() => {
-                                  playClickSound();
-                                  setOpenDropdown(openDropdown === "mistakes" ? null : "mistakes");
-                                }}
-                                className={`w-full h-[38px] flex items-center justify-center gap-1 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none outline-none cursor-pointer transition-all duration-150 active:scale-95 ${
-                                  darkMode
-                                    ? "bg-[#451a03] text-[#fef08a] shadow-[0_8px_16px_rgba(0,0,0,0.4)]"
-                                    : "bg-[#FFF99D] text-[#854D0E] shadow-[0_8px_16px_rgba(133,77,14,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
-                                }`}
-                              >
-                                <span className="truncate">
-                                  {challengeMistakeLimit === 0 ? "0 Mistakes" : challengeMistakeLimit === 999 ? "Unlimited" : `${challengeMistakeLimit} Mistakes`} ▾
-                                </span>
-                              </button>
-
-                              {openDropdown === "mistakes" && (
-                                <div className="absolute top-full right-0 mt-1.5 w-full min-w-[200px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800">
-                                  {[
-                                    { label: "0 Mistakes (Sudden Death)", val: 0 },
-                                    { label: "3 Mistakes", val: 3 },
-                                    { label: "5 Mistakes", val: 5 },
-                                    { label: "Unlimited", val: 999 },
-                                  ].map(opt => (
-                                    <button
-                                      key={opt.label}
-                                      onClick={() => {
-                                        playClickSound();
-                                        setChallengeMistakeLimit(opt.val);
-                                        setOpenDropdown(null);
-                                        updateRoomSettingsInFirestore({ mistakesLimit: opt.val });
-                                      }}
-                                      className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all ${
-                                        darkMode
-                                          ? "hover:bg-[#451a03] text-[#fef08a]"
-                                          : "hover:bg-[#FFF99D] text-[#854D0E]"
-                                      } ${challengeMistakeLimit === opt.val ? (darkMode ? "bg-zinc-800 font-black" : "bg-stone-100 font-black") : "bg-transparent"}`}
-                                    >
-                                      {opt.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Bottom-Left: Hints */}
-                            <div className="relative w-full">
-                              <button
-                                onClick={() => {
-                                  playClickSound();
-                                  setOpenDropdown(openDropdown === "hints" ? null : "hints");
-                                }}
-                                className={`w-full h-[38px] flex items-center justify-center gap-1.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none outline-none cursor-pointer transition-all duration-150 active:scale-95 ${
-                                  darkMode
-                                    ? "bg-[#2e1065] text-[#e9d5ff] shadow-[0_8px_16px_rgba(0,0,0,0.4)]"
-                                    : "bg-[#F3E8FF] text-[#6B21A8] shadow-[0_8px_16px_rgba(107,33,168,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
-                                }`}
-                              >
-                                <Lightbulb className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                                <span className="truncate">
-                                  {challengeHintLimit === 0 ? "No Hints" : challengeHintLimit === 1 ? "1 Hint" : `${challengeHintLimit} Hints`} ▾
-                                </span>
-                              </button>
-
-                              {openDropdown === "hints" && (
-                                <div className="absolute top-full left-0 mt-1.5 w-full min-w-[150px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800">
-                                  {[
-                                    { label: "No Hints", val: 0 },
-                                    { label: "1 Hint", val: 1 },
-                                    { label: "3 Hints", val: 3 },
-                                    { label: "5 Hints", val: 5 },
-                                  ].map(opt => (
-                                    <button
-                                      key={opt.label}
-                                      onClick={() => {
-                                        playClickSound();
-                                        setChallengeHintLimit(opt.val);
-                                        setOpenDropdown(null);
-                                        updateRoomSettingsInFirestore({ hintsLimit: opt.val });
-                                      }}
-                                      className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all flex items-center gap-1.5 ${
-                                        darkMode
-                                          ? "hover:bg-[#2e1065] text-[#e9d5ff]"
-                                          : "hover:bg-[#F3E8FF] text-[#6B21A8]"
-                                      } ${challengeHintLimit === opt.val ? (darkMode ? "bg-zinc-800 font-black" : "bg-stone-100 font-black") : "bg-transparent"}`}
-                                    >
-                                      <Lightbulb className="w-3 h-3 stroke-[2.5] shrink-0" />
-                                      <span>{opt.label}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Bottom-Right: Timer */}
-                            <div className="relative w-full">
-                              <button
-                                onClick={() => {
-                                  playClickSound();
-                                  setOpenDropdown(openDropdown === "timer" ? null : "timer");
-                                }}
-                                className={`w-full h-[38px] flex items-center justify-center gap-1.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none outline-none cursor-pointer transition-all duration-150 active:scale-95 ${
-                                  challengeTimerEnabled
-                                    ? (darkMode ? "bg-[#0c4a6e]/50 text-[#bae6fd] shadow-[0_8px_16px_rgba(0,0,0,0.4)]" : "bg-[#E0F2FE] text-[#0369A1] shadow-[0_8px_16px_rgba(3,105,161,0.06),_0_2px_4px_rgba(0,0,0,0.02)]")
-                                    : (darkMode ? "bg-zinc-800/80 text-stone-400" : "bg-stone-150 text-stone-600")
-                                }`}
-                              >
-                                <Timer className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                                <span className="truncate">
-                                  {challengeTimerEnabled ? "TIMER ON ▾" : "TIMER OFF ▾"}
-                                </span>
-                              </button>
-
-                              {openDropdown === "timer" && (
-                                <div className="absolute top-full right-0 mt-1.5 w-full min-w-[150px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800">
-                                  {[
-                                    { label: "Timer On", val: true },
-                                    { label: "Timer Off", val: false },
-                                  ].map(opt => (
-                                    <button
-                                      key={opt.label}
-                                      onClick={() => {
-                                        playClickSound();
-                                        setChallengeTimerEnabled(opt.val);
-                                        setOpenDropdown(null);
-                                        updateRoomSettingsInFirestore({ timerEnabled: opt.val });
-                                      }}
-                                      className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all flex items-center gap-1.5 ${
-                                        darkMode
-                                          ? "hover:bg-[#0c4a6e]/50 text-[#bae6fd]"
-                                          : "hover:bg-[#E0F2FE] text-[#0369A1]"
-                                      } ${challengeTimerEnabled === opt.val ? (darkMode ? "bg-zinc-800 font-black" : "bg-stone-100 font-black") : "bg-transparent"}`}
-                                    >
-                                      <Timer className="w-3 h-3 stroke-[2.5] shrink-0" />
-                                      <span>{opt.label}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 3. PLAYER ROSTER & INLINE ACTIONS */}
-                        <div className="flex-1 min-h-0 flex flex-col gap-2 select-none">
-                          <div className="flex items-center justify-between px-1 shrink-0">
-                            <span className={`font-sans font-black uppercase tracking-wider text-[10px] ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
-                              Players & Friends:
-                            </span>
-                            <span className={`text-[10px] font-mono font-bold ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
-                              {multiplayerPlayers.length} Available
-                            </span>
-                          </div>
-
-                          <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-2 no-scrollbar">
-                            {multiplayerPlayers.length === 0 ? (
-                              <span className="text-xs italic text-stone-500 py-6 text-center">
-                                No past players yet. Share your room code or link below!
-                              </span>
-                            ) : (
-                              multiplayerPlayers.map(player => {
-                                const { isJoined, isPendingSent, isDeclined, remainingSeconds } = getInviteCooldownState(player.id);
-
-                                return (
-                                  <div
-                                    key={player.id}
-                                    className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-200 shrink-0 ${
-                                      darkMode 
-                                        ? "bg-zinc-900/60 border border-zinc-800/60 text-stone-200" 
-                                        : "bg-white border border-stone-200/60 text-stone-850 shadow-xs"
-                                    }`}
-                                  >
-                                    {/* Left: Status Dot, Username, Inline Friend Toggle */}
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <span className={`w-2 h-2 rounded-full shrink-0 ${
-                                        player.status === 'online' ? "bg-emerald-400 animate-pulse" : "bg-stone-300 dark:bg-zinc-700"
-                                      }`} />
-                                      <span className="font-bold text-xs font-sans truncate">
-                                        {player.name}
-                                      </span>
-                                      {player.isFriend ? (
-                                        <span className={`text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0 ${
-                                          darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
-                                        }`}>
-                                          FRIEND
-                                        </span>
-                                      ) : (
-                                        <button
-                                          onClick={() => handleToggleFriend(player.id, player.name)}
-                                          className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border-none cursor-pointer shrink-0 transition-all active:scale-95 ${
-                                            darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-150 hover:bg-stone-200 text-stone-700"
-                                          }`}
-                                        >
-                                          + Add
-                                        </button>
-                                      )}
-                                    </div>
-
-                                    {/* Right: Dedicated match invite button */}
-                                    <div className="shrink-0 ml-2">
-                                      {isJoined ? (
-                                        <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl flex items-center gap-1 ${
-                                          darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
-                                        }`}>
-                                          <Check className="w-3 h-3 stroke-[3]" />
-                                          JOINED
-                                        </span>
-                                      ) : isPendingSent ? (
-                                        <button
-                                          disabled
-                                          className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
-                                            darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]"
-                                          }`}
-                                        >
-                                          SENT ({remainingSeconds}s)...
-                                        </button>
-                                      ) : isDeclined ? (
-                                        <button
-                                          disabled
-                                          className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
-                                            darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
-                                          }`}
-                                        >
-                                          DECLINED ({remainingSeconds}s)
-                                        </button>
-                                      ) : (
-                                        <button
-                                          onClick={() => {
-                                            playClickSound();
-                                            handleInviteFriend(player.id);
-                                          }}
-                                          className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none cursor-pointer transition-all active:scale-95 shadow-xs ${
-                                            darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
-                                          }`}
-                                        >
-                                          INVITE
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-                        </div>
-
-                        {/* 4. BOTTOM ACTION GROUPING */}
-                        <div className="flex flex-col gap-2.5 shrink-0 select-none mt-[14px]">
-                          {/* Side-by-side equal-width buttons */}
-                          <div className="grid grid-cols-2 gap-2.5 w-full">
-                            {/* Left: RE-INVITE ALL / STOP */}
-                            <button
-                              onClick={() => handleReinviteAll()}
-                              disabled={!isInvitingAll && multiplayerPlayers.length === 0}
-                              className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
-                                isInvitingAll
-                                  ? "bg-rose-500 hover:bg-rose-600 text-white animate-pulse"
-                                  : darkMode
-                                    ? "bg-[#2e1065]/60 hover:bg-[#2e1065] text-[#e9d5ff]"
-                                    : "bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8]"
-                              }`}
-                            >
-                              {isInvitingAll ? (
-                                <>
-                                  <XCircle className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                                  <span>STOP</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Users className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                                  <span>RE-INVITE ALL</span>
-                                </>
-                              )}
-                            </button>
-
-                            {/* Right: SHARE LINK */}
-                            <button
-                              onClick={async () => {
-                                playClickSound();
-                                const isConfigured = checkIsDisplayNameConfigured();
-                                if (!isConfigured) {
-                                  setDisplayNameCallbackAction("SHARE");
-                                  setShowDisplayNameModal(true);
-                                } else {
-                                  await executeShareInviteAction();
-                                }
-                              }}
-                              className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
-                                darkMode
-                                  ? "bg-[#0c4a6e]/50 hover:bg-[#0c4a6e]/80 text-[#bae6fd]"
-                                  : "bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1]"
-                              }`}
-                            >
-                              <Link2 className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                              <span>SHARE LINK</span>
-                            </button>
-                          </div>
-
-                          {/* Full-width primary START GAME button */}
-                          <button
-                            onClick={() => {
-                              playClickSound();
-                              const isConfigured = checkIsDisplayNameConfigured();
-                              if (!isConfigured) {
-                                setDisplayNameCallbackAction("START");
-                                setShowDisplayNameModal(true);
-                              } else {
-                                executeStartGameAction();
-                              }
-                            }}
-                            className={`w-full py-3.5 sm:py-4 px-4 text-xs sm:text-sm font-sans font-black uppercase tracking-wider rounded-2xl border-none transition-all duration-150 cursor-pointer text-center hover:scale-[1.01] active:scale-98 shadow-md flex items-center justify-center gap-2 ${
-                              darkMode
-                                ? "bg-[#022c22] hover:bg-[#064e3b] text-[#d1fae5] shadow-[0_8px_20px_rgba(0,0,0,0.5)]"
-                                : "bg-[#D1FAE5] hover:bg-[#A7F3D0] active:bg-[#6EE7B7] text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.12)]"
-                            }`}
-                          >
-                            <span>START GAME</span>
-                          </button>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </motion.div>
-              )}
+              <CreateChallengeModal
+                isOpen={showCreateChallengeModal}
+                onClose={() => setShowCreateChallengeModal(false)}
+                challengeSeed={challengeSeed}
+                boardState={boardState}
+                isRoomLocked={isRoomLocked}
+                setIsRoomLocked={setIsRoomLocked}
+                roomPin={roomPin}
+                setRoomPin={setRoomPin}
+                updateRoomSettingsInFirestore={updateRoomSettingsInFirestore}
+                challengeDifficulty={challengeDifficulty}
+                setChallengeDifficulty={setChallengeDifficulty}
+                challengeMistakeLimit={challengeMistakeLimit}
+                setChallengeMistakeLimit={setChallengeMistakeLimit}
+                challengeHintLimit={challengeHintLimit}
+                setChallengeHintLimit={setChallengeHintLimit}
+                challengeTimerEnabled={challengeTimerEnabled}
+                setChallengeTimerEnabled={setChallengeTimerEnabled}
+                multiplayerPlayers={multiplayerPlayers}
+                getInviteCooldownState={getInviteCooldownState}
+                handleToggleFriend={handleToggleFriend}
+                handleInviteFriend={handleInviteFriend}
+                handleReinviteAll={handleReinviteAll}
+                isInvitingAll={isInvitingAll}
+                onShareLink={async () => {
+                  const isConfigured = checkIsDisplayNameConfigured();
+                  if (!isConfigured) {
+                    setDisplayNameCallbackAction("SHARE");
+                    setShowDisplayNameModal(true);
+                  } else {
+                    await executeShareInviteAction();
+                  }
+                }}
+                onStartGame={() => {
+                  const isConfigured = checkIsDisplayNameConfigured();
+                  if (!isConfigured) {
+                    setDisplayNameCallbackAction("START");
+                    setShowDisplayNameModal(true);
+                  } else {
+                    executeStartGameAction();
+                  }
+                }}
+                copyToClipboard={copyToClipboard}
+                showCopiedToast={showCopiedToast}
+                darkMode={darkMode}
+                playClickSound={playClickSound}
+              />
             </AnimatePresence>
           </div>
         )}
@@ -10286,134 +9648,50 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showInviteModal && incomingChallengeDetails && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm p-4">
-            {/* Backdrop click dismisser */}
-            <div 
-              className="absolute inset-0 cursor-pointer" 
-              onClick={() => {
-                playClickSound();
-                setShowInviteModal(false);
-              }} 
-            />
+      <IncomingInviteModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        incomingChallengeDetails={incomingChallengeDetails}
+        enteredInvitePassword={enteredInvitePassword}
+        setEnteredInvitePassword={setEnteredInvitePassword}
+        invitePasswordError={invitePasswordError}
+        setInvitePasswordError={setInvitePasswordError}
+        onDecline={() => {
+          const matchingPending = pendingChallenges.find(c => c.id === incomingChallengeId);
+          if (matchingPending?.inviteId) {
+            try {
+              updateDoc(doc(db, "invites", matchingPending.inviteId), { status: "declined" });
+            } catch (e) {}
+          }
+          handleMaybeLaterChallenge();
+          setShowInviteModal(false);
+        }}
+        onAccept={() => {
+          // Password check
+          if (incomingChallengeDetails?.password) {
+            const correct = incomingChallengeDetails.password.trim().toLowerCase();
+            const entered = enteredInvitePassword.trim().toLowerCase();
+            if (entered !== correct) {
+              setInvitePasswordError("❌ Incorrect Password");
+              return;
+            }
+          }
 
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className={`relative w-full max-w-sm rounded-[32px] p-8 border-none flex flex-col gap-6 shadow-[0_12px_40px_rgba(0,0,0,0.08)] select-none z-[10001] text-center transition-colors duration-300 ${
-                darkMode ? "bg-[#2A2D24] text-[#FDFBF7]" : "bg-[#FDFBF7] text-[#4B5563]"
-              }`}
-            >
-              <div className="flex flex-col items-center gap-1">
-                <span className={`text-[12px] font-sans font-bold uppercase tracking-widest ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
-                  Game Invitation
-                </span>
-                <h3 className={`text-2xl font-sans font-medium tracking-tight mt-1 ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
-                  {incomingChallengeDetails.senderName || "Fellow Player"}
-                </h3>
-                <p className={`text-sm font-sans mt-0.5 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
-                  invited you to clear a board.
-                </p>
-              </div>
+          const matchingPending = pendingChallenges.find(c => c.id === incomingChallengeId);
+          const launch = () => {
+            handleAcceptAndLaunchInvite(
+              incomingChallengeId,
+              matchingPending?.inviteId,
+              incomingChallengeDetails?.password,
+              true
+            );
+          };
 
-              {/* 📊 SUMMARY */}
-              <div className="flex items-center justify-center gap-6 py-2">
-                 <div className="flex flex-col items-center">
-                   <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>Level</span>
-                   <span className="text-lg font-mono font-medium">{incomingChallengeDetails.difficulty}</span>
-                 </div>
-                 <div className={`w-[1px] h-8 ${darkMode ? "bg-[#4B5563]" : "bg-[#E5E7EB]"}`} />
-                 <div className="flex flex-col items-center">
-                   <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>Mistakes</span>
-                   <span className="text-lg font-mono font-medium">{incomingChallengeDetails.maxMistakes} limit</span>
-                 </div>
-              </div>
-
-              {/* 🔒 PASSWORD FIELD */}
-              {incomingChallengeDetails.password && (
-                <div className={`p-4 rounded-3xl border-none flex flex-col gap-2 select-none ${
-                  darkMode ? "bg-stone-800/20 text-rose-300" : "bg-[#FFF5F5] text-red-950"
-                }`}>
-                  <div className="flex items-center justify-center gap-1.5 font-sans font-bold uppercase tracking-wider text-[10px]">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-red-500 animate-pulse" />
-                    Enter Password
-                  </div>
-                  <input
-                    type="text"
-                    maxLength={16}
-                    placeholder="Passcode..."
-                    value={enteredInvitePassword}
-                    onChange={(e) => {
-                      setEnteredInvitePassword(e.target.value.replace(/[^a-zA-Z0-9]/g, ''));
-                      setInvitePasswordError(null);
-                    }}
-                    className={`w-full py-2.5 px-3 rounded-[16px] text-center text-xs font-mono font-bold tracking-widest border-none focus:outline-none focus:ring-0 select-none ${
-                      darkMode ? "bg-black/20 text-stone-100 placeholder-zinc-700" : "bg-white text-stone-850 placeholder-stone-300"
-                    }`}
-                  />
-                  {invitePasswordError && (
-                    <span className="text-[10px] font-bold text-rose-600 text-center uppercase tracking-wide mt-0.5">
-                      {invitePasswordError}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* ACTION FOOTER */}
-              <div className="flex w-full gap-3 mt-2">
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    const matchingPending = pendingChallenges.find(c => c.id === incomingChallengeId);
-                    if (matchingPending?.inviteId) {
-                      try {
-                        updateDoc(doc(db, "invites", matchingPending.inviteId), { status: "declined" });
-                      } catch (e) {}
-                    }
-                    handleMaybeLaterChallenge();
-                    setShowInviteModal(false);
-                  }}
-                  className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#3F4238] text-[#FDFBF7] hover:bg-[#4E5146]" : "bg-[#F3F4F6] text-[#4B5563] hover:bg-[#E5E7EB]"}`}
-                >
-                   <X className="w-7 h-7" strokeWidth={1.5} />
-                </button>
-                <button
-                  onClick={() => {
-                    playClickSound();
-
-                    // Password check
-                    if (incomingChallengeDetails.password) {
-                      const correct = incomingChallengeDetails.password.trim().toLowerCase();
-                      const entered = enteredInvitePassword.trim().toLowerCase();
-                      if (entered !== correct) {
-                        setInvitePasswordError("❌ Incorrect Password");
-                        return;
-                      }
-                    }
-
-                    const matchingPending = pendingChallenges.find(c => c.id === incomingChallengeId);
-                    const launch = () => {
-                      handleAcceptAndLaunchInvite(
-                        incomingChallengeId,
-                        matchingPending?.inviteId,
-                        incomingChallengeDetails.password,
-                        true
-                      );
-                    };
-
-                    handleAcceptInvitationWithProfileCheck(launch);
-                  }}
-                  className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]" : "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]"}`}
-                >
-                   <Check className="w-7 h-7" strokeWidth={1.5} />
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          handleAcceptInvitationWithProfileCheck(launch);
+        }}
+        darkMode={darkMode}
+        playClickSound={playClickSound}
+      />
 
       <AnimatePresence>
         {playerToUnfriend && (
