@@ -2081,30 +2081,78 @@ useEffect(() => {
   const gamesPlayed = completedGames.length;
   const winsCount = completedGames.filter(g => g.isWon).length;
   const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
-  // Dynamically analyze and compute the absolute actual best times from the actual completed won games (solo or challenge)
-  const bestTimes = React.useMemo<Record<Difficulty, number>>(() => {
-    const records: Record<Difficulty, number> = {
-      EASY: 0,
-      MEDIUM: 0,
-      HARD: 0,
-      EXPERT: 0
-    };
-    
-    completedGames.forEach(g => {
-      if (g.isWon && g.difficulty) {
-        // Normalize difficulty casing
-        const diffKey = g.difficulty.toUpperCase() as Difficulty;
-        if (records[diffKey] === 0 || g.timeSec < records[diffKey]) {
-          records[diffKey] = g.timeSec;
+
+  // Persistent Best Times tracking across Solo and Multiplayer sessions (never lost when history is capped)
+  const [personalBestTimes, setPersonalBestTimes] = useState<Record<Difficulty, number>>(() => {
+    const initial: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
+    try {
+      const saved = localStorage.getItem("sudoku_best_times");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object") {
+          initial.EASY = Number(parsed.EASY) || 0;
+          initial.MEDIUM = Number(parsed.MEDIUM) || 0;
+          initial.HARD = Number(parsed.HARD) || 0;
+          initial.EXPERT = Number(parsed.EXPERT) || 0;
         }
       }
-    });
-    
-    return records;
-  }, [completedGames]);
+      // Seed from historical completed games if any
+      const history = localStorage.getItem("sudoku_completed_games");
+      if (history) {
+        const parsedGames = JSON.parse(history);
+        if (Array.isArray(parsedGames)) {
+          parsedGames.forEach((g: any) => {
+            if (g.isWon && g.difficulty && g.timeSec > 0) {
+              const diffKey = g.difficulty.toUpperCase() as Difficulty;
+              if (initial[diffKey] === undefined || initial[diffKey] === 0 || g.timeSec < initial[diffKey]) {
+                initial[diffKey] = g.timeSec;
+              }
+            }
+          });
+        }
+      }
+    } catch {}
+    return initial;
+  });
 
-  // Derived bestTime for current selected difficulty
+  const [isNewRecordAchieved, setIsNewRecordAchieved] = useState<boolean>(false);
+
+  // Derived bestTimes and current difficulty record
+  const bestTimes = personalBestTimes;
   const bestTime = bestTimes[difficulty];
+
+  // Unified Personal Best Time update logic with Fair-Play safeguards
+  const updatePersonalBestTime = (diff: Difficulty, elapsedSeconds: number): boolean => {
+    if (!elapsedSeconds || elapsedSeconds <= 0) return false;
+    const diffKey = diff.toUpperCase() as Difficulty;
+    const currentBest = personalBestTimes[diffKey] || 0;
+    
+    if (currentBest === 0 || elapsedSeconds < currentBest) {
+      setPersonalBestTimes(prev => {
+        const updated = { ...prev, [diffKey]: elapsedSeconds };
+        try {
+          localStorage.setItem("sudoku_best_times", JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+      setIsNewRecordAchieved(true);
+      addLog(`🏆 New Personal Best Record achieved for ${diffKey}: ${formatTimer(elapsedSeconds)}!`);
+      return true;
+    }
+    return false;
+  };
+
+  // Complete multiplayer room state teardown
+  const cleanupRoomSession = () => {
+    setChallengeMode(false);
+    setActiveGameId(null);
+    setChallengeSeed(null);
+    setRematchGameId(null);
+    setSyncedLeaderboard([]);
+    setPendingRematchSeed(null);
+    setEndGameStep(1);
+    addLog("🧹 Room session cleared. Restored clean Solo state.");
+  };
 
   // Together Mode dynamic colors mapped to selected difficulty and dark/light modes
   const themeTextAccent = darkMode ? (
@@ -2855,7 +2903,7 @@ useEffect(() => {
     registerChallengeJoin(roomCode);
 
     // 5. Mount puzzle using the exact canonical parameters and preloaded board if present
-    await generateAndSetNewPuzzle(diff, seed, mistakesLimit, timerEnabled, hintsLimit, preloadedBoard);
+    await generateAndSetNewPuzzle(diff, seed, mistakesLimit, timerEnabled, hintsLimit, preloadedBoard, true);
     setSessionSeconds(0);
     setIsTimerPaused(false);
 
@@ -3933,7 +3981,7 @@ useEffect(() => {
     setMistakeLimitEnabled(challengeMistakeLimit !== 999);
     setTimerEnabled(challengeTimerEnabled);
     
-    generateAndSetNewPuzzle(challengeDifficulty, canonicalSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit);
+    generateAndSetNewPuzzle(challengeDifficulty, canonicalSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit, undefined, true);
 
     setShowCreateChallengeModal(false);
     setIsTimerPaused(false);
@@ -4198,7 +4246,9 @@ useEffect(() => {
       seedVal,
       maxMistakesVal,
       timerOnVal,
-      hintLimitVal
+      hintLimitVal,
+      undefined,
+      game.isChallenge
     );
     
     setDifficulty(game.difficulty);
@@ -5009,21 +5059,30 @@ useEffect(() => {
     maxMistakesOverride?: number,
     timerEnabledOverride?: boolean,
     hintLimitOverride?: number,
-    preloadedBoardData?: { puzzle?: number[][]; solution?: number[][] }
+    preloadedBoardData?: { puzzle?: number[][]; solution?: number[][] },
+    isChallengeModeOverride?: boolean
   ) => {
     setVisualizingBacktrack(false);
     setGeneratorLogs([]);
+    setIsNewRecordAchieved(false);
     addLog("⚡ Initiating unique sudoku puzzle algorithm...");
 
     // Determine the seed (either user override or generate a new random seed)
     const seed = seedOverride !== undefined ? seedOverride : (Math.floor(Math.random() * 900000) + 100000);
     const prng = createPRNG(seed);
 
+    // Determine if this session is a challenge / room game (clean solo by default)
+    const isChallengeSession = isChallengeModeOverride !== undefined 
+      ? isChallengeModeOverride 
+      : false;
+
     // Build or set active Game ID
     const customLimit = maxMistakesOverride ?? (mistakeLimitEnabled ? 3 : 999);
     const customTimer = timerEnabledOverride ?? timerEnabled;
-    const customHintLimit = hintLimitOverride ?? challengeHintLimit;
-    const gameId = `SUDOKU-${seed}-${level}-M${customLimit}-H${customHintLimit}-T${customTimer ? 1 : 0}`;
+    const customHintLimit = hintLimitOverride ?? (isChallengeSession ? challengeHintLimit : 3);
+    const gameId = isChallengeSession
+      ? `SUDOKU-${seed}-${level}-M${customLimit}-H${customHintLimit}-T${customTimer ? 1 : 0}`
+      : null;
     
     // Set active game details for displays
     setActiveGameId(gameId);
@@ -5140,7 +5199,7 @@ useEffect(() => {
     setShowGameOverModal(false);
 
     // Also update current active challenge states if this started a challenge
-    if (seedOverride !== undefined) {
+    if (isChallengeSession) {
       setChallengeMode(true);
       setChallengeSeed(seed);
       setChallengeMistakeLimit(customLimit);
@@ -5151,6 +5210,7 @@ useEffect(() => {
     } else {
       setChallengeMode(false);
       setChallengeSeed(null);
+      setRematchGameId(null);
     }
   };
 
@@ -5985,6 +6045,7 @@ useEffect(() => {
               playClickSound();
               const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
               if (currentScreen === "game") {
+                cleanupRoomSession();
                 if (isDesktop) {
                   navigateToScreen("status");
                 } else {
@@ -6698,6 +6759,11 @@ useEffect(() => {
                                       <span className={`font-sans font-bold text-sm leading-none flex items-center gap-1.5 ${player.isMe ? (darkMode ? "text-indigo-300" : "text-indigo-950") : (darkMode ? "text-zinc-200" : "text-stone-850")}`}>
                                         {player.name}
                                         {player.isMe && <span className="text-[9px] bg-indigo-500/20 text-indigo-500 px-1.5 py-0.5 rounded uppercase tracking-wider font-black">You</span>}
+                                        {player.isMe && isNewRecordAchieved && !player.failed && (
+                                          <span className="text-[8.5px] bg-amber-400/20 text-amber-600 dark:text-amber-400 border border-amber-400/40 px-1.5 py-0.5 rounded uppercase tracking-wider font-black animate-pulse">
+                                            NEW BEST TIME!
+                                          </span>
+                                        )}
                                         {player.isReal && !player.isMe && !isPending && (
                                           <span className="text-[9px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">Synced ✓</span>
                                         )}
@@ -7361,7 +7427,7 @@ useEffect(() => {
                                     setTimerEnabled(challengeTimerEnabled);
 
                                     registerChallengeJoin(roomCode);
-                                    generateAndSetNewPuzzle(challengeDifficulty, targetSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit);
+                                    generateAndSetNewPuzzle(challengeDifficulty, targetSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit, undefined, true);
                                     setSessionSeconds(0);
                                     setIsTimerPaused(false);
                                     setShowGameOverModal(false);
@@ -7413,8 +7479,14 @@ useEffect(() => {
                         {difficulty} Difficulty
                       </span>
                       <h3 className={`text-3xl font-sans font-medium tracking-tight mt-2 ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
-                        {(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) ? "Try Again" : "Cleared!"}
+                        {(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) ? "Try Again" : "Solved!"}
                       </h3>
+                      {isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) && (
+                        <div className="flex items-center justify-center gap-1.5 py-1 px-3 mt-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-sans font-black text-xs uppercase tracking-wider animate-bounce">
+                          <span>🏆</span>
+                          <span>New Personal Best!</span>
+                        </div>
+                      )}
                       <p className={`text-sm font-sans mt-1 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
                         {(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) 
                           ? `You accumulated ${boardState.maxMistakesLimit} mistakes.`
@@ -7423,26 +7495,46 @@ useEffect(() => {
                     </div>
 
                     {/* Stats */}
-                    <div className="flex items-center justify-center gap-8 py-2">
+                    <div className="grid grid-cols-3 gap-2 py-3 px-3 rounded-2xl bg-stone-500/5 dark:bg-stone-500/10 text-center items-center">
                        <div className="flex flex-col items-center">
                          <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>Time</span>
-                         <span className={`text-lg font-mono font-medium ${darkMode ? "text-[#E5E7EB]" : "text-[#4B5563]"}`}>{formatTimer(sessionSeconds)}</span>
+                         <span className={`text-base sm:text-lg font-mono font-bold ${darkMode ? "text-[#E5E7EB]" : "text-[#4B5563]"}`}>{formatTimer(sessionSeconds)}</span>
                        </div>
-                       <div className={`w-[1px] h-8 ${darkMode ? "bg-[#4B5563]" : "bg-[#E5E7EB]"}`} />
-                       <div className="flex flex-col items-center">
+                       <div className="flex flex-col items-center border-x border-stone-200 dark:border-zinc-700">
                          <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>Errors</span>
-                         <span className={`text-lg font-mono font-medium ${darkMode ? "text-[#E5E7EB]" : "text-[#4B5563]"}`}>{boardState.currentMistakesCount}</span>
+                         <span className={`text-base sm:text-lg font-mono font-bold ${boardState.currentMistakesCount > 0 ? "text-rose-500" : (darkMode ? "text-[#E5E7EB]" : "text-[#4B5563]")}`}>
+                           {boardState.currentMistakesCount}/{boardState.maxMistakesLimit}
+                         </span>
+                       </div>
+                       <div className="flex flex-col items-center">
+                         <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>Best</span>
+                         <span className={`text-base sm:text-lg font-mono font-bold text-amber-500`}>
+                           {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
+                         </span>
                        </div>
                     </div>
 
-                    {/* Button Split */}
+                    {/* Invite Friends / Play Together Action Button */}
+                    <button
+                      onClick={() => {
+                        playClickSound();
+                        setShowGameOverModal(false);
+                        openCreateRoomModal(difficulty, timerEnabled);
+                      }}
+                      className="w-full py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 font-sans font-black text-xs tracking-wider uppercase transition-all shadow-md active:scale-98 border-none cursor-pointer text-white bg-purple-700 hover:bg-purple-800 dark:bg-purple-800 dark:hover:bg-purple-700"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>Invite Friends</span>
+                    </button>
+
                     {/* Action buttons row */}
-                    <div className="flex w-full gap-3 mt-2">
+                    <div className="flex w-full gap-3">
                       {/* Button 1: Back Arrow */}
                       <button
                         onClick={() => {
                           playClickSound();
                           setShowGameOverModal(false);
+                          cleanupRoomSession();
                           navigateToScreen("home");
                         }}
                         className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-700"}`}
@@ -7455,7 +7547,7 @@ useEffect(() => {
                       <button
                         onClick={() => {
                           playClickSound();
-                          generateAndSetNewPuzzle(difficulty, boardState?.seed);
+                          generateAndSetNewPuzzle(difficulty, boardState?.seed, undefined, undefined, undefined, undefined, false);
                           setIsTimerPaused(false);
                           setShowGameOverModal(false);
                         }}
@@ -7469,7 +7561,7 @@ useEffect(() => {
                       <button
                         onClick={() => {
                           playClickSound();
-                          generateAndSetNewPuzzle(difficulty);
+                          generateAndSetNewPuzzle(difficulty, undefined, undefined, undefined, undefined, undefined, false);
                           setIsTimerPaused(false);
                           setShowGameOverModal(false);
                         }}
