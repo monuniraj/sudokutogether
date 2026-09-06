@@ -6361,78 +6361,38 @@ useEffect(() => {
                         })}
                       </div>
                     </div>
-
-                    <div className="w-full grid grid-cols-2 gap-3.5 select-none shrink-0" id="desktop-solo-multiplayer-split">
-                      <button
-                        onClick={() => {
-                          playClickSound();
-                          if (savedSessionInfo) {
-                            const loaded = resumeSavedSession();
-                            if (loaded) {
-                              setDifficulty(loaded.difficulty);
-                              setIsTimerPaused(false);
-                            }
-                          } else {
-                            showToast("Select a difficulty above and click PLAY NEW GAME!");
-                          }
-                        }}
-                        className={`border-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
-                          savedSessionInfo
-                            ? (darkMode ? "bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc] border border-[#bae6fd]/15" : "bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]")
-                            : (darkMode ? "bg-zinc-800/40 text-stone-500 cursor-not-allowed opacity-60 border border-zinc-700/30" : "bg-stone-100/60 text-stone-400 cursor-not-allowed opacity-60 shadow-[0_8px_30px_rgba(0,0,0,0.02)]")
-                        }`}
-                      >
-                        <RotateCw className={`w-4 h-4 stroke-[3] shrink-0 ${savedSessionInfo ? "animate-pulse" : ""}`} />
-                        <span className="font-sans font-black text-xs md:text-sm tracking-wider uppercase leading-none">
-                          Resume
-                        </span>
-                      </button>
-    
-                      <button
-                        onClick={() => {
-                          playClickSound();
-                          setShowMultiplayerForkModal(true);
-                        }}
-                        className={`border-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
-                          darkMode ? "bg-[#3b0764]/20 hover:bg-[#3b0764]/40 border border-[#f5f3ff]/15 text-[#d8b4fe]" : "bg-[#f3e8ff]/60 hover:bg-[#e9d5ff]/60 active:bg-[#d8b4fe]/60 shadow-[0_8px_30px_rgba(107,33,168,0.04)] text-[#6B21A8]"
-                        }`}
-                      >
-                        <Users className="w-4 h-4 stroke-[3] shrink-0" />
-                        <span className="font-sans font-black text-xs md:text-sm tracking-wider uppercase leading-none">
-                          Multiplayer
-                        </span>
-                      </button>
-                    </div>
                   </div>
 
+                  {/* ROW 2: HUD GROUP DIRECTLY ABOVE 9x9 BOARD */}
+                  <div className="w-full flex items-center justify-between px-1 mb-2 select-none shrink-0" id="unified-bridge-container">
+                    {/* Left: Mistakes status metric */}
+                    <div className="flex flex-col gap-0.5 select-none">
+                      <span className="text-[10px] font-black font-mono tracking-widest text-[#0369A1] dark:text-[#38BDF8] uppercase leading-none">
+                        Mistakes
+                      </span>
+                      <span className={`font-sans font-black text-xs sm:text-sm tracking-wider leading-none ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
+                        ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
+                      </span>
+                    </div>
 
-                  {/* Status Indicators directly above the grid with swapped positions - hidden on desktop */}
-                  <div className="w-full flex items-center justify-between px-1 pb-0.5 md:pb-4 lg:hidden" id="unified-bridge-container">
-                    {/* Mistakes status metric inside elegant borderless layout */}
-                    <span className={`font-sans font-black text-xs sm:text-sm tracking-wider leading-none ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
-                      ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
-                    </span>
-
-                    {/* Middle HUD Icons: Multiplayer Invite and Help */}
-                    <div className="flex items-center gap-1">
-                      {/* Borderless Multiplayer Invite Icon Button */}
+                    {/* Center: Multiplayer Invite and Help */}
+                    <div className="flex items-center gap-1.5 sm:gap-2">
                       <button
                         onClick={() => {
                           playClickSound();
                           setIsTimerPaused(true);
                           setShowMidGameInviteModal(true);
                         }}
-                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer active:scale-90 flex items-center justify-center ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
+                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
                         aria-label="Invite Players to Match"
                         title="Invite Players"
                       >
                         <Users className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
                       </button>
 
-                      {/* Help Icon Mobile */}
                       <button
                         onClick={() => setShowHowToPlayModal(true)}
-                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer active:scale-90 flex items-center justify-center ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
+                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
                         aria-label="How to play"
                         title="How to play"
                       >
@@ -6440,35 +6400,42 @@ useEffect(() => {
                       </button>
                     </div>
 
-                    {/* Running Timer and Pause Button placed directly adjacent on the right */}
-                    {timerEnabled ? (
-                      <div className="flex items-center gap-1.5 justify-end">
-                        <button
-                          onClick={() => {
-                            playClickSound();
-                            setIsTimerPaused(!isTimerPaused);
-                            addLog(isTimerPaused ? "⏱️ Session timer resumed!" : "⏸️ Session timer paused.");
-                          }}
-                          className="bg-transparent border-none p-0 cursor-pointer outline-none hover:opacity-80 transition-all flex items-center justify-center active:scale-90 duration-150"
-                          title={isTimerPaused ? "Resume Game" : "Pause Game"}
-                        >
-                          {isTimerPaused ? (
-                            <svg className={`w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current ${darkMode ? "text-sky-450 text-sky-400" : "text-[#2B6CB0]"}`} viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                          ) : (
-                            <svg className={`w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current ${darkMode ? "text-sky-450 text-sky-400" : "text-[#2B6CB0]"}`} viewBox="0 0 24 24">
-                              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                            </svg>
-                          )}
-                        </button>
+                    {/* Right: Running Timer and Pause Button */}
+                    <div className="flex flex-col items-end gap-0.5 select-none">
+                      <span className="text-[10px] font-black font-mono tracking-widest text-[#0369A1] dark:text-[#38BDF8] uppercase leading-none">
+                        Timer
+                      </span>
+                      {timerEnabled ? (
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <button
+                            onClick={() => {
+                              playClickSound();
+                              setIsTimerPaused(!isTimerPaused);
+                              addLog(isTimerPaused ? "⏱️ Session timer resumed!" : "⏸️ Session timer paused.");
+                            }}
+                            className="bg-transparent border-none p-0 cursor-pointer outline-none hover:opacity-80 transition-all flex items-center justify-center active:scale-90 duration-150"
+                            title={isTimerPaused ? "Resume Game" : "Pause Game"}
+                          >
+                            {isTimerPaused ? (
+                              <svg className={`w-3.5 h-3.5 fill-current ${darkMode ? "text-sky-450 text-sky-400" : "text-[#2B6CB0]"}`} viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                              </svg>
+                            ) : (
+                              <svg className={`w-3.5 h-3.5 fill-current ${darkMode ? "text-sky-450 text-sky-400" : "text-[#2B6CB0]"}`} viewBox="0 0 24 24">
+                                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                              </svg>
+                            )}
+                          </button>
+                          <span className={`font-sans font-bold text-xs sm:text-sm tracking-wider leading-none ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}>
+                            {isTimerPaused ? "PAUSED" : formatTimer(sessionSeconds)}
+                          </span>
+                        </div>
+                      ) : (
                         <span className={`font-sans font-bold text-xs sm:text-sm tracking-wider leading-none ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}>
-                          {isTimerPaused ? "PAUSED" : formatTimer(sessionSeconds)}
+                          --:--
                         </span>
-                      </div>
-                    ) : (
-                      <div />
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   {/* 2. CENTER CANVAS: Corner-to-Corner Sudoku grid with custom border hierarchy and height-aware sizing */}
@@ -6518,79 +6485,21 @@ useEffect(() => {
                   id="game-controls-column"
                 >
                   
-                  {/* 1. STATUS INDICATORS (Desktop-only, placed at the top of the right panel) */}
-                  <div className="hidden lg:flex items-center justify-between w-full border-b border-stone-200/20 dark:border-zinc-800 pb-2.5 mb-0.5" id="desktop-status-indicators">
-                    {/* Mistakes counter */}
-                    <div className="flex flex-col gap-1 w-1/3">
-                      <span className="text-[10px] font-black font-mono tracking-widest text-[#0369A1] dark:text-[#38BDF8] uppercase">
-                        Mistakes
-                      </span>
-                      <span className={`font-sans font-black text-sm tracking-wider leading-none ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
-                        ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
-                      </span>
-                    </div>
-
-                    {/* Help & Invite Icons Desktop */}
-                    <div className="flex items-center justify-center gap-2 w-1/3">
-                      <button
-                        onClick={() => {
-                          playClickSound();
-                          setIsTimerPaused(true);
-                          setShowMidGameInviteModal(true);
-                        }}
-                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-95 flex items-center justify-center ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
-                        aria-label="Invite Players to Match"
-                        title="Invite Players"
-                      >
-                        <Users className="w-5 h-5" strokeWidth={2} />
-                      </button>
-
-                      <button
-                        onClick={() => setShowHowToPlayModal(true)}
-                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-95 flex items-center justify-center ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
-                        title="How to play"
-                      >
-                        <HelpCircle className="w-5 h-5" strokeWidth={2} />
-                      </button>
-                    </div>
-
-                    {/* Timer/Time counter */}
-                    <div className="flex flex-col items-end gap-1 w-1/3">
-                      <span className="text-[10px] font-black font-mono tracking-widest text-[#0369A1] dark:text-[#38BDF8] uppercase">
-                        Timer
-                      </span>
-                      {timerEnabled ? (
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button
-                            onClick={() => {
-                              playClickSound();
-                              setIsTimerPaused(!isTimerPaused);
-                              addLog(isTimerPaused ? "⏱️ Session timer resumed!" : "⏸️ Session timer paused.");
-                            }}
-                            className="bg-transparent border-none p-0 cursor-pointer outline-none hover:opacity-80 transition-all flex items-center justify-center active:scale-95 duration-150"
-                            title={isTimerPaused ? "Resume Game" : "Pause Game"}
-                          >
-                            {isTimerPaused ? (
-                              <svg className="w-3.5 h-3.5 fill-current text-[#2B6CB0] dark:text-sky-450 text-sky-400" viewBox="0 0 24 24">
-                                <path d="M8 5v14l11-7z" />
-                              </svg>
-                            ) : (
-                              <svg className="w-3.5 h-3.5 fill-current text-[#2B6CB0] dark:text-sky-450 text-sky-400" viewBox="0 0 24 24">
-                                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                              </svg>
-                            )}
-                          </button>
-                          <span className={`font-sans font-bold text-sm tracking-wider leading-none ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}>
-                            {isTimerPaused ? "PAUSED" : formatTimer(sessionSeconds)}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className={`font-sans font-bold text-sm tracking-wider leading-none ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}>
-                          --:--
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  {/* ROW 1: MULTIPLAYER BUTTON (Desktop-only, matches Difficulty buttons baseline and height) */}
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      setShowMultiplayerForkModal(true);
+                    }}
+                    className={`hidden lg:flex w-full h-[38px] border-none px-4 text-center transition-all duration-150 select-none rounded-xl items-center justify-center gap-2 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px font-mono text-xs uppercase tracking-wider shrink-0 ${
+                      darkMode 
+                        ? "bg-[#2e1065] hover:bg-[#3b0764] text-[#e9d5ff] font-black border border-purple-950/60 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" 
+                        : "bg-[#F3E8FF] hover:bg-[#E9D5FF] active:bg-[#D8B4FE] text-[#6B21A8] font-black shadow-[0_8px_16px_rgba(107,33,168,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
+                    }`}
+                  >
+                    <Users className="w-4 h-4 stroke-[2.5] shrink-0" />
+                    <span>Multiplayer</span>
+                  </button>
 
                   {/* 2 & 3. KEYPAD & CONTROLS DECK */}
                   <SudokuKeypad
