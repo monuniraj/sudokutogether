@@ -215,19 +215,4 @@
     max-width: 100% !important;
     width: 100% !important;
   }
-}
-/* =========================================================================
-   DESKTOP RESPONSIVENESS AND LAYOUT REFINEMENTS (min-width: 1024px)
-   Pulls the controls cabinet closer to the Sudoku 9x9 grid,
-   and shifts the entire container to center it visually on desktop.
-   ========================================================================= */
-@media (min-width: 1024px) {
-  #main-responsive-game-container {
-    transform: translateX(-26px) !important; /* Precise offset shifter to center the entire block on desktop */
-  }
-
-  /* Shifter for Column 2 to reside closer to the grid column */
-  #game-controls-column {
-    margin-left: -52px !important; /* Decreasing margin-left pulls the right panel closer to the Sudoku grid */
-  }
-}
+}

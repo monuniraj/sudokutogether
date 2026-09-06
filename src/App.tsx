@@ -6302,17 +6302,15 @@ useEffect(() => {
           {currentScreen === "game" && (
             <div className={`flex-1 w-full flex flex-col items-center justify-start p-1 sm:p-3 md:p-6 overflow-hidden lg:overflow-y-auto pb-16 select-none pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto`}>
               
-              {/* Main responsive outer layout container - Centers automatically and stretches beautifully */}
+              {/* Main responsive outer layout container - Centers automatically as a unified cohesive block */}
               <div 
-                className="w-full flex flex-col lg:flex-row gap-5 lg:gap-3 xl:gap-4 justify-center items-center lg:items-stretch select-none mx-auto lg:max-w-[940px] xl:max-w-[980px] my-auto shrink-0"
-                style={{ margin: "auto" }}
+                className="w-full lg:w-fit flex flex-col lg:flex-row gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto my-auto shrink-0"
                 id="main-responsive-game-container"
               >
                 
-                {/* COLUMN 1: SUDOKU GRID & SCOREBOARD (Left Column 58-60% on Wide Screens, centered, proportional styling) */}
+                {/* COLUMN 1: SUDOKU GRID & SCOREBOARD */}
                 <div 
-                  className="w-full lg:w-auto lg:max-w-[min(94vw,62vh,500px)] xl:max-w-[min(94vw,66vh,540px)] lg:flex-1 flex flex-col gap-3 relative select-none"
-                  style={{ margin: "0 auto" }}
+                  className="w-full lg:w-[500px] shrink-0 flex flex-col justify-between select-none relative"
                   id="game-grid-column"
                 >
                 
@@ -6514,14 +6512,14 @@ useEffect(() => {
                 </div>
                 </div>
 
-                {/* COLUMN 2: CONTROLS & NUMBERS DECK (Right Column compacted on Desktop to match Sudoku 3/3 dimensions) */}
+                {/* COLUMN 2: CONTROLS & NUMBERS DECK */}
                 <div 
-                  className="w-full lg:w-[260px] xl:w-[285px] flex flex-col gap-3 lg:gap-0 lg:justify-between px-2 py-3 sm:px-2 sm:py-4 lg:p-4.5 transition-colors duration-300 border-none select-none mt-2 lg:mt-0 shrink-0 lg:self-stretch lg:h-auto"
+                  className="w-full lg:w-[292px] shrink-0 flex flex-col justify-between px-2 py-3 sm:px-2 sm:py-4 lg:p-0 transition-colors duration-300 border-none select-none mt-2 lg:mt-0"
                   id="game-controls-column"
                 >
                   
                   {/* 1. STATUS INDICATORS (Desktop-only, placed at the top of the right panel) */}
-                  <div className="hidden lg:flex items-center justify-between w-full border-b border-stone-200/20 dark:border-zinc-800 pb-3 mb-1" id="desktop-status-indicators">
+                  <div className="hidden lg:flex items-center justify-between w-full border-b border-stone-200/20 dark:border-zinc-800 pb-2.5 mb-0.5" id="desktop-status-indicators">
                     {/* Mistakes counter */}
                     <div className="flex flex-col gap-1 w-1/3">
                       <span className="text-[10px] font-black font-mono tracking-widest text-[#0369A1] dark:text-[#38BDF8] uppercase">
@@ -6633,7 +6631,7 @@ useEffect(() => {
                       setIsTimerPaused(false);
                       addLog("🔄 Started a fresh new board!");
                     }}
-                    className={`hidden lg:block w-full border-none p-4 lg:py-5 xl:py-6 text-center font-black text-sm xl:text-base tracking-wider uppercase transition-all duration-150 select-none rounded-[16px] xl:rounded-2xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md mt-1 lg:mt-2 ${
+                    className={`hidden lg:block w-full border-none py-3.5 px-4 text-center font-black text-sm xl:text-base tracking-wider uppercase transition-all duration-150 select-none rounded-2xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 ${
                       darkMode 
                         ? "bg-[#4c0519] hover:bg-[#4c0519]/80 text-[#fecdd3]" 
                         : "bg-[#FFE4E6] hover:bg-[#FFE4E6]/85 active:bg-[#FBCFE8] text-[#9D174D]"
