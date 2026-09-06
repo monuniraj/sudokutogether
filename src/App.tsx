@@ -6514,7 +6514,7 @@ useEffect(() => {
 
                 {/* COLUMN 2: CONTROLS & NUMBERS DECK */}
                 <div 
-                  className="w-full lg:w-[292px] shrink-0 flex flex-col justify-between px-2 py-3 sm:px-2 sm:py-4 lg:p-0 transition-colors duration-300 border-none select-none mt-2 lg:mt-0"
+                  className="w-full lg:w-[292px] shrink-0 flex flex-col justify-between px-2 py-3 sm:px-2 sm:py-4 lg:p-0 transition-colors duration-300 border-none select-none mt-2 lg:mt-6"
                   id="game-controls-column"
                 >
                   

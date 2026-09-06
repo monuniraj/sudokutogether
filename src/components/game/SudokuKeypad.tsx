@@ -77,7 +77,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onUndo();
             }}
             disabled={!boardState || isGameOver || historyLength === 0}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[58px] xl:min-h-[62px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? "bg-zinc-900 border border-sky-950 hover:bg-zinc-850 text-[#38BDF8] active:bg-zinc-800" 
                 : "bg-[#E0F2FE] hover:bg-[#bae6fd] active:bg-[#C0E8FF] text-[#0369A1] shadow-[0_8px_16px_rgba(3,105,161,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
@@ -96,7 +96,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onErase();
             }}
             disabled={!boardState || isGameOver}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[58px] xl:min-h-[62px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? "bg-zinc-900 border border-pink-950 hover:bg-zinc-850 text-[#F472B6] active:bg-zinc-800" 
                 : "bg-[#FCE7F3] hover:bg-[#FBCFE8] active:bg-[#F9A8D4] text-[#9D174D] shadow-[0_8px_16px_rgba(157,23,77,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
@@ -115,7 +115,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onTogglePencilMode();
             }}
             disabled={!boardState || isGameOver}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[58px] xl:min-h-[62px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? (pencilMode 
                     ? "bg-[#713f12] hover:bg-[#854d0e] active:bg-[#854d0e] text-[#facc15] font-black border border-yellow-950" 
@@ -138,7 +138,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onHint();
             }}
             disabled={!boardState || isGameOver}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[58px] xl:min-h-[62px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? "bg-zinc-900 border border-emerald-950 hover:bg-zinc-850 text-[#34D399] active:bg-[#135236]" 
                 : "bg-[#E6F4EA] hover:bg-[#D1FAE5] text-[#135236] shadow-[0_8px_16px_rgba(19,82,54,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
@@ -175,7 +175,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                   onNumberSelect(num);
                 }}
                 disabled={!boardState || isGameOver || visualizingBacktrack || remainingCount <= 0}
-                className={`aspect-[1/1.55] lg:aspect-[1/1.36] w-full relative flex items-center justify-center font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
+                className={`aspect-[1/1.55] lg:aspect-[1/1.25] w-full relative flex items-center justify-center font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
                   isLocked 
                     ? (darkMode 
                         ? "bg-[#713f12] text-[#facc15] active:bg-[#854d0e] border border-yellow-950" 
