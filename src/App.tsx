@@ -6366,14 +6366,9 @@ useEffect(() => {
                   {/* ROW 2: HUD GROUP DIRECTLY ABOVE 9x9 BOARD */}
                   <div className="w-full flex items-center justify-between px-1 mb-2 select-none shrink-0" id="unified-bridge-container">
                     {/* Left: Mistakes status metric */}
-                    <div className="flex flex-col gap-0.5 select-none">
-                      <span className="text-[10px] font-black font-mono tracking-widest text-[#0369A1] dark:text-[#38BDF8] uppercase leading-none">
-                        Mistakes
-                      </span>
-                      <span className={`font-sans font-black text-xs sm:text-sm tracking-wider leading-none ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
-                        ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
-                      </span>
-                    </div>
+                    <span className={`font-sans font-black text-xs sm:text-sm tracking-wider leading-none select-none ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
+                      ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
+                    </span>
 
                     {/* Center: Multiplayer Invite and Help */}
                     <div className="flex items-center gap-1.5 sm:gap-2">
@@ -6401,41 +6396,42 @@ useEffect(() => {
                     </div>
 
                     {/* Right: Running Timer and Pause Button */}
-                    <div className="flex flex-col items-end gap-0.5 select-none">
-                      <span className="text-[10px] font-black font-mono tracking-widest text-[#0369A1] dark:text-[#38BDF8] uppercase leading-none">
-                        Timer
-                      </span>
-                      {timerEnabled ? (
-                        <div className="flex items-center gap-1.5 justify-end">
-                          <button
-                            onClick={() => {
-                              playClickSound();
-                              setIsTimerPaused(!isTimerPaused);
-                              addLog(isTimerPaused ? "⏱️ Session timer resumed!" : "⏸️ Session timer paused.");
-                            }}
-                            className="bg-transparent border-none p-0 cursor-pointer outline-none hover:opacity-80 transition-all flex items-center justify-center active:scale-90 duration-150"
-                            title={isTimerPaused ? "Resume Game" : "Pause Game"}
-                          >
-                            {isTimerPaused ? (
-                              <svg className={`w-3.5 h-3.5 fill-current ${darkMode ? "text-sky-450 text-sky-400" : "text-[#2B6CB0]"}`} viewBox="0 0 24 24">
-                                <path d="M8 5v14l11-7z" />
-                              </svg>
-                            ) : (
-                              <svg className={`w-3.5 h-3.5 fill-current ${darkMode ? "text-sky-450 text-sky-400" : "text-[#2B6CB0]"}`} viewBox="0 0 24 24">
-                                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                              </svg>
-                            )}
-                          </button>
-                          <span className={`font-sans font-bold text-xs sm:text-sm tracking-wider leading-none ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}>
-                            {isTimerPaused ? "PAUSED" : formatTimer(sessionSeconds)}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className={`font-sans font-bold text-xs sm:text-sm tracking-wider leading-none ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}>
-                          --:--
+                    {timerEnabled ? (
+                      <div className="flex items-center gap-1.5 justify-end select-none shrink-0 w-[68px] sm:w-[76px]">
+                        <button
+                          onClick={() => {
+                            playClickSound();
+                            setIsTimerPaused(!isTimerPaused);
+                            addLog(isTimerPaused ? "⏱️ Session timer resumed!" : "⏸️ Session timer paused.");
+                          }}
+                          className="bg-transparent border-none p-0 cursor-pointer outline-none hover:opacity-80 transition-all flex items-center justify-center active:scale-90 duration-150 shrink-0 w-3.5 h-3.5"
+                          title={isTimerPaused ? "Resume Game" : "Pause Game"}
+                        >
+                          {isTimerPaused ? (
+                            <svg className={`w-3.5 h-3.5 fill-current ${darkMode ? "text-sky-450 text-sky-400" : "text-[#2B6CB0]"}`} viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          ) : (
+                            <svg className={`w-3.5 h-3.5 fill-current ${darkMode ? "text-sky-450 text-sky-400" : "text-[#2B6CB0]"}`} viewBox="0 0 24 24">
+                              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                            </svg>
+                          )}
+                        </button>
+                        <span 
+                          className={`font-mono tabular-nums font-bold text-xs sm:text-sm tracking-wider leading-none text-left w-[48px] sm:w-[56px] shrink-0 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
+                          style={{ fontVariantNumeric: "tabular-nums" }}
+                        >
+                          {isTimerPaused ? "PAUSED" : formatTimer(sessionSeconds)}
                         </span>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <span 
+                        className={`font-mono tabular-nums font-bold text-xs sm:text-sm tracking-wider leading-none select-none text-right w-[68px] sm:w-[76px] shrink-0 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
+                        style={{ fontVariantNumeric: "tabular-nums" }}
+                      >
+                        --:--
+                      </span>
+                    )}
                   </div>
 
                   {/* 2. CENTER CANVAS: Corner-to-Corner Sudoku grid with custom border hierarchy and height-aware sizing */}
@@ -6481,7 +6477,7 @@ useEffect(() => {
 
                 {/* COLUMN 2: CONTROLS & NUMBERS DECK */}
                 <div 
-                  className="w-full lg:w-[292px] shrink-0 flex flex-col justify-between px-2 py-3 sm:px-2 sm:py-4 lg:p-0 transition-colors duration-300 border-none select-none mt-2 lg:mt-6"
+                  className="w-full lg:w-[292px] shrink-0 flex flex-col gap-3 sm:gap-4 lg:gap-0 lg:justify-between px-2 py-3 sm:px-2 sm:py-4 lg:p-0 transition-colors duration-300 border-none select-none mt-2 lg:mt-6"
                   id="game-controls-column"
                 >
                   
