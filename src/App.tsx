@@ -6183,15 +6183,15 @@ useEffect(() => {
                   navigateToScreen("status");
                 }
               }}
-              className={`p-2.5 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
               title={(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? "Statistics" : "Back"}
               aria-label={(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? "Statistics" : "Back"}
               id="global-top-left-back-button"
             >
               {(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? (
-                <BarChart2 className={`w-5 h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+                <BarChart2 className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
               ) : (
-                <ArrowLeft className={`w-4.5 h-4.5 stroke-[2] font-bold ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+                <ArrowLeft className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] font-bold ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
               )}
             </button>
 
@@ -6202,15 +6202,15 @@ useEffect(() => {
                 triggerHapticTap();
                 setDarkMode(prev => !prev);
               }}
-              className={`p-2.5 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
               title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
               aria-label={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
               id="global-top-theme-toggle-button"
             >
               {darkMode ? (
-                <Moon className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+                <Moon className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
               ) : (
-                <Sun className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+                <Sun className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
               )}
             </button>
           </div>
@@ -6235,14 +6235,14 @@ useEffect(() => {
                 triggerHapticTap();
                 setShowBellInvitesModal(true);
               }}
-              className={`relative p-2.5 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${
+              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${
                 darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"
               }`}
               title="Notifications"
               aria-label="Notifications"
               id="global-top-right-bell-button"
             >
-              <Bell className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+              <Bell className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
               {pendingChallenges.length > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-black text-white shadow-sm font-mono pointer-events-none">
                   {pendingChallenges.length > 9 ? "9+" : pendingChallenges.length}
@@ -6262,12 +6262,12 @@ useEffect(() => {
                   navigateToScreen("settings");
                 }
               }}
-              className={`p-2.5 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
               title="Settings"
               aria-label="Settings"
               id="global-top-right-settings-button"
             >
-              <Settings className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+              <Settings className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
             </button>
           </div>
         </div>
