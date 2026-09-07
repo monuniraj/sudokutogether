@@ -43,6 +43,8 @@ export interface CreateChallengeModalProps {
   onStartGame: () => void;
   copyToClipboard: (text: string) => void;
   showCopiedToast: (msg: string) => void;
+  onMistakeLimitAbove3?: () => void;
+  onHintLimitAbove3?: () => void;
   darkMode: boolean;
   playClickSound: () => void;
 }
@@ -75,6 +77,8 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
   onStartGame,
   copyToClipboard,
   showCopiedToast,
+  onMistakeLimitAbove3,
+  onHintLimitAbove3,
   darkMode,
   playClickSound
 }) => {
@@ -290,6 +294,9 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                       setChallengeMistakeLimit(opt.val);
                       setOpenDropdown(null);
                       updateRoomSettingsInFirestore({ mistakesLimit: opt.val });
+                      if (opt.val > 3) {
+                        onMistakeLimitAbove3?.();
+                      }
                     }}
                     className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all ${
                       darkMode
@@ -338,6 +345,9 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                       setChallengeHintLimit(opt.val);
                       setOpenDropdown(null);
                       updateRoomSettingsInFirestore({ hintsLimit: opt.val });
+                      if (opt.val > 3) {
+                        onHintLimitAbove3?.();
+                      }
                     }}
                     className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all flex items-center gap-1.5 ${
                       darkMode

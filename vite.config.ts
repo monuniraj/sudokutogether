@@ -7,7 +7,7 @@ export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
     build: {
-      sourcemap: true,
+      sourcemap: false,
     },
     resolve: {
       alias: {

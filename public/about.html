@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>About Us - SudokuSync</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="canonical" href="https://sudoku-together-mode.web.app/about.html" />
+    <meta name="description" content="About SudokuSync - Modern, high-performance logic puzzle and multiplayer brain-training platform." />
+    <style>
+      :root {
+        --bg-color: #fdfbf7;
+        --text-color: #1e1e1e;
+        --card-bg: #ffffff;
+        --border-color: #e5e7eb;
+        --primary-color: #0369a1;
+        --accent-color: #0284c7;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg-color: #18181b;
+          --text-color: #e5e5e5;
+          --card-bg: #27272a;
+          --border-color: #3f3f46;
+          --primary-color: #38bdf8;
+          --accent-color: #7dd3fc;
+        }
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        line-height: 1.6;
+        margin: 0;
+        padding: 24px 16px;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        padding: 32px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      }
+      h1 { font-size: 1.75rem; color: var(--primary-color); margin-top: 0; }
+      h2 { font-size: 1.25rem; color: var(--primary-color); margin-top: 28px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
+      p, li { font-size: 0.95rem; }
+      a { color: var(--primary-color); text-decoration: underline; word-break: break-all; }
+      a:hover { color: var(--accent-color); }
+      .meta { font-size: 0.85rem; color: #71717a; margin-bottom: 20px; }
+      .highlight-box {
+        background-color: rgba(2, 132, 199, 0.08);
+        border-left: 4px solid var(--primary-color);
+        padding: 14px 18px;
+        border-radius: 0 10px 10px 0;
+        margin: 16px 0;
+        font-size: 0.9rem;
+      }
+      ul { padding-left: 20px; }
+      li { margin-bottom: 6px; }
+      .footer {
+        margin-top: 36px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-color);
+        font-size: 0.85rem;
+        text-align: center;
+        color: #71717a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>About SudokuSync</h1>
+      <div class="meta"><strong>Platform:</strong> Web & Android App | <strong>Status:</strong> Active & Free to Play</div>
+
+      <p>
+        <strong>SudokuSync</strong> (<a href="https://sudoku-together-mode.web.app">https://sudoku-together-mode.web.app</a>) is a modern, high-performance logic puzzle and brain-training platform designed for solo solvers and competitive friends alike.
+      </p>
+      <p>
+        Our mission is to elevate classic paper-and-pencil Sudoku into an engaging digital multiplayer experience. Powered by deterministic seed generation (Mulberry32 PRNG), custom mistake limits, real-time board synchronization, and procedural sound synthesis, our platform brings players together on identical, mathematically verified 1-solution puzzles without heavy data transmission.
+      </p>
+
+      <h2>Key Features & Architecture</h2>
+      <ul>
+        <li><strong>Deterministic Seeded Generation:</strong> Play identical puzzles with friends across web and Android mobile by simply sharing a room link or numeric seed.</li>
+        <li><strong>Scrapbook Design Aesthetic:</strong> Premium paper-and-ink visual theme with customizable sticky notes, washi tape, and clean tactile controls.</li>
+        <li><strong>Procedural Web Audio Engine:</strong> Dynamic, zero-latency synthesizer sounds created natively via the browser Web Audio API.</li>
+        <li><strong>Offline-First Resilience:</strong> Full gameplay capability offline with automatic Firestore synchronization when back online.</li>
+      </ul>
+
+      <div class="highlight-box">
+        <strong>100% Free & Transparent:</strong>
+        <p style="margin: 6px 0 0 0;">
+          This application is completely free to play, supported by Google AdSense advertisements, and built with user privacy, speed, and accessibility at its core.
+        </p>
+      </div>
+
+      <div class="footer">
+        <a href="/">← Return to SudokuSync</a> | <a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms of Service</a>
+        <br /><br />
+        © 2026 SudokuSync. All rights reserved.
+      </div>
+    </div>
+  </body>
+</html>

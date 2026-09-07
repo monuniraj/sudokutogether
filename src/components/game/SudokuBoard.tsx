@@ -1,5 +1,5 @@
 import React from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Play } from "lucide-react";
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 
@@ -120,7 +120,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
 
   return (
     <div 
-      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden rounded-none transition-colors duration-200 ${darkMode ? "bg-zinc-950 border-t-[3px] border-l-[3px]" : "bg-white border-t-[3px] border-l-[3px]"} ${darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#064e3b]/60" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#713f12]/60" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#581c87]/60" : "border-[#881337]/60") : ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#065f46]/40" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#854d0e]/40" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#6b21a8]/40" : "border-[#9d174d]/40")}`}
+      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-none transition-colors duration-200 ${darkMode ? "bg-zinc-950 border-[3px]" : "bg-white border-[3px]"} ${darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#064e3b]/60" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#713f12]/60" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#581c87]/60" : "border-[#881337]/60") : ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#065f46]/40" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#854d0e]/40" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#6b21a8]/40" : "border-[#9d174d]/40")}`}
       style={{ 
         boxShadow: darkMode ? "0 4px 20px rgba(0,0,0,0.6)" : "0 4px 20px rgba(43,108,176,0.03)",
         width: "100%",
@@ -128,20 +128,33 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
         margin: "0 auto",
       }}
     >
-      {/* PAUSE SCREEN OVERLAY */}
+      {/* MINIMALIST PAUSE SCREEN OVERLAY */}
       {isTimerPaused && (
-        <div className={`absolute inset-0 ${darkMode ? "bg-zinc-950/95 text-zinc-100" : "bg-[#FDFBF7]/95 text-stone-900"} backdrop-blur-xs z-45 flex flex-col items-center justify-center gap-3 rounded-xl`}>
-          <span className="text-3xl">⏸️</span>
-          <span className={`font-sans font-black text-xs uppercase tracking-widest ${darkMode ? "text-zinc-100" : "text-[#1E1E1E]"}`}>Sudoku Paused</span>
-          <button
-            onClick={() => {
-              playClickSound();
-              onResumeSession();
+        <div 
+          onClick={() => {
+            playClickSound();
+            onResumeSession();
+          }}
+          className={`absolute inset-0 ${
+            darkMode ? "bg-zinc-950/75 text-zinc-100" : "bg-[#FDFBF7]/75 text-stone-900"
+          } backdrop-blur-[8px] z-45 flex items-center justify-center cursor-pointer select-none transition-all duration-200 overflow-hidden rounded-[inherit]`}
+          style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+          title="Resume Game"
+        >
+          <div
+            className={`w-20 h-20 sm:w-22 sm:h-22 rounded-full flex items-center justify-center transition-all duration-200 border-none cursor-pointer active:scale-95 group hover:scale-105 ${
+              darkMode 
+                ? "bg-zinc-900/90 text-emerald-400 hover:bg-zinc-800" 
+                : "bg-white/90 text-emerald-700 hover:bg-white"
+            }`}
+            style={{ 
+              boxShadow: darkMode ? "0 4px 16px rgba(0, 0, 0, 0.4)" : "0 4px 12px rgba(0, 0, 0, 0.06)",
+              backdropFilter: "blur(8px)", 
+              WebkitBackdropFilter: "blur(8px)" 
             }}
-            className={`border-none py-2 px-5 rounded-xl font-sans text-xs font-black uppercase tracking-wider cursor-pointer shadow-md transition-all active:scale-98 ${darkMode ? "bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white" : "bg-[#2B6CB0] hover:bg-[#1D4ED8] text-white"}`}
           >
-            Resume Session
-          </button>
+            <Play className="w-8 h-8 sm:w-9 sm:h-9 fill-current translate-x-0.5 transition-transform duration-200 group-hover:scale-110" />
+          </div>
         </div>
       )}
       
@@ -221,14 +234,18 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           }
 
           let borderClasses = "";
-          if (c === 2 || c === 8 || c === 5) {
+          if (c === 2 || c === 5) {
             borderClasses += ` border-r-[3px] ${heavyBorderR}`;
+          } else if (c === 8) {
+            borderClasses += " border-r-0";
           } else {
             borderClasses += ` border-r-[0.75px] ${lightBorderR}`;
           }
 
-          if (r === 2 || r === 8 || r === 5) {
+          if (r === 2 || r === 5) {
             borderClasses += ` border-b-[3px] ${heavyBorderB}`;
+          } else if (r === 8) {
+            borderClasses += " border-b-0";
           } else {
             borderClasses += ` border-b-[0.75px] ${lightBorderB}`;
           }

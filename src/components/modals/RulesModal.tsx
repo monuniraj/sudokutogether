@@ -64,7 +64,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({
                   darkMode ? "text-stone-300" : "text-stone-700"
                 }`}
               >
-                The goal of Sudoku Together is to fill the grid so that every row, column, and 3x3
+                The goal of SudokuSync is to fill the grid so that every row, column, and 3x3
                 box contains all numbers from 1 to 9. Each number can only appear once in each row,
                 column, and 3x3 box. Use the Pencil tool to jot down potential numbers. Use the
                 Eraser tool to correct mistakes. The game is complete once the grid is filled

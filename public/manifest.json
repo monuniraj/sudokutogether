@@ -1,0 +1,16 @@
+{
+  "name": "SudokuSync",
+  "short_name": "SudokuSync",
+  "description": "Real-time multiplayer Sudoku game with deterministic seeded generation and instant room codes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fdfbf7",
+  "theme_color": "#0369a1",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    }
+  ]
+}

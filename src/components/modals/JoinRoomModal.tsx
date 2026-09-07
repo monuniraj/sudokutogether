@@ -53,7 +53,7 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
           <span className={`text-[10px] font-sans font-black tracking-widest uppercase ${darkMode ? "text-sky-400" : "text-[#0369a1]"}`}>
-            Together Mode
+            SudokuSync
           </span>
           <h3 className="text-xl font-sans font-black tracking-tight leading-none text-stone-850 dark:text-stone-100">
             Join Room

@@ -88,6 +88,7 @@ import { Share } from '@capacitor/share';
 import { App as CapApp } from '@capacitor/app';
 import { PushNotifications } from "@capacitor/push-notifications";
 import { LocalNotifications } from "@capacitor/local-notifications";
+import { triggerHapticTap, triggerHapticError } from "./utils/haptics";
 import { getToken } from "firebase/messaging";
 import { messaging } from "./firebase";
 
@@ -170,6 +171,8 @@ interface CompletedGame {
   timeSec: number;
   mistakes: number;
   maxMistakes: number;
+  hints?: number;
+  maxHints?: number;
   isWon: boolean;
   date: string;
   isChallenge: boolean;
@@ -2082,38 +2085,108 @@ useEffect(() => {
   const winsCount = completedGames.filter(g => g.isWon).length;
   const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
 
+  // Helper to parse times stored as raw numbers, numeric strings, or mm:ss / hh:mm:ss strings
+  const parseTimeToSeconds = (val: unknown): number => {
+    if (typeof val === "number" && !isNaN(val) && val > 0) {
+      return Math.round(val);
+    }
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      if (/^\d+$/.test(trimmed)) {
+        const num = parseInt(trimmed, 10);
+        if (!isNaN(num) && num > 0) return num;
+      }
+      const parts = trimmed.split(":").map(p => parseInt(p, 10));
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        return parts[0] * 60 + parts[1];
+      }
+      if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      }
+    }
+    return 0;
+  };
+
   // Persistent Best Times tracking across Solo and Multiplayer sessions (never lost when history is capped)
   const [personalBestTimes, setPersonalBestTimes] = useState<Record<Difficulty, number>>(() => {
-    const initial: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
+    const records: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
+    
+    // 1. Read existing saved best times from localStorage (case-insensitive for tiers)
     try {
       const saved = localStorage.getItem("sudoku_best_times");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === "object") {
-          initial.EASY = Number(parsed.EASY) || 0;
-          initial.MEDIUM = Number(parsed.MEDIUM) || 0;
-          initial.HARD = Number(parsed.HARD) || 0;
-          initial.EXPERT = Number(parsed.EXPERT) || 0;
-        }
-      }
-      // Seed from historical completed games if any
-      const history = localStorage.getItem("sudoku_completed_games");
-      if (history) {
-        const parsedGames = JSON.parse(history);
-        if (Array.isArray(parsedGames)) {
-          parsedGames.forEach((g: any) => {
-            if (g.isWon && g.difficulty && g.timeSec > 0) {
-              const diffKey = g.difficulty.toUpperCase() as Difficulty;
-              if (initial[diffKey] === undefined || initial[diffKey] === 0 || g.timeSec < initial[diffKey]) {
-                initial[diffKey] = g.timeSec;
-              }
+          (["EASY", "MEDIUM", "HARD", "EXPERT"] as Difficulty[]).forEach(tier => {
+            const rawVal = parsed[tier] ?? parsed[tier.toLowerCase()] ?? parsed[tier.charAt(0) + tier.slice(1).toLowerCase()];
+            const secs = parseTimeToSeconds(rawVal);
+            if (secs > 0) {
+              records[tier] = secs;
             }
           });
         }
       }
+    } catch (e) {
+      console.error("Error reading sudoku_best_times:", e);
+    }
+
+    // 2. Scan historical completed & saved games for any qualified faster times (restores past flawless runs like 01:35 or 02:22)
+    ["sudoku_completed_games", "sudoku_saved_games"].forEach(sourceKey => {
+      try {
+        const raw = localStorage.getItem(sourceKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((g: any) => {
+              if (!g || !g.isWon) return;
+
+              const diffUpper = String(g.difficulty || "").toUpperCase();
+              if (!["EASY", "MEDIUM", "HARD", "EXPERT"].includes(diffUpper)) return;
+              const diffKey = diffUpper as Difficulty;
+
+              // Qualification rule:
+              // Must have < 3 mistakes and not have unlimited (>= 999) or > 3 mistake limit
+              const maxMistakes = Number(g.maxMistakes);
+              const mistakes = Number(g.mistakes ?? 0);
+              const isUnlimited = isNaN(maxMistakes) ? false : maxMistakes >= 999;
+              const isAbove3 = isNaN(maxMistakes) ? false : maxMistakes > 3;
+              const withinLimit = mistakes < 3;
+
+              // Hint limit rule:
+              // Hints used <= 3 and max hint limit <= 3
+              const hintsUsed = Number(g.hints ?? g.hintsCount ?? 0);
+              const maxHints = Number(g.maxHints ?? g.maxHintsLimit ?? 3);
+              const isHintsDisqualified = hintsUsed > 3 || maxHints > 3;
+
+              if (isUnlimited || isAbove3 || !withinLimit || isHintsDisqualified) return;
+
+              const timeSec = parseTimeToSeconds(g.timeSec ?? g.time);
+              if (timeSec > 0) {
+                if (records[diffKey] === 0 || timeSec < records[diffKey]) {
+                  records[diffKey] = timeSec;
+                }
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.error(`Error scanning ${sourceKey}:`, e);
+      }
+    });
+
+    // 3. Immediately write back reconciled best times so they are permanently saved
+    try {
+      localStorage.setItem("sudoku_best_times", JSON.stringify(records));
     } catch {}
-    return initial;
+
+    return records;
   });
+
+  const personalBestTimesRef = useRef<Record<Difficulty, number>>(personalBestTimes);
+
+  useEffect(() => {
+    personalBestTimesRef.current = personalBestTimes;
+  }, [personalBestTimes]);
 
   const [isNewRecordAchieved, setIsNewRecordAchieved] = useState<boolean>(false);
 
@@ -2125,16 +2198,15 @@ useEffect(() => {
   const updatePersonalBestTime = (diff: Difficulty, elapsedSeconds: number): boolean => {
     if (!elapsedSeconds || elapsedSeconds <= 0) return false;
     const diffKey = diff.toUpperCase() as Difficulty;
-    const currentBest = personalBestTimes[diffKey] || 0;
+    const currentBest = personalBestTimesRef.current[diffKey] || 0;
     
     if (currentBest === 0 || elapsedSeconds < currentBest) {
-      setPersonalBestTimes(prev => {
-        const updated = { ...prev, [diffKey]: elapsedSeconds };
-        try {
-          localStorage.setItem("sudoku_best_times", JSON.stringify(updated));
-        } catch {}
-        return updated;
-      });
+      const updated = { ...personalBestTimesRef.current, [diffKey]: elapsedSeconds };
+      personalBestTimesRef.current = updated;
+      setPersonalBestTimes(updated);
+      try {
+        localStorage.setItem("sudoku_best_times", JSON.stringify(updated));
+      } catch {}
       setIsNewRecordAchieved(true);
       addLog(`🏆 New Personal Best Record achieved for ${diffKey}: ${formatTimer(elapsedSeconds)}!`);
       return true;
@@ -3343,6 +3415,26 @@ useEffect(() => {
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState<boolean>(false);
   const [showResetSettingsModal, setShowResetSettingsModal] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [recordWarningMessage, setRecordWarningMessage] = useState<string | null>(null);
+  const recordWarningTimerRef = useRef<any>(null);
+
+  const triggerRecordWarningAlert = (msg: string) => {
+    setRecordWarningMessage(msg);
+    if (recordWarningTimerRef.current) {
+      clearTimeout(recordWarningTimerRef.current);
+    }
+    recordWarningTimerRef.current = setTimeout(() => {
+      setRecordWarningMessage(null);
+    }, 3000);
+  };
+
+  const triggerMistakeLimitAlert = () => {
+    triggerRecordWarningAlert("Above 3 mistakes: Personal best time record is disabled.");
+  };
+
+  const triggerHintLimitAlert = () => {
+    triggerRecordWarningAlert("Above 3 hints: Personal best time record is disabled.");
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -3696,9 +3788,9 @@ useEffect(() => {
     const currentProfileName = userProfile?.name || "Player";
     const chalUrl = `${getChallengeBaseUrl()}?room=${activeRoomCode}${pinParam}&sender=${encodeURIComponent(currentProfileName)}`;
     const pwMsg = cleanPin ? ` (PIN: ${cleanPin})` : "";
-    const shareText = `Let's play Sudoku Together! Join room CODE: ${activeRoomCode}${pwMsg}:`;
+    const shareText = `Play SudokuSync with me at https://sudokusync.com! Join room CODE: ${activeRoomCode}${pwMsg}:`;
 
-    await shareOrCopyContent("Color Sudoku Together", shareText, chalUrl, showCopiedToast, showCopiedToast);
+    await shareOrCopyContent("SudokuSync", shareText, chalUrl, showCopiedToast, showCopiedToast);
   };
 
   const executeEndGameShareAction = async () => {
@@ -3740,7 +3832,7 @@ useEffect(() => {
     const challengeLink = `${getChallengeBaseUrl()}?challenge=${finalGameId}&sender=${encodeURIComponent(currentProfileName)}`;
     const shareText = `${currentProfileName} solved a Sudoku puzzle in ${formattedTime} on ${difficulty}! Think you can beat this? Try here:`;
     
-    await shareAppContent("Sudoku Together", shareText, challengeLink);
+    await shareAppContent("SudokuSync", shareText, challengeLink);
   };
 
   const executeHistoryShareAction = async () => {
@@ -3778,9 +3870,9 @@ useEffect(() => {
 
     const challengeLink = `${getChallengeBaseUrl()}?challenge=${finalId}&sender=${encodeURIComponent(currentProfileName)}`;
     const formattedTime = formatTimer(historyChallengeGame.timeSec);
-    const shareText = `${currentProfileName} completed a Sudoku Together match in ${formattedTime} on ${historyChallengeGame.difficulty} level! Think you can beat this? Try here:`;
+    const shareText = `${currentProfileName} completed a SudokuSync match in ${formattedTime} on ${historyChallengeGame.difficulty} level! Think you can beat this? Try here:`;
     
-    await shareAppContent("Sudoku Together", shareText, challengeLink);
+    await shareAppContent("SudokuSync", shareText, challengeLink);
   };
 
   const shareChallengeLink = async (gameId: string, customText?: string) => {
@@ -3800,9 +3892,9 @@ useEffect(() => {
     const pinParam = cleanPin ? `&pw=${encodeURIComponent(cleanPin)}&pin=${encodeURIComponent(cleanPin)}` : "";
     const chalUrl = `${getChallengeBaseUrl()}?room=${roomCode}${pinParam}&sender=${encodeURIComponent(currentProfileName)}`;
     const pwMsg = cleanPin ? ` (Room PIN: ${cleanPin})` : "";
-    const shareText = customText || `Let's play a Sudoku Rematch! Join my challenge room #${roomCode}${pwMsg}:`;
+    const shareText = customText || `Let's play a SudokuSync Rematch! Join my challenge room #${roomCode}${pwMsg}:`;
 
-    await shareAppContent("Sudoku Together", shareText, chalUrl);
+    await shareAppContent("SudokuSync", shareText, chalUrl);
   };
 
   const executePendingChallengeShareAction = async (challengeCard: any) => {
@@ -4166,6 +4258,37 @@ useEffect(() => {
       ? mistakesOverride 
       : (boardState ? boardState.currentMistakesCount : 0);
 
+    // Evaluate Personal Best qualification based on industry standard rules:
+    // 1. Any completed game within standard 3-mistake limit (< 3 errors: 0, 1, or 2 mistakes) MUST qualify.
+    // 2. Disqualify ONLY IF:
+    //    a) Mistake limit setting was turned OFF (unlimited mistakes mode / 999), OR
+    //    b) Mistake limit was custom-increased above 3 (e.g. 4 or 5 mistakes in multiplayer).
+    // 3. Hint limit rule:
+    //    a) A run only qualifies if hints used <= 3 AND max hints limit <= 3.
+    //    b) If hints used > 3 or hints set to unlimited (> 3), personal best is not recorded.
+    const maxMistakesLimit = boardState ? boardState.maxMistakesLimit : (mistakeLimitEnabled ? 3 : 999);
+    const isUnlimitedMistakes = !mistakeLimitEnabled || maxMistakesLimit >= 999;
+    const isCustomIncreasedAbove3 = maxMistakesLimit > 3;
+    const isWithinStandardLimit = finalMistakes < 3;
+
+    const hintsUsed = boardState ? boardState.hintsCount : 0;
+    const maxHintsLimit = boardState?.maxHintsLimit ?? (challengeMode ? challengeHintLimit : 3);
+    const isHintsDisqualified = hintsUsed > 3 || maxHintsLimit > 3;
+
+    const qualifiesForPersonalBest = 
+      isWon && 
+      !isUnlimitedMistakes && 
+      !isCustomIncreasedAbove3 && 
+      isWithinStandardLimit && 
+      !isHintsDisqualified && 
+      sessionSeconds > 0;
+
+    if (qualifiesForPersonalBest) {
+      updatePersonalBestTime(difficulty, sessionSeconds);
+    } else {
+      setIsNewRecordAchieved(false);
+    }
+
     // Check if duplicate record exists
     setCompletedGames(prev => {
       const exists = prev.some(r => r.id === finalGameId);
@@ -4182,6 +4305,8 @@ useEffect(() => {
         timeSec: sessionSeconds,
         mistakes: finalMistakes,
         maxMistakes: boardState ? boardState.maxMistakesLimit : 3,
+        hints: hintsUsed,
+        maxHints: maxHintsLimit,
         isWon: isWon,
         date: new Date().toISOString(),
         isChallenge: challengeMode,
@@ -4213,6 +4338,8 @@ useEffect(() => {
       playerName: pName,
       timeSec: sessionSeconds,
       mistakes: finalMistakes,
+      hints: hintsUsed,
+      maxHints: maxHintsLimit,
       isWon: isWon,
       date: new Date().toISOString()
     };
@@ -4665,7 +4792,7 @@ useEffect(() => {
       setRematchInviteStates(prev => {
         let changed = false;
         const next = { ...prev };
-        Object.entries(next).forEach(([uid, state]) => {
+        Object.entries(next).forEach(([uid, state]: [string, any]) => {
           if ((state.status === "sent" || state.status === "declined") && state.timerEnd > 0 && state.timerEnd <= now) {
             delete next[uid];
             changed = true;
@@ -5248,9 +5375,9 @@ useEffect(() => {
     // Update room progress in Firestore if active
     const liveSeed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
     const liveRoomCode = String(liveSeed).padStart(6, '0').slice(-6);
-    if (currentUser?.uid && liveRoomCode) {
+    if (userProfile?.id && liveRoomCode) {
       try {
-        await setDoc(doc(db, "rooms", liveRoomCode, "players", currentUser.uid), {
+        await setDoc(doc(db, "rooms", liveRoomCode, "players", userProfile.id), {
           progress: 0,
           mistakes: 0,
           status: "active",
@@ -5272,9 +5399,11 @@ useEffect(() => {
         const val = parseInt(key);
         if (lockedNum === val) {
           setLockedNum(null);
+          triggerHapticTap(vibrations);
           addLog(`🔓 Unlocked digit ${val}.`);
         } else {
           setLockedNum(val);
+          triggerHapticTap(vibrations);
           addLog(`🎨 Selected paint digit ${val}. Tap empty cells to fast fill!`);
         }
         return;
@@ -5353,6 +5482,7 @@ useEffect(() => {
     // Same-digit toggle: clear value and bypass checks
     if (cell.value === num) {
       pushToHistory();
+      triggerHapticTap(vibrations);
       const newGrid = boardState.grid.map(row => row.map(c => {
         if (c.row === selectedRow && c.col === selectedCol) {
           return { ...c, value: 0, isUserInput: false, notes: new Set<number>() };
@@ -5372,34 +5502,9 @@ useEffect(() => {
     pushToHistory();
 
     if (pencilMode) {
-      const cellNotes = cell.notes;
-      const isAdding = !cellNotes.has(num);
+      triggerHapticTap(vibrations);
 
-      let hasClash = false;
-      if (isAdding && isPreventMistakeNotesEnabled) {
-        for (let r = 0; r < 9; r++) {
-          for (let c = 0; c < 9; c++) {
-            if (boardState.grid[r][c].value === num) {
-              const inRow = r === selectedRow;
-              const inCol = c === selectedCol;
-              const inBox = Math.floor(r / 3) === Math.floor(selectedRow / 3) &&
-                            Math.floor(c / 3) === Math.floor(selectedCol / 3);
-              if (inRow || inCol || inBox) {
-                hasClash = true;
-                break;
-              }
-            }
-          }
-          if (hasClash) break;
-        }
-      }
-
-      if (hasClash) {
-        addLog(`⚠️ Mistake note blocked! Digit ${num} is already revealed in the row, column, or block quadrant.`);
-        return;
-      }
-
-      // Add or remove pencil notes draft
+      // Pure unrestricted scratchpad: toggle candidate digit freely in and out
       const newGrid = boardState.grid.map(row => row.map(c => {
         if (c.row === selectedRow && c.col === selectedCol) {
           const updatedNotes = new Set(c.notes);
@@ -5470,11 +5575,13 @@ useEffect(() => {
 
       if (isMismatch) {
         playMistakeSound();
+        triggerHapticError(vibrations);
         addLog(`⚠️ Mistake at Row ${selectedRow + 1} Col ${selectedCol + 1}. Selected digit ${num} is incorrect.`);
         if (isOver) {
           saveGameToHistory(false, newMistakes);
         }
       } else {
+        triggerHapticTap(vibrations);
         // Check game win
         const currentProgress = finalGrid.every(r => r.every(cell => cell.value === solutionGrid[cell.row][cell.col]));
         if (currentProgress) {
@@ -5496,6 +5603,7 @@ useEffect(() => {
     if (cell.isOriginalClue) return;
 
     pushToHistory();
+    triggerHapticTap(vibrations);
 
     const newGrid = boardState.grid.map(row => row.map(c => {
       if (c.row === selectedRow && c.col === selectedCol) {
@@ -5603,6 +5711,15 @@ useEffect(() => {
 
     addLog(`💡 Smart hint injected for Cell (Row ${selectedRow + 1}, Col ${selectedCol + 1}) → ${solvedNum}`);
     setHintExplanation({ num: solvedNum, row: selectedRow, col: selectedCol });
+
+    // Check game win if hint completes the puzzle
+    const currentProgress = finalGrid.every(r => r.every(cell => cell.value === solutionGrid[cell.row][cell.col]));
+    if (currentProgress) {
+      setBoardState(prev => prev ? { ...prev, isGameOver: true } : null);
+      addLog("⭐ Victory! All sudoku square criteria satisfied uniquely!");
+      playWinSound();
+      saveGameToHistory(true, boardState ? boardState.currentMistakesCount : 0);
+    }
   };
 
   // Run Real-Time step-by-step Visual Backtracking solver
@@ -5810,10 +5927,10 @@ useEffect(() => {
             </div>
             
             <div className="flex gap-4">
-              <Trophy className={`w-5 h-5 mt-0.5 shrink-0 ${darkMode ? "text-indigo-300" : "text-[#4F46E5]"}`} />
+              <KeyRound className={`w-5 h-5 mt-0.5 shrink-0 ${darkMode ? "text-indigo-300" : "text-[#4F46E5]"}`} />
               <div>
-                <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>Live Competition Arena</h3>
-                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>Compete on identical grids. See results, rankings, and stats as each player finishes the game.</p>
+                <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>Room Code Access & Leaderboard</h3>
+                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>Broadcast a simple Room ID for anyone nearby to join instantly on their device and track live finish times.</p>
               </div>
             </div>
             
@@ -5821,7 +5938,7 @@ useEffect(() => {
               <BarChart2 className={`w-5 h-5 mt-0.5 shrink-0 ${darkMode ? "text-indigo-300" : "text-[#4F46E5]"}`} />
               <div>
                 <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>Performance Review</h3>
-                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>Analyze your finished boards and mistake frequencies. Compare your personal performance metrics against friends.</p>
+                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>Analyze completed boards, error rates, and solving speed to track personal progress across all difficulty tiers.</p>
               </div>
             </div>
             
@@ -5829,7 +5946,7 @@ useEffect(() => {
               <RotateCcw className={`w-5 h-5 mt-0.5 shrink-0 ${darkMode ? "text-indigo-300" : "text-[#4F46E5]"}`} />
               <div>
                 <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>Game History & Replayability</h3>
-                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>Review past games, re-run challenges, and analyze board metrics to continuously improve.</p>
+                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>Review past match logs, revisit saved boards, and inspect full scoreboards to evaluate your puzzle growth.</p>
               </div>
             </div>
           </div>
@@ -6076,7 +6193,7 @@ useEffect(() => {
           <div className="relative flex flex-col items-center justify-center px-7">
             <h1 className="relative z-10 text-xl md:text-2xl font-black tracking-tight uppercase font-sans pre-wrap flex items-center justify-center gap-1 inline-flex select-none leading-none pt-0.5">
               <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
-              <span className={`ml-1.5 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>TOGETHER</span>
+              <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
             </h1>
             <span className={`text-[10px] md:text-[11.5px] uppercase font-sans font-bold tracking-[0.25em] leading-none opacity-75 select-none mt-2 text-center ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#d1fae5]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#fef08a]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#065F46]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#854D0E]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
               {currentScreen === "together" ? "Together Mode" : currentScreen === "settings" ? "Settings" : currentScreen === "login" ? "Authorization" : currentScreen === "status" ? "Player Insights" : (boardState?.difficulty || difficulty)}
@@ -6286,13 +6403,13 @@ useEffect(() => {
             {renderAdSenseContent("home")}
             <footer className="w-full max-w-4xl mx-auto px-4 py-8 mt-6 text-center text-xs font-sans text-stone-500 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 animate-fade-in select-text">
               <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-                <button onClick={() => { playClickSound(); setActiveCompliancePage("about"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors">About Us</button>
-                <button onClick={() => { playClickSound(); setActiveCompliancePage("contact"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors">Contact Us</button>
-                <button onClick={() => { playClickSound(); setActiveCompliancePage("privacy"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors">Privacy Policy</button>
-                <button onClick={() => { playClickSound(); setActiveCompliancePage("terms"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors">Terms of Service</button>
+                <a href="/about.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("about"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">About Us</a>
+                <a href="/contact.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("contact"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Contact Us</a>
+                <a href="/privacy.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("privacy"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Privacy Policy</a>
+                <a href="/terms.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("terms"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Terms of Service</a>
               </div>
               <div className="opacity-80 font-mono text-[10px]">
-                © {new Date().getFullYear()} Sudoku Together Mode. All rights reserved. Supported by Google AdSense advertising.
+                © 2026 SudokuSync. All rights reserved.
               </div>
             </footer>
           </div>
@@ -6463,6 +6580,7 @@ useEffect(() => {
                           if (cell && cell.value !== 0) {
                             // Tapping any filled cell immediately sets that number as the active brush digit
                             setLockedNum(cell.value);
+                            triggerHapticTap(vibrations);
                             addLog(`🎨 Selected paint digit ${cell.value} from grid cell. Click empty cells to fast fill!`);
                           } else if (lockedNum !== null && cell && !cell.isOriginalClue) {
                             // Fast fill empty cell with the active brush digit
@@ -6526,6 +6644,7 @@ useEffect(() => {
                     visualizingBacktrack={visualizingBacktrack}
                     darkMode={darkMode}
                     playClickSound={playClickSound}
+                    vibrations={vibrations}
                   />
 
                   {/* 4. ACTION BUTTON: 'New Game' button at the bottom of the right panel, spanning the width of the number pad on desktop */}
@@ -6875,6 +6994,9 @@ useEffect(() => {
                                       setOpenDropdown(null);
                                       setDropdownCoords(null);
                                       updateRoomSettingsInFirestore({ mistakesLimit: opt.val });
+                                      if (opt.val > 3) {
+                                        triggerMistakeLimitAlert();
+                                      }
                                     }}
                                     className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all ${
                                       darkMode
@@ -6902,6 +7024,9 @@ useEffect(() => {
                                       setOpenDropdown(null);
                                       setDropdownCoords(null);
                                       updateRoomSettingsInFirestore({ hintsLimit: opt.val });
+                                       if (opt.val > 3) {
+                                         triggerHintLimitAlert();
+                                       }
                                     }}
                                     className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all flex items-center gap-1.5 ${
                                       darkMode
@@ -7483,13 +7608,13 @@ useEffect(() => {
                 {renderAdSenseContent("game")}
                 <footer className="w-full max-w-4xl mx-auto px-4 py-8 mt-8 text-center text-xs font-sans text-stone-500 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 select-text">
                   <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-                    <button onClick={() => { playClickSound(); setActiveCompliancePage("about"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors">About Us</button>
-                    <button onClick={() => { playClickSound(); setActiveCompliancePage("contact"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors">Contact Us</button>
-                    <button onClick={() => { playClickSound(); setActiveCompliancePage("privacy"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors">Privacy Policy</button>
-                    <button onClick={() => { playClickSound(); setActiveCompliancePage("terms"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors">Terms of Service</button>
+                    <a href="/about.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("about"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">About Us</a>
+                    <a href="/contact.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("contact"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Contact Us</a>
+                    <a href="/privacy.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("privacy"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Privacy Policy</a>
+                    <a href="/terms.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("terms"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Terms of Service</a>
                   </div>
                   <div className="opacity-80 font-mono text-[10px]">
-                    © {new Date().getFullYear()} Sudoku Together Mode. All rights reserved. Supported by Google AdSense advertising.
+                    © 2026 SudokuSync. All rights reserved.
                   </div>
                 </footer>
               </div>
@@ -8803,6 +8928,8 @@ useEffect(() => {
                 }}
                 copyToClipboard={copyToClipboard}
                 showCopiedToast={showCopiedToast}
+                onMistakeLimitAbove3={triggerMistakeLimitAlert}
+                onHintLimitAbove3={triggerHintLimitAlert}
                 darkMode={darkMode}
                 playClickSound={playClickSound}
               />
@@ -10951,6 +11078,29 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
+      {/* MULTIPLAYER SETUP ALERT: ABOVE 3 MISTAKES WARNING */}
+      <AnimatePresence>
+        {recordWarningMessage && (
+          <div className="fixed inset-x-4 top-6 z-[100050] flex justify-center pointer-events-none">
+            <motion.div
+              initial={{ opacity: 0, y: -24, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -16, scale: 0.95 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className={`px-5 py-2.5 rounded-full flex items-center gap-2.5 shadow-lg border text-xs sm:text-sm font-sans font-medium whitespace-nowrap select-none ${
+                darkMode
+                  ? "bg-amber-950/80 border-amber-500/30 text-amber-200"
+                  : "bg-amber-50/85 border-amber-200/80 text-amber-900"
+              }`}
+              style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
+            >
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+              <span>{recordWarningMessage}</span>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* GLOBAL TOAST OVERLAY */}
       <AnimatePresence>
         {toastMessage && (
@@ -11014,9 +11164,9 @@ useEffect(() => {
               <div className="flex-1 overflow-y-auto pr-2 no-scrollbar leading-relaxed text-xs sm:text-sm font-sans flex flex-col gap-4 select-text">
                 {activeCompliancePage === "about" && (
                   <div className="space-y-3">
-                    <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc]">Welcome to Sudoku Together Mode!</p>
+                    <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc]">Welcome to SudokuSync!</p>
                     <p>
-                      <strong>Sudoku Together Mode</strong> (<a href="https://sudoku-together-mode.web.app" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudoku-together-mode.web.app</a>) is a modern, high-performance logic puzzle and brain-training platform designed for solo solvers and competitive friends alike.
+                      <strong>SudokuSync</strong> (<a href="https://sudoku-together-mode.web.app" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudoku-together-mode.web.app</a>) is a modern, high-performance logic puzzle and brain-training platform designed for solo solvers and competitive friends alike.
                     </p>
                     <p>
                       Our mission is to elevate classic paper-and-pencil Sudoku into an engaging digital multiplayer experience. Powered by deterministic seed generation (Mulberry32 PRNG), custom mistake limits, real-time board synchronization, and procedural sound synthesis, our platform brings players together on identical, mathematically verified 1-solution puzzles without heavy data transmission.
@@ -11042,7 +11192,7 @@ useEffect(() => {
                     </p>
                     <div className="p-4 rounded-2xl bg-stone-500/5 dark:bg-zinc-800/60 border border-stone-200/60 dark:border-zinc-700/60 my-2 space-y-2">
                       <p className="font-bold text-xs uppercase tracking-wider text-stone-600 dark:text-stone-300">Official Support & Privacy Contact:</p>
-                      <a href="mailto:sudokutogethermode@gmail.com?subject=Sudoku%20Together%20Support%20Inquiry" className="text-sky-500 dark:text-sky-400 font-bold hover:underline text-sm block">
+                      <a href="mailto:sudokutogethermode@gmail.com?subject=SudokuSync%20Support%20Inquiry" className="text-sky-500 dark:text-sky-400 font-bold hover:underline text-sm block">
                         sudokutogethermode@gmail.com
                       </a>
                       <p className="text-[11px] text-stone-500 dark:text-stone-400 font-mono">
@@ -11064,7 +11214,7 @@ useEffect(() => {
                     </div>
                     
                     <p>
-                      At <strong>Sudoku Together Mode</strong> (accessible from <a href="https://sudoku-together-mode.web.app" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">https://sudoku-together-mode.web.app</a> and the official Android mobile app), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed, and how we uphold global privacy standards including the <strong>General Data Protection Regulation (GDPR)</strong>, the <strong>California Consumer Privacy Act (CCPA/CPRA)</strong>, the <strong>Children's Online Privacy Protection Act (COPPA)</strong>, <strong>Google Play Store Data Safety Policies</strong>, and <strong>Google AdSense Program Policies</strong>.
+                      At <strong>SudokuSync</strong> (accessible from <a href="https://sudoku-together-mode.web.app" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">https://sudoku-together-mode.web.app</a> and the official Android mobile app), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed, and how we uphold global privacy standards including the <strong>General Data Protection Regulation (GDPR)</strong>, the <strong>California Consumer Privacy Act (CCPA/CPRA)</strong>, the <strong>Children's Online Privacy Protection Act (COPPA)</strong>, <strong>Google Play Store Data Safety Policies</strong>, and <strong>Google AdSense Program Policies</strong>.
                     </p>
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">1. Information Collection & Storage Architecture</h4>
@@ -11137,7 +11287,7 @@ useEffect(() => {
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3">5. Children's Privacy Protection (COPPA)</h4>
                     <p className="text-xs">
-                      Protecting the privacy of young children is especially important. Sudoku Together Mode does not knowingly collect or solicit personally identifiable information from children under the age of 13 (or under 16 in the EEA/UK). Our game does not require real names, physical addresses, or phone numbers to play. If a parent or guardian believes their child has submitted personal information to our servers, please contact us immediately at <a href="mailto:sudokutogethermode@gmail.com" className="text-sky-500 underline">sudokutogethermode@gmail.com</a> and we will expeditiously remove such records.
+                      Protecting the privacy of young children is especially important. SudokuSync does not knowingly collect or solicit personally identifiable information from children under the age of 13 (or under 16 in the EEA/UK). Our game does not require real names, physical addresses, or phone numbers to play. If a parent or guardian believes their child has submitted personal information to our servers, please contact us immediately at <a href="mailto:sudokutogethermode@gmail.com" className="text-sky-500 underline">sudokutogethermode@gmail.com</a> and we will expeditiously remove such records.
                     </p>
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3">6. Data Retention & Security Controls</h4>
@@ -11163,12 +11313,12 @@ useEffect(() => {
                     
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">1. Agreement & Acceptance of Terms</h4>
                     <p className="text-xs">
-                      By accessing, browsing, installing, or playing <strong>Sudoku Together Mode</strong> (via <a href="https://sudoku-together-mode.web.app" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudoku-together-mode.web.app</a> or our official Android application), you agree to be bound by these Terms of Service, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws. If you do not agree with any of these terms, you are prohibited from using or accessing this application.
+                      By accessing, browsing, installing, or playing <strong>SudokuSync</strong> (via <a href="https://sudoku-together-mode.web.app" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudoku-together-mode.web.app</a> or our official Android application), you agree to be bound by these Terms of Service, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws. If you do not agree with any of these terms, you are prohibited from using or accessing this application.
                     </p>
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">2. Description of Service & Free Access</h4>
                     <p className="text-xs">
-                      Sudoku Together Mode provides free-to-play digital Sudoku puzzles, deterministic seeded matchmaking rooms, real-time leaderboards, and logic training tools. The service is provided on an "AS IS" and "AS AVAILABLE" basis. We reserve the right to modify, update, or discontinue features of the game at any time without prior notice.
+                      SudokuSync provides free-to-play digital Sudoku puzzles, deterministic seeded matchmaking rooms, real-time leaderboards, and logic training tools. The service is provided on an "AS IS" and "AS AVAILABLE" basis. We reserve the right to modify, update, or discontinue features of the game at any time without prior notice.
                     </p>
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">3. User Conduct & Community Standards</h4>
@@ -11182,7 +11332,7 @@ useEffect(() => {
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">4. Intellectual Property Rights</h4>
                     <p className="text-xs">
-                      All game logic engines, procedural sound synthesis code, user interface designs, the Scrapbook Design System tokens, graphics, logos, and software code are the intellectual property of Sudoku Together Mode and protected by international copyright and trademark laws.
+                      All game logic engines, procedural sound synthesis code, user interface designs, the Scrapbook Design System tokens, graphics, logos, and software code are the intellectual property of SudokuSync and protected by international copyright and trademark laws.
                     </p>
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">5. Third-Party Advertisements</h4>
@@ -11192,7 +11342,7 @@ useEffect(() => {
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">6. Disclaimer of Warranties & Limitation of Liability</h4>
                     <p className="text-xs">
-                      The materials and software on Sudoku Together Mode are provided on an 'as is' basis. Sudoku Together Mode makes no warranties, expressed or implied, and hereby disclaims all other warranties including, without limitation, implied warranties of merchantability, fitness for a particular purpose, or non-infringement. In no event shall Sudoku Together Mode or its developers be liable for any damages (including, without limitation, damages for loss of data or profit) arising out of the use or inability to use the game.
+                      The materials and software on SudokuSync are provided on an 'as is' basis. SudokuSync makes no warranties, expressed or implied, and hereby disclaims all other warranties including, without limitation, implied warranties of merchantability, fitness for a particular purpose, or non-infringement. In no event shall SudokuSync or its developers be liable for any damages (including, without limitation, damages for loss of data or profit) arising out of the use or inability to use the game.
                     </p>
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">7. Account Deletion & Termination</h4>

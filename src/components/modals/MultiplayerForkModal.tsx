@@ -39,7 +39,7 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className={`text-[10px] font-sans font-black tracking-widest uppercase ${darkMode ? "text-purple-400" : "text-[#6B21A8]"}`}>
-            Together Mode
+            SudokuSync
           </span>
           <h3 className="text-xl font-sans font-black tracking-tight leading-none text-stone-850 dark:text-stone-100 mt-0.5">
             Multiplayer Lobby

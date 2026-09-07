@@ -1,5 +1,6 @@
 import React from "react";
 import { RotateCcw, Trash2, Pencil, Lightbulb } from "lucide-react";
+import { triggerHapticTap } from "../../utils/haptics";
 
 export interface SudokuKeypadProps {
   boardState: {
@@ -23,6 +24,7 @@ export interface SudokuKeypadProps {
   visualizingBacktrack?: boolean;
   darkMode: boolean;
   playClickSound: () => void;
+  vibrations?: boolean;
 }
 
 export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
@@ -40,7 +42,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   showRemainingNumbers,
   visualizingBacktrack,
   darkMode,
-  playClickSound
+  playClickSound,
+  vibrations
 }) => {
   const isGameOver = boardState?.isGameOver ?? false;
 
@@ -74,6 +77,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
           <button
             onClick={() => {
               playClickSound();
+              triggerHapticTap(vibrations ?? true);
               onUndo();
             }}
             disabled={!boardState || isGameOver || historyLength === 0}
@@ -93,6 +97,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
           <button
             onClick={() => {
               playClickSound();
+              triggerHapticTap(vibrations ?? true);
               onErase();
             }}
             disabled={!boardState || isGameOver}
@@ -112,6 +117,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
           <button
             onClick={() => {
               playClickSound();
+              triggerHapticTap(vibrations ?? true);
               onTogglePencilMode();
             }}
             disabled={!boardState || isGameOver}
@@ -135,6 +141,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
           <button
             onClick={() => {
               playClickSound();
+              triggerHapticTap(vibrations ?? true);
               onHint();
             }}
             disabled={!boardState || isGameOver}
@@ -172,6 +179,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                 key={num}
                 onClick={() => {
                   playClickSound();
+                  triggerHapticTap(vibrations ?? true);
                   onNumberSelect(num);
                 }}
                 disabled={!boardState || isGameOver || visualizingBacktrack || remainingCount <= 0}

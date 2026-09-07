@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Pencil } from "lucide-react";
 
 export interface SettingsModalProps {
@@ -85,6 +85,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenDeleteAccountModal,
   onOpenResetSettingsModal
 }) => {
+  const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
+
+  const toggleInfo = (id: string) => {
+    setExpandedInfo(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
   return (
     <div
       className={`${
@@ -221,8 +227,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           ) : (
             <div className="flex flex-col gap-1.5 w-full select-none">
               <button
-                disabled
-                className={`w-full flex items-center justify-center gap-2 font-sans text-[10.5px] lg:text-[13px] font-black uppercase tracking-wider py-2.5 lg:py-3.5 px-4 rounded-xl transition-all text-center border-none opacity-50 cursor-not-allowed ${
+                disabled={true}
+                aria-disabled="true"
+                className={`w-full flex items-center justify-center gap-2 font-sans text-[10.5px] lg:text-[13px] font-black uppercase tracking-wider py-2.5 lg:py-3.5 px-4 rounded-xl transition-all text-center border-none opacity-50 cursor-not-allowed pointer-events-none ${
                   darkMode ? "bg-zinc-800 text-stone-500" : "bg-stone-100 text-stone-400"
                 }`}
               >
@@ -353,31 +360,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             {/* Push Notifications */}
-            <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-stone-300" : "text-stone-850"}`}>
-                Push Notifications
-              </span>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setNotificationsEnabled(!notificationsEnabled);
-                }}
-                className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
-                  notificationsEnabled
-                    ? darkMode
-                      ? "bg-sky-500"
-                      : "bg-[#0369A1] active:bg-[#025a8b] shadow-none"
-                    : darkMode
-                    ? "bg-zinc-850"
-                    : "bg-[#BAE6FD] active:bg-[#90cdf4] shadow-sm active:shadow-none"
-                }`}
-              >
-                <div
-                  className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
-                    notificationsEnabled ? "translate-x-5" : "translate-x-0"
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className={`text-sm font-medium ${darkMode ? "text-stone-300" : "text-stone-850"}`}>
+                  Push Notifications
+                </span>
+                <button
+                  disabled
+                  title="Available in the upcoming mobile app release"
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 border-none cursor-not-allowed opacity-50 ${
+                    darkMode ? "bg-zinc-850" : "bg-[#BAE6FD]"
                   }`}
-                />
-              </button>
+                >
+                  <div
+                    className="w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none translate-x-0"
+                  />
+                </button>
+              </div>
+              <p className="text-[10px] text-stone-500 dark:text-zinc-400 leading-normal font-sans m-0">
+                Available in the upcoming mobile app release.
+              </p>
             </div>
           </div>
 
@@ -398,133 +400,253 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </span>
 
             {/* Highlight Identical */}
-            <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
-                Highlight Identical
-              </span>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setHighlightIdentical(!highlightIdentical);
-                }}
-                className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
-                  highlightIdentical
-                    ? darkMode
-                      ? "bg-pink-500"
-                      : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
-                    : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
-                }`}
-              >
-                <div
-                  className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
-                    highlightIdentical ? "translate-x-5" : "translate-x-0"
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                    Highlight Identical
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playClickSound();
+                      toggleInfo("highlight-identical");
+                    }}
+                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["highlight-identical"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    }`}
+                    aria-label="Info: Highlight Identical"
+                    title="Toggle explanation"
+                  >
+                    <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setHighlightIdentical(!highlightIdentical);
+                  }}
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
+                    highlightIdentical
+                      ? darkMode
+                        ? "bg-pink-500"
+                        : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
+                      : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
                   }`}
-                />
-              </button>
+                >
+                  <div
+                    className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
+                      highlightIdentical ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              {expandedInfo["highlight-identical"] && (
+                <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
+                  Highlights every matching digit across the board when a cell or number is selected.
+                </div>
+              )}
             </div>
 
             {/* Remaining Numbers */}
-            <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
-                Remaining Numbers
-              </span>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setShowRemainingNumbers(!showRemainingNumbers);
-                }}
-                className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
-                  showRemainingNumbers
-                    ? darkMode
-                      ? "bg-pink-500"
-                      : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
-                    : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
-                }`}
-              >
-                <div
-                  className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
-                    showRemainingNumbers ? "translate-x-5" : "translate-x-0"
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                    Remaining Numbers
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playClickSound();
+                      toggleInfo("remaining-numbers");
+                    }}
+                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["remaining-numbers"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    }`}
+                    aria-label="Info: Remaining Numbers"
+                    title="Toggle explanation"
+                  >
+                    <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setShowRemainingNumbers(!showRemainingNumbers);
+                  }}
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
+                    showRemainingNumbers
+                      ? darkMode
+                        ? "bg-pink-500"
+                        : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
+                      : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
                   }`}
-                />
-              </button>
+                >
+                  <div
+                    className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
+                      showRemainingNumbers ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              {expandedInfo["remaining-numbers"] && (
+                <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
+                  Shows count badges on keypad buttons indicating how many of each digit are left to place.
+                </div>
+              )}
             </div>
 
             {/* Highlight Area */}
-            <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
-                Highlight Area
-              </span>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setHighlightAreas(!highlightAreas);
-                }}
-                className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
-                  highlightAreas
-                    ? darkMode
-                      ? "bg-pink-500"
-                      : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
-                    : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
-                }`}
-              >
-                <div
-                  className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
-                    highlightAreas ? "translate-x-5" : "translate-x-0"
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                    Highlight Area
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playClickSound();
+                      toggleInfo("highlight-area");
+                    }}
+                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["highlight-area"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    }`}
+                    aria-label="Info: Highlight Area"
+                    title="Toggle explanation"
+                  >
+                    <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setHighlightAreas(!highlightAreas);
+                  }}
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
+                    highlightAreas
+                      ? darkMode
+                        ? "bg-pink-500"
+                        : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
+                      : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
                   }`}
-                />
-              </button>
+                >
+                  <div
+                    className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
+                      highlightAreas ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              {expandedInfo["highlight-area"] && (
+                <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
+                  Shades the row, column, and 3×3 box of the selected cell for better focus.
+                </div>
+              )}
             </div>
 
             {/* Auto-Remove Notes */}
-            <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
-                Auto-Remove Notes
-              </span>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setIsAutoRemoveNotesEnabled(!isAutoRemoveNotesEnabled);
-                }}
-                className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
-                  isAutoRemoveNotesEnabled
-                    ? darkMode
-                      ? "bg-pink-500"
-                      : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
-                    : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
-                }`}
-              >
-                <div
-                  className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
-                    isAutoRemoveNotesEnabled ? "translate-x-5" : "translate-x-0"
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                    Auto-Remove Notes
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playClickSound();
+                      toggleInfo("auto-remove-notes");
+                    }}
+                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["auto-remove-notes"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    }`}
+                    aria-label="Info: Auto-Remove Notes"
+                    title="Toggle explanation"
+                  >
+                    <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setIsAutoRemoveNotesEnabled(!isAutoRemoveNotesEnabled);
+                  }}
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
+                    isAutoRemoveNotesEnabled
+                      ? darkMode
+                        ? "bg-pink-500"
+                        : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
+                      : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
                   }`}
-                />
-              </button>
+                >
+                  <div
+                    className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
+                      isAutoRemoveNotesEnabled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              {expandedInfo["auto-remove-notes"] && (
+                <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
+                  When you place a solid number, matching pencil notes in neighboring cells across that row, column, and 3×3 box are automatically cleared.
+                </div>
+              )}
             </div>
 
             {/* Paint Mode */}
-            <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
-                Paint Mode
-              </span>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setIsNumberFirstInputMode(!isNumberFirstInputMode);
-                }}
-                className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
-                  isNumberFirstInputMode
-                    ? darkMode
-                      ? "bg-pink-500"
-                      : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
-                    : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
-                }`}
-              >
-                <div
-                  className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
-                    isNumberFirstInputMode ? "translate-x-5" : "translate-x-0"
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                    Paint Mode
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playClickSound();
+                      toggleInfo("paint-mode");
+                    }}
+                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["paint-mode"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    }`}
+                    aria-label="Info: Paint Mode"
+                    title="Toggle explanation"
+                  >
+                    <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setIsNumberFirstInputMode(!isNumberFirstInputMode);
+                  }}
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
+                    isNumberFirstInputMode
+                      ? darkMode
+                        ? "bg-pink-500"
+                        : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
+                      : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
                   }`}
-                />
-              </button>
+                >
+                  <div
+                    className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
+                      isNumberFirstInputMode ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              {expandedInfo["paint-mode"] && (
+                <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
+                  Locks a selected digit on the keypad so you can tap multiple empty cells to place it rapidly.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -547,49 +669,90 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </span>
 
             {/* Active Timer Clock */}
-            <div className={`flex items-center justify-between ${challengeMode ? "opacity-60 select-none" : ""}`}>
-              <div className="flex flex-col">
-                <span className={`text-sm font-medium ${darkMode ? "text-[#a7f3d0]/90" : "text-stone-850"}`}>
-                  Active Timer Clock
-                </span>
-                {challengeMode && (
-                  <span className="text-[10px] text-red-500 font-black tracking-wide mt-0.5 flex items-center gap-0.5">
-                    🔒 LOCKED BY CHALLENGE
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => {
-                  if (challengeMode) return;
-                  playClickSound();
-                  setTimerEnabled(!timerEnabled);
-                }}
-                disabled={challengeMode}
-                className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none ${
-                  challengeMode ? "cursor-not-allowed opacity-80" : "cursor-pointer active:scale-95"
-                } ${
-                  timerEnabled
-                    ? darkMode
-                      ? "bg-emerald-500"
-                      : "bg-[#135236] active:bg-[#0e3c28] shadow-none"
-                    : "bg-[#D1FAE5] active:bg-[#a7f3d0] shadow-sm active:shadow-none"
-                }`}
-              >
-                <div
-                  className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
-                    timerEnabled ? "translate-x-5" : "translate-x-0"
+            <div className={`flex flex-col gap-1 ${challengeMode ? "opacity-60 select-none" : ""}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-sm font-medium ${darkMode ? "text-[#a7f3d0]/90" : "text-stone-850"}`}>
+                      Active Timer Clock
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playClickSound();
+                        toggleInfo("active-timer-clock");
+                      }}
+                      className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                        expandedInfo["active-timer-clock"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                      }`}
+                      aria-label="Info: Active Timer Clock"
+                      title="Toggle explanation"
+                    >
+                      <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
+                    </button>
+                  </div>
+                  {challengeMode && (
+                    <span className="text-[10px] text-red-500 font-black tracking-wide mt-0.5 flex items-center gap-0.5">
+                      🔒 LOCKED BY CHALLENGE
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    if (challengeMode) return;
+                    playClickSound();
+                    setTimerEnabled(!timerEnabled);
+                  }}
+                  disabled={challengeMode}
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none ${
+                    challengeMode ? "cursor-not-allowed opacity-80" : "cursor-pointer active:scale-95"
+                  } ${
+                    timerEnabled
+                      ? darkMode
+                        ? "bg-emerald-500"
+                        : "bg-[#135236] active:bg-[#0e3c28] shadow-none"
+                      : "bg-[#D1FAE5] active:bg-[#a7f3d0] shadow-sm active:shadow-none"
                   }`}
-                />
-              </button>
+                >
+                  <div
+                    className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
+                      timerEnabled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              {expandedInfo["active-timer-clock"] && (
+                <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
+                  Tracks your game duration in real time. Turn off for a relaxed, untimed session.
+                </div>
+              )}
             </div>
 
             {/* Strict Mistake Limit */}
             <div className={`flex flex-col gap-1 ${challengeMode ? "opacity-60 select-none" : ""}`}>
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
-                  <span className={`text-sm font-medium ${darkMode ? "text-[#a7f3d0]/90" : "text-stone-850"}`}>
-                    Strict Mistake Limit
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-sm font-medium ${darkMode ? "text-[#a7f3d0]/90" : "text-stone-850"}`}>
+                      Strict Mistake Limit
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playClickSound();
+                        toggleInfo("strict-mistake-limit");
+                      }}
+                      className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                        expandedInfo["strict-mistake-limit"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                      }`}
+                      aria-label="Info: Strict Mistake Limit"
+                      title="Toggle explanation"
+                    >
+                      <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
+                    </button>
+                  </div>
                   {challengeMode && (
                     <span className="text-[10px] text-red-500 font-black tracking-wide mt-0.5 flex items-center gap-0.5">
                       🔒 LOCKED TO {boardState?.maxMistakesLimit ?? challengeMistakeLimit} ERRORS
@@ -620,6 +783,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </button>
               </div>
+              {expandedInfo["strict-mistake-limit"] && (
+                <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
+                  Enforces a 3-mistake limit before triggering game over.
+                </div>
+              )}
+              {!mistakeLimitEnabled && (
+                <span className={`text-[11px] leading-tight font-sans ${darkMode ? "text-amber-300/90" : "text-amber-700/90"}`}>
+                  Personal best time record won't be recorded with unlimited mistakes.
+                </span>
+              )}
             </div>
           </div>
 
