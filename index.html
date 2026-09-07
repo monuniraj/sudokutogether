@@ -1,6 +1,13 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      if (window.location.hostname.includes('web.app') || window.location.hostname.includes('firebaseapp.com')) {
+        window.location.replace('https://sudokusync.com' + window.location.pathname + window.location.search + (window.location.hash || ''));
+      }
+    </script>
+    <link rel="canonical" href="https://sudokusync.com/" />
+
     <!-- INVITE PARAM RESCUE: Captures challenge URL params synchronously before React/SW
          swallows them. Runs before any framework code, persists into sessionStorage.
          This is the canonical PWA deep-link fix pattern. -->
@@ -43,7 +50,6 @@
     <title>SudokuSync - Real-Time Multiplayer Sudoku</title>
     <link rel="icon" type="image/png" href="/logo.png">
     <link rel="manifest" href="/manifest.json">
-    <link rel="canonical" href="https://sudokusync.com/" />
 
     <meta name="google-adsense-account" content="ca-pub-2107539674074275">
     <meta name="google-site-verification" content="sqIwQ2v9K8H79kxv0pC-x3PH3lN1bNACTXQmO-Tvje0" />
