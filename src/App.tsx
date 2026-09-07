@@ -6582,21 +6582,21 @@ useEffect(() => {
                   </div>
 
                   {/* ROW 2: HUD GROUP DIRECTLY ABOVE 9x9 BOARD */}
-                  <div className="w-full flex items-center justify-between px-1 mb-2 select-none shrink-0" id="unified-bridge-container">
+                  <div className="w-full relative flex items-center justify-between px-1 mb-1 select-none shrink-0" id="unified-bridge-container">
                     {/* Left: Mistakes status metric */}
                     <span className={`font-sans font-black text-xs sm:text-sm tracking-wider leading-none select-none ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
                       ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
                     </span>
 
                     {/* Center: Multiplayer Invite and Help */}
-                    <div className="flex items-center gap-1.5 sm:gap-2">
+                    <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3 pointer-events-none">
                       <button
                         onClick={() => {
                           playClickSound();
                           setIsTimerPaused(true);
                           setShowMidGameInviteModal(true);
                         }}
-                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
+                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
                         aria-label="Invite Players to Match"
                         title="Invite Players"
                       >
@@ -6605,7 +6605,7 @@ useEffect(() => {
 
                       <button
                         onClick={() => setShowHowToPlayModal(true)}
-                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
+                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
                         aria-label="How to play"
                         title="How to play"
                       >
@@ -6615,7 +6615,7 @@ useEffect(() => {
 
                     {/* Right: Running Timer and Pause Button */}
                     {timerEnabled ? (
-                      <div className="flex items-center gap-1.5 justify-end select-none shrink-0 w-[68px] sm:w-[76px]">
+                      <div className="flex items-center gap-1.5 justify-end select-none shrink-0">
                         <button
                           onClick={() => {
                             playClickSound();
@@ -6636,7 +6636,7 @@ useEffect(() => {
                           )}
                         </button>
                         <span 
-                          className={`font-mono tabular-nums font-bold text-xs sm:text-sm tracking-wider leading-none text-left w-[48px] sm:w-[56px] shrink-0 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
+                          className={`font-mono tabular-nums font-bold text-xs sm:text-sm tracking-wider leading-none text-right shrink-0 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
                           style={{ fontVariantNumeric: "tabular-nums" }}
                         >
                           {isTimerPaused ? "PAUSED" : formatTimer(sessionSeconds)}
@@ -6644,7 +6644,7 @@ useEffect(() => {
                       </div>
                     ) : (
                       <span 
-                        className={`font-mono tabular-nums font-bold text-xs sm:text-sm tracking-wider leading-none select-none text-right w-[68px] sm:w-[76px] shrink-0 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
+                        className={`font-mono tabular-nums font-bold text-xs sm:text-sm tracking-wider leading-none select-none text-right shrink-0 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
                         style={{ fontVariantNumeric: "tabular-nums" }}
                       >
                         --:--

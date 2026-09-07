@@ -188,9 +188,9 @@ html.theme-snapshotting *::after {
 
   /* Elegant padding/spacing margins inside status indicators block */
   #unified-bridge-container {
-    padding-left: 6px !important;
-    padding-right: 6px !important;
-    margin-bottom: 8px !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+    margin-bottom: 4px !important;
   }
 
   /* 3. FLUID CONTROL PANEL SIDE DECK - VERTICALLY STACKED BELOW BOARD */
