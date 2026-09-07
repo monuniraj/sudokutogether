@@ -60,6 +60,9 @@ import {
   Settings,
   Timer,
   BarChart2,
+  BarChart3,
+  Sun,
+  Moon,
   ArrowLeft,
   Lock,
   Unlock,
@@ -6156,41 +6159,65 @@ useEffect(() => {
           }}
           className="select-none"
         >
-          {/* Left Back Arrow: ArrowLeft or Status button */}
-          <button
-            onClick={() => {
-              playClickSound();
-              const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
-              if (currentScreen === "game") {
-                cleanupRoomSession();
-                if (isDesktop) {
-                  navigateToScreen("status");
+          {/* Left Actions: Symmetrical 2-button container (Statistics + Theme Indicator) */}
+          <div className="flex items-center gap-2 z-10">
+            {/* Button 1: Statistics Modal Trigger / Back button */}
+            <button
+              onClick={() => {
+                playClickSound();
+                triggerHapticTap();
+                const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
+                if (currentScreen === "game") {
+                  cleanupRoomSession();
+                  if (isDesktop) {
+                    navigateToScreen("status");
+                  } else {
+                    saveCurrentGameToLocal(boardState, sessionSeconds, difficulty);
+                    setCurrentScreen("home");
+                    setNavigationHistory(["home"]);
+                    window.history.pushState({ view: "home" }, "", window.location.href);
+                  }
+                } else if (currentScreen !== "home") {
+                  navigatorPop();
                 } else {
-                  saveCurrentGameToLocal(boardState, sessionSeconds, difficulty);
-                  setCurrentScreen("home");
-                  setNavigationHistory(["home"]);
-                  window.history.pushState({ view: "home" }, "", window.location.href);
+                  // Clicking on home goes to Voyage Status / Statistics view
+                  navigateToScreen("status");
                 }
-              } else if (currentScreen !== "home") {
-                navigatorPop();
-              } else {
-                // Clicking on home goes to Voyage Status view
-                navigateToScreen("status");
-              }
-            }}
-            className={`p-2.5 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
-            title={(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? "Voyage Status" : "Back"}
-            id="global-top-left-back-button"
-          >
-            {(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? (
-              <BarChart2 className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
-            ) : (
-              <ArrowLeft className={`w-4.5 h-4.5 stroke-[2] font-bold ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
-            )}
-          </button>
+              }}
+              className={`p-2.5 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
+              title={(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? "Statistics" : "Back"}
+              aria-label={(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? "Statistics" : "Back"}
+              id="global-top-left-back-button"
+            >
+              {(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? (
+                <BarChart3 className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+              ) : (
+                <ArrowLeft className={`w-4.5 h-4.5 stroke-[2] font-bold ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+              )}
+            </button>
 
-          {/* Central matte title */}
-          <div className="relative flex flex-col items-center justify-center px-7">
+            {/* Button 2: Theme Indicator & Quick Toggle */}
+            <button
+              onClick={() => {
+                playClickSound();
+                triggerHapticTap();
+                setDarkMode(prev => !prev);
+              }}
+              className={`p-2.5 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
+              title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              aria-label={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              id="global-top-theme-toggle-button"
+            >
+              {darkMode ? (
+                <Moon className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+              ) : (
+                <Sun className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+              )}
+            </button>
+          </div>
+
+          {/* Central matte title: Dead-center alignment */}
+          <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none text-center flex flex-col items-center justify-center">
             <h1 className="relative z-10 text-xl md:text-2xl font-black tracking-tight uppercase font-sans pre-wrap flex items-center justify-center gap-1 inline-flex select-none leading-none pt-0.5">
               <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
               <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
@@ -6200,32 +6227,35 @@ useEffect(() => {
             </span>
           </div>
 
-          {/* Right Actions: Clean main header with only Settings gear! */}
-          <div className="flex items-center gap-2">
-            {/* Bell Icon (Only on Home Screen and if there are pending invites) */}
-            {currentScreen === "home" && pendingChallenges.length > 0 && (
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setShowBellInvitesModal(true);
-                }}
-                className={`relative p-2.5 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${
-                  darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"
-                }`}
-                title="Notifications"
-                id="global-top-right-bell-button"
-              >
-                <Bell className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-black text-white shadow-sm font-mono">
-                  {pendingChallenges.length}
-                </span>
-              </button>
-            )}
-
-            {/* Settings Gear */}
+          {/* Right Actions: Symmetrical 2-button container (Notification Bell + Settings) */}
+          <div className="flex items-center gap-2 z-10">
+            {/* Button 1: Notification Bell (Permanently visible to preserve fixed layout spacing) */}
             <button
               onClick={() => {
                 playClickSound();
+                triggerHapticTap();
+                setShowBellInvitesModal(true);
+              }}
+              className={`relative p-2.5 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${
+                darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"
+              }`}
+              title="Notifications"
+              aria-label="Notifications"
+              id="global-top-right-bell-button"
+            >
+              <Bell className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+              {pendingChallenges.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-black text-white shadow-sm font-mono pointer-events-none">
+                  {pendingChallenges.length > 9 ? "9+" : pendingChallenges.length}
+                </span>
+              )}
+            </button>
+
+            {/* Button 2: Settings Gear */}
+            <button
+              onClick={() => {
+                playClickSound();
+                triggerHapticTap();
                 if (currentScreen === "settings") {
                   navigatorPop();
                 } else {
@@ -6235,6 +6265,7 @@ useEffect(() => {
               }}
               className={`p-2.5 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
               title="Settings"
+              aria-label="Settings"
               id="global-top-right-settings-button"
             >
               <Settings className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
