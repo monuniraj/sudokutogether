@@ -52,7 +52,7 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className={`relative w-full max-w-sm rounded-[32px] p-8 border-none flex flex-col gap-6 shadow-[0_12px_40px_rgba(0,0,0,0.08)] select-none z-[10001] text-center transition-colors duration-300 ${
+            className={`modal card relative w-full max-w-sm rounded-[32px] p-8 border-none flex flex-col gap-6 shadow-[0_12px_40px_rgba(0,0,0,0.08)] select-none z-[10001] text-center transition-colors duration-300 ${
               darkMode ? "bg-[#2A2D24] text-[#FDFBF7]" : "bg-[#FDFBF7] text-[#4B5563]"
             }`}
           >

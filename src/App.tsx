@@ -71,6 +71,8 @@ import {
   Clock,
   BellOff,
   Bell,
+  Volume2,
+  VolumeX,
   Minus,
   Home,
   KeyRound,
@@ -90,7 +92,8 @@ import { Share } from '@capacitor/share';
 import { App as CapApp } from '@capacitor/app';
 import { PushNotifications } from "@capacitor/push-notifications";
 import { LocalNotifications } from "@capacitor/local-notifications";
-import { triggerHapticTap, triggerHapticError } from "./utils/haptics";
+import { triggerHapticTap, triggerHapticError, triggerHaptic, isHapticsEnabled, setGlobalHapticsEnabled } from "./utils/haptics";
+import { playThemeFeedback, applyThemeToggle } from "./utils/themeFeedback";
 import { getToken } from "firebase/messaging";
 import { messaging } from "./firebase";
 
@@ -3268,6 +3271,7 @@ useEffect(() => {
       console.error("Audio Mistake Sound Error:", e);
     }
   };
+  const playErrorSound = playMistakeSound;
 
   // Play a pleasant ascending invitation chime (C5 -> E5) using Web Audio API
   const playInviteChime = () => {
@@ -5464,6 +5468,8 @@ useEffect(() => {
     }
     const prevGrid = history[history.length - 1];
     setHistory(prev => prev.slice(0, -1));
+    playClickSound();
+    triggerHapticTap(vibrations);
     setBoardState(prev => prev ? {
       ...prev,
       grid: prevGrid
@@ -5484,6 +5490,7 @@ useEffect(() => {
     // Same-digit toggle: clear value and bypass checks
     if (cell.value === num) {
       pushToHistory();
+      playClickSound();
       triggerHapticTap(vibrations);
       const newGrid = boardState.grid.map(row => row.map(c => {
         if (c.row === selectedRow && c.col === selectedCol) {
@@ -5504,6 +5511,7 @@ useEffect(() => {
     pushToHistory();
 
     if (pencilMode) {
+      playClickSound();
       triggerHapticTap(vibrations);
 
       // Pure unrestricted scratchpad: toggle candidate digit freely in and out
@@ -5576,13 +5584,16 @@ useEffect(() => {
       } : null);
 
       if (isMismatch) {
-        playMistakeSound();
+        // Critical: Play ONLY error sound, do NOT fire click sound!
+        playErrorSound();
         triggerHapticError(vibrations);
         addLog(`⚠️ Mistake at Row ${selectedRow + 1} Col ${selectedCol + 1}. Selected digit ${num} is incorrect.`);
         if (isOver) {
           saveGameToHistory(false, newMistakes);
         }
       } else {
+        // Valid placed number: play standard click/placement sound
+        playClickSound();
         triggerHapticTap(vibrations);
         // Check game win
         const currentProgress = finalGrid.every(r => r.every(cell => cell.value === solutionGrid[cell.row][cell.col]));
@@ -5605,6 +5616,7 @@ useEffect(() => {
     if (cell.isOriginalClue) return;
 
     pushToHistory();
+    playClickSound();
     triggerHapticTap(vibrations);
 
     const newGrid = boardState.grid.map(row => row.map(c => {
@@ -6148,15 +6160,17 @@ useEffect(() => {
             height: "calc(70px + env(safe-area-inset-top, 0px))",
             paddingTop: "env(safe-area-inset-top, 0px)",
             zIndex: 9999,
-            backgroundColor: darkMode ? "#18181B" : "#f7f5ee",
             paddingLeft: "16px",
             paddingRight: "16px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            boxShadow: darkMode ? "0 2px 12px rgba(0,0,0,0.3)" : "0 2px 12px rgba(0,0,0,0.03)"
           }}
-          className="select-none"
+          className={`select-none ${
+            darkMode
+              ? "bg-[#18181B] shadow-[0_2px_12px_rgba(0,0,0,0.3)]"
+              : "bg-[#f7f5ee] shadow-[0_2px_12px_rgba(0,0,0,0.03)]"
+          }`}
         >
           {/* Left Actions: Symmetrical 2-button container (Statistics + Theme Indicator) */}
           <div className="flex items-center gap-2 z-10">
@@ -6164,7 +6178,7 @@ useEffect(() => {
             <button
               onClick={() => {
                 playClickSound();
-                triggerHapticTap();
+                triggerHapticTap(vibrations);
                 const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
                 if (currentScreen === "game") {
                   cleanupRoomSession();
@@ -6198,46 +6212,61 @@ useEffect(() => {
             {/* Button 2: Theme Indicator & Quick Toggle */}
             <button
               onClick={() => {
-                playClickSound();
-                triggerHapticTap();
-                setDarkMode(prev => !prev);
+                applyThemeToggle(!darkMode, setDarkMode, soundEffects, vibrations);
               }}
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs relative overflow-hidden ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
               title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
               aria-label={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
               id="global-top-theme-toggle-button"
             >
-              {darkMode ? (
-                <Moon className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
-              ) : (
-                <Sun className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
-              )}
+              <div className="relative w-5 h-5 flex items-center justify-center pointer-events-none">
+                <Sun
+                  className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] absolute ${
+                    !darkMode ? "theme-icon-entering text-stone-700" : "theme-icon-exiting text-stone-400"
+                  }`}
+                  style={{
+                    opacity: !darkMode ? 1 : 0,
+                    transform: !darkMode ? "rotate(0deg) scale(1)" : "rotate(-90deg) scale(0.6)",
+                    transition: "all 250ms cubic-bezier(0.4, 0, 0.2, 1)"
+                  }}
+                />
+                <Moon
+                  className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] absolute ${
+                    darkMode ? "theme-icon-entering text-zinc-100" : "theme-icon-exiting text-zinc-400"
+                  }`}
+                  style={{
+                    opacity: darkMode ? 1 : 0,
+                    transform: darkMode ? "rotate(0deg) scale(1)" : "rotate(-90deg) scale(0.6)",
+                    transition: "all 250ms cubic-bezier(0.4, 0, 0.2, 1)"
+                  }}
+                />
+              </div>
             </button>
           </div>
 
           {/* Central matte title: Dead-center alignment */}
-          <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none text-center flex flex-col items-center justify-center">
-            <h1 className="relative z-10 text-xl md:text-2xl font-black tracking-tight uppercase font-sans pre-wrap flex items-center justify-center gap-1 inline-flex select-none leading-none pt-0.5">
+          <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none text-center flex flex-col items-center justify-center max-w-[calc(100vw-200px)] sm:max-w-none">
+            <h1 className="relative z-10 text-xl md:text-2xl font-black tracking-tight uppercase font-sans pre-wrap flex items-center justify-center gap-1 inline-flex select-none leading-none pt-0.5 truncate">
               <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
               <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
             </h1>
-            <span className={`text-[10px] md:text-[11.5px] uppercase font-sans font-bold tracking-[0.25em] leading-none opacity-75 select-none mt-2 text-center ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#d1fae5]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#fef08a]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#065F46]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#854D0E]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
+            <span className={`text-[10px] md:text-[11.5px] uppercase font-sans font-bold tracking-[0.25em] leading-none opacity-75 select-none mt-2 text-center truncate max-w-[160px] sm:max-w-none ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#d1fae5]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#fef08a]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#065F46]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#854D0E]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
               {currentScreen === "together" ? "Together Mode" : currentScreen === "settings" ? "Settings" : currentScreen === "login" ? "Authorization" : currentScreen === "status" ? "Player Insights" : (boardState?.difficulty || difficulty)}
             </span>
           </div>
 
-          {/* Right Actions: Symmetrical 2-button container (Notification Bell + Settings) */}
+          {/* Right Actions: Responsive cluster (Notification Bell, Sound Toggle, Settings) */}
           <div className="flex items-center gap-2 z-10">
-            {/* Button 1: Notification Bell (Permanently visible to preserve fixed layout spacing) */}
+            {/* Button 1: Notification Bell (Mobile: hidden in game board; Desktop: always visible) */}
             <button
               onClick={() => {
                 playClickSound();
-                triggerHapticTap();
+                triggerHapticTap(vibrations);
                 setShowBellInvitesModal(true);
               }}
-              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${
+              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] items-center justify-center border-none shadow-xs ${
                 darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"
-              }`}
+              } ${currentScreen === "game" ? "hidden md:flex" : "flex"}`}
               title="Notifications"
               aria-label="Notifications"
               id="global-top-right-bell-button"
@@ -6250,11 +6279,53 @@ useEffect(() => {
               )}
             </button>
 
-            {/* Button 2: Settings Gear */}
+            {/* Button 2: Sound Toggle (Mobile: visible only in game board; Desktop: always visible side-by-side) */}
+            <button
+              onClick={() => {
+                const nextSound = !soundEffects;
+                triggerHapticTap(vibrations);
+                if (nextSound) {
+                  try {
+                    const audioCtx = getAudioCtx();
+                    if (audioCtx) {
+                      const osc = audioCtx.createOscillator();
+                      const gain = audioCtx.createGain();
+                      osc.connect(gain);
+                      gain.connect(audioCtx.destination);
+                      osc.type = "sine";
+                      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                      osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+                      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                      osc.start();
+                      osc.stop(audioCtx.currentTime + 0.1);
+                    }
+                  } catch {}
+                }
+                setSoundEffects(nextSound);
+                try {
+                  localStorage.setItem("sudoku_soundEffects", String(nextSound));
+                } catch {}
+              }}
+              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] items-center justify-center border-none shadow-xs ${
+                darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"
+              } ${currentScreen === "game" ? "flex" : "hidden md:flex"}`}
+              title={soundEffects ? "Mute Sound Effects" : "Enable Sound Effects"}
+              aria-label={soundEffects ? "Mute Sound Effects" : "Enable Sound Effects"}
+              id="global-top-right-sound-button"
+            >
+              {soundEffects ? (
+                <Volume2 className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+              ) : (
+                <VolumeX className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-400" : "text-stone-400"}`} />
+              )}
+            </button>
+
+            {/* Button 3: Settings Gear */}
             <button
               onClick={() => {
                 playClickSound();
-                triggerHapticTap();
+                triggerHapticTap(vibrations);
                 if (currentScreen === "settings") {
                   navigatorPop();
                 } else {
@@ -6284,7 +6355,7 @@ useEffect(() => {
                 
                 {/* 📌 PREMIUM FLOATING STICKY NOTE (CHIT) */}
                 <div 
-                  className={`w-full p-6 sm:p-8 mb-4 sm:mb-6 relative rounded-2xl transition-all duration-300 select-none flex flex-col justify-center items-center gap-2 sm:gap-3 transform rotate-[-1.5deg] ${
+                  className={`card w-full p-6 sm:p-8 mb-4 sm:mb-6 relative rounded-2xl transition-all duration-200 select-none flex flex-col justify-center items-center gap-2 sm:gap-3 transform rotate-[-1.5deg] ${
                     darkMode ? (
                       difficulty === "EASY" ? "bg-[#022c22] text-[#d1fae5] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
                       difficulty === "MEDIUM" ? "bg-[#451a03] text-[#fef08a] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
@@ -6300,7 +6371,7 @@ useEffect(() => {
                   style={{ border: 'none' }}
                 >
                   {/* Subtle top tape aesthetic or fold bar, styled borderless */}
-                  <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 w-16 h-3.5 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] rotate-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none`} />
+                  <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 w-16 h-3.5 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] rotate-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none transition-colors duration-200`} />
 
                   <div className="text-center">
                     <span className="text-[10px] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80">
@@ -6602,20 +6673,35 @@ useEffect(() => {
                           setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                           return;
                         }
-                        playClickSound();
-                        setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
+                        const isCurrentlySelected = boardState?.selectedRow === r && boardState?.selectedCol === c;
 
                         if (isNumberFirstInputMode) {
                           const cell = boardState?.grid[r][c];
                           if (cell && cell.value !== 0) {
                             // Tapping any filled cell immediately sets that number as the active brush digit
+                            playClickSound();
                             setLockedNum(cell.value);
                             triggerHapticTap(vibrations);
+                            setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                             addLog(`🎨 Selected paint digit ${cell.value} from grid cell. Click empty cells to fast fill!`);
                           } else if (lockedNum !== null && cell && !cell.isOriginalClue) {
                             // Fast fill empty cell with the active brush digit
+                            // Do NOT playClickSound here — handleValueInput will validate and play ONLY error sound if invalid, or click sound if valid!
+                            setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                             handleValueInput(lockedNum, r, c);
+                          } else {
+                            if (!isCurrentlySelected) {
+                              playClickSound();
+                              triggerHapticTap(vibrations);
+                            }
+                            setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                           }
+                        } else {
+                          if (!isCurrentlySelected) {
+                            playClickSound();
+                            triggerHapticTap(vibrations);
+                          }
+                          setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                         }
                       }}
                     />
@@ -6709,7 +6795,7 @@ useEffect(() => {
                     initial={{ opacity: 0, scale: 0.95, y: 15 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                    className={`p-4 sm:p-6 md:p-8 w-[92%] sm:w-full max-w-lg max-h-[85dvh] my-auto mx-auto relative flex flex-col gap-3 sm:gap-4 rounded-[28px] shadow-[0_24px_50px_rgba(0,0,0,0.2)] overflow-hidden ${darkMode ? "bg-zinc-900 border border-zinc-700/50" : "bg-[#FDFBF7] border border-stone-200"}`}
+                    className={`modal card p-4 sm:p-6 md:p-8 w-[92%] sm:w-full max-w-lg max-h-[85dvh] my-auto mx-auto relative flex flex-col gap-3 sm:gap-4 rounded-[28px] shadow-[0_24px_50px_rgba(0,0,0,0.2)] overflow-hidden ${darkMode ? "bg-zinc-900 border border-zinc-700/50" : "bg-[#FDFBF7] border border-stone-200"}`}
                   >
                     {/* ── 2-STEP END-GAME FLOW ── */}
                     {endGameStep === 1 ? (
@@ -7519,7 +7605,7 @@ useEffect(() => {
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
-                    className={`border-none p-8 max-w-sm w-full relative text-center rounded-[32px] shadow-[0_12px_40px_rgba(0,0,0,0.08)] flex flex-col gap-6 ${darkMode ? "bg-[#2A2D24]" : "bg-[#FDFBF7]"}`}
+                    className={`modal card border-none p-8 max-w-sm w-full relative text-center rounded-[32px] shadow-[0_12px_40px_rgba(0,0,0,0.08)] flex flex-col gap-6 ${darkMode ? "bg-[#2A2D24]" : "bg-[#FDFBF7]"}`}
                   >
                     {/* Top-right X dismiss button — closes modal without leaving the board */}
                     <button

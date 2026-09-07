@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { Pencil } from "lucide-react";
+import { applyThemeToggle } from "../../utils/themeFeedback";
+import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 
 export interface SettingsModalProps {
   fromGameplaySettings: boolean;
@@ -93,7 +95,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div
-      className={`${
+      className={`modal ${
         fromGameplaySettings
           ? `fixed inset-0 w-screen h-screen z-50 p-6 flex flex-col items-center justify-start overflow-y-auto pt-[calc(80px+env(safe-area-inset-top,0px))] lg:pt-[85px] ${
               darkMode ? "bg-[#121212] paper-pattern-dark" : "bg-[#FDFBF7] paper-pattern"
@@ -287,8 +289,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </span>
               <button
                 onClick={() => {
-                  playClickSound();
-                  setDarkMode(!darkMode);
+                  applyThemeToggle(!darkMode, setDarkMode, soundEffects, vibrations);
                 }}
                 className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
                   darkMode
@@ -339,7 +340,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 onClick={() => {
                   playClickSound();
-                  setVibrations(!vibrations);
+                  const nextVal = !vibrations;
+                  setVibrations(nextVal);
+                  setGlobalHapticsEnabled(nextVal);
+                  if (nextVal) {
+                    triggerHapticTap(true);
+                  }
                 }}
                 className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
                   vibrations

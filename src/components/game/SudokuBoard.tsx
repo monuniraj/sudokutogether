@@ -120,7 +120,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
 
   return (
     <div 
-      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-none transition-colors duration-200 ${darkMode ? "bg-zinc-950 border-[3px]" : "bg-white border-[3px]"} ${darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#064e3b]/60" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#713f12]/60" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#581c87]/60" : "border-[#881337]/60") : ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#065f46]/40" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#854d0e]/40" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#6b21a8]/40" : "border-[#9d174d]/40")}`}
+      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-none sudoku-board transition-colors duration-200 ${darkMode ? "bg-zinc-950 border-[3px]" : "bg-white border-[3px]"} ${darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#064e3b]/60" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#713f12]/60" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#581c87]/60" : "border-[#881337]/60") : ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#065f46]/40" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#854d0e]/40" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#6b21a8]/40" : "border-[#9d174d]/40")}`}
       style={{ 
         boxShadow: darkMode ? "0 4px 20px rgba(0,0,0,0.6)" : "0 4px 20px rgba(43,108,176,0.03)",
         width: "100%",
@@ -199,15 +199,15 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
             // Distinct deep error highlight for active selected mistake cell
             if (darkMode) {
               cellBgStyle = { backgroundColor: "#881337" };
-              cellBgClass = "text-white ring-2 ring-inset ring-rose-400 font-black animate-pulse";
+              cellBgClass = "text-white font-black animate-pulse";
             } else {
               cellBgStyle = { backgroundColor: "#fca5a5" };
-              cellBgClass = "ring-2 ring-inset ring-rose-500 font-black text-rose-950";
+              cellBgClass = "text-rose-950 font-black animate-pulse";
             }
           } else if (isMistake) {
             // Soft unselected mistake background
             if (darkMode) {
-              cellBgClass = "bg-[#4c0519]/40 border border-rose-900/30 text-rose-400";
+              cellBgClass = "bg-[#4c0519]/40 text-rose-400";
             } else {
               cellBgStyle = { backgroundColor: "#fee2e2" };
               cellBgClass = "text-rose-600";
@@ -257,7 +257,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
               key={`${r}-${c}`}
               onClick={() => onCellClick(r, c)}
               style={cellBgStyle}
-              className={`aspect-square relative cursor-pointer select-none ${cellBgClass} ${borderClasses} p-0 overflow-hidden flex items-center justify-center`}
+              className={`cell aspect-square relative cursor-pointer select-none ${cellBgClass} ${borderClasses} p-0 overflow-hidden flex items-center justify-center`}
             >
               {cell.value !== 0 ? (
                 <div 
@@ -265,7 +265,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                     cell.isOriginalClue 
                       ? (darkMode ? "text-white font-sans font-normal" : "text-stone-900 font-sans font-normal")
                       : isMistake
-                        ? (darkMode ? "text-rose-300 handwriting font-black animate-pulse" : "text-rose-700 handwriting font-black")
+                        ? (darkMode ? "text-rose-300 handwriting font-black animate-pulse" : "text-rose-700 handwriting font-black animate-pulse")
                         : (darkMode ? "text-[#38bdf8] handwriting font-normal" : "text-[#2B6CB0] handwriting font-normal")
                   }`}
                   style={{

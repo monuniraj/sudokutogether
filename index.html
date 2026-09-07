@@ -46,6 +46,19 @@
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2107539674074275"
      crossorigin="anonymous"></script>
 
+    <script>
+      (function() {
+        try {
+          var d = localStorage.getItem('sudoku_darkMode');
+          if (d === 'true' || (d === null && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch(e) {}
+      })();
+    </script>
+
     <meta charset="UTF-8" />
     <title>SudokuSync - Real-Time Multiplayer Sudoku</title>
     <link rel="icon" type="image/png" href="/logo.png">

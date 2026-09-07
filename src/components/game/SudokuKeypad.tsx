@@ -77,7 +77,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
           <button
             onClick={() => {
               playClickSound();
-              triggerHapticTap(vibrations ?? true);
+              triggerHapticTap(vibrations);
               onUndo();
             }}
             disabled={!boardState || isGameOver || historyLength === 0}
@@ -97,7 +97,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
           <button
             onClick={() => {
               playClickSound();
-              triggerHapticTap(vibrations ?? true);
+              triggerHapticTap(vibrations);
               onErase();
             }}
             disabled={!boardState || isGameOver}
@@ -117,7 +117,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
           <button
             onClick={() => {
               playClickSound();
-              triggerHapticTap(vibrations ?? true);
+              triggerHapticTap(vibrations);
               onTogglePencilMode();
             }}
             disabled={!boardState || isGameOver}
@@ -141,7 +141,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
           <button
             onClick={() => {
               playClickSound();
-              triggerHapticTap(vibrations ?? true);
+              triggerHapticTap(vibrations);
               onHint();
             }}
             disabled={!boardState || isGameOver}
@@ -178,8 +178,10 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               <button
                 key={num}
                 onClick={() => {
-                  playClickSound();
-                  triggerHapticTap(vibrations ?? true);
+                  if (isNumberFirstInputMode) {
+                    playClickSound();
+                    triggerHapticTap(vibrations);
+                  }
                   onNumberSelect(num);
                 }}
                 disabled={!boardState || isGameOver || visualizingBacktrack || remainingCount <= 0}

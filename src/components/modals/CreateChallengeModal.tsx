@@ -95,7 +95,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
       animate={{ scale: 1, opacity: 1 }}
       exit={{ scale: 0.96, opacity: 0 }}
       transition={{ duration: 0.15, ease: "easeOut" }}
-      className={`relative w-[92%] max-w-md h-[70vh] rounded-3xl p-5 sm:p-6 border-none flex flex-col gap-4 select-none z-[10001] text-left transition-colors duration-300 ${
+      className={`modal card relative w-[92%] max-w-md h-[70vh] rounded-3xl p-5 sm:p-6 border-none flex flex-col gap-4 select-none z-[10001] text-left transition-colors duration-300 ${
         darkMode ? "bg-[#1A1A1A] text-stone-200" : "bg-[#FDFBF7] text-stone-850"
       }`}
       style={{

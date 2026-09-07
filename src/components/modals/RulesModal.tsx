@@ -30,7 +30,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className={`relative w-full max-w-sm rounded-[16px] shadow-2xl overflow-hidden flex flex-col ${
+            className={`modal card relative w-full max-w-sm rounded-[16px] shadow-2xl overflow-hidden flex flex-col ${
               darkMode ? "bg-[#1E1E1E] border border-zinc-800" : "bg-[#FDFBF7]"
             }`}
           >
