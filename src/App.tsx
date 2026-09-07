@@ -60,7 +60,6 @@ import {
   Settings,
   Timer,
   BarChart2,
-  BarChart3,
   Sun,
   Moon,
   ArrowLeft,
@@ -6190,7 +6189,7 @@ useEffect(() => {
               id="global-top-left-back-button"
             >
               {(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? (
-                <BarChart3 className={`w-4.5 h-4.5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+                <BarChart2 className={`w-5 h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
               ) : (
                 <ArrowLeft className={`w-4.5 h-4.5 stroke-[2] font-bold ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
               )}
