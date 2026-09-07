@@ -274,7 +274,7 @@ const getSharedOrigin = (): string => {
   const isLocalhostWebView = /^(https?|capacitor):\/\/localhost\/?$/.test(origin);
   
   if (isCapacitorNative || isLocalhostWebView) {
-    return "https://sudoku-together-mode.web.app";
+    return "https://sudokusync.com";
   }
   if (origin.includes("ais-dev-")) {
     return origin.replace("ais-dev-", "ais-pre-");
@@ -11196,7 +11196,7 @@ useEffect(() => {
                   <div className="space-y-3">
                     <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc]">Welcome to SudokuSync!</p>
                     <p>
-                      <strong>SudokuSync</strong> (<a href="https://sudoku-together-mode.web.app" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudoku-together-mode.web.app</a>) is a modern, high-performance logic puzzle and brain-training platform designed for solo solvers and competitive friends alike.
+                      <strong>SudokuSync</strong> (<a href="https://sudokusync.com" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudokusync.com</a>) is a modern, high-performance logic puzzle and brain-training platform designed for solo solvers and competitive friends alike.
                     </p>
                     <p>
                       Our mission is to elevate classic paper-and-pencil Sudoku into an engaging digital multiplayer experience. Powered by deterministic seed generation (Mulberry32 PRNG), custom mistake limits, real-time board synchronization, and procedural sound synthesis, our platform brings players together on identical, mathematically verified 1-solution puzzles without heavy data transmission.
@@ -11244,7 +11244,7 @@ useEffect(() => {
                     </div>
                     
                     <p>
-                      At <strong>SudokuSync</strong> (accessible from <a href="https://sudoku-together-mode.web.app" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">https://sudoku-together-mode.web.app</a> and the official Android mobile app), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed, and how we uphold global privacy standards including the <strong>General Data Protection Regulation (GDPR)</strong>, the <strong>California Consumer Privacy Act (CCPA/CPRA)</strong>, the <strong>Children's Online Privacy Protection Act (COPPA)</strong>, <strong>Google Play Store Data Safety Policies</strong>, and <strong>Google AdSense Program Policies</strong>.
+                      At <strong>SudokuSync</strong> (accessible from <a href="https://sudokusync.com" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">https://sudokusync.com</a> and the official Android mobile app), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed, and how we uphold global privacy standards including the <strong>General Data Protection Regulation (GDPR)</strong>, the <strong>California Consumer Privacy Act (CCPA/CPRA)</strong>, the <strong>Children's Online Privacy Protection Act (COPPA)</strong>, <strong>Google Play Store Data Safety Policies</strong>, and <strong>Google AdSense Program Policies</strong>.
                     </p>
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">1. Information Collection & Storage Architecture</h4>
@@ -11343,7 +11343,7 @@ useEffect(() => {
                     
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">1. Agreement & Acceptance of Terms</h4>
                     <p className="text-xs">
-                      By accessing, browsing, installing, or playing <strong>SudokuSync</strong> (via <a href="https://sudoku-together-mode.web.app" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudoku-together-mode.web.app</a> or our official Android application), you agree to be bound by these Terms of Service, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws. If you do not agree with any of these terms, you are prohibited from using or accessing this application.
+                      By accessing, browsing, installing, or playing <strong>SudokuSync</strong> (via <a href="https://sudokusync.com" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudokusync.com</a> or our official Android application), you agree to be bound by these Terms of Service, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws. If you do not agree with any of these terms, you are prohibited from using or accessing this application.
                     </p>
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">2. Description of Service & Free Access</h4>

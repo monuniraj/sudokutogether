@@ -21,6 +21,7 @@ async function startServer() {
   const ALLOWED_ORIGIN_PATTERNS = [
     /^https:\/\/sudoku-together-mode\.web\.app$/,
     /^https:\/\/sudoku-together-mode\.firebaseapp\.com$/,
+    /^https:\/\/(www\.)?sudokusync\.com$/,
     /^http:\/\/localhost(:\d+)?$/,
     /^http:\/\/127\.0\.0\.1(:\d+)?$/,
     /^capacitor:\/\/localhost$/

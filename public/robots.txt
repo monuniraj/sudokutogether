@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://sudoku-together-mode.web.app/sitemap.xml
+Sitemap: https://sudokusync.com/sitemap.xml
