@@ -1,10 +1,12 @@
 import express, { Request, Response, NextFunction } from "express";
+import http from "http";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 
 async function startServer() {
   const app = express();
+  const server = http.createServer(app);
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   // Security Headers Middleware
@@ -370,7 +372,10 @@ async function startServer() {
   // Vite development server routing middleware fallback
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        hmr: { server }
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -382,7 +387,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
   });
 }

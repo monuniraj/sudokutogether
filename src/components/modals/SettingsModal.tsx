@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, Check, Lock } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 
@@ -137,14 +137,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               darkMode ? "bg-zinc-950/45 border-purple-900/20" : "bg-white/60 border-purple-200/40"
             }`}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
               <div
                 className="w-10 h-10 rounded-full border-none flex items-center justify-center text-md font-sans font-black text-white shrink-0 shadow-sm"
                 style={{ backgroundColor: userProfile?.avatarColor || "#8B5CF6" }}
               >
                 {userProfile?.name ? userProfile.name.charAt(0).toUpperCase() : "V"}
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col min-w-0 flex-1">
                 <span
                   className={`text-[10px] font-mono font-black uppercase tracking-wider ${
                     darkMode ? "text-purple-300" : "text-purple-700"
@@ -153,7 +153,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   Display Name
                 </span>
                 <span
-                  className={`font-sans font-bold text-sm ${
+                  className={`font-sans font-bold text-sm truncate ${
                     darkMode ? "text-stone-100" : "text-purple-950"
                   }`}
                 >
@@ -172,7 +172,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 playClickSound();
                 onOpenDisplayNameModal();
               }}
-              className={`p-2 rounded-full border-none cursor-pointer transition-all hover:bg-purple-200/50 dark:hover:bg-purple-950/40 active:scale-95 text-purple-700 dark:text-purple-300 flex items-center justify-center`}
+              className={`p-2 rounded-full border-none cursor-pointer transition-all hover:bg-purple-200/50 dark:hover:bg-purple-950/40 active:scale-95 text-purple-700 dark:text-purple-300 flex items-center justify-center shrink-0`}
               title="Edit Display Name"
             >
               <Pencil className="w-4 h-4" />
@@ -191,8 +191,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <div className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block animate-pulse" />
-                  <span className="text-xs font-sans font-bold text-purple-600 dark:text-purple-400">
-                    Synced Securely ✓
+                  <span className="text-xs font-sans font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                    <span>Synced Securely</span>
+                    <Check className="w-3 h-3 stroke-[2.5]" />
                   </span>
                 </div>
                 <span
@@ -699,8 +700,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </button>
                   </div>
                   {challengeMode && (
-                    <span className="text-[10px] text-red-500 font-black tracking-wide mt-0.5 flex items-center gap-0.5">
-                      🔒 LOCKED BY CHALLENGE
+                    <span className="text-[10px] text-red-500 font-black tracking-wide mt-0.5 flex items-center gap-1">
+                      <Lock className="w-3 h-3 stroke-[2.5] shrink-0" />
+                      <span>LOCKED BY CHALLENGE</span>
                     </span>
                   )}
                 </div>
@@ -760,8 +762,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </button>
                   </div>
                   {challengeMode && (
-                    <span className="text-[10px] text-red-500 font-black tracking-wide mt-0.5 flex items-center gap-0.5">
-                      🔒 LOCKED TO {boardState?.maxMistakesLimit ?? challengeMistakeLimit} ERRORS
+                    <span className="text-[10px] text-red-500 font-black tracking-wide mt-0.5 flex items-center gap-1">
+                      <Lock className="w-3 h-3 stroke-[2.5] shrink-0" />
+                      <span>LOCKED TO {boardState?.maxMistakesLimit ?? challengeMistakeLimit} ERRORS</span>
                     </span>
                   )}
                 </div>

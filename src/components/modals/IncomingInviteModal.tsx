@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Check } from "lucide-react";
+import { X, Check, Lock, XCircle } from "lucide-react";
 
 export interface IncomingInviteModalProps {
   isOpen: boolean;
@@ -87,8 +87,8 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
                 darkMode ? "bg-stone-800/20 text-rose-300" : "bg-[#FFF5F5] text-red-950"
               }`}>
                 <div className="flex items-center justify-center gap-1.5 font-sans font-bold uppercase tracking-wider text-[10px]">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-red-500 animate-pulse" />
-                  Enter Password
+                  <Lock className="w-3.5 h-3.5 stroke-[2.5] text-red-500 shrink-0" />
+                  <span>Enter Password</span>
                 </div>
                 <input
                   type="text"
@@ -104,8 +104,9 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
                   }`}
                 />
                 {invitePasswordError && (
-                  <span className="text-[10px] font-bold text-rose-600 text-center uppercase tracking-wide mt-0.5">
-                    {invitePasswordError}
+                  <span className="text-[10px] font-bold text-rose-600 text-center uppercase tracking-wide mt-0.5 flex items-center justify-center gap-1">
+                    <XCircle className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
+                    <span>{invitePasswordError.replace(/^❌\s*/, "")}</span>
                   </span>
                 )}
               </div>

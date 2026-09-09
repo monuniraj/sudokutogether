@@ -1,4 +1,6 @@
 import React from "react";
+import { Check, X } from "lucide-react";
+import { formatMatchTimestamp } from "../../utils/formatTimestamp";
 
 export interface CompletedGameRecord {
   id: string;
@@ -301,7 +303,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                   >
                     <div className="flex justify-between items-center">
                       <span
-                        className={`text-xs font-sans font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                        className={`text-xs font-sans font-black uppercase tracking-wider px-2.5 py-0.5 rounded flex items-center gap-1 ${
                           game.isWon
                             ? darkMode
                               ? "bg-emerald-950/20 text-emerald-400"
@@ -311,11 +313,21 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                             : "bg-rose-100 text-rose-850"
                         }`}
                       >
-                        {game.isWon ? "✓ Won" : "✗ Failed"}
+                        {game.isWon ? (
+                          <>
+                            <Check className="w-3 h-3 stroke-[3]" />
+                            <span>Won</span>
+                          </>
+                        ) : (
+                          <>
+                            <X className="w-3 h-3 stroke-[3]" />
+                            <span>Failed</span>
+                          </>
+                        )}
                       </span>
 
                       <span className="font-sans text-xs md:text-sm font-medium text-stone-500">
-                        {game.date}
+                        {formatMatchTimestamp(game.date)}
                       </span>
                     </div>
 
@@ -420,7 +432,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                   >
                     <div className="flex justify-between items-center">
                       <span
-                        className={`text-xs font-sans font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                        className={`text-xs font-sans font-black uppercase tracking-wider px-2.5 py-0.5 rounded flex items-center gap-1 ${
                           game.isWon
                             ? darkMode
                               ? "bg-emerald-950/20 text-emerald-400"
@@ -430,11 +442,21 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                             : "bg-rose-100 text-rose-850"
                         }`}
                       >
-                        {game.isWon ? "✓ Won" : "✗ Failed"}
+                        {game.isWon ? (
+                          <>
+                            <Check className="w-3 h-3 stroke-[3]" />
+                            <span>Won</span>
+                          </>
+                        ) : (
+                          <>
+                            <X className="w-3 h-3 stroke-[3]" />
+                            <span>Failed</span>
+                          </>
+                        )}
                       </span>
 
                       <span className="font-sans text-xs md:text-sm font-medium text-stone-500">
-                        {game.date || "Saved Config"}
+                        {formatMatchTimestamp(game.date, "Saved Config")}
                       </span>
                     </div>
 

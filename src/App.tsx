@@ -10,6 +10,7 @@ import { CreateChallengeModal } from "./components/modals/CreateChallengeModal";
 import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
 import { SudokuBoard } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
+import { formatMatchTimestamp, formatInviteTimestamp } from "./utils/formatTimestamp";
 import {
   doc,
   setDoc,
@@ -77,6 +78,9 @@ import {
   Home,
   KeyRound,
   UserPlus,
+  User,
+  Mail,
+  Phone,
   Trophy,
   Brain,
   Zap,
@@ -270,6 +274,112 @@ const shuffleWithPRNG = <T,>(arr: T[], prng: () => number): T[] => {
   return newArr;
 };
 
+// Pure Sudoku Logical Calculations Engine
+const isValidPlacementPure = (grid: number[][], row: number, col: number, num: number): boolean => {
+  for (let x = 0; x < 9; x++) {
+    if (grid[row][x] === num) return false;
+  }
+  for (let x = 0; x < 9; x++) {
+    if (grid[x][col] === num) return false;
+  }
+  const boxRowStart = row - (row % 3);
+  const boxColStart = col - (col % 3);
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      if (grid[boxRowStart + i][boxColStart + j] === num) return false;
+    }
+  }
+  return true;
+};
+
+const solveSudokuRecursivePure = (grid: number[][], prng?: () => number): boolean => {
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if (grid[r][c] === 0) {
+        const baseNums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+        const nums = prng ? shuffleWithPRNG(baseNums, prng) : baseNums.sort(() => Math.random() - 0.5);
+        for (const num of nums) {
+          if (isValidPlacementPure(grid, r, c, num)) {
+            grid[r][c] = num;
+            if (solveSudokuRecursivePure(grid, prng)) {
+              return true;
+            }
+            grid[r][c] = 0;
+          }
+        }
+        return false;
+      }
+    }
+  }
+  return true;
+};
+
+const countSolutionsPure = (grid: number[][], limit = 2): number => {
+  let count = 0;
+  const clone = (arr: number[][]) => arr.map(row => [...row]);
+  const workGrid = clone(grid);
+
+  const checkAndSolve = (g: number[][]): boolean => {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (g[r][c] === 0) {
+          for (let num = 1; num <= 9; num++) {
+            if (isValidPlacementPure(g, r, c, num)) {
+              g[r][c] = num;
+              if (checkAndSolve(g)) {
+                count++;
+              }
+              g[r][c] = 0;
+              if (count >= limit) {
+                return true;
+              }
+            }
+          }
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  checkAndSolve(workGrid);
+  return count;
+};
+
+const generateFlatBoardForSeed = (diff: Difficulty, seed: number) => {
+  const prng = createPRNG(seed);
+  const solved = Array(9).fill(null).map(() => Array(9).fill(0));
+  solveSudokuRecursivePure(solved, prng);
+  const puzzle = solved.map(r => [...r]);
+  let removedTarget = 24;
+  if (diff === "EASY") removedTarget = 30;
+  else if (diff === "MEDIUM") removedTarget = 40;
+  else if (diff === "HARD") removedTarget = 48;
+  else if (diff === "EXPERT") removedTarget = 54;
+
+  let removedCount = 0;
+  const baseList = Array.from({ length: 81 }, (_, i) => i);
+  const list = shuffleWithPRNG(baseList, prng);
+  for (const pos of list) {
+    if (removedCount >= removedTarget) break;
+    const row = Math.floor(pos / 9);
+    const col = pos % 9;
+    const originalVal = puzzle[row][col];
+    puzzle[row][col] = 0;
+    if (countSolutionsPure(puzzle, 2) === 1) {
+      removedCount++;
+    } else {
+      puzzle[row][col] = originalVal;
+    }
+  }
+  return {
+    puzzleFlat: puzzle.flat(),
+    solutionFlat: solved.flat(),
+    puzzle,
+    solved
+  };
+};
+
 const getSharedOrigin = (): string => {
   if (typeof window === "undefined") return "";
   const origin = window.location.origin;
@@ -287,9 +397,7 @@ const getSharedOrigin = (): string => {
 
 const getChallengeBaseUrl = (): string => {
   const origin = getSharedOrigin();
-  const path = typeof window !== "undefined" ? window.location.pathname : "/";
-  const cleanPath = path.endsWith("/index.html") ? "/" : path;
-  return `${origin}${cleanPath}`;
+  return `${origin.replace(/\/+$/, "")}/`;
 };
 
 const getApiOrigin = (): string => {
@@ -304,6 +412,16 @@ const encodePass = (str: string): string => {
   } catch (e) {
     return str;
   }
+};
+
+const getPlayerInitials = (name?: string): string => {
+  if (!name) return "PL";
+  const trimmed = name.trim();
+  const parts = trimmed.split(/\s+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return trimmed.slice(0, 2).toUpperCase() || "PL";
 };
 
 const decodePass = (str: string): string => {
@@ -1459,6 +1577,24 @@ useEffect(() => {
     return isConfiguredFlag;
   };
 
+  const getActiveDisplayName = (): string => {
+    const raw = (userProfile?.name || "").trim();
+    const isGenericOrPlaceholder =
+      !raw ||
+      raw === "Anonymous Voyager" ||
+      raw === "Guest Voyager" ||
+      raw === "Guest Solver" ||
+      raw === "Guest" ||
+      raw.startsWith("Player");
+
+    if (!isGenericOrPlaceholder) {
+      return raw;
+    }
+
+    const randNum = (userProfile?.id || "").replace(/[^0-9]/g, "").slice(-5) || String(Math.floor(10000 + Math.random() * 90000));
+    return `Bold Voyager ${randNum}`;
+  };
+
   const handleAcceptInvitationWithProfileCheck = (onConfirm: () => void) => {
     const isConfigured = checkIsDisplayNameConfigured();
 
@@ -1561,6 +1697,20 @@ useEffect(() => {
   const [roomPassword, setRoomPassword] = useState<string>("");
   const [isRoomLocked, setIsRoomLocked] = useState<boolean>(false);
   const [roomPin, setRoomPin] = useState<string>("");
+  const [isOnline, setIsOnline] = useState<boolean>(() => 
+    typeof navigator !== "undefined" && typeof navigator.onLine === "boolean" ? navigator.onLine : true
+  );
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
   const [openDropdown, setOpenDropdown] = useState<"difficulty" | "mistakes" | "hints" | "timer" | null>(null);
   const [dropdownCoords, setDropdownCoords] = useState<{
     top: number;
@@ -1659,6 +1809,7 @@ useEffect(() => {
   const [showCreateChallengeModal, setShowCreateChallengeModal] = useState<boolean>(false);
   const [showGameOverModal, setShowGameOverModal] = useState<boolean>(false);
   const [showMidGameInviteModal, setShowMidGameInviteModal] = useState<boolean>(false);
+  const [isHost, setIsHost] = useState<boolean>(true);
   const [showHistoryChallengeModal, setShowHistoryChallengeModal] = useState<boolean>(false);
   const [historyChallengeGame, setHistoryChallengeGame] = useState<CompletedGame | null>(null);
   const [viewingRankingsGame, setViewingRankingsGame] = useState<CompletedGame | null>(null);
@@ -1753,8 +1904,20 @@ useEffect(() => {
     return challengeId ? challengeLeaderboardCache[challengeId] : undefined;
   };
 
+  const getSeedFromId = (id: string): string => {
+    const match = id.match(/SUDOKU-(\d+)/i);
+    return match ? match[1] : id;
+  };
+
   const getDisplayParticipants = (game: CompletedGame): any[] | undefined => {
-    return getCachedLeaderboard(game.id) ?? game.participants;
+    const seed = game.seed || (game.id ? getSeedFromId(game.id) : undefined);
+    const cached = getCachedLeaderboard(game.id) || (seed ? getCachedLeaderboard(String(seed)) : undefined);
+    if (Array.isArray(cached) && cached.length > 0) return cached;
+    if (Array.isArray(game.participants) && game.participants.length > 0) return game.participants;
+    if (activeGameId && (game.id === activeGameId || (seed && String(seed) === activeGameId)) && syncedLeaderboard.length > 0) {
+      return syncedLeaderboard;
+    }
+    return cached ?? game.participants;
   };
 
   const shouldRepairParticipants = (game: CompletedGame): boolean => {
@@ -1762,69 +1925,30 @@ useEffect(() => {
   };
 
   const repairGameParticipants = (game: CompletedGame, results: any[]): CompletedGame => {
-    if (shouldRepairParticipants(game) && Array.isArray(results) && results.length > 0) {
-      return { ...game, participants: results };
+    if (Array.isArray(results) && results.length > 0) {
+      const currentCount = Array.isArray(game.participants) ? game.participants.length : 0;
+      if (results.length >= currentCount) {
+        return { ...game, participants: results };
+      }
     }
     return game;
   };
 
-  const formatMatchTimestamp = (dateStrOrTimestamp?: string | number): string => {
-    if (!dateStrOrTimestamp) return "Saved Config";
-    let d: Date;
-    if (typeof dateStrOrTimestamp === "number") {
-      d = new Date(dateStrOrTimestamp);
-    } else {
-      const parsedTime = Date.parse(dateStrOrTimestamp);
-      if (!isNaN(parsedTime)) {
-        d = new Date(parsedTime);
-      } else {
-        return dateStrOrTimestamp;
-      }
-    }
-    const diffMs = Date.now() - d.getTime();
-    if (diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000) {
-      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    } else {
-      return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-  };
-
-  const formatInviteTimestamp = (timestamp?: any): string => {
-    if (!timestamp) return "Just now";
-    let d: Date;
-    if (typeof timestamp === "number") {
-      d = new Date(timestamp);
-    } else if (timestamp?.toMillis && typeof timestamp.toMillis === "function") {
-      d = new Date(timestamp.toMillis());
-    } else if (timestamp?.toDate && typeof timestamp.toDate === "function") {
-      d = timestamp.toDate();
-    } else if (typeof timestamp === "string") {
-      const parsedTime = Date.parse(timestamp);
-      if (!isNaN(parsedTime)) {
-        d = new Date(parsedTime);
-      } else {
-        const numParsed = Number(timestamp);
-        if (!isNaN(numParsed) && numParsed > 0) {
-          d = new Date(numParsed);
-        } else {
-          return "Just now";
-        }
-      }
-    } else {
-      return "Just now";
-    }
-    if (isNaN(d.getTime())) return "Just now";
-
-    const diffMs = Date.now() - d.getTime();
-    if (diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000) {
-      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    } else {
-      return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-  };
+  // Standardized formatMatchTimestamp and formatInviteTimestamp are imported from ./utils/formatTimestamp
 
   const resolveParticipantsForSave = (game: CompletedGame): any[] | undefined => {
-    return game.participants || getCachedLeaderboard(game.id) || (game.id === activeGameId ? syncedLeaderboard : undefined);
+    const seed = game.seed || (game.id ? getSeedFromId(game.id) : undefined);
+    const cached = getCachedLeaderboard(game.id) 
+      || (seed ? getCachedLeaderboard(String(seed)) : undefined)
+      || (activeGameId ? getCachedLeaderboard(activeGameId) : undefined);
+    
+    const live = (syncedLeaderboard && syncedLeaderboard.length > 0) ? syncedLeaderboard : undefined;
+
+    const candidates = [game.participants, cached, live].filter((arr): arr is any[] => Array.isArray(arr) && arr.length > 0);
+    if (candidates.length === 0) return undefined;
+    
+    candidates.sort((a, b) => b.length - a.length);
+    return candidates[0];
   };
 
   const [savedGames, setSavedGames] = useState<CompletedGame[]>(() => {
@@ -2222,12 +2346,15 @@ useEffect(() => {
   // Complete multiplayer room state teardown
   const cleanupRoomSession = () => {
     setChallengeMode(false);
+    setIsHost(true);
     setActiveGameId(null);
     setChallengeSeed(null);
     setRematchGameId(null);
     setSyncedLeaderboard([]);
     setPendingRematchSeed(null);
     setEndGameStep(1);
+    setIsRoomLocked(false);
+    setRoomPin("");
     addLog("🧹 Room session cleared. Restored clean Solo state.");
   };
 
@@ -2667,7 +2794,7 @@ useEffect(() => {
         if (index === -1) {
           next.push({
             id: opp.id,
-            name: opp.name || "Player " + opp.id.substring(0, 5),
+            name: opp.name || "Voyager " + opp.id.substring(0, 5),
             isFriend: false,
             status: "offline" as const,
             inviteStatus: "idle" as const
@@ -2771,7 +2898,7 @@ useEffect(() => {
         }
 
         // Add them as a new friend directly since they aren't in the list
-        const name = playerName || "Player " + playerId.substring(0, 5);
+        const name = playerName || "Voyager " + playerId.substring(0, 5);
         const newPlayer = {
           id: playerId,
           name: name,
@@ -2832,37 +2959,17 @@ useEffect(() => {
     return null;
   };
 
-  // Universal Auto-Navigate on Accept - Single Source of Truth from Firestore
-  const handleAcceptAndLaunchInvite = async (
+  // Unified, instantaneous state dispatcher for ALL multiplayer join vectors
+  const executeJoinRoom = async (
     targetGameId: string,
-    inviteDocId?: string,
-    passwordOverride?: string,
-    isDirectInvite = false,
-    preloadedRoomData?: any
-  ) => {
-    playClickSound();
-
-    // 1. Optimistically switch directly to game arena and dismiss open modals immediately (<1ms)
-    // This completely prevents the Home screen from flashing or bouncing!
-    navigateToScreen("game");
-    setShowGameOverModal(false);
-    setShowInviteModal(false);
-    setShowBellInvitesModal(false);
-    setShowCreateChallengeModal(false);
-    setShowRematchInviteModal(false);
-    setShowJoinRoomModal(false);
-    setShowMultiplayerForkModal(false);
-
-    // Update Firestore invite status if doc ID provided
-    if (inviteDocId) {
-      try {
-        await updateDoc(doc(db, "invites", inviteDocId), { status: "accepted" });
-      } catch (err) {
-        console.error("[Firestore] Failed to update invite to accepted:", err);
-      }
+    options?: {
+      inviteDocId?: string;
+      passwordOverride?: string;
+      isDirectInvite?: boolean;
+      preloadedRoomData?: any;
     }
-
-    // Extract canonical 6-digit roomCode
+  ): Promise<{ success: boolean; error?: string }> => {
+    // 1. Extract canonical 6-digit roomCode
     const trimmedId = (targetGameId || "").trim();
     let roomCode = "";
     if (/^\d{6}$/.test(trimmedId)) {
@@ -2879,79 +2986,66 @@ useEffect(() => {
       }
     }
 
-    if (!roomCode) {
-      showToast("❌ Invalid room code.");
-      navigateToScreen("home");
-      return;
+    if (!roomCode || roomCode.length !== 6) {
+      return { success: false, error: "Please enter a valid 6-digit room code." };
     }
 
-    // Read canonical session document from Firestore (/rooms/{roomCode}) or use preloaded
-    let seed: number;
-    let diff: Difficulty;
-    let mistakesLimit: number;
-    let hintsLimit: number;
-    let timerEnabled: boolean;
-    let preloadedBoard: { puzzle?: number[][]; solution?: number[][] } | undefined;
+    // 2. Update Firestore invite status if doc ID provided
+    if (options?.inviteDocId) {
+      try {
+        await updateDoc(doc(db, "invites", options.inviteDocId), { status: "accepted" });
+      } catch (err) {
+        console.error("[Firestore] Failed to update invite to accepted:", err);
+      }
+    }
 
-    try {
-      let rData = preloadedRoomData;
-      if (!rData) {
+    // 3. Read canonical session document from Firestore (/rooms/{roomCode}) or use preloaded
+    let rData = options?.preloadedRoomData;
+    if (!rData) {
+      try {
         const roomSnap = await getDoc(doc(db, "rooms", roomCode));
         if (!roomSnap.exists()) {
           console.warn(`[Firestore] Canonical room /rooms/${roomCode} not found.`);
-          showToast("❌ Room not found or no longer active.");
-          addLog(`⚠️ Attempted join failed: Room /rooms/${roomCode} does not exist in Firestore.`);
-          navigateToScreen("home");
-          return;
+          return { success: false, error: "Room not found. Please check the 6-digit code." };
         }
         rData = roomSnap.data();
+      } catch (err) {
+        console.error("[Firestore] Failed to read canonical room document:", err);
+        return { success: false, error: "Failed to connect to room. Please try again." };
       }
-
-      if (rData.status === "closed" || rData.isClosed) {
-        showToast("❌ This room session is closed.");
-        navigateToScreen("home");
-        return;
-      }
-
-      // Security check for locked rooms if PIN is set (Bypassed if direct in-game invite)
-      if (isDirectInvite) {
-        // Unconditional bypass: skip all PIN / password validation
-      } else if (rData.isLocked) {
-        const expectedPin = (rData.pin || rData.roomPin || "").trim();
-        if (expectedPin.length > 0) {
-          const providedPin = (passwordOverride || "").trim();
-          let isMatch = providedPin === expectedPin || decodePass(providedPin) === expectedPin;
-          try {
-            if (decodeURIComponent(providedPin) === expectedPin) isMatch = true;
-          } catch (e) {}
-          if (!isMatch) {
-            showToast("❌ Room PIN required or incorrect.");
-            navigateToScreen("home");
-            return;
-          }
-        }
-      }
-
-      seed = rData.seed !== undefined ? Number(rData.seed) : parseInt(roomCode, 10);
-      diff = (rData.difficulty || "EASY").toUpperCase() as Difficulty;
-      mistakesLimit = rData.mistakesLimit !== undefined 
-        ? Number(rData.mistakesLimit) 
-        : (rData.mistakeLimit !== undefined ? Number(rData.mistakeLimit) : 3);
-      hintsLimit = rData.hintsLimit !== undefined 
-        ? Number(rData.hintsLimit) 
-        : (rData.hintLimit !== undefined ? Number(rData.hintLimit) : 3);
-      timerEnabled = rData.timerEnabled !== undefined ? Boolean(rData.timerEnabled) : true;
-      if (rData.puzzle && rData.solution) {
-        preloadedBoard = { puzzle: rData.puzzle, solution: rData.solution };
-      }
-    } catch (err) {
-      console.error("[Firestore] Failed to read canonical room document:", err);
-      showToast("❌ Network error connecting to room.");
-      navigateToScreen("home");
-      return;
     }
 
-    // 2. Dismiss remaining modals & drawers
+    if (rData.status === "closed" || rData.isClosed) {
+      return { success: false, error: "This room session is closed." };
+    }
+
+    // 4. Security check for locked rooms if PIN is set (Bypassed if direct in-game invite)
+    if (!options?.isDirectInvite && rData.isLocked) {
+      const expectedPin = (rData.pin || rData.roomPin || "").trim();
+      if (expectedPin.length > 0) {
+        const enteredPin = (options?.passwordOverride || "").trim();
+        if (!enteredPin) {
+          return { success: false, error: "This room is locked. Please enter the 4-digit PIN." };
+        }
+        let isMatch = enteredPin === expectedPin || decodePass(enteredPin) === expectedPin;
+        try {
+          if (decodeURIComponent(enteredPin) === expectedPin) isMatch = true;
+        } catch (e) {}
+        if (!isMatch) {
+          return { success: false, error: "Incorrect 4-digit PIN." };
+        }
+      }
+    }
+
+    // 5. Dismiss all open modals & reset dialog states immediately (<1ms)
+    setShowJoinRoomModal(false);
+    setShowMultiplayerForkModal(false);
+    setShowCreateChallengeModal(false);
+    setShowMidGameInviteModal(false);
+    setShowGameOverModal(false);
+    setShowInviteModal(false);
+    setShowBellInvitesModal(false);
+    setShowRematchInviteModal(false);
     setShowHowToPlayModal(false);
     setShowDeleteAccountModal(false);
     setShowResetSettingsModal(false);
@@ -2963,10 +3057,78 @@ useEffect(() => {
     setActiveInviteNotification(null);
     setEndGameStep(1);
 
-    // 3. Set current active match ID to the canonical roomCode
+    const isLocked = Boolean(rData.isLocked || rData.pin);
+    const pin = (rData.pin || rData.roomPin || "").trim();
+    const seed = rData.seed !== undefined ? Number(rData.seed) : parseInt(roomCode, 10);
+    const diff = (rData.difficulty || "EASY").toUpperCase() as Difficulty;
+    const mistakesLimit = rData.mistakesLimit !== undefined 
+      ? Number(rData.mistakesLimit) 
+      : (rData.mistakeLimit !== undefined ? Number(rData.mistakeLimit) : 3);
+    const hintsLimit = rData.hintsLimit !== undefined 
+      ? Number(rData.hintsLimit) 
+      : (rData.hintLimit !== undefined ? Number(rData.hintLimit) : 3);
+    const timerEnabled = rData.timerEnabled !== undefined ? Boolean(rData.timerEnabled) : true;
+
+    // 6. Option A: Decode puzzleFlat and solutionFlat directly into 9x9 grids with deterministic fallback
+    let puzzle2D: number[][];
+    let solution2D: number[][];
+
+    if (Array.isArray(rData.puzzleFlat) && Array.isArray(rData.solutionFlat) && rData.puzzleFlat.length === 81) {
+      puzzle2D = Array(9).fill(null).map((_, r) =>
+        Array(9).fill(null).map((_, c) => Number(rData.puzzleFlat[r * 9 + c]))
+      );
+      solution2D = Array(9).fill(null).map((_, r) =>
+        Array(9).fill(null).map((_, c) => Number(rData.solutionFlat[r * 9 + c]))
+      );
+    } else if (rData.puzzle && rData.solution && Array.isArray(rData.puzzle[0])) {
+      puzzle2D = rData.puzzle;
+      solution2D = rData.solution;
+    } else {
+      // Deterministic fallback using room seed and diff if flat arrays were omitted
+      const fallbackBoard = generateFlatBoardForSeed(diff, seed);
+      puzzle2D = fallbackBoard.puzzle;
+      solution2D = fallbackBoard.solved;
+    }
+
+    // Convert to SudokuCell[][] with original clues locked
+    const finishedGrid: SudokuCell[][] = Array(9).fill(null).map((_, r) => {
+      return Array(9).fill(null).map((_, c) => {
+        const val = puzzle2D[r][c];
+        return {
+          row: r,
+          col: c,
+          value: val,
+          isOriginalClue: val !== 0,
+          isUserInput: false,
+          notes: new Set<number>()
+        };
+      });
+    });
+
+    // Prime cache for instant reloads
+    puzzleCache.set(`${diff}_${seed}`, {
+      solved: solution2D.map(r => [...r]),
+      puzzle: puzzle2D.map(r => [...r])
+    });
+
+    // 7. Direct synchronous state dispatch (<1ms paint)
+    setSolutionGrid(solution2D.map(r => [...r]));
+    setBoardState({
+      grid: finishedGrid,
+      selectedRow: null,
+      selectedCol: null,
+      currentMistakesCount: 0,
+      maxMistakesLimit: mistakesLimit,
+      hintsCount: 0,
+      maxHintsLimit: hintsLimit,
+      isGameOver: false,
+      difficulty: diff,
+      seed: seed
+    });
     setActiveGameId(roomCode);
     setRematchGameId(roomCode);
     setChallengeMode(true);
+    setIsHost(false);
     setChallengeSeed(seed);
     setChallengeDifficulty(diff);
     setChallengeMistakeLimit(mistakesLimit);
@@ -2975,15 +3137,16 @@ useEffect(() => {
     setDifficulty(diff);
     setMistakeLimitEnabled(mistakesLimit !== 999);
     setTimerEnabled(timerEnabled);
-
-    // 4. Register challenge join in Firestore
-    registerChallengeJoin(roomCode);
-
-    // 5. Mount puzzle using the exact canonical parameters and preloaded board if present
-    await generateAndSetNewPuzzle(diff, seed, mistakesLimit, timerEnabled, hintsLimit, preloadedBoard, true);
+    setIsRoomLocked(isLocked);
+    setRoomPin(pin);
+    setHistory([]);
+    setLockedNum(null);
+    setHintInventory(hintsLimit);
     setSessionSeconds(0);
     setIsTimerPaused(false);
 
+    // 8. Clear local solo autosave session so guest starts completely fresh
+    try { localStorage.removeItem("sudoku_savedSession"); } catch (e) {}
     try { window.history.replaceState({ view: "game" }, "", window.location.pathname); } catch (e) {}
     try { localStorage.setItem("sudoku_together_accepted_timestamp", String(Date.now())); } catch (e) {}
 
@@ -2996,8 +3159,34 @@ useEffect(() => {
       return updated;
     });
 
-    addLog(`✓ Joined canonical room #${roomCode}! Entering game arena...`);
+    // Register participant in challenge results
+    registerChallengeJoin(roomCode);
+
+    // Navigate to game view immediately
+    navigateToScreen("game");
     showToast(`✓ Joined Room ${roomCode}!`);
+    addLog(`✓ Joined canonical room #${roomCode}! Entering game arena...`);
+    return { success: true };
+  };
+
+  const handleAcceptAndLaunchInvite = async (
+    targetGameId: string,
+    inviteDocId?: string,
+    passwordOverride?: string,
+    isDirectInvite = false,
+    preloadedRoomData?: any
+  ) => {
+    playClickSound();
+    const res = await executeJoinRoom(targetGameId, {
+      inviteDocId,
+      passwordOverride,
+      isDirectInvite,
+      preloadedRoomData
+    });
+    if (!res.success && res.error) {
+      showToast(`❌ ${res.error}`);
+      navigateToScreen("home");
+    }
   };
 
   const handleAcceptAndPlayBellInvite = async (challenge: PendingChallenge) => {
@@ -3789,12 +3978,9 @@ useEffect(() => {
       setChallengeSeed(targetSeed);
     }
     const activeRoomCode = String(targetSeed).padStart(6, '0').slice(-6);
-    const cleanPin = (isRoomLocked && roomPin) ? roomPin.trim() : "";
-    const pinParam = cleanPin ? `&pw=${encodeURIComponent(cleanPin)}&pin=${encodeURIComponent(cleanPin)}` : "";
-    const currentProfileName = userProfile?.name || "Player";
-    const chalUrl = `${getChallengeBaseUrl()}?room=${activeRoomCode}${pinParam}&sender=${encodeURIComponent(currentProfileName)}`;
-    const pwMsg = cleanPin ? ` (PIN: ${cleanPin})` : "";
-    const shareText = `Play SudokuSync with me at https://sudokusync.com! Join room CODE: ${activeRoomCode}${pwMsg}:`;
+    const currentProfileName = getActiveDisplayName();
+    const chalUrl = `${getChallengeBaseUrl()}?room=${activeRoomCode}&sender=${encodeURIComponent(currentProfileName)}`;
+    const shareText = `Play Sudoku with me! Let's see who finishes first:`;
 
     await shareOrCopyContent("SudokuSync", shareText, chalUrl, showCopiedToast, showCopiedToast);
   };
@@ -3804,7 +3990,7 @@ useEffect(() => {
     const formattedTime = formatTimer(timeToShare);
     const targetSeed = boardState?.seed || Math.floor(Math.random() * 900000) + 100000;
     const finalGameId = activeGameId || `SUDOKU-${targetSeed}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-H${challengeHintLimit}-T${timerEnabled ? 1 : 0}`;
-    const currentProfileName = userProfile?.name || "Player";
+    const currentProfileName = getActiveDisplayName();
 
     // Ensure the game result is submitted/synced to Firestore for this challenge ID
     const isWon = boardState 
@@ -3848,7 +4034,7 @@ useEffect(() => {
     const hintLimitVal = matchHint ? parseInt(matchHint[1], 10) : (historyChallengeGame.hintLimit ?? 3);
     const finalId = `SUDOKU-${targetSeed}-${historyChallengeGame.difficulty}-M${historyChallengeGame.maxMistakes || 3}-H${hintLimitVal}-T${1}`;
     
-    const currentProfileName = userProfile?.name || "Player";
+    const currentProfileName = getActiveDisplayName();
 
     // Ensure the game result is submitted/synced to Firestore for this challenge ID
     const rBody = {
@@ -3883,7 +4069,7 @@ useEffect(() => {
 
   const shareChallengeLink = async (gameId: string, customText?: string) => {
     const isLocked = isRoomLocked;
-    const currentProfileName = userProfile?.name || "Player";
+    const currentProfileName = getActiveDisplayName();
     
     // Extract 6-digit room code from gameId
     let roomCode = "";
@@ -3894,11 +4080,8 @@ useEffect(() => {
       roomCode = match ? match[1] : (challengeSeed ? String(challengeSeed).slice(-6) : "849201");
     }
     
-    const cleanPin = (isLocked && roomPin) ? roomPin.trim() : "";
-    const pinParam = cleanPin ? `&pw=${encodeURIComponent(cleanPin)}&pin=${encodeURIComponent(cleanPin)}` : "";
-    const chalUrl = `${getChallengeBaseUrl()}?room=${roomCode}${pinParam}&sender=${encodeURIComponent(currentProfileName)}`;
-    const pwMsg = cleanPin ? ` (Room PIN: ${cleanPin})` : "";
-    const shareText = customText || `Let's play a SudokuSync Rematch! Join my challenge room #${roomCode}${pwMsg}:`;
+    const chalUrl = `${getChallengeBaseUrl()}?room=${roomCode}&sender=${encodeURIComponent(currentProfileName)}`;
+    const shareText = `Play Sudoku with me! Let's see who finishes first:`;
 
     await shareAppContent("SudokuSync", shareText, chalUrl);
   };
@@ -3908,16 +4091,13 @@ useEffect(() => {
     if (!finalCard) return;
     
     const baseId = finalCard.id.split("-P")[0];
-    const currentProfileName = userProfile?.name || "Player";
+    const currentProfileName = getActiveDisplayName();
 
     const chalUrl = `${getChallengeBaseUrl()}?challenge=${baseId}${finalCard.password ? `&pw=${encodePass(finalCard.password)}` : ""}&sender=${encodeURIComponent(currentProfileName)}`;
+    const shareText = `Play Sudoku with me! Let's see who finishes first:`;
     
-    const copied = await copyToClipboard(chalUrl);
-    if (copied) {
-      showCopiedToast("Challenge Link Copied");
-    } else {
-      showCopiedToast("Failed to copy challenge link.");
-    }
+    await shareAppContent("SudokuSync", shareText, chalUrl);
+    setSharingPendingChallenge(null);
   };
 
   const openCreateRoomModal = (initialDifficulty: Difficulty = "EASY", initialTimer: boolean = true) => {
@@ -3930,9 +4110,19 @@ useEffect(() => {
     setChallengeTimerEnabled(initialTimer);
     setIsRoomLocked(false);
     setRoomPin("");
+    setIsHost(true);
     setChallengeSeed(canonicalSeed);
     setActiveGameId(roomCode);
     setRematchGameId(roomCode);
+
+    // Synchronously generate initial board flat arrays for this canonicalSeed
+    const generated = generateFlatBoardForSeed(initialDifficulty, canonicalSeed);
+
+    // Prime cache so when host clicks Start Game it loads in 0ms!
+    puzzleCache.set(`${initialDifficulty}_${canonicalSeed}`, {
+      solved: generated.solved.map(r => [...r]),
+      puzzle: generated.puzzle.map(r => [...r])
+    });
 
     // Reset roster invite statuses & clear in-memory lobby states
     setMultiplayerPlayers(prev => prev.map(p => ({
@@ -3949,11 +4139,13 @@ useEffect(() => {
     setShowJoinRoomModal(false);
     setShowCreateChallengeModal(true);
 
-    // Write canonical session record to Firestore in the background without blocking UI
+    // Write canonical session record to Firestore in the background with puzzleFlat and solutionFlat
     setDoc(doc(db, "rooms", roomCode), {
       roomCode: roomCode,
       seed: canonicalSeed,
       difficulty: initialDifficulty,
+      puzzleFlat: generated.puzzleFlat,
+      solutionFlat: generated.solutionFlat,
       mistakesLimit: 3,
       hintsLimit: 3,
       timerEnabled: initialTimer,
@@ -3963,7 +4155,7 @@ useEffect(() => {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     }).then(() => {
-      console.log(`[Firestore] Initialized canonical room /rooms/${roomCode}`);
+      console.log(`[Firestore] Initialized canonical room /rooms/${roomCode} with flat puzzle arrays`);
     }).catch(err => {
       console.error("[Firestore] Failed to initialize canonical room document:", err);
     });
@@ -3978,37 +4170,13 @@ useEffect(() => {
     setIsJoiningRoomLoading(true);
     setJoinRoomError(null);
     try {
-      const roomSnap = await getDoc(doc(db, "rooms", code));
-      if (!roomSnap.exists()) {
-        setJoinRoomError("Room not found. Please check the 6-digit code.");
-        setIsJoiningRoomLoading(false);
-        return; // CRITICAL: NEVER fallback to local board generation!
+      const res = await executeJoinRoom(code, {
+        passwordOverride: joinRoomPinInput.trim(),
+        isDirectInvite: false
+      });
+      if (!res.success) {
+        setJoinRoomError(res.error || "Failed to connect to room.");
       }
-      const rData = roomSnap.data();
-      if (rData.status === "closed" || rData.isClosed) {
-        setJoinRoomError("This room session is closed.");
-        setIsJoiningRoomLoading(false);
-        return;
-      }
-      if (rData.isLocked) {
-        const expectedPin = (rData.pin || rData.roomPin || "").trim();
-        if (expectedPin.length > 0) {
-          const enteredPin = joinRoomPinInput.trim();
-          if (!enteredPin) {
-            setJoinRoomError("This room is locked. Please enter the 4-digit PIN.");
-            setIsJoiningRoomLoading(false);
-            return;
-          }
-          if (enteredPin !== expectedPin) {
-            setJoinRoomError("❌ Incorrect 4-digit PIN.");
-            setIsJoiningRoomLoading(false);
-            return;
-          }
-        }
-      }
-      
-      setShowJoinRoomModal(false);
-      await handleAcceptAndLaunchInvite(code, undefined, joinRoomPinInput.trim(), false, rData);
     } catch (err: any) {
       console.error("Join room error:", err);
       setJoinRoomError("Failed to connect to room. Please try again.");
@@ -4033,7 +4201,17 @@ useEffect(() => {
     const payload: any = {
       updatedAt: serverTimestamp()
     };
-    if (updates.difficulty !== undefined) payload.difficulty = updates.difficulty;
+    if (updates.difficulty !== undefined) {
+      payload.difficulty = updates.difficulty;
+      // Synchronously regenerate puzzleFlat and solutionFlat matching the seed and new difficulty
+      const generated = generateFlatBoardForSeed(updates.difficulty, seed);
+      payload.puzzleFlat = generated.puzzleFlat;
+      payload.solutionFlat = generated.solutionFlat;
+      puzzleCache.set(`${updates.difficulty}_${seed}`, {
+        solved: generated.solved.map(r => [...r]),
+        puzzle: generated.puzzle.map(r => [...r])
+      });
+    }
     if (updates.mistakesLimit !== undefined) {
       payload.mistakesLimit = updates.mistakesLimit;
       payload.mistakeLimit = updates.mistakesLimit;
@@ -4079,6 +4257,14 @@ useEffect(() => {
     setMistakeLimitEnabled(challengeMistakeLimit !== 999);
     setTimerEnabled(challengeTimerEnabled);
     
+    // Ensure final room settings and flat arrays are committed to Firestore
+    updateRoomSettingsInFirestore({
+      difficulty: challengeDifficulty,
+      mistakesLimit: challengeMistakeLimit,
+      hintsLimit: challengeHintLimit,
+      timerEnabled: challengeTimerEnabled
+    });
+
     generateAndSetNewPuzzle(challengeDifficulty, canonicalSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit, undefined, true);
 
     setShowCreateChallengeModal(false);
@@ -4138,7 +4324,15 @@ useEffect(() => {
     const seed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
     const activeRoomCode = String(seed).padStart(6, '0').slice(-6);
     const currentUserId = userProfile?.id || "GUEST_ANON";
-    const currentUserName = userProfile?.name || "Player";
+    const currentUserName = getActiveDisplayName();
+
+    // Ensure room is synced with current settings before invite is dispatched
+    await updateRoomSettingsInFirestore({
+      difficulty: challengeDifficulty,
+      mistakesLimit: challengeMistakeLimit,
+      hintsLimit: challengeHintLimit,
+      timerEnabled: challengeTimerEnabled
+    });
 
     // Write to Firestore invites collection with canonical payload directly bound to active roomCode
     try {
@@ -4295,15 +4489,24 @@ useEffect(() => {
       setIsNewRecordAchieved(false);
     }
 
-    // Check if duplicate record exists
-    setCompletedGames(prev => {
-      const exists = prev.some(r => r.id === finalGameId);
-      if (exists) return prev;
+    // Check if duplicate record exists or update with participants
+    const pName = getActiveDisplayName();
+    const isMultiplayerMatch = challengeMode || Boolean(activeGameId) || Boolean(rematchGameId);
+    const resolvedParts = isMultiplayerMatch ? resolveParticipantsForSave({ id: finalGameId, seed: gameSeed } as CompletedGame) : undefined;
 
-      const isConfigured = checkIsDisplayNameConfigured();
-      const pName = isConfigured && userProfile?.name
-        ? userProfile.name
-        : "Player " + (userProfile?.id?.substring(6) || "Guest");
+    setCompletedGames(prev => {
+      const existsIndex = prev.findIndex(r => r.id === finalGameId);
+      if (existsIndex !== -1) {
+        if (resolvedParts && resolvedParts.length > (prev[existsIndex].participants?.length || 0)) {
+          const updated = [...prev];
+          updated[existsIndex] = { ...updated[existsIndex], participants: resolvedParts, isChallenge: isMultiplayerMatch };
+          try {
+            localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
+          } catch {}
+          return updated;
+        }
+        return prev;
+      }
 
       const newRecord: CompletedGame = {
         id: finalGameId,
@@ -4315,15 +4518,17 @@ useEffect(() => {
         maxHints: maxHintsLimit,
         isWon: isWon,
         date: new Date().toISOString(),
-        isChallenge: challengeMode,
+        isChallenge: isMultiplayerMatch,
         seed: gameSeed,
         userId: userProfile?.id || "GUEST_ANON",
         playerName: pName,
-        participants: challengeMode ? resolveParticipantsForSave({ id: finalGameId } as CompletedGame) : undefined
+        participants: resolvedParts
       };
 
       const updated = [newRecord, ...prev].slice(0, 10);
-      localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
+      try {
+        localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
+      } catch {}
       return updated;
     });
 
@@ -4334,10 +4539,6 @@ useEffect(() => {
       return updated;
     });
 
-    const isConfigured = checkIsDisplayNameConfigured();
-    const pName = isConfigured && userProfile?.name
-      ? userProfile.name
-      : "Player " + (userProfile?.id?.substring(6) || "Guest");
     const rBody = {
       challengeId: finalGameId,
       userId: userProfile?.id || "GUEST_ANON",
@@ -4432,17 +4633,24 @@ useEffect(() => {
         addLog(`📌 Puzzle #${game.seed || game.id} saved to Saved folder.`);
         
         if (!finalParticipants) {
-          fetch(`${getApiOrigin()}/api/challenges/${encodeURIComponent(game.id)}/leaderboard`)
-            .then(res => res.json())
-            .then(data => {
-              if (data && Array.isArray(data.results)) {
-                setChallengeLeaderboardCache(prev => ({
-                  ...prev,
-                  [game.id]: data.results
-                }));
+          (async () => {
+            try {
+              const candidateDocIds = new Set<string>();
+              if (game.id) candidateDocIds.add(getSeedDocId(game.id));
+              if (game.seed) {
+                candidateDocIds.add(String(game.seed));
+                candidateDocIds.add(String(game.seed).padStart(6, '0').slice(-6));
               }
-            })
-            .catch(() => {});
+              for (const dId of candidateDocIds) {
+                const snap = await getDocs(collection(db, "challenge_results", dId, "participants"));
+                if (!snap.empty) {
+                  const res = snap.docs.map(d => d.data());
+                  setChallengeLeaderboardCache(prevCache => ({ ...prevCache, [game.id]: res }));
+                  break;
+                }
+              }
+            } catch {}
+          })();
         }
         
         return updated;
@@ -4450,62 +4658,144 @@ useEffect(() => {
     });
   };
 
-  const handleOpenRankings = (game: CompletedGame) => {
+  const handleOpenRankings = async (game: CompletedGame) => {
     playClickSound();
     setViewingRankingsGame(game);
-    setHistoryRankings(getDisplayParticipants(game) || []);
+    const initialParticipants = getDisplayParticipants(game) || (Array.isArray(game.participants) ? game.participants : []);
+    setHistoryRankings(initialParticipants);
     setIsLoadingHistoryRankings(true);
     
-    console.log(`[Sync] Fetching live rankings for historical game ID: ${game.id}`);
-    fetch(`${getApiOrigin()}/api/challenges/${encodeURIComponent(game.id)}/leaderboard`)
-      .then(async res => {
-        if (!res.ok) throw new Error(`HTTP status ${res.status}`);
-        const data = await res.json();
-        console.log(`[Sync] Live rankings response for ID ${game.id}:`, data);
-        if (data && Array.isArray(data.results)) {
-          setHistoryRankings(data.results);
-          setChallengeLeaderboardCache(prev => ({
-            ...prev,
-            [game.id]: data.results
-          }));
-
-          setViewingRankingsGame(prev => prev && prev.id === game.id ? { 
-            ...prev, 
-            userId: prev.userId || game.userId || userProfile?.id,
-            playerName: prev.playerName || game.playerName || userProfile?.name
-          } : prev);
-
-          if (shouldRepairParticipants(game)) {
-            setCompletedGames(prev => {
-              const index = prev.findIndex(g => g.id === game.id);
-              if (index === -1) return prev;
-              const updated = [...prev];
-              updated[index] = repairGameParticipants(updated[index], data.results);
-              try {
-                localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
-              } catch {}
-              return updated;
-            });
-
-            setSavedGames(prev => {
-              const index = prev.findIndex(g => g.id === game.id);
-              if (index === -1) return prev;
-              const updated = [...prev];
-              updated[index] = repairGameParticipants(updated[index], data.results);
-              try {
-                localStorage.setItem("sudoku_saved_games", JSON.stringify(updated));
-              } catch {}
-              return updated;
-            });
-          }
+    console.log(`[Rankings] Opening rankings for game ID: ${game.id}, seed: ${game.seed}`);
+    
+    try {
+      // 1. Gather all potential doc IDs where participants could be stored in Firestore
+      const candidateDocIds = new Set<string>();
+      if (game.id) {
+        candidateDocIds.add(getSeedDocId(game.id));
+        const match = game.id.match(/SUDOKU-(\d+)/i);
+        if (match) {
+          candidateDocIds.add(match[1]);
+          candidateDocIds.add(String(match[1]).padStart(6, '0').slice(-6));
         }
-      })
-      .catch(err => {
-        console.error("Failed to fetch live rankings for historical game:", err);
-      })
-      .finally(() => {
-        setIsLoadingHistoryRankings(false);
-      });
+      }
+      if (game.seed) {
+        candidateDocIds.add(String(game.seed));
+        candidateDocIds.add(String(game.seed).padStart(6, '0').slice(-6));
+      }
+
+      // 2. Query Firestore challenge_results for all candidate doc IDs
+      const mergedMap = new Map<string, any>();
+      for (const docId of candidateDocIds) {
+        try {
+          const colRef = collection(db, "challenge_results", docId, "participants");
+          const snap = await getDocs(colRef);
+          snap.docs.forEach(d => {
+            const data = d.data();
+            const uId = data.userId || data.id || d.id;
+            if (uId) {
+              const existing = mergedMap.get(uId);
+              // Prefer non-pending / winning / more detailed data
+              if (!existing || (existing.isPending && !data.isPending) || (!existing.isWon && data.isWon)) {
+                mergedMap.set(uId, { ...data, userId: uId });
+              }
+            }
+          });
+        } catch (err) {
+          console.warn(`[Rankings] Query for challenge_results/${docId}/participants failed:`, err);
+        }
+      }
+
+      // 3. Fallback to room players if challenge_results had no records
+      if (mergedMap.size === 0 && game.seed) {
+        try {
+          const roomCode = String(game.seed).padStart(6, '0').slice(-6);
+          const roomPlayersCol = collection(db, "rooms", roomCode, "players");
+          const snap = await getDocs(roomPlayersCol);
+          snap.docs.forEach(d => {
+            const dData = d.data();
+            const uId = d.id;
+            mergedMap.set(uId, {
+              userId: uId,
+              playerName: dData.name || dData.playerName || "Player",
+              timeSec: dData.timeSec || dData.elapsedTime || 0,
+              mistakes: dData.mistakes || 0,
+              isWon: dData.status === "won" || !!dData.isWon,
+              isPending: dData.status === "active" || dData.status === "solving"
+            });
+          });
+        } catch (roomErr) {
+          console.warn("[Rankings] Room fallback query failed:", roomErr);
+        }
+      }
+
+      // 4. API fallback if still empty
+      if (mergedMap.size === 0) {
+        try {
+          const res = await fetch(`${getApiOrigin()}/api/challenges/${encodeURIComponent(game.id)}/leaderboard`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && Array.isArray(data.results)) {
+              data.results.forEach((r: any) => {
+                const uId = r.userId || r.id;
+                if (uId) mergedMap.set(uId, r);
+              });
+            }
+          }
+        } catch (apiErr) {
+          // ignore api fallback error
+        }
+      }
+
+      const results = Array.from(mergedMap.values());
+      console.log(`[Rankings] Found ${results.length} participants across all sources for game ${game.id}`);
+
+      if (results.length > 0) {
+        setHistoryRankings(results);
+        setChallengeLeaderboardCache(prev => ({
+          ...prev,
+          [game.id]: results,
+          ...(game.seed ? { [String(game.seed)]: results } : {})
+        }));
+
+        setViewingRankingsGame(prev => prev && prev.id === game.id ? { 
+          ...prev, 
+          userId: prev.userId || game.userId || userProfile?.id,
+          playerName: prev.playerName || game.playerName || getActiveDisplayName(),
+          participants: results
+        } : prev);
+
+        setCompletedGames(prev => {
+          const index = prev.findIndex(g => g.id === game.id);
+          if (index === -1) return prev;
+          const updated = [...prev];
+          updated[index] = repairGameParticipants(updated[index], results);
+          try {
+            localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+
+        setSavedGames(prev => {
+          const index = prev.findIndex(g => g.id === game.id);
+          if (index === -1) return prev;
+          const updated = [...prev];
+          updated[index] = repairGameParticipants(updated[index], results);
+          try {
+            localStorage.setItem("sudoku_saved_games", JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      } else if (initialParticipants.length > 0) {
+        setHistoryRankings(initialParticipants);
+      }
+    } catch (err) {
+      console.error("Failed to fetch live rankings for historical game:", err);
+      if (initialParticipants.length > 0) {
+        setHistoryRankings(initialParticipants);
+      }
+    } finally {
+      setIsLoadingHistoryRankings(false);
+    }
   };
 
   const handleAddRecentFriend = (player: { id: string; name: string }) => {
@@ -4531,6 +4821,9 @@ useEffect(() => {
   const validateNameLocally = (name: string): { isValid: boolean; error?: string } => {
     const trimmed = name.trim();
     if (!trimmed) return { isValid: false, error: "Name is required." };
+    if (trimmed.length > 16) {
+      return { isValid: false, error: "Name cannot exceed 16 characters." };
+    }
     if (!/^[a-zA-Z0-9\s]+$/.test(trimmed)) {
       return { isValid: false, error: "Please choose a name that contains only alphanumeric characters." };
     }
@@ -4699,12 +4992,7 @@ useEffect(() => {
   const registerChallengeJoin = async (challengeId: string) => {
     if (!challengeId) return;
 
-    const isConfigured = checkIsDisplayNameConfigured();
-    if (!isConfigured) return;
-
-    const pName = userProfile?.name
-      ? userProfile.name
-      : "Player " + (userProfile?.id?.substring(6) || "Guest");
+    const pName = getActiveDisplayName();
     const userId = userProfile?.id || "GUEST_ANON";
 
     try {
@@ -4720,11 +5008,12 @@ useEffect(() => {
           timeSec: 0,
           mistakes: 0,
           isWon: false,
+          status: "solving",
           isPending: true,
           date: new Date().toLocaleDateString(),
           timestamp: serverTimestamp()
         });
-        console.log(`[Firestore] Registered join for ${userId} on ${challengeId}`);
+        console.log(`[Firestore] Registered join for ${userId} (${pName}) on ${challengeId}`);
       }
     } catch (err) {
       console.error("[Firestore] Failed to register join:", err);
@@ -4755,11 +5044,31 @@ useEffect(() => {
         console.log(`[Firestore] Real-time update: ${results.length} entries for ${activeGameId}`);
         setSyncedLeaderboard(results);
         setChallengeLeaderboardCache(prev => ({ ...prev, [activeGameId]: results }));
+        if (challengeSeed) {
+          setChallengeLeaderboardCache(prev => ({ ...prev, [String(challengeSeed)]: results }));
+        }
         setIsLoadingLeaderboard(false);
 
         // Auto-save all participants as past players
         const opponents = results.map(r => ({ id: r.userId, name: r.playerName }));
         saveOpponentsToPastPlayers(opponents);
+
+        // Also enrich completedGames if the active game is already saved in history
+        if (results.length > 0) {
+          setCompletedGames(prev => {
+            const index = prev.findIndex(g => g.id === activeGameId || (challengeSeed && g.seed === challengeSeed));
+            if (index === -1) return prev;
+            const updated = [...prev];
+            const currentCount = Array.isArray(updated[index].participants) ? updated[index].participants.length : 0;
+            if (results.length >= currentCount) {
+              updated[index] = { ...updated[index], participants: results };
+              try {
+                localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
+              } catch {}
+            }
+            return updated;
+          });
+        }
       },
       (err) => {
         console.error(`[Firestore] Listener error for ${activeGameId}:`, err);
@@ -4773,6 +5082,24 @@ useEffect(() => {
       unsubscribe();
     };
   }, [challengeMode, activeGameId]);
+
+  // Real-time synchronization of canonical room document (Lock badge, PIN) while in-game invite modal is open
+  useEffect(() => {
+    if (!showMidGameInviteModal) return;
+    const liveRoomCode = activeGameId || String(challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000)).padStart(6, '0').slice(-6);
+
+    const unsub = onSnapshot(doc(db, "rooms", liveRoomCode), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const locked = Boolean(data.isLocked || data.pin);
+        setIsRoomLocked(locked);
+        if (data.pin) setRoomPin(data.pin);
+      }
+    }, (err) => {
+      console.warn("[Firestore] Mid-game room listener notice:", err);
+    });
+    return () => unsub();
+  }, [showMidGameInviteModal, activeGameId, challengeSeed, boardState?.seed]);
 
   // Active 1-second interval ticker for invite countdowns across active views (SENT 30s / DECLINED 60s)
   // OPTIMIZATION: Runs strictly when an invite/lobby modal is open, completely eliminating root re-renders during active gameplay!
@@ -5108,81 +5435,17 @@ useEffect(() => {
 
   // SUDOKU LOGICAL CALCULATIONS ENGINE (TypeScript counterpart matching kotlin logic)
   const isValidPlacement = (grid: number[][], row: number, col: number, num: number): boolean => {
-    // Check row
-    for (let x = 0; x < 9; x++) {
-      if (grid[row][x] === num) return false;
-    }
-    // Check col
-    for (let x = 0; x < 9; x++) {
-      if (grid[x][col] === num) return false;
-    }
-    // Check local 3x3 square
-    const boxRowStart = row - (row % 3);
-    const boxColStart = col - (col % 3);
-    for (let i = 0; i < 3; i++) {
-      for (let j = 0; j < 3; j++) {
-        if (grid[boxRowStart + i][boxColStart + j] === num) return false;
-      }
-    }
-    return true;
+    return isValidPlacementPure(grid, row, col, num);
   };
 
   // Backtracking solver
   const solveSudokuRecursive = (grid: number[][], prng?: () => number): boolean => {
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        if (grid[r][c] === 0) {
-          // Shuffle 1..9 to introduce randomness using either the challenge PRNG or Math.random
-          const baseNums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-          const nums = prng ? shuffleWithPRNG(baseNums, prng) : baseNums.sort(() => Math.random() - 0.5);
-          for (const num of nums) {
-            if (isValidPlacement(grid, r, c, num)) {
-              grid[r][c] = num;
-              if (solveSudokuRecursive(grid, prng)) {
-                return true;
-              }
-              grid[r][c] = 0;
-            }
-          }
-          return false;
-        }
-      }
-    }
-    return true;
+    return solveSudokuRecursivePure(grid, prng);
   };
 
   // Count solutions using backtracking (returns total solutions up to max limit of 2)
   const countSolutions = (grid: number[][], limit = 2): number => {
-    let count = 0;
-    
-    const clone = (arr: number[][]) => arr.map(row => [...row]);
-    const workGrid = clone(grid);
-
-    const checkAndSolve = (g: number[][]): boolean => {
-      for (let r = 0; r < 9; r++) {
-        for (let c = 0; c < 9; c++) {
-          if (g[r][c] === 0) {
-            for (let num = 1; num <= 9; num++) {
-              if (isValidPlacement(g, r, c, num)) {
-                g[r][c] = num;
-                if (checkAndSolve(g)) {
-                  count++;
-                }
-                g[r][c] = 0;
-                if (count >= limit) {
-                  return true; // Stop early
-                }
-              }
-            }
-            return false;
-          }
-        }
-      }
-      return true;
-    };
-
-    checkAndSolve(workGrid);
-    return count;
+    return countSolutionsPure(grid, limit);
   };
 
   // Generates valid complete grid and punctures holes while ensuring exactly ONE unique solution
@@ -5213,12 +5476,14 @@ useEffect(() => {
     const customLimit = maxMistakesOverride ?? (mistakeLimitEnabled ? 3 : 999);
     const customTimer = timerEnabledOverride ?? timerEnabled;
     const customHintLimit = hintLimitOverride ?? (isChallengeSession ? challengeHintLimit : 3);
-    const gameId = isChallengeSession
-      ? `SUDOKU-${seed}-${level}-M${customLimit}-H${customHintLimit}-T${customTimer ? 1 : 0}`
-      : null;
+    const canonicalRoomCode = String(seed).padStart(6, '0').slice(-6);
+    const gameId = isChallengeSession ? canonicalRoomCode : null;
     
     // Set active game details for displays
     setActiveGameId(gameId);
+    if (isChallengeSession) {
+      setRematchGameId(canonicalRoomCode);
+    }
     // Clear stale leaderboard from a previous game so it doesn't flash before the new fetch arrives
     setSyncedLeaderboard([]);
 
@@ -5297,6 +5562,18 @@ useEffect(() => {
     setSolutionGrid(solved.map(r => [...r]));
     addLog(`Difficulty Tagged: ${level}`);
 
+    // If challenge session, persist flat puzzle and solution arrays to canonical room
+    if (isChallengeSession) {
+      const flatP = puzzle.map(r => [...r]).flat();
+      const flatS = solved.map(r => [...r]).flat();
+      const canonicalRoomCode = String(seed).padStart(6, '0').slice(-6);
+      setDoc(doc(db, "rooms", canonicalRoomCode), {
+        puzzleFlat: flatP,
+        solutionFlat: flatS,
+        updatedAt: serverTimestamp()
+      }, { merge: true }).catch(() => {});
+    }
+
     // Convert flat array representation to state model data structures
     const finishedGrid: SudokuCell[][] = Array(9).fill(null).map((_, r) => {
       return Array(9).fill(null).map((_, c) => {
@@ -5342,8 +5619,11 @@ useEffect(() => {
       setTimerEnabled(customTimer);
     } else {
       setChallengeMode(false);
+      setIsHost(true);
       setChallengeSeed(null);
       setRematchGameId(null);
+      setIsRoomLocked(false);
+      setRoomPin("");
     }
   };
 
@@ -5392,6 +5672,69 @@ useEffect(() => {
       } catch (e) {}
     }
     addLog("🔄 Puzzle replayed! Personal board, mistakes (0/3), and timer reset to 00:00.");
+  };
+
+  // Mid-game Solo to Multiplayer Escalation: Initializes Firestore room document with flat arrays and attaches listeners
+  const handleOpenMidGameMultiplayer = () => {
+    playClickSound();
+    setIsTimerPaused(true);
+
+    // If already in an active challenge match (as host or guest), DO NOT re-escalate or clobber Firestore!
+    if (challengeMode) {
+      setShowMidGameInviteModal(true);
+      return;
+    }
+
+    const liveSeed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : Math.floor(100000 + Math.random() * 900000));
+    const liveRoomCode = String(liveSeed).padStart(6, '0').slice(-6);
+
+    const basePuzzleGrid = boardState ? boardState.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)) : null;
+    let solvedGrid = solutionGrid && solutionGrid.length === 9 ? solutionGrid : null;
+    if (!solvedGrid && basePuzzleGrid) {
+      const copy = basePuzzleGrid.map(r => [...r]);
+      if (solveSudokuRecursive(copy)) {
+        solvedGrid = copy;
+        setSolutionGrid(copy);
+      }
+    }
+    const puzzleFlat = basePuzzleGrid ? basePuzzleGrid.flat() : null;
+    const solutionFlat = solvedGrid ? solvedGrid.flat() : null;
+
+    const midMistakes = boardState?.maxMistakesLimit !== undefined ? boardState.maxMistakesLimit : (challengeMistakeLimit || 3);
+    const midHints = boardState?.maxHintsLimit !== undefined ? boardState.maxHintsLimit : (challengeHintLimit || 3);
+
+    // Escalate to active challenge mode on canonical roomCode
+    setChallengeMode(true);
+    setIsHost(true);
+    setActiveGameId(liveRoomCode);
+    setRematchGameId(liveRoomCode);
+    setChallengeSeed(liveSeed);
+    setChallengeDifficulty(boardState?.difficulty || difficulty);
+    setChallengeMistakeLimit(midMistakes);
+    setChallengeHintLimit(midHints);
+    setChallengeTimerEnabled(timerEnabled);
+
+    // Write canonical room to Firestore with flat arrays (safe against nested array errors)
+    setDoc(doc(db, "rooms", liveRoomCode), {
+      roomCode: liveRoomCode,
+      seed: liveSeed,
+      difficulty: boardState?.difficulty || difficulty,
+      ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
+      ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
+      mistakesLimit: midMistakes,
+      hintsLimit: midHints,
+      timerEnabled: timerEnabled,
+      isLocked: isRoomLocked,
+      pin: isRoomLocked && roomPin ? roomPin : "",
+      status: "active",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true }).catch(err => {
+      console.error("[Firestore] Failed to write mid-game room document:", err);
+    });
+
+    registerChallengeJoin(liveRoomCode);
+    setShowMidGameInviteModal(true);
   };
 
   // Keyboard controls handling for grid input
@@ -6591,11 +6934,7 @@ useEffect(() => {
                     {/* Center: Multiplayer Invite and Help */}
                     <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3 pointer-events-none">
                       <button
-                        onClick={() => {
-                          playClickSound();
-                          setIsTimerPaused(true);
-                          setShowMidGameInviteModal(true);
-                        }}
+                        onClick={handleOpenMidGameMultiplayer}
                         className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
                         aria-label="Invite Players to Match"
                         title="Invite Players"
@@ -6835,9 +7174,10 @@ useEffect(() => {
                             const resultsMap = new Map<string, any>();
 
                             const isConfigured = checkIsDisplayNameConfigured();
+                            const currentLocalName = (userProfile?.name && userProfile.name.trim()) || getActiveDisplayName();
                             const localMe = {
                               id: userProfile?.id || 'me',
-                              name: isConfigured && userProfile?.name ? userProfile.name : "You",
+                              name: currentLocalName,
                               time: didCurrentPlayerFail ? 9999 : sessionSeconds,
                               elapsedTime: sessionSeconds,
                               mistakes: boardState.currentMistakesCount,
@@ -6852,7 +7192,7 @@ useEffect(() => {
                               const isCurrentUser = r.userId === userProfile?.id;
                               resultsMap.set(r.userId, {
                                 id: r.userId,
-                                name: r.playerName,
+                                name: isCurrentUser ? (r.playerName || currentLocalName) : r.playerName,
                                 time: !r.isWon ? 9999 : Number(r.timeSec),
                                 elapsedTime: Number(r.timeSec) || 0,
                                 mistakes: Number(r.mistakes),
@@ -6875,8 +7215,7 @@ useEffect(() => {
 
                             return results.map((player, idx) => {
                               const isPending = !!player.isPending;
-                              const medal = isPending ? "⏳" : idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "";
-                              const positionStr = isPending ? "" : idx === 0 ? "1st" : idx === 1 ? "2nd" : idx === 2 ? "3rd" : `${idx + 1}th`;
+                              const positionStr = idx === 0 ? "1st" : idx === 1 ? "2nd" : idx === 2 ? "3rd" : `${idx + 1}th`;
                               
                               return (
                                 <div 
@@ -6887,40 +7226,53 @@ useEffect(() => {
                                       : (darkMode ? "bg-zinc-800/40" : "bg-stone-55")
                                   }`}
                                 >
-                                  <div className="flex items-center gap-3">
-                                    <span className={`font-mono text-sm sm:text-base font-black w-8 text-center ${
+                                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 pr-2">
+                                    <span className={`font-mono text-sm sm:text-base font-black w-7 sm:w-8 text-center flex items-center justify-center flex-shrink-0 shrink-0 ${
                                       isPending ? "text-amber-500 animate-pulse" : idx === 0 ? "text-yellow-500" : idx === 1 ? "text-slate-400" : idx === 2 ? "text-amber-700" : darkMode ? "text-zinc-600" : "text-stone-400"
                                     }`}>
-                                      {medal || positionStr}
+                                      {isPending ? (
+                                        <Clock className="w-4 h-4 text-amber-500 animate-spin" />
+                                      ) : idx === 0 ? (
+                                        <Trophy className="w-4.5 h-4.5 text-yellow-500 fill-yellow-500/20 stroke-[2.5]" />
+                                      ) : idx === 1 ? (
+                                        <Award className="w-4 h-4 text-slate-400 stroke-[2.5]" />
+                                      ) : idx === 2 ? (
+                                        <Award className="w-4 h-4 text-amber-700 stroke-[2.5]" />
+                                      ) : (
+                                        positionStr
+                                      )}
                                     </span>
-                                    <div className="flex flex-col">
-                                      <span className={`font-sans font-bold text-sm leading-none flex items-center gap-1.5 ${player.isMe ? (darkMode ? "text-indigo-300" : "text-indigo-950") : (darkMode ? "text-zinc-200" : "text-stone-850")}`}>
-                                        {player.name}
-                                        {player.isMe && <span className="text-[9px] bg-indigo-500/20 text-indigo-500 px-1.5 py-0.5 rounded uppercase tracking-wider font-black">You</span>}
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <span className={`font-sans font-bold text-sm leading-none truncate ${player.isMe ? (darkMode ? "text-indigo-300" : "text-indigo-950") : (darkMode ? "text-zinc-200" : "text-stone-850")}`}>
+                                          {player.name}
+                                        </span>
+                                        {player.isMe && (
+                                          <span className="text-[9px] bg-indigo-500/20 text-indigo-500 px-1.5 py-0.5 rounded uppercase tracking-wider font-black flex-shrink-0 shrink-0">
+                                            You
+                                          </span>
+                                        )}
                                         {player.isMe && isNewRecordAchieved && !player.failed && (
-                                          <span className="text-[8.5px] bg-amber-400/20 text-amber-600 dark:text-amber-400 border border-amber-400/40 px-1.5 py-0.5 rounded uppercase tracking-wider font-black animate-pulse">
+                                          <span className="text-[8.5px] bg-amber-400/20 text-amber-600 dark:text-amber-400 border border-amber-400/40 px-1.5 py-0.5 rounded uppercase tracking-wider font-black animate-pulse flex-shrink-0 shrink-0">
                                             NEW BEST TIME!
                                           </span>
                                         )}
-                                        {player.isReal && !player.isMe && !isPending && (
-                                          <span className="text-[9px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">Synced ✓</span>
-                                        )}
-                                      </span>
-                                      <span className={`font-sans text-[10px] mt-1.5 uppercase font-bold tracking-wider ${player.failed ? "text-rose-500" : isPending ? "text-amber-500" : darkMode ? "text-zinc-400" : "text-stone-500"}`}>
+                                      </div>
+                                      <span className={`font-sans text-[10px] mt-1.5 uppercase font-bold tracking-wider truncate ${player.failed ? "text-rose-500" : isPending ? "text-amber-500" : darkMode ? "text-zinc-400" : "text-stone-500"}`}>
                                         {isPending ? "In Progress..." : player.failed ? "Mistake Limit Reached" : "Board Completed"}
                                       </span>
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex flex-col items-end justify-center gap-0.5">
+                                  <div className="flex items-center gap-2 flex-shrink-0 shrink-0">
+                                    <div className="flex flex-col items-end justify-center gap-0.5 flex-shrink-0 shrink-0 whitespace-nowrap text-right">
                                       {isPending ? (
                                         <>
-                                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap flex-shrink-0 shrink-0 ${
                                             darkMode ? "bg-amber-900/30 text-amber-300 border border-amber-800/40" : "bg-amber-50 text-amber-700 border border-amber-200/70"
                                           }`}>
                                             PLAYING
                                           </span>
-                                          <span className={`font-sans text-[8.5px] uppercase font-bold tracking-wider ${
+                                          <span className={`font-sans text-[8.5px] uppercase font-bold tracking-wider whitespace-nowrap flex-shrink-0 shrink-0 ${
                                             darkMode ? "text-amber-400/80" : "text-amber-600"
                                           } animate-pulse`}>
                                             SOLVING...
@@ -6928,10 +7280,10 @@ useEffect(() => {
                                         </>
                                       ) : player.failed ? (
                                         <>
-                                          <span className="font-mono font-black text-xs sm:text-sm text-red-500 tracking-wide">
+                                          <span className="font-mono font-black text-xs sm:text-sm text-red-500 tracking-wide whitespace-nowrap flex-shrink-0 shrink-0">
                                             FAIL • {formatTimer(player.elapsedTime)}
                                           </span>
-                                          <span className={`font-sans text-[8.5px] uppercase font-bold tracking-wider ${
+                                          <span className={`font-sans text-[8.5px] uppercase font-bold tracking-wider whitespace-nowrap flex-shrink-0 shrink-0 ${
                                             darkMode ? "text-zinc-400" : "text-stone-500"
                                           }`}>
                                             {player.mistakes} {player.mistakes === 1 ? "Error" : "Errors"}
@@ -6939,14 +7291,14 @@ useEffect(() => {
                                         </>
                                       ) : (
                                         <>
-                                          <span className={`font-mono font-black text-sm sm:text-base ${
+                                          <span className={`font-mono font-black text-sm sm:text-base whitespace-nowrap flex-shrink-0 shrink-0 ${
                                             player.isMe 
                                               ? (darkMode ? "text-indigo-200" : "text-indigo-950") 
                                               : (darkMode ? "text-zinc-200" : "text-stone-850")
                                           }`}>
                                             {formatTimer(player.elapsedTime || player.time)}
                                           </span>
-                                          <span className={`font-sans text-[8.5px] uppercase font-bold tracking-wider ${
+                                          <span className={`font-sans text-[8.5px] uppercase font-bold tracking-wider whitespace-nowrap flex-shrink-0 shrink-0 ${
                                             player.isMe 
                                               ? (darkMode ? "text-indigo-400/80" : "text-indigo-600/80") 
                                               : (darkMode ? "text-zinc-400" : "text-stone-500")
@@ -7521,7 +7873,7 @@ useEffect(() => {
                                 <button
                                   onClick={async () => {
                                     playClickSound();
-                                    await shareChallengeLink(activeRematchRoomCode, `Join my Sudoku Rematch! Room #${activeRematchRoomCode}:`);
+                                    await shareChallengeLink(activeRematchRoomCode, "Play Sudoku with me! Let's see who finishes first:");
                                   }}
                                   className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
                                     darkMode
@@ -7627,7 +7979,7 @@ useEffect(() => {
                       </h3>
                       {isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) && (
                         <div className="flex items-center justify-center gap-1.5 py-1 px-3 mt-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-sans font-black text-xs uppercase tracking-wider animate-bounce">
-                          <span>🏆</span>
+                          <Trophy className="w-4 h-4 stroke-[2.5] text-amber-500 shrink-0" />
                           <span>New Personal Best!</span>
                         </div>
                       )}
@@ -7873,13 +8225,24 @@ useEffect(() => {
                         setPrivacyEnabled(!privacyEnabled);
                         addLog(`🔒 Privacy toggle changed to: ${!privacyEnabled ? "ON" : "OFF"}`);
                       }}
-                      className={`text-xs font-sans font-black uppercase tracking-wider py-1 px-3 border rounded-xl transition-all duration-150 cursor-pointer ${
+                      className={`text-xs font-sans font-black uppercase tracking-wider py-1 px-3 border rounded-xl transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
                         privacyEnabled
                           ? (darkMode ? "bg-rose-950/20 text-rose-455 border-rose-900/50" : "bg-rose-50 border-rose-100 text-rose-700")
                           : (darkMode ? "bg-emerald-950/20 text-emerald-400 border-emerald-900/50" : "bg-emerald-50 border-emerald-100 text-emerald-700")
                       }`}
                     >
-                      Presence: {privacyEnabled ? "🔒 Private" : "● Live"}
+                      <span>Presence:</span>
+                      {privacyEnabled ? (
+                        <span className="flex items-center gap-1">
+                          <Lock className="w-3 h-3 stroke-[2.5]" />
+                          <span>Private</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>Live</span>
+                        </span>
+                      )}
                     </button>
                   </div>
 
@@ -8041,12 +8404,22 @@ useEffect(() => {
                             }`}
                           >
                             <div className="flex justify-between items-center">
-                              <span className={`text-xs font-sans font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                              <span className={`text-xs font-sans font-black uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${
                                 game.isWon 
                                   ? (darkMode ? "bg-emerald-950/20 text-emerald-400" : "bg-emerald-100 text-emerald-850")
                                   : (darkMode ? "bg-rose-950/20 text-rose-455" : "bg-rose-100 text-rose-850")
                               }`}>
-                                {game.isWon ? "✓ Won" : "✗ Failed"}
+                                {game.isWon ? (
+                                  <>
+                                    <Check className="w-3 h-3 stroke-[3]" />
+                                    <span>Won</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <X className="w-3 h-3 stroke-[3]" />
+                                    <span>Failed</span>
+                                  </>
+                                )}
                               </span>
                               
                               <span className="font-sans text-xs md:text-sm font-medium text-stone-500">
@@ -8128,12 +8501,22 @@ useEffect(() => {
                             }`}
                           >
                             <div className="flex justify-between items-center">
-                              <span className={`text-xs font-sans font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                              <span className={`text-xs font-sans font-black uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${
                                 game.isWon 
                                   ? (darkMode ? "bg-emerald-950/20 text-emerald-400" : "bg-emerald-100 text-emerald-850")
                                   : (darkMode ? "bg-rose-950/20 text-rose-455" : "bg-rose-100 text-rose-850")
                               }`}>
-                                {game.isWon ? "✓ Won" : "✗ Failed"}
+                                {game.isWon ? (
+                                  <>
+                                    <Check className="w-3 h-3 stroke-[3]" />
+                                    <span>Won</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <X className="w-3 h-3 stroke-[3]" />
+                                    <span>Failed</span>
+                                  </>
+                                )}
                               </span>
                               
                               <span className="font-sans text-xs md:text-sm font-medium text-stone-500">
@@ -8226,7 +8609,7 @@ useEffect(() => {
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
                                       darkMode ? "bg-purple-950/60 text-purple-300 border border-purple-800/40" : "bg-purple-100 text-purple-800 border border-purple-200"
                                     }`}>
-                                      {friend.name ? friend.name.slice(0, 2).toUpperCase() : "PL"}
+                                      {getPlayerInitials(friend.name)}
                                     </div>
                                     <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 ${
                                       darkMode ? "border-zinc-900" : "border-white"
@@ -8273,7 +8656,7 @@ useEffect(() => {
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
                                       darkMode ? "bg-zinc-800 text-stone-300" : "bg-stone-150 text-stone-700"
                                     }`}>
-                                      {player.name ? player.name.slice(0, 2).toUpperCase() : "PL"}
+                                      {getPlayerInitials(player.name)}
                                     </div>
                                     <div className="flex flex-col">
                                       <span className="font-sans font-bold text-xs">{player.name}</span>
@@ -8328,8 +8711,8 @@ useEffect(() => {
                 <div className={`p-8 rounded-3xl flex flex-col items-center justify-center gap-6 border-none shadow-md ${darkMode ? "bg-zinc-900/80 border border-zinc-800 text-stone-200" : "bg-white shadow-[0_12px_45px_rgba(0,0,0,0.04)]"}`}>
                   <div className="flex flex-col gap-2.5 items-center select-none">
                     {/* Circle identity context */}
-                    <div className={`w-14 h-14 rounded-full flex items-center justify-center text-xl shadow-xs ${darkMode ? "bg-zinc-800 text-sky-400" : "bg-[#E0F2FE] text-[#0369A1]"}`}>
-                      👤
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-xs ${darkMode ? "bg-zinc-800 text-sky-400" : "bg-[#E0F2FE] text-[#0369A1]"}`}>
+                      <User className="w-7 h-7 stroke-[2.2]" />
                     </div>
                     <h2 className={`text-3xl font-sans font-black uppercase tracking-tight mt-2.5 leading-none ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}>
                       LOGIN
@@ -8870,7 +9253,7 @@ useEffect(() => {
                </div>
             ) : adSuccessMsg ? (
                <div className="flex justify-center py-4">
-                 <span className="text-4xl">🌱</span>
+                 <Sparkles className="w-10 h-10 text-emerald-500 animate-pulse stroke-[2]" />
                </div>
             ) : null}
 
@@ -9083,7 +9466,7 @@ useEffect(() => {
               <div className="flex justify-between items-center select-none shrink-0 mb-4">
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
-                    <span className={`text-base font-sans font-black ${darkMode ? "text-purple-300" : "text-[#6B21A8]"}`}>★</span>
+                    <Star className={`w-4.5 h-4.5 fill-current ${darkMode ? "text-purple-300" : "text-[#6B21A8]"}`} />
                     <h4 className="text-lg font-sans font-black uppercase tracking-wide">
                       Challenge Room Lobby
                     </h4>
@@ -9339,13 +9722,14 @@ useEffect(() => {
 
                       // 1. Seed historical game owner/player statistics
                       const originalPlayerId = viewingRankingsGame.userId || userProfile?.id || 'original-player';
+                      const currentLocalName = (userProfile?.name && userProfile.name.trim()) || getActiveDisplayName();
                       
                       const originalPlayer = {
                         id: originalPlayerId,
-                        name: "You",
+                        name: viewingRankingsGame.playerName || currentLocalName,
                         time: !viewingRankingsGame.isWon ? 9999 : viewingRankingsGame.timeSec,
                         mistakes: viewingRankingsGame.mistakes,
-                        hints: (viewingRankingsGame as any).hintsUsed ?? 0,
+                        hints: (viewingRankingsGame as any).hints ?? (viewingRankingsGame as any).hintsUsed ?? 0,
                         failed: !viewingRankingsGame.isWon,
                         isMe: true,
                         isReal: true,
@@ -9353,22 +9737,45 @@ useEffect(() => {
                       };
                       resultsMap.set(originalPlayer.id, originalPlayer);
 
-                      // 2. Overlay live synced results downloaded from server
-                      if (Array.isArray(historyRankings)) {
-                        historyRankings.forEach(r => {
-                          const isCurrentUser = r.userId === userProfile?.id || r.userId === originalPlayerId;
-                          resultsMap.set(r.userId, {
-                            id: r.userId,
-                            name: isCurrentUser ? "You" : r.playerName,
-                            time: !r.isWon ? 9999 : Number(r.timeSec),
-                            mistakes: r.mistakes !== undefined ? Number(r.mistakes) : 0,
-                            hints: r.hints !== undefined ? Number(r.hints) : 0,
-                            failed: !r.isWon,
-                            isMe: isCurrentUser,
-                            isReal: true,
-                            isPending: !isCurrentUser ? !!r.isPending : false
-                          });
+                      // Helper to safely extract participant fields and merge into resultsMap
+                      const mergeParticipant = (item: any) => {
+                        if (!item) return;
+                        const pId = item.userId || item.id;
+                        if (!pId) return;
+
+                        const isCurrentUser = pId === userProfile?.id || pId === originalPlayerId || item.isMe === true;
+                        const pName = isCurrentUser 
+                          ? (item.playerName || item.name || viewingRankingsGame.playerName || currentLocalName) 
+                          : (item.playerName || item.name || 'Opponent');
+                        
+                        const isWon = item.isWon !== undefined 
+                          ? !!item.isWon 
+                          : (item.failed !== undefined ? !item.failed : !item.isPending);
+                        const isPending = !isCurrentUser && (item.isPending ?? false);
+                        const pTime = !isWon ? 9999 : Number(item.timeSec ?? item.time ?? item.elapsedTime ?? 0);
+
+                        resultsMap.set(pId, {
+                          id: pId,
+                          name: pName,
+                          time: pTime,
+                          mistakes: item.mistakes !== undefined ? Number(item.mistakes) : 0,
+                          hints: item.hints !== undefined ? Number(item.hints) : ((item as any).hintsUsed ?? 0),
+                          failed: !isWon && !isPending,
+                          isMe: isCurrentUser,
+                          isReal: true,
+                          isPending: isPending
                         });
+                      };
+
+                      // 2. Merge stored participants on viewingRankingsGame
+                      const storedParticipants = viewingRankingsGame.participants || getDisplayParticipants(viewingRankingsGame);
+                      if (Array.isArray(storedParticipants)) {
+                        storedParticipants.forEach(mergeParticipant);
+                      }
+
+                      // 3. Overlay live synced results downloaded from server / Firestore
+                      if (Array.isArray(historyRankings)) {
+                        historyRankings.forEach(mergeParticipant);
                       }
 
                       const results = Array.from(resultsMap.values());
@@ -9391,7 +9798,7 @@ useEffect(() => {
 
                       return results.map((player, idx) => {
                         const isPending = !!player.isPending;
-                        const positionStr = isPending ? "⏳" : idx === 0 ? "1st" : idx === 1 ? "2nd" : idx === 2 ? "3rd" : `${idx + 1}th`;
+                        const positionStr = idx === 0 ? "1st" : idx === 1 ? "2nd" : idx === 2 ? "3rd" : `${idx + 1}th`;
                         const timeStr = isPending ? "--:--" : formatTimer(player.time);
                         const errorsStr = `${player.mistakes}/${viewingRankingsGame.maxMistakes || 3} Errs`;
                         const hintsStr = `${player.hints ?? 0} Hints`;
@@ -9406,12 +9813,16 @@ useEffect(() => {
                                 : (darkMode ? "bg-zinc-800/40 border border-zinc-800/60" : "bg-stone-50 border border-stone-200/50")
                             }`}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
                               {/* Rank Badge */}
-                              <span className={`font-mono text-xs sm:text-sm font-black w-7 text-center shrink-0 ${
+                              <span className={`font-mono text-xs sm:text-sm font-black w-7 text-center shrink-0 flex items-center justify-center ${
                                 isPending ? "text-amber-500 animate-pulse" : idx === 0 ? "text-amber-500" : idx === 1 ? "text-slate-400" : idx === 2 ? "text-amber-700" : darkMode ? "text-zinc-500" : "text-stone-400"
                               }`}>
-                                {positionStr}
+                                {isPending ? (
+                                  <Clock className="w-3.5 h-3.5 text-amber-500 animate-spin" />
+                                ) : (
+                                  positionStr
+                                )}
                               </span>
 
                               {/* Avatar */}
@@ -9420,7 +9831,7 @@ useEffect(() => {
                                   ? (darkMode ? "bg-purple-950/80 text-purple-300 border border-purple-800/40" : "bg-purple-100 text-purple-800 border border-purple-200")
                                   : (darkMode ? "bg-zinc-800 text-stone-300" : "bg-stone-200/80 text-stone-700")
                               }`}>
-                                {player.name ? player.name.slice(0, 2).toUpperCase() : "PL"}
+                                {getPlayerInitials(player.name)}
                               </div>
 
                               {/* Name & Performance Line */}
@@ -9614,7 +10025,14 @@ useEffect(() => {
                             }`}
                             disabled={hasInvited}
                           >
-                            {hasInvited ? "Invited ✓" : "Invite"}
+                            {hasInvited ? (
+                              <span className="flex items-center gap-1">
+                                <Check className="w-3 h-3 stroke-[2.5]" />
+                                <span>Invited</span>
+                              </span>
+                            ) : (
+                              "Invite"
+                            )}
                           </button>
                         </div>
                       );
@@ -9655,7 +10073,7 @@ useEffect(() => {
                   <button
                     onClick={() => {
                       playClickSound();
-                      shareChallengeLink(rematchGameId, `Join my Sudoku Rematch! Challenge link:`);
+                      shareChallengeLink(rematchGameId);
                     }}
                     className={`flex-1 py-3 px-4 font-sans text-xs font-bold uppercase tracking-wider rounded-xl cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 border ${
                       darkMode 
@@ -9711,7 +10129,7 @@ useEffect(() => {
             const correct = incomingChallengeDetails.password.trim().toLowerCase();
             const entered = enteredInvitePassword.trim().toLowerCase();
             if (entered !== correct) {
-              setInvitePasswordError("❌ Incorrect Password");
+              setInvitePasswordError("Incorrect Password");
               return;
             }
           }
@@ -10065,8 +10483,7 @@ useEffect(() => {
               }} 
             />
             {(() => {
-              const liveSeed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
-              const liveRoomCode = String(liveSeed).padStart(6, '0').slice(-6);
+              const liveRoomCode = activeGameId || String(challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000)).padStart(6, '0').slice(-6);
 
               return (
                 <motion.div
@@ -10084,32 +10501,43 @@ useEffect(() => {
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs sm:text-sm font-sans font-black tracking-wider text-stone-850 dark:text-stone-100 flex items-center gap-1.5">
                         <span className="text-stone-400 dark:text-stone-500 text-2xs uppercase font-bold">CODE:</span>
-                        <span className="font-mono tracking-widest text-sm sm:text-base select-all">{liveRoomCode}</span>
+                        <span className="font-mono tracking-widest text-sm sm:text-base select-all">{isOnline ? liveRoomCode : "OFFLINE"}</span>
                       </span>
-                      <button
-                        onClick={() => {
-                          playClickSound();
-                          copyToClipboard(liveRoomCode);
-                          showCopiedToast("Room code copied!");
-                        }}
-                        title="Copy room code"
-                        className={`p-1 rounded-lg border-none cursor-pointer transition-all active:scale-90 ${
-                          darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
-                        }`}
-                      >
-                        <Copy className="w-3 h-3" />
-                      </button>
+                      {isOnline && (
+                        <button
+                          onClick={() => {
+                            playClickSound();
+                            copyToClipboard(liveRoomCode);
+                            showCopiedToast("Room code copied!");
+                          }}
+                          title="Copy room code"
+                          className={`p-1 rounded-lg border-none cursor-pointer transition-all active:scale-90 ${
+                            darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
+                          }`}
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
 
                     {/* Center/Right: Lock status/PIN if locked */}
                     <div className="flex items-center gap-2">
-                      {isRoomLocked && roomPin ? (
-                        <span className={`px-2.5 py-1 rounded-lg font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 ${
-                          darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
-                        }`}>
-                          <Lock className="w-3 h-3 stroke-[2.5]" />
-                          <span>PIN: {roomPin}</span>
-                        </span>
+                      {isRoomLocked ? (
+                        isHost && roomPin ? (
+                          <span className={`px-2.5 py-1 rounded-lg font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 ${
+                            darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
+                          }`}>
+                            <Lock className="w-3 h-3 stroke-[2.5]" />
+                            <span>PIN: {roomPin}</span>
+                          </span>
+                        ) : (
+                          <span className={`px-2.5 py-1 rounded-lg font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 ${
+                            darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
+                          }`}>
+                            <Lock className="w-3 h-3 stroke-[2.5]" />
+                            <span>LOCKED</span>
+                          </span>
+                        )
                       ) : (
                         <span className={`px-2.5 py-1 rounded-lg font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 ${
                           darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
@@ -10131,10 +10559,18 @@ useEffect(() => {
                         }`}
                         title="Close"
                       >
-                        <X className="w-4 h-4" strokeWidth={2.5} />
+                        <X className="w-4 h-4 stroke-[2.5]" />
                       </button>
                     </div>
                   </div>
+
+                  {/* Offline Warning Banner */}
+                  {!isOnline && (
+                    <div className="w-full py-2.5 px-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-2 select-none shrink-0">
+                      <AlertTriangle className="w-4 h-4 stroke-[2.5] text-amber-500 shrink-0" />
+                      <span>You are offline. Connect to the internet to invite friends.</span>
+                    </div>
+                  )}
 
                   {/* Body: Scrollable list of recent players & friends */}
                   <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 no-scrollbar flex flex-col gap-2 max-h-[260px]">
@@ -10210,26 +10646,18 @@ useEffect(() => {
                                 </button>
                               ) : (
                                 <button
-                                  onClick={async () => {
+                                  onClick={() => {
+                                    if (!isOnline) return;
                                     playClickSound();
-                                    // Ensure room doc in Firestore exists for this live seed
-                                    try {
-                                      await setDoc(doc(db, "rooms", liveRoomCode), {
-                                        roomCode: liveRoomCode,
-                                        seed: liveSeed,
-                                        difficulty: boardState?.difficulty || difficulty,
-                                        mistakesLimit: challengeMistakeLimit,
-                                        hintsLimit: challengeHintLimit,
-                                        timerEnabled: challengeTimerEnabled,
-                                        isLocked: isRoomLocked,
-                                        pin: isRoomLocked && roomPin ? roomPin : "",
-                                        status: "active",
-                                        updatedAt: serverTimestamp()
-                                      }, { merge: true });
-                                    } catch (e) {}
                                     handleInviteFriend(player.id);
                                   }}
-                                  className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none cursor-pointer transition-all active:scale-95 shadow-xs ${
+                                  disabled={!isOnline}
+                                  style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
+                                  className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none transition-all shadow-xs ${
+                                    !isOnline
+                                      ? "opacity-40 cursor-not-allowed pointer-events-none"
+                                      : "cursor-pointer active:scale-95"
+                                  } ${
                                     darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
                                   }`}
                                 >
@@ -10244,7 +10672,8 @@ useEffect(() => {
                   </div>
 
                   {/* Personal Replay Section: Immediate 1-Tap Action */}
-                  <div className="w-full pt-2 border-t border-stone-200/60 dark:border-zinc-800 shrink-0 flex flex-col gap-2">
+                  <div className="w-full pt-2 border-t border-stone-200/60 dark:border-zinc-800 shrink-0 flex flex-col gap-2.5">
+                    {/* 1. REPLAY BOARD */}
                     <button
                       onClick={handlePersonalReplay}
                       className={`w-full py-2.5 px-3 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
@@ -10257,34 +10686,26 @@ useEffect(() => {
                       <span>REPLAY BOARD</span>
                     </button>
 
-                    {/* Bottom Action Row: [ 👥 RE-INVITE ALL ] and [ 🔗 SHARE LINK ] */}
+                    {/* 2. Side-by-Side: [ 👥 RE-INVITE ALL ] and [ 🔗 SHARE LINK ] */}
                     <div className="grid grid-cols-2 gap-2.5 w-full">
                       {/* Left: RE-INVITE ALL / STOP */}
                       <button
-                        onClick={async () => {
+                        onClick={() => {
+                          if (!isOnline) return;
                           playClickSound();
                           if (isInvitingAll) {
                             cancelInviteAll();
                             return;
                           }
-                          try {
-                            await setDoc(doc(db, "rooms", liveRoomCode), {
-                              roomCode: liveRoomCode,
-                              seed: liveSeed,
-                              difficulty: boardState?.difficulty || difficulty,
-                              mistakesLimit: challengeMistakeLimit,
-                              hintsLimit: challengeHintLimit,
-                              timerEnabled: challengeTimerEnabled,
-                              isLocked: isRoomLocked,
-                              pin: isRoomLocked && roomPin ? roomPin : "",
-                              status: "active",
-                              updatedAt: serverTimestamp()
-                            }, { merge: true });
-                          } catch (e) {}
                           handleReinviteAll();
                         }}
-                        disabled={!isInvitingAll && multiplayerPlayers.length === 0}
-                        className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
+                        disabled={!isOnline || (!isInvitingAll && multiplayerPlayers.length === 0)}
+                        style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
+                        className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 text-center flex items-center justify-center gap-1.5 shadow-xs ${
+                          !isOnline
+                            ? "cursor-not-allowed opacity-40 pointer-events-none"
+                            : "cursor-pointer active:scale-95"
+                        } ${
                           isInvitingAll
                             ? "bg-rose-500 hover:bg-rose-600 text-white animate-pulse shadow-md"
                             : darkMode
@@ -10308,24 +10729,17 @@ useEffect(() => {
                       {/* Right: SHARE LINK */}
                       <button
                         onClick={async () => {
+                          if (!isOnline) return;
                           playClickSound();
-                          try {
-                            await setDoc(doc(db, "rooms", liveRoomCode), {
-                              roomCode: liveRoomCode,
-                              seed: liveSeed,
-                              difficulty: boardState?.difficulty || difficulty,
-                              mistakesLimit: challengeMistakeLimit,
-                              hintsLimit: challengeHintLimit,
-                              timerEnabled: challengeTimerEnabled,
-                              isLocked: isRoomLocked,
-                              pin: isRoomLocked && roomPin ? roomPin : "",
-                              status: "active",
-                              updatedAt: serverTimestamp()
-                            }, { merge: true });
-                          } catch (e) {}
-                          await shareChallengeLink(liveRoomCode, `Join my live Sudoku match! Room #${liveRoomCode}:`);
+                          await shareChallengeLink(liveRoomCode);
                         }}
-                        className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
+                        disabled={!isOnline}
+                        style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
+                        className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 text-center flex items-center justify-center gap-1.5 shadow-xs ${
+                          !isOnline
+                            ? "cursor-not-allowed opacity-40 pointer-events-none"
+                            : "cursor-pointer active:scale-95"
+                        } ${
                           darkMode
                             ? "bg-[#0c4a6e]/60 hover:bg-[#0c4a6e] text-[#bae6fd]"
                             : "bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1]"
@@ -10335,6 +10749,22 @@ useEffect(() => {
                         <span>SHARE LINK</span>
                       </button>
                     </div>
+
+                    {/* 3. Full-width primary RESUME GAME button */}
+                    <button
+                      onClick={() => {
+                        playClickSound();
+                        setShowMidGameInviteModal(false);
+                        setIsTimerPaused(false);
+                      }}
+                      className={`w-full py-3.5 sm:py-4 px-4 text-xs sm:text-sm font-sans font-black uppercase tracking-wider rounded-2xl border-none transition-all duration-150 cursor-pointer text-center hover:scale-[1.01] active:scale-98 shadow-md flex items-center justify-center gap-2 ${
+                        darkMode
+                          ? "bg-[#022c22] hover:bg-[#064e3b] text-[#d1fae5] shadow-[0_8px_20px_rgba(0,0,0,0.5)]"
+                          : "bg-[#D1FAE5] hover:bg-[#A7F3D0] active:bg-[#6EE7B7] text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.12)]"
+                      }`}
+                    >
+                      <span>RESUME GAME</span>
+                    </button>
                   </div>
                 </motion.div>
               );
@@ -10398,7 +10828,7 @@ useEffect(() => {
               <div className="flex flex-col gap-2">
                 <input
                   type="text"
-                  maxLength={24}
+                  maxLength={16}
                   placeholder="Enter your name..."
                   value={enteredDisplayName}
                   onChange={(e) => {
@@ -10533,7 +10963,7 @@ useEffect(() => {
               <div className="flex flex-col gap-2">
                 <input
                   type="text"
-                  maxLength={24}
+                  maxLength={16}
                   placeholder="Enter your name..."
                   value={inviteJoinName}
                   onChange={(e) => {
@@ -10617,7 +11047,7 @@ useEffect(() => {
                   onClick={() => { playClickSound(); setShowAuthModal(false); }}
                   className="bg-stone-100 hover:bg-stone-200 text-stone-600 font-extrabold w-8 h-8 rounded-full flex items-center justify-center cursor-pointer border-none shadow-sm transition-colors"
                 >
-                  ✕
+                  <X className="w-4 h-4 stroke-[2.5]" />
                 </button>
               </div>
 
@@ -10637,20 +11067,33 @@ useEffect(() => {
                         <span className="font-sans font-black text-[#2B6CB0] text-sm">
                           {userProfile?.name || "Anonymous Voyager"}
                         </span>
-                        <span className={`text-[8.5px] font-mono font-black px-2 py-0.5 rounded-full ${
+                        <span className={`text-[8.5px] font-mono font-black px-2 py-0.5 rounded-full flex items-center gap-1 ${
                           userProfile?.isSynced ? "bg-[#E6F4EA] text-[#135236]" : "bg-[#F3E8FF] text-[#6B21A8]"
                         }`}>
-                          {userProfile?.isSynced ? "CLOUD SYNCED ✓" : "OFFLINE GUEST"}
+                          {userProfile?.isSynced ? (
+                            <>
+                              <Check className="w-2.5 h-2.5 stroke-[2.5]" />
+                              <span>CLOUD SYNCED</span>
+                            </>
+                          ) : (
+                            <span>OFFLINE GUEST</span>
+                          )}
                         </span>
                       </div>
                       <p className="text-[10.5px] text-[#2B6CB0] font-mono uppercase mt-0.5 tracking-wide leading-none">
                         ID: {userProfile?.id || "N/A"}
                       </p>
                       {userProfile?.email && (
-                        <p className="text-xs text-stone-650 font-sans mt-1">📧 {userProfile.email}</p>
+                        <p className="text-xs text-stone-650 font-sans mt-1 flex items-center gap-1.5">
+                          <Mail className="w-3.5 h-3.5 shrink-0 text-stone-500" />
+                          <span>{userProfile.email}</span>
+                        </p>
                       )}
                       {userProfile?.phone && (
-                        <p className="text-xs text-stone-650 font-sans mt-0.5">📱 {userProfile.phone}</p>
+                        <p className="text-xs text-stone-650 font-sans mt-0.5 flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 shrink-0 text-stone-500" />
+                          <span>{userProfile.phone}</span>
+                        </p>
                       )}
                     </div>
                   </div>
@@ -10689,7 +11132,7 @@ useEffect(() => {
                           }}
                           className="bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8] border-none py-3 px-4 rounded-xl font-sans text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm cursor-pointer active:translate-y-px transition-all"
                         >
-                          <span className="text-sm">📱</span>
+                          <Phone className="w-4 h-4 shrink-0" />
                           <span>Link Mobile & OTP</span>
                         </button>
                       </div>
@@ -10697,7 +11140,10 @@ useEffect(() => {
                   ) : (
                     <div className="flex flex-col gap-3">
                       <div className="bg-[#E6F4EA] border-none p-4 text-xs text-[#135236] leading-relaxed rounded-2xl font-sans shadow-[0_2px_8px_rgba(19,82,54,0.02)]">
-                        <p className="font-sans font-black text-[#135236] uppercase mb-1">✓ Core Identity Linked</p>
+                        <p className="font-sans font-black text-[#135236] uppercase mb-1 flex items-center gap-1.5">
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Core Identity Linked</span>
+                        </p>
                         <p className="font-sans mb-2">Successfully authenticated. Your unique player profile is now linked to your authenticated identity.</p>
                         <p className="font-sans font-bold text-emerald-800">Cloud synchronization across devices will be available in a future update.</p>
                       </div>
@@ -10767,6 +11213,7 @@ useEffect(() => {
                         <span className="block text-[10px] font-mono font-black text-[#5B21B6] uppercase tracking-wider mb-1.5">VOYAGE USERNAME:</span>
                         <input 
                           type="text" 
+                          maxLength={16}
                           value={usernameInput}
                           onChange={(e) => setUsernameInput(e.target.value)}
                           placeholder="e.g. My Username"
@@ -10774,8 +11221,11 @@ useEffect(() => {
                         />
                       </label>
 
-                      <div className="bg-[#FEF3C7]/60 border border-[#FDE68A]/30 p-3 rounded-xl text-[10.5px] text-[#92400E] leading-normal font-sans">
-                        💡 <strong>Notice:</strong> Native Google account popup selection requires defining <code>VITE_GOOGLE_CLIENT_ID</code> in AI Studio settings list.
+                      <div className="bg-[#FEF3C7]/60 border border-[#FDE68A]/30 p-3 rounded-xl text-[10.5px] text-[#92400E] leading-normal font-sans flex items-start gap-1.5">
+                        <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Notice:</strong> Native Google account popup selection requires defining <code>VITE_GOOGLE_CLIENT_ID</code> in AI Studio settings list.
+                        </div>
                       </div>
                     </div>
                   )}
@@ -10966,8 +11416,8 @@ useEffect(() => {
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
               className="bg-[#E6F4EA] border border-[#A7F3D0] text-[#135236] px-6 py-4.5 rounded-2xl shadow-[0_12px_24px_rgba(19,82,54,0.1)] flex items-center gap-3.5 select-none"
             >
-              <div className="w-6 h-6 rounded-full bg-[#135236] text-white flex items-center justify-center font-black text-sm shrink-0">
-                ✓
+              <div className="w-6 h-6 rounded-full bg-[#135236] text-white flex items-center justify-center shrink-0">
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
               </div>
               <div className="flex flex-col text-left">
                 <span className="font-sans font-black text-sm uppercase tracking-tight leading-none text-[#135236]">Notebook Synced!</span>

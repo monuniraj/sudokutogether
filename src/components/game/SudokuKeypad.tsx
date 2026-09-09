@@ -1,5 +1,5 @@
 import React from "react";
-import { RotateCcw, Trash2, Pencil, Lightbulb } from "lucide-react";
+import { RotateCcw, Trash2, Pencil, Lightbulb, Check } from "lucide-react";
 import { triggerHapticTap } from "../../utils/haptics";
 
 export interface SudokuKeypadProps {
@@ -202,8 +202,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                     {num}
                   </span>
                   {showRemainingNumbers && (
-                    <span className={`text-[9px] lg:text-xs xl:text-sm font-mono leading-none mt-1 lg:mt-1.5 font-semibold text-slate-500 dark:text-slate-400 ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
-                      {remainingCount > 0 ? remainingCount : "✓"}
+                    <span className={`text-[9px] lg:text-xs xl:text-sm font-mono leading-none mt-1 lg:mt-1.5 font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-center ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
+                      {remainingCount > 0 ? remainingCount : <Check className="w-2.5 h-2.5 lg:w-3 lg:h-3 stroke-[2.5]" />}
                     </span>
                   )}
                 </div>

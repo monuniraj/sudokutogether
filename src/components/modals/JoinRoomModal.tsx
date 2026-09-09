@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "motion/react";
-import { X, RefreshCw, Play } from "lucide-react";
+import { X, RefreshCw, Play, XCircle } from "lucide-react";
 
 export interface JoinRoomModalProps {
   isOpen: boolean;
@@ -122,8 +122,9 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
 
       {/* Error Message */}
       {joinRoomError && (
-        <p className="text-xs font-sans font-bold text-rose-500 text-center -my-1">
-          {joinRoomError}
+        <p className="text-xs font-sans font-bold text-rose-500 text-center -my-1 flex items-center justify-center gap-1.5">
+          <XCircle className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
+          <span>{joinRoomError.replace(/^❌\s*/, "")}</span>
         </p>
       )}
 

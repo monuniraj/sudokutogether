@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -83,6 +83,14 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
   playClickSound
 }) => {
   const [openDropdown, setOpenDropdown] = useState<"difficulty" | "mistakes" | "hints" | "timer" | null>(null);
+  const [isLobbyLocked, setIsLobbyLocked] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsLobbyLocked(false);
+      setOpenDropdown(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -157,7 +165,12 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             </button>
 
             <button 
-              onClick={() => { playClickSound(); onClose(); }}
+              onClick={() => {
+                playClickSound();
+                setIsLobbyLocked(false);
+                setOpenDropdown(null);
+                onClose();
+              }}
               className={`p-1.5 rounded-full border-none cursor-pointer transition-all active:scale-95 hover:scale-105 ${
                 darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-250" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
               }`}
@@ -212,7 +225,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
 
         <div className="grid grid-cols-2 gap-2.5 w-full">
           {/* Top-Left: Difficulty */}
-          <div className="relative w-full">
+          <div className={`relative w-full transition-opacity duration-150 ${isLobbyLocked ? "pointer-events-none opacity-50" : ""}`}>
             <button
               onClick={() => {
                 playClickSound();
@@ -262,7 +275,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           </div>
 
           {/* Top-Right: Mistakes */}
-          <div className="relative w-full">
+          <div className={`relative w-full transition-opacity duration-150 ${isLobbyLocked ? "pointer-events-none opacity-50" : ""}`}>
             <button
               onClick={() => {
                 playClickSound();
@@ -312,7 +325,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           </div>
 
           {/* Bottom-Left: Hints */}
-          <div className="relative w-full">
+          <div className={`relative w-full transition-opacity duration-150 ${isLobbyLocked ? "pointer-events-none opacity-50" : ""}`}>
             <button
               onClick={() => {
                 playClickSound();
@@ -364,7 +377,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           </div>
 
           {/* Bottom-Right: Timer */}
-          <div className="relative w-full">
+          <div className={`relative w-full transition-opacity duration-150 ${isLobbyLocked ? "pointer-events-none opacity-50" : ""}`}>
             <button
               onClick={() => {
                 playClickSound();
@@ -410,6 +423,26 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             )}
           </div>
         </div>
+
+        {/* Status Badge when lobby is locked */}
+        <AnimatePresence>
+          {isLobbyLocked && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.15 }}
+              className={`mt-2.5 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl text-[11px] font-mono font-bold tracking-wide select-none ${
+                darkMode
+                  ? "bg-amber-950/40 border border-amber-800/60 text-amber-300"
+                  : "bg-amber-50 border border-amber-200 text-amber-800"
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
+              <span>Settings locked — invitation active</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* 3. PLAYER ROSTER & INLINE ACTIONS */}
@@ -498,6 +531,8 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                       <button
                         onClick={() => {
                           playClickSound();
+                          setIsLobbyLocked(true);
+                          setOpenDropdown(null);
                           handleInviteFriend(player.id);
                         }}
                         className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none cursor-pointer transition-all active:scale-95 shadow-xs ${
@@ -521,7 +556,13 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
         <div className="grid grid-cols-2 gap-2.5 w-full">
           {/* Left: RE-INVITE ALL / STOP */}
           <button
-            onClick={() => handleReinviteAll()}
+            onClick={() => {
+              if (!isInvitingAll) {
+                setIsLobbyLocked(true);
+                setOpenDropdown(null);
+              }
+              handleReinviteAll();
+            }}
             disabled={!isInvitingAll && multiplayerPlayers.length === 0}
             className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
               isInvitingAll
@@ -548,6 +589,8 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           <button
             onClick={() => {
               playClickSound();
+              setIsLobbyLocked(true);
+              setOpenDropdown(null);
               onShareLink();
             }}
             className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${

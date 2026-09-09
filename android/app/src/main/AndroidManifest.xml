@@ -29,6 +29,8 @@
                 <data android:scheme="https" />
                 <data android:host="sudoku-together-mode.web.app" />
                 <data android:host="sudoku-together-mode.firebaseapp.com" />
+                <data android:host="sudokusync.com" />
+                <data android:host="www.sudokusync.com" />
             </intent-filter>
 
         </activity>

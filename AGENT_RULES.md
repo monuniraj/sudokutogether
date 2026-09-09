@@ -1,0 +1,4 @@
+# Project Rules & UI Directives
+
+## UI Directive
+UI Directive: All future UI development must strictly use the project's custom vector-based sticker components for icons. Never use bare Unicode emojis or unstyled placeholders.
