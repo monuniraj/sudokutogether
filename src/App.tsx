@@ -6889,20 +6889,15 @@ useEffect(() => {
             height: "calc(70px + env(safe-area-inset-top, 0px))",
             paddingTop: "env(safe-area-inset-top, 0px)",
             zIndex: 9999,
-            paddingLeft: "16px",
-            paddingRight: "16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
           }}
-          className={`select-none ${
+          className={`select-none grid grid-cols-[auto_minmax(0,1fr)_auto] items-center px-2.5 sm:px-4 gap-1 sm:gap-2 ${
             darkMode
               ? "bg-[#18181B] shadow-[0_2px_12px_rgba(0,0,0,0.3)]"
               : "bg-[#f7f5ee] shadow-[0_2px_12px_rgba(0,0,0,0.03)]"
           }`}
         >
-          {/* Left Actions: Symmetrical 2-button container (Statistics + Theme Indicator) */}
-          <div className="flex items-center gap-2 z-10">
+          {/* Left Actions: Symmetrical 2-button container (Statistics/Back + Theme Quick-Toggle) */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 z-10 justify-start">
             {/* Button 1: Statistics Modal Trigger / Back button */}
             <button
               onClick={() => {
@@ -6926,7 +6921,7 @@ useEffect(() => {
                   navigateToScreen("status");
                 }
               }}
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs shrink-0 ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
               title={(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? "Statistics" : "Back"}
               aria-label={(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? "Statistics" : "Back"}
               id="global-top-left-back-button"
@@ -6943,7 +6938,7 @@ useEffect(() => {
               onClick={() => {
                 applyThemeToggle(!darkMode, setDarkMode, soundEffects, vibrations);
               }}
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs relative overflow-hidden ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs relative overflow-hidden shrink-0 ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
               title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
               aria-label={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
               id="global-top-theme-toggle-button"
@@ -6973,19 +6968,19 @@ useEffect(() => {
             </button>
           </div>
 
-          {/* Central matte title: Dead-center alignment */}
-          <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none text-center flex flex-col items-center justify-center max-w-[calc(100vw-200px)] sm:max-w-none">
-            <h1 className="relative z-10 text-xl md:text-2xl font-black tracking-tight uppercase font-sans pre-wrap flex items-center justify-center gap-1 inline-flex select-none leading-none pt-0.5 truncate">
+          {/* Central Title & Difficulty: Fluid scaling within bounded 1fr track */}
+          <div className="min-w-0 flex flex-col items-center justify-center text-center px-1 overflow-hidden pointer-events-none">
+            <h1 className="text-[clamp(1rem,4.2vw,1.35rem)] font-black tracking-tight uppercase font-sans select-none leading-none pt-0.5 truncate max-w-full block">
               <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
               <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
             </h1>
-            <span className={`text-[10px] md:text-[11.5px] uppercase font-sans font-bold tracking-[0.25em] leading-none opacity-75 select-none mt-2 text-center truncate max-w-[160px] sm:max-w-none ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#d1fae5]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#fef08a]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#065F46]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#854D0E]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
+            <span className={`text-[clamp(8.5px,2.2vw,11.5px)] uppercase font-sans font-bold tracking-[0.14em] sm:tracking-[0.25em] leading-none opacity-75 select-none mt-1.5 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#d1fae5]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#fef08a]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#065F46]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#854D0E]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
               {currentScreen === "together" ? "Together Mode" : currentScreen === "settings" ? "Settings" : currentScreen === "login" ? "Authorization" : currentScreen === "status" ? "Player Insights" : (boardState?.difficulty || difficulty)}
             </span>
           </div>
 
           {/* Right Actions: Responsive cluster (Notification Bell, Sound Toggle, Settings) */}
-          <div className="flex items-center gap-2 z-10">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 z-10 justify-end">
             {/* Button 1: Notification Bell (Mobile: hidden in game board; Desktop: always visible) */}
             <button
               onClick={() => {
@@ -6993,7 +6988,7 @@ useEffect(() => {
                 triggerHapticTap(vibrations);
                 setShowBellInvitesModal(true);
               }}
-              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] items-center justify-center border-none shadow-xs ${
+              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] items-center justify-center border-none shadow-xs shrink-0 ${
                 darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"
               } ${currentScreen === "game" ? "hidden md:flex" : "flex"}`}
               title="Notifications"
@@ -7036,7 +7031,7 @@ useEffect(() => {
                   localStorage.setItem("sudoku_soundEffects", String(nextSound));
                 } catch {}
               }}
-              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] items-center justify-center border-none shadow-xs ${
+              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] items-center justify-center border-none shadow-xs shrink-0 ${
                 darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"
               } ${currentScreen === "game" ? "flex" : "hidden md:flex"}`}
               title={soundEffects ? "Mute Sound Effects" : "Enable Sound Effects"}
@@ -7062,7 +7057,7 @@ useEffect(() => {
                   navigateToScreen("settings");
                 }
               }}
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs shrink-0 ${darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"}`}
               title="Settings"
               aria-label="Settings"
               id="global-top-right-settings-button"
