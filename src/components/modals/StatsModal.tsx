@@ -57,6 +57,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
   handleAddRecentFriend,
   formatTimer
 }) => {
+  const [activePlayersTab, setActivePlayersTab] = React.useState<"recent" | "friends">("recent");
   return (
     <div
       className={`p-4 md:p-8 flex-1 w-full flex flex-col items-center justify-start overflow-y-auto pb-10 select-none pt-[calc(85px+env(safe-area-inset-top,0px))] lg:pt-[130px] transition-colors duration-300 ${
@@ -543,120 +544,146 @@ export const StatsModal: React.FC<StatsModalProps> = ({
             ) : (
               /* FRIENDS TAB PANEL */
               <div className="flex flex-col gap-4">
-                {/* My Friends Section */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-stone-400 dark:text-stone-500">
-                      My Friends ({multiplayerPlayers.filter((p) => p.isFriend).length})
-                    </span>
-                  </div>
-                  {multiplayerPlayers.filter((p) => p.isFriend).length === 0 ? (
-                    <div className="py-4 text-center text-stone-400 dark:text-stone-500 font-sans text-xs">
-                      No friends added yet.
-                    </div>
-                  ) : (
-                    multiplayerPlayers
-                      .filter((p) => p.isFriend)
-                      .map((friend) => (
-                        <div
-                          key={friend.id}
-                          className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
-                            darkMode
-                              ? "bg-zinc-950/45 border-zinc-800 text-stone-200"
-                              : "bg-stone-50/45 border-stone-200/50 text-stone-850"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="relative">
-                              <div
-                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                                  darkMode
-                                    ? "bg-purple-950/60 text-purple-300 border border-purple-800/40"
-                                    : "bg-purple-100 text-purple-800 border border-purple-200"
-                                }`}
-                              >
-                                {friend.name ? friend.name.slice(0, 2).toUpperCase() : "PL"}
-                              </div>
-                              <span
-                                className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 ${
-                                  darkMode ? "border-zinc-900" : "border-white"
-                                } ${friend.status === "online" ? "bg-emerald-500" : "bg-stone-400"}`}
-                              />
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="font-sans font-bold text-xs">{friend.name}</span>
-                              <span className="text-[9.5px] text-stone-400 capitalize">
-                                {friend.status || "online"}
-                              </span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleToggleFriend(friend.id, friend.name)}
-                            className="text-[10.5px] font-sans font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 border-none bg-transparent cursor-pointer transition-all active:scale-95 px-2 py-1"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))
-                  )}
-                </div>
+                {(() => {
+                  const friends = multiplayerPlayers.filter(p => p.isFriend).sort((a, b) => {
+                    if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
+                    return a.name.localeCompare(b.name);
+                  });
+                  
+                  const recentPlayers = [...multiplayerPlayers].sort((a, b) => {
+                    if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
+                    return a.name.localeCompare(b.name);
+                  });
 
-                {/* Recent Players Section */}
-                <div className="flex flex-col gap-2 pt-2 border-t border-dashed border-stone-200/40 dark:border-zinc-800">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-stone-400 dark:text-stone-500">
-                      Recent Players ({multiplayerPlayers.filter((p) => !p.isFriend).length})
-                    </span>
-                  </div>
-                  {multiplayerPlayers.filter((p) => !p.isFriend).length === 0 ? (
-                    <div className="py-4 text-center text-stone-400 dark:text-stone-500 font-sans text-xs">
-                      No recent players.
-                    </div>
-                  ) : (
-                    multiplayerPlayers
-                      .filter((p) => !p.isFriend)
-                      .map((player) => {
-                        const isRequested = requestedFriendIds.includes(player.id);
-                        return (
-                          <div
-                            key={player.id}
-                            className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
-                              darkMode
-                                ? "bg-zinc-950/45 border-zinc-800 text-stone-200"
-                                : "bg-stone-50/45 border-stone-200/50 text-stone-850"
+                  return (
+                    <div className="flex flex-col h-full">
+                      {/* Segmented Control Header */}
+                      <div className="flex items-center justify-center px-1 shrink-0 mb-3 mt-1">
+                        <div className={`flex w-full rounded-lg p-1 ${darkMode ? "bg-zinc-900/60" : "bg-stone-200/50"}`}>
+                          <button
+                            onClick={() => setActivePlayersTab('recent')}
+                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                              activePlayersTab === 'recent'
+                                ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
+                                : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
                             }`}
                           >
-                            <div className="flex items-center gap-2.5">
+                            Recent ({recentPlayers.length})
+                          </button>
+                          <button
+                            onClick={() => setActivePlayersTab('friends')}
+                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                              activePlayersTab === 'friends'
+                                ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
+                                : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
+                            }`}
+                          >
+                            Friends ({friends.length})
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Tab Content */}
+                      <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto no-scrollbar pb-2">
+                        {activePlayersTab === 'friends' && (
+                          friends.length === 0 ? (
+                            <div className="py-6 text-center text-stone-500 font-sans text-xs italic">
+                              No friends added yet. Tap [+] next to recent players to add them!
+                            </div>
+                          ) : (
+                            friends.map((friend) => (
                               <div
-                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                                  darkMode ? "bg-zinc-800 text-stone-300" : "bg-stone-150 text-stone-700"
+                                key={friend.id}
+                                className={`p-2.5 rounded-xl border flex items-center justify-between transition-all shrink-0 ${
+                                  darkMode
+                                    ? "bg-zinc-950/45 border-zinc-800 text-stone-200"
+                                    : "bg-stone-50/45 border-stone-200/50 text-stone-850"
                                 }`}
                               >
-                                {player.name ? player.name.slice(0, 2).toUpperCase() : "PL"}
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
+                                    darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
+                                  }`}>
+                                    ✓
+                                  </span>
+                                  <div className="flex flex-col truncate">
+                                    <span className="font-sans font-bold text-xs truncate">{friend.name}</span>
+                                    <span className="text-[9.5px] text-stone-400 capitalize">
+                                      {friend.status || "online"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleToggleFriend(friend.id, friend.name)}
+                                  className="shrink-0 text-[10.5px] font-sans font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 border-none bg-transparent cursor-pointer transition-all active:scale-95 px-2 py-1"
+                                >
+                                  Remove
+                                </button>
                               </div>
-                              <div className="flex flex-col">
-                                <span className="font-sans font-bold text-xs">{player.name}</span>
-                                <span className="text-[9.5px] text-stone-400">Match Participant</span>
-                              </div>
+                            ))
+                          )
+                        )}
+
+                        {activePlayersTab === 'recent' && (
+                          recentPlayers.length === 0 ? (
+                            <div className="py-6 text-center text-stone-500 font-sans text-xs italic">
+                              No recent opponents yet. Start a match to find players!
                             </div>
-                            <button
-                              disabled={isRequested}
-                              onClick={() => handleAddRecentFriend(player)}
-                              className={`py-1 px-2.5 rounded-lg border-none cursor-pointer transition-all active:scale-95 text-[10.5px] font-sans font-bold uppercase tracking-wider ${
-                                isRequested
-                                  ? "bg-stone-200/50 text-stone-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed"
-                                  : darkMode
-                                  ? "bg-purple-950/60 text-purple-300 hover:bg-purple-900/80"
-                                  : "bg-purple-100 text-purple-800 hover:bg-purple-200"
-                              }`}
-                            >
-                              {isRequested ? "Requested" : "+ Add"}
-                            </button>
-                          </div>
-                        );
-                      })
-                  )}
-                </div>
+                          ) : (
+                            recentPlayers.map((player) => {
+                              const isRequested = requestedFriendIds.includes(player.id);
+                              return (
+                                <div
+                                  key={player.id}
+                                  className={`p-2.5 rounded-xl border flex items-center justify-between transition-all shrink-0 ${
+                                    darkMode
+                                      ? "bg-zinc-950/45 border-zinc-800 text-stone-200"
+                                      : "bg-stone-50/45 border-stone-200/50 text-stone-850"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    {player.isFriend ? (
+                                      <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
+                                        darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
+                                      }`}>
+                                        ✓ Friend
+                                      </span>
+                                    ) : (
+                                      <button
+                                        disabled={isRequested}
+                                        onClick={() => handleAddRecentFriend(player)}
+                                        className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border-none cursor-pointer shrink-0 transition-all active:scale-95 flex items-center justify-center ${
+                                          isRequested
+                                            ? "bg-stone-200/50 text-stone-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed"
+                                            : darkMode
+                                            ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300"
+                                            : "bg-stone-150 hover:bg-stone-200 text-stone-700"
+                                        }`}
+                                        title={isRequested ? "Requested" : "Add Friend"}
+                                      >
+                                        {isRequested ? "✓" : "+"}
+                                      </button>
+                                    )}
+                                    <div className="flex flex-col truncate min-w-0">
+                                      <span className="font-sans font-bold text-xs truncate">{player.name}</span>
+                                      {player.lastPlayedAt ? (
+                                        <span className="text-[9.5px] text-stone-400">
+                                          {formatMatchTimestamp(player.lastPlayedAt)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[9.5px] text-stone-400">Match Participant</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

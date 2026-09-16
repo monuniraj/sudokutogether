@@ -8,6 +8,7 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss()],
     build: {
       sourcemap: false,
+      chunkSizeWarningLimit: 2000,
     },
     resolve: {
       alias: {

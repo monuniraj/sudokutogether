@@ -19,6 +19,7 @@ export interface SudokuKeypadProps {
   hintInventory: number;
   onNumberSelect: (num: number) => void;
   lockedNum: number | null;
+  activeKeypadNum?: number | null;
   isNumberFirstInputMode: boolean;
   showRemainingNumbers: boolean;
   visualizingBacktrack?: boolean;
@@ -38,6 +39,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   hintInventory,
   onNumberSelect,
   lockedNum,
+  activeKeypadNum,
   isNumberFirstInputMode,
   showRemainingNumbers,
   visualizingBacktrack,
@@ -171,39 +173,37 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
         <div className="grid grid-cols-9 lg:grid-cols-3 gap-1 sm:gap-1.5 lg:gap-2.5 xl:gap-3 w-full select-none overflow-visible">
           {Array.from({ length: 9 }).map((_, i) => {
             const num = i + 1;
-            const isLocked = isNumberFirstInputMode && (lockedNum === num);
+            const isSelected = (isNumberFirstInputMode && lockedNum === num) || (!isNumberFirstInputMode && activeKeypadNum === num);
             const remainingCount = remainingCounts[num] ?? 0;
 
             return (
               <button
                 key={num}
                 onClick={() => {
-                  if (isNumberFirstInputMode) {
-                    playClickSound();
-                    triggerHapticTap(vibrations);
-                  }
+                  playClickSound();
+                  triggerHapticTap(vibrations);
                   onNumberSelect(num);
                 }}
                 disabled={!boardState || isGameOver || visualizingBacktrack || remainingCount <= 0}
                 className={`aspect-[1/1.55] lg:aspect-[1/1.25] w-full relative flex items-center justify-center font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
-                  isLocked 
+                  isSelected 
                     ? (darkMode 
                         ? "bg-[#713f12] text-[#facc15] active:bg-[#854d0e] border border-yellow-950" 
                         : "bg-[#FFF99D] text-[#854D0E] active:bg-[#FDE047] shadow-[0_8px_16px_rgba(133,77,14,0.12),_0_2px_4px_rgba(0,0,0,0.02)]")
                     : (darkMode 
-                        ? "bg-[#1E1E26] text-sky-450 hover:bg-[#252530] border border-zinc-805 shadow-[0_4px_10px_rgba(0,0,0,0.4)]" 
+                        ? "bg-zinc-900 text-sky-450 hover:bg-zinc-850 border border-zinc-805 shadow-[0_4px_10px_rgba(0,0,0,0.4)]" 
                         : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")
                 }`}
               >
-                <div className="flex flex-col items-center justify-center absolute inset-0">
+                <div className="flex flex-col items-center justify-center absolute inset-0 py-1 sm:py-1.5 lg:py-2 px-0.5 select-none">
                   <span 
-                    className="leading-none flex items-center justify-center font-bold text-2xl lg:text-3xl"
+                    className="handwriting font-normal leading-none flex items-center justify-center text-[29px] sm:text-[33px] lg:text-[44px] xl:text-[48px] select-none"
                   >
                     {num}
                   </span>
                   {showRemainingNumbers && (
-                    <span className={`text-[9px] lg:text-xs xl:text-sm font-mono leading-none mt-1 lg:mt-1.5 font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-center ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
-                      {remainingCount > 0 ? remainingCount : <Check className="w-2.5 h-2.5 lg:w-3 lg:h-3 stroke-[2.5]" />}
+                    <span className={`text-[11px] sm:text-xs lg:text-[14px] xl:text-[15px] font-mono leading-none mt-0.5 sm:mt-1 lg:mt-1.5 font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
+                      {remainingCount > 0 ? remainingCount : <Check className="w-3 h-3 lg:w-3.5 lg:h-3.5 stroke-[2.5]" />}
                     </span>
                   )}
                 </div>

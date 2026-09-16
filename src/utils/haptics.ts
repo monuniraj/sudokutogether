@@ -123,3 +123,25 @@ export const triggerHapticTap = (enabled?: boolean): void => {
 export const triggerHapticError = (enabled?: boolean): void => {
   triggerHaptic('error', enabled);
 };
+
+/**
+ * Convenience wrapper for number completion / mini-win feedback.
+ * Distinct celebratory vibration pattern.
+ */
+export const triggerHapticCompletion = (enabled?: boolean): void => {
+  if (!isHapticsEnabled(enabled)) return;
+  if (typeof window === 'undefined') return;
+
+  try {
+    if (Capacitor.isNativePlatform()) {
+      Haptics.notification({ type: NotificationType.Success }).catch(() => {
+        // Fail silently
+      });
+    } else if (typeof navigator !== 'undefined' && 'vibrate' in navigator && typeof navigator.vibrate === 'function') {
+      navigator.vibrate([40, 50, 60, 50, 100]);
+    }
+  } catch {
+    // Fail silently
+  }
+};
+

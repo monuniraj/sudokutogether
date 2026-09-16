@@ -96,7 +96,7 @@ import { Share } from '@capacitor/share';
 import { App as CapApp } from '@capacitor/app';
 import { PushNotifications } from "@capacitor/push-notifications";
 import { LocalNotifications } from "@capacitor/local-notifications";
-import { triggerHapticTap, triggerHapticError, triggerHaptic, isHapticsEnabled, setGlobalHapticsEnabled } from "./utils/haptics";
+import { triggerHapticTap, triggerHapticError, triggerHapticCompletion, triggerHaptic, isHapticsEnabled, setGlobalHapticsEnabled } from "./utils/haptics";
 import { playThemeFeedback, applyThemeToggle } from "./utils/themeFeedback";
 import { getToken } from "firebase/messaging";
 import { messaging } from "./firebase";
@@ -111,13 +111,32 @@ const getAudioCtx = () => {
       }
     }
     if (globalAudioCtx && globalAudioCtx.state === "suspended") {
-      globalAudioCtx.resume();
+      globalAudioCtx.resume().catch(() => {});
     }
     return globalAudioCtx;
   } catch(e) {
     return null;
   }
 };
+
+// Web Audio gesture auto-resume & background mute lifecycle handlers
+if (typeof window !== "undefined") {
+  const unlockAudioOnGesture = () => {
+    if (globalAudioCtx && globalAudioCtx.state === "suspended") {
+      globalAudioCtx.resume().catch(() => {});
+    }
+  };
+  window.addEventListener("touchstart", unlockAudioOnGesture, { passive: true });
+  window.addEventListener("pointerdown", unlockAudioOnGesture, { passive: true });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      if (globalAudioCtx && globalAudioCtx.state === "running") {
+        globalAudioCtx.suspend().catch(() => {});
+      }
+    }
+  });
+}
 
 // Types corresponding exactly to Kotlin classes for Sudoku
 interface SudokuCell {
@@ -155,22 +174,22 @@ const DIFFICULTY_GRID_THEMES: Record<Difficulty, {
   EASY: {
     activeCell: { light: "#86EFAC", dark: "#064e3b" },
     crosshair: { light: "rgba(134, 239, 172, 0.15)", dark: "rgba(6, 78, 59, 0.28)" },
-    identical: { light: "#D1FAE5", dark: "#022c22" },
+    identical: { light: "#86EFAC", dark: "#064e3b" },
   },
   MEDIUM: {
     activeCell: { light: "#FEF08A", dark: "#713f12" }, // soft butter yellow
     crosshair: { light: "rgba(253, 224, 71, 0.15)", dark: "rgba(113, 63, 18, 0.28)" },
-    identical: { light: "#FFF99D", dark: "#451a03" },
+    identical: { light: "#FEF08A", dark: "#713f12" },
   },
   HARD: {
     activeCell: { light: "#D8B4FE", dark: "#581c87" },
     crosshair: { light: "rgba(216, 180, 254, 0.15)", dark: "rgba(88, 28, 135, 0.28)" },
-    identical: { light: "#F3E8FF", dark: "#2e1065" },
+    identical: { light: "#D8B4FE", dark: "#581c87" },
   },
   EXPERT: {
     activeCell: { light: "#F9A8D4", dark: "#881337" },
     crosshair: { light: "rgba(249, 168, 212, 0.15)", dark: "rgba(136, 19, 55, 0.28)" },
-    identical: { light: "#FFE4E6", dark: "#4c0519" },
+    identical: { light: "#F9A8D4", dark: "#881337" },
   },
 };
 
@@ -1197,7 +1216,7 @@ fun showOutOfHintsDialog() {
         .setTitle("Out of Hints!")
         .setMessage("Watch the ad to receive extra guidance and keep your game flowing smoothly.")
         .setPositiveButton("Watch Ad") { dialog, _ -> 
-            // TODO: Trigger your Rewarded Video Ad logic here
+            // Rewarded Video Ad logic integration point
             // e.g., adManager.showRewardedVideo()
             Toast.makeText(this, "Loading Ad...", Toast.LENGTH_SHORT).show()
             dialog.dismiss() 
@@ -1442,6 +1461,7 @@ useEffect(() => {
     typeof window !== "undefined" && window.innerWidth >= 1024 ? "game" : "home"
   );
   const [fromGameplaySettings, setFromGameplaySettings] = useState<boolean>(false);
+  const [activeAppInviteTab, setActiveAppInviteTab] = useState<"recent" | "friends">("recent");
 
   // --- SEAMLESS HYBRID THEME SWITCHER state ---
   const [activeTheme, setActiveTheme] = useState<"Original" | "Sticky Note Pro">(() => {
@@ -1579,7 +1599,7 @@ useEffect(() => {
 
   const getActiveDisplayName = (): string => {
     const raw = (userProfile?.name || "").trim();
-    const isGenericOrPlaceholder =
+    const isGenericGuestName =
       !raw ||
       raw === "Anonymous Voyager" ||
       raw === "Guest Voyager" ||
@@ -1587,7 +1607,7 @@ useEffect(() => {
       raw === "Guest" ||
       raw.startsWith("Player");
 
-    if (!isGenericOrPlaceholder) {
+    if (!isGenericGuestName) {
       return raw;
     }
 
@@ -1761,6 +1781,7 @@ useEffect(() => {
     isSynced?: boolean;
     inviteSentTimestamp?: number;
     declinedTimestamp?: number;
+    lastPlayedAt?: number;
   }>>(() => {
     try {
       const saved = localStorage.getItem("sudoku_past_players");
@@ -2028,7 +2049,7 @@ useEffect(() => {
 
   // Google OAuth flow disabled at this stage as requested
   useEffect(() => {
-    // Disabled placeholder
+    // Intentionally inactive in current build
     return;
   }, [gisLoaded, googleClientId, authModalTab, currentScreen]);
 
@@ -2616,10 +2637,14 @@ useEffect(() => {
     };
 
     const q1 = query(invitesCol, where("toUserId", "==", user.uid), where("status", "==", "pending"));
-    const unsubscribe1 = onSnapshot(q1, handleSnapshot);
+    const unsubscribe1 = onSnapshot(q1, handleSnapshot, (err) => {
+      console.warn("[Firestore] Incoming invites listener (toUserId) notice:", err);
+    });
 
     const q2 = query(invitesCol, where("recipientId", "==", user.uid), where("status", "==", "pending"));
-    const unsubscribe2 = onSnapshot(q2, handleSnapshot);
+    const unsubscribe2 = onSnapshot(q2, handleSnapshot, (err) => {
+      console.warn("[Firestore] Incoming invites listener (recipientId) notice:", err);
+    });
 
     return () => {
       console.log(`[Firestore] Unsubscribing from incoming invites for user: ${user.uid}`);
@@ -2722,7 +2747,47 @@ useEffect(() => {
     return () => clearInterval(interval);
   }, [showInviteModal, muteUntil, inviteQueue]);
 
-  // Navigation interceptor using History API for Android/system swipe-to-back gestures
+  // Topmost modal closer for Android system back button & popstate handling
+  const currentScreenRef = useRef(currentScreen);
+  useEffect(() => {
+    currentScreenRef.current = currentScreen;
+  }, [currentScreen]);
+
+  const closeTopmostModal = (): boolean => {
+    if (showDeleteAccountModal) { setShowDeleteAccountModal(false); return true; }
+    if (showResetSettingsModal) { setShowResetSettingsModal(false); return true; }
+    if (activeCompliancePage) { setActiveCompliancePage(null); return true; }
+    if (showDisplayNameModal) { setShowDisplayNameModal(false); return true; }
+    if (showInviteJoinNamePopup) { setShowInviteJoinNamePopup(false); return true; }
+    if (showAuthModal) { setShowAuthModal(false); return true; }
+    if (showLoginRequiredModal) { setShowLoginRequiredModal(false); return true; }
+    if (showTargetLoginRequiredModal) { setShowTargetLoginRequiredModal(false); return true; }
+    if (showBellInvitesModal) { setShowBellInvitesModal(false); return true; }
+    if (showRematchInviteModal) { setShowRematchInviteModal(false); return true; }
+    if (showInviteModal) { setShowInviteModal(false); return true; }
+    if (showFriendsListSection) { setShowFriendsListSection(false); return true; }
+    if (showHistoryChallengeModal) { setShowHistoryChallengeModal(false); return true; }
+    if (showMidGameInviteModal) { setShowMidGameInviteModal(false); return true; }
+    if (showGameOverModal) { 
+      setShowGameOverModal(false); 
+      setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+      setLockedNum(null);
+      setActiveKeypadNum(null);
+      return true; 
+    }
+    if (showCreateChallengeModal) { setShowCreateChallengeModal(false); return true; }
+    if (showJoinRoomModal) { setShowJoinRoomModal(false); return true; }
+    if (showMultiplayerForkModal) { setShowMultiplayerForkModal(false); return true; }
+    if (showHowToPlayModal) { setShowHowToPlayModal(false); return true; }
+    return false;
+  };
+
+  const closeTopmostModalRef = useRef(closeTopmostModal);
+  useEffect(() => {
+    closeTopmostModalRef.current = closeTopmostModal;
+  });
+
+  // Navigation interceptor using History API and Capacitor Back Button for Android/system swipe-to-back gestures
   useEffect(() => {
     // Initialize initial state if empty to keep history alignment intact
     if (!window.history.state || !window.history.state.hasOwnProperty("view")) {
@@ -2730,6 +2795,11 @@ useEffect(() => {
     }
 
     const handlePopState = (event: PopStateEvent) => {
+      // 1. If any modal or overlay is open, dismiss it first
+      if (closeTopmostModalRef.current()) {
+        return;
+      }
+
       const params = new URLSearchParams(window.location.search);
       let chalParam = params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("room");
       if (!chalParam && window.location.hash) {
@@ -2769,9 +2839,54 @@ useEffect(() => {
     };
 
     window.addEventListener("popstate", handlePopState);
+
+    // Hardware Back Button listener for Android via Capacitor
+    let backListenerHandle: any = null;
+    try {
+      if (Capacitor.isNativePlatform()) {
+        CapApp.addListener('backButton', ({ canGoBack }) => {
+          // 1. Dismiss topmost modal if open
+          if (closeTopmostModalRef.current()) {
+            return;
+          }
+          // 2. If on a subscreen (settings, status, game over), go back to home
+          if (currentScreenRef.current !== "home") {
+            navigateToScreen("home");
+            return;
+          }
+          // 3. If on home and no modals, exit/minimize
+          if (canGoBack) {
+            window.history.back();
+          } else {
+            CapApp.exitApp();
+          }
+        }).then(handle => {
+          backListenerHandle = handle;
+        }).catch(() => {});
+      }
+    } catch (e) {}
+
     return () => {
       window.removeEventListener("popstate", handlePopState);
+      if (backListenerHandle && typeof backListenerHandle.remove === "function") {
+        backListenerHandle.remove();
+      }
     };
+  }, []);
+
+  // Conditionally inject Google AdSense script strictly on Web (Firebase Hosting / Browsers)
+  // Never inject AdSense when running natively on Android (Capacitor WebView) to prevent invalid traffic policy violations
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) {
+      const existingScript = document.querySelector('script[src*="pagead2.googlesyndication.com"]');
+      if (!existingScript) {
+        const script = document.createElement("script");
+        script.async = true;
+        script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2107539674074275";
+        script.crossOrigin = "anonymous";
+        document.head.appendChild(script);
+      }
+    }
   }, []);
 
   const saveOpponentsToPastPlayers = async (opponents: Array<{ id: string, name: string }>) => {
@@ -2797,15 +2912,22 @@ useEffect(() => {
             name: opp.name || "Voyager " + opp.id.substring(0, 5),
             isFriend: false,
             status: "offline" as const,
-            inviteStatus: "idle" as const
+            inviteStatus: "idle" as const,
+            lastPlayedAt: Date.now()
           });
           updated = true;
         } else {
-          // If name changed or was blank, update it
-          if (opp.name && next[index].name !== opp.name) {
-            next[index] = { ...next[index], name: opp.name };
-            updated = true;
+          // Update name if changed, and update lastPlayedAt
+          let hasChanges = false;
+          let updatedPlayer = { ...next[index], lastPlayedAt: Date.now() };
+          hasChanges = true; // Always update lastPlayedAt when match ends
+          
+          if (opp.name && updatedPlayer.name !== opp.name) {
+            updatedPlayer.name = opp.name;
           }
+          
+          next[index] = updatedPlayer;
+          updated = true;
         }
       });
 
@@ -3529,6 +3651,39 @@ useEffect(() => {
       console.error("Audio Web Synth Win Error:", e);
     }
   };
+
+  // Mini-win sound on completing all 9 instances of a number (bright, distinct ascending bell chime)
+  const playNumberCompletionSound = () => {
+    if (!soundEffects) return;
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const playChimeTone = (freq: number, start: number, duration: number) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.linearRampToValueAtTime(0.12, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+        osc.start(start);
+        osc.stop(start + duration);
+      };
+
+      const now = audioCtx.currentTime;
+      playChimeTone(587.33, now, 0.20); // D5
+      playChimeTone(880.00, now + 0.09, 0.24); // A5
+      playChimeTone(1174.66, now + 0.18, 0.38); // D6
+    } catch (e) {
+      console.error("Audio Number Completion Sound Error:", e);
+    }
+  };
   
   // Advanced Preference Variables (representing Jetpack DataStore states)
   const [isNumberFirstInputMode, setIsNumberFirstInputMode] = useState<boolean>(() => {
@@ -3598,6 +3753,8 @@ useEffect(() => {
 
   // Locked number for Number-First input mode
   const [lockedNum, setLockedNum] = useState<number | null>(null);
+  // Active selected number for single-number highlighting / keypad toggle
+  const [activeKeypadNum, setActiveKeypadNum] = useState<number | null>(null);
 
   // Rewarded Video Ad simulated card states
   const [rewardType, setRewardType] = useState<"hint_reward" | "mistake_reward" | null>(null);
@@ -5604,6 +5761,7 @@ useEffect(() => {
     
     setHistory([]);
     setLockedNum(null);
+    setActiveKeypadNum(null);
     setHintInventory(3);
     setSessionSeconds(0);
     setShowGameOverModal(false);
@@ -5652,6 +5810,7 @@ useEffect(() => {
 
     setHistory([]);
     setLockedNum(null);
+    setActiveKeypadNum(null);
     setHintInventory(boardState.maxHintsLimit !== undefined ? boardState.maxHintsLimit : 3);
     setSessionSeconds(0);
     setIsTimerPaused(false);
@@ -5746,12 +5905,26 @@ useEffect(() => {
       // In Paint / Fast-Fill mode, pressing 1-9 sets lockedNum and keeps active cell focus
       if (isNumberFirstInputMode && /^[1-9]$/.test(key)) {
         const val = parseInt(key);
+        // Requirement 4: Completed number restriction
+        let count = 0;
+        for (let r = 0; r < 9; r++) {
+          for (let c = 0; c < 9; c++) {
+            if (boardState.grid[r][c].value === val) count++;
+          }
+        }
+        if (count >= 9) {
+          showToast(`Number ${val} is already completed.`);
+          return;
+        }
+
         if (lockedNum === val) {
           setLockedNum(null);
+          setActiveKeypadNum(null);
           triggerHapticTap(vibrations);
           addLog(`🔓 Unlocked digit ${val}.`);
         } else {
           setLockedNum(val);
+          setActiveKeypadNum(val);
           triggerHapticTap(vibrations);
           addLog(`🎨 Selected paint digit ${val}. Tap empty cells to fast fill!`);
         }
@@ -5759,7 +5932,18 @@ useEffect(() => {
       }
 
       const { selectedRow, selectedCol } = boardState;
-      if (selectedRow === null || selectedCol === null) return;
+      if (selectedRow === null || selectedCol === null) {
+        // Requirement 2 & 3: Keyboard number selection when no cell is selected
+        if (/^[1-9]$/.test(key)) {
+          const val = parseInt(key);
+          if (activeKeypadNum === val) {
+            setActiveKeypadNum(null);
+          } else {
+            setActiveKeypadNum(val);
+          }
+        }
+        return;
+      }
 
       const cell = boardState.grid[selectedRow][selectedCol];
 
@@ -5792,7 +5976,7 @@ useEffect(() => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [boardState, activeTab, pencilMode, visualizingBacktrack, isNumberFirstInputMode, lockedNum]);
+  }, [boardState, activeTab, pencilMode, visualizingBacktrack, isNumberFirstInputMode, lockedNum, activeKeypadNum]);
 
   const pushToHistory = () => {
     if (!boardState) return;
@@ -5830,24 +6014,28 @@ useEffect(() => {
     const cell = boardState.grid[selectedRow][selectedCol];
     if (cell.isOriginalClue) return;
 
-    // Same-digit toggle: clear value and bypass checks
+    // Requirement 1: Erase-First Protection (No Direct Overwrite)
+    // If a cell already contains a user-filled number, clicking a different number must not overwrite it directly.
+    // The user must explicitly erase the existing number first using the Erase tool.
+    if (cell.value !== 0 && cell.value !== num) {
+      triggerHapticError(vibrations);
+      showToast("🔒 Erase the existing number first.");
+      addLog(`🔒 Erase-First Protection: Cell at (Row ${selectedRow + 1}, Col ${selectedCol + 1}) contains ${cell.value}. Erase it before entering a new number.`);
+      return;
+    }
+
+    // In pencil mode, prevent adding candidate notes to a filled cell
+    if (pencilMode && cell.value !== 0) {
+      triggerHapticError(vibrations);
+      showToast("🔒 Erase the number first to add notes.");
+      return;
+    }
+
+    // Requirement 2: Tapping an already selected number a second time deselects it completely
     if (cell.value === num) {
-      pushToHistory();
-      playClickSound();
-      triggerHapticTap(vibrations);
-      const newGrid = boardState.grid.map(row => row.map(c => {
-        if (c.row === selectedRow && c.col === selectedCol) {
-          return { ...c, value: 0, isUserInput: false, notes: new Set<number>() };
-        }
-        return c;
-      }));
-      setBoardState(prev => prev ? { 
-        ...prev, 
-        grid: newGrid,
-        selectedRow,
-        selectedCol
-      } : null);
-      addLog(`✨ Same-Digit Toggle: Erased value ${num} from Cell (Row ${selectedRow + 1}, Col ${selectedCol + 1}).`);
+      setActiveKeypadNum(null);
+      setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+      addLog(`⚪ Deselected number ${num}. Returned board to neutral state.`);
       return;
     }
 
@@ -5935,9 +6123,15 @@ useEffect(() => {
           saveGameToHistory(false, newMistakes);
         }
       } else {
-        // Valid placed number: play standard click/placement sound
-        playClickSound();
-        triggerHapticTap(vibrations);
+        // Valid placed number: check if this digit is now completely placed (all 9 instances)
+        let totalPlacedOfNum = 0;
+        for (let r = 0; r < 9; r++) {
+          for (let c = 0; c < 9; c++) {
+            if (finalGrid[r][c].value === num) totalPlacedOfNum++;
+          }
+        }
+        const isNumCompleted = totalPlacedOfNum === 9;
+
         // Check game win
         const currentProgress = finalGrid.every(r => r.every(cell => cell.value === solutionGrid[cell.row][cell.col]));
         if (currentProgress) {
@@ -5945,6 +6139,20 @@ useEffect(() => {
           addLog("⭐ Victory! All sudoku square criteria satisfied uniquely!");
           playWinSound();
           saveGameToHistory(true, boardState ? boardState.currentMistakesCount : 0);
+        } else if (isNumCompleted) {
+          // Requirement 6: Number Completion Audio & Haptic Feedback
+          playNumberCompletionSound();
+          triggerHapticCompletion(vibrations);
+          addLog(`🎉 All 9 instances of ${num} placed! Number completed.`);
+        } else {
+          playClickSound();
+          triggerHapticTap(vibrations);
+        }
+
+        // Requirement 4: In Paintbrush mode, if completed number was locked, unlock it immediately
+        if (isNumCompleted && lockedNum === num) {
+          setLockedNum(null);
+          setActiveKeypadNum(null);
         }
       }
     }
@@ -5969,6 +6177,7 @@ useEffect(() => {
       return c;
     }));
 
+    setActiveKeypadNum(null);
     setBoardState(prev => prev ? { ...prev, grid: newGrid } : null);
   };
 
@@ -6245,25 +6454,34 @@ useEffect(() => {
   ];
 
   const renderAdSenseContent = (context: "home" | "game") => {
+    // Web-only AdSense container: suppressed on native Android to comply with invalid traffic & WebView policies
+    if (Capacitor.isNativePlatform()) {
+      return null;
+    }
+
     const faqs = [
       {
         q: "Is this Sudoku free to play?",
-        a: "Yes, our Sudoku is completely free to play with unlimited puzzles. You can generate and solve as many boards as you want without any restrictions or hidden costs."
+        a: "Yes, our Sudoku is completely free to play with unlimited puzzles. You can generate and solve as many boards as you want without any restrictions or hidden costs. We rely on standard advertisements to keep the servers running, meaning you will never hit a paywall or be forced to buy premium currency to unlock higher difficulties."
       },
       {
         q: "What difficulty should I start with?",
-        a: "Beginners should start with Easy or Medium difficulty levels. This allows you to get comfortable with the grid, rules, and basic scanning techniques before moving up to Hard or Expert."
+        a: "Beginners should start with Easy or Medium difficulty levels. This allows you to get comfortable with the grid, rules, and basic scanning techniques before moving up to Hard or Expert. As you progress, you will naturally start recognizing patterns that make solving higher tiers much faster."
       },
       {
         q: "Can I play on mobile?",
-        a: "Yes, our Sudoku is fully responsive for all devices. It is designed to scale beautifully and operate smoothly on desktop, tablet, and mobile browsers."
+        a: "Yes, our Sudoku is fully responsive for all devices. It is designed to scale beautifully and operate smoothly on desktop, tablet, and mobile browsers. It functions entirely as a Progressive Web App (PWA), meaning you can even install it to your home screen and play solo puzzles completely offline when you don't have internet access."
+      },
+      {
+        q: "How does the multiplayer matchmaking work?",
+        a: "We utilize a deterministic seeded matchmaking system. When you create a room, the game generates a specific cryptographic seed that dictates the puzzle layout. Anyone who joins your room using the challenge link or room code will receive the exact same board, ensuring a 100% fair and synchronized race against your friends."
       }
     ];
 
     return (
-      <section className="w-full max-w-4xl mx-auto px-4 py-16 mt-8 border-t border-stone-200/50 dark:border-zinc-800/50 flex flex-col gap-16 select-text selection:bg-[#E0F2FE]">
+      <section className="w-full max-w-5xl mx-auto px-4 pt-12 pb-6 mt-8 border-t border-stone-200/50 dark:border-zinc-800/50 flex flex-col select-text selection:bg-[#E0F2FE]">
         {/* Our Unique Features (USP) */}
-        <div className={`p-8 rounded-3xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.03)] ${darkMode ? "bg-indigo-950/20 text-indigo-200" : "bg-[#EEF2FF] text-[#333333]"}`}>
+        <div className={`p-8 rounded-3xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.03)] mb-12 ${darkMode ? "bg-indigo-950/20 text-indigo-200" : "bg-[#EEF2FF] text-[#333333]"}`}>
           <div className="flex items-center gap-3 mb-6">
             <div className={`p-2 rounded-xl ${darkMode ? "bg-indigo-900/40 text-indigo-300" : "bg-indigo-100 text-[#4F46E5]"}`}>
               <Users className="w-6 h-6" />
@@ -6310,7 +6528,7 @@ useEffect(() => {
         </div>
 
         {/* Why Play Our Sudoku? */}
-        <div>
+        <div className="w-full mb-12">
           <div className="text-center mb-8">
             <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>Why Play Our Sudoku?</h2>
             <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Engineered for absolute mental clarity</p>
@@ -6351,54 +6569,79 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* How to Play Guide & Solving Techniques */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-7 flex flex-col gap-4">
+        {/* SECTION 1: HOW TO PLAY SUDOKU */}
+        <div className="w-full max-w-4xl mx-auto mb-12 flex flex-col gap-4">
+          <div className="text-center sm:text-left">
             <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>How to Play Sudoku</h2>
-            <div className={`p-6 rounded-3xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] text-xs md:text-sm leading-relaxed font-sans ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
-              <h3 className="font-bold text-sm mb-2 uppercase">Official Game Rules</h3>
-              <p className="mb-4">
-                Sudoku is a logic-based, number-placement puzzle that has captivated minds worldwide. The classic game is played on a 9x9 grid, which is further divided into nine smaller 3x3 subgrids or 'regions'. The objective is simple yet mentally engaging: fill every empty cell with digits from 1 to 9. However, you must follow a strict core rule: each digit must appear exactly once in every horizontal row, once in every vertical column, and once in every 3x3 region without any duplicates or repetition.
-              </p>
-              <p className="mb-4">
-                You begin each game with a partially completed grid containing pre-filled clues. Solving a Sudoku puzzle requires absolutely no arithmetic calculations; instead, it relies entirely on systematic deduction and logical reasoning. By analyzing the numbers already present and identifying empty cells, you can step-by-step eliminate invalid candidates for each location until only one correct number remains.
-              </p>
-              <p>
-                Starting with Easy puzzles helps beginners build core confidence and learn to recognize basic visual patterns. As you gradually advance to Medium, Hard, and Expert levels, you will encounter complex grid lock-ins that demand deeper deduction. Play patiently, think logically, and experience the mental clarity that comes from solving!
+            <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Fundamental rules & logic guidelines</p>
+          </div>
+          <div className={`p-6 md:p-8 rounded-3xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] text-xs md:text-sm leading-relaxed font-sans ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
+            <h3 className="font-bold text-sm mb-3 uppercase tracking-wide">Official Game Rules</h3>
+            <p className="mb-4">
+              Sudoku is a logic-based, number-placement puzzle that has captivated minds worldwide. The classic game is played on a 9x9 grid, which is further divided into nine smaller 3x3 subgrids or 'regions'. The objective is simple yet mentally engaging: fill every empty cell with digits from 1 to 9. However, you must follow a strict core rule: each digit must appear exactly once in every horizontal row, once in every vertical column, and once in every 3x3 region without any duplicates or repetition. If you place a '5' in the top row, no other cell in that top row can contain a '5'.
+            </p>
+            <p className="mb-4">
+              You begin each game with a partially completed grid containing pre-filled clues. Solving a Sudoku puzzle requires absolutely no arithmetic calculations; instead, it relies entirely on systematic deduction and logical reasoning. By analyzing the numbers already present and identifying empty cells, you can step-by-step eliminate invalid candidates for each location until only one correct number remains. Every puzzle we generate has exactly one unique solution, meaning guessing is never required. To maintain the integrity of competitive play, our platform enforces a strict mistake limit. If you input an incorrect digit 3 times, you lose the match. This forces players to rely purely on logic rather than brute-force trial and error.
+            </p>
+            <p>
+              Starting with Easy puzzles helps beginners build core confidence and learn to recognize basic visual patterns. As you gradually advance to Medium, Hard, and Expert levels, you will encounter complex grid lock-ins that demand deeper deduction. Play patiently, think logically, and experience the mental clarity that comes from solving!
+            </p>
+          </div>
+        </div>
+
+        {/* SECTION 2: SUDOKU STRATEGY GUIDES (DESKTOP CARD GRID) */}
+        <div className="w-full max-w-5xl mx-auto mb-12 flex flex-col gap-6">
+          <div className="text-center">
+            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>Sudoku Strategy Guides</h2>
+            <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Master advanced deduction and pattern recognition</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl mx-auto">
+            {/* Card 1: Scanning Technique */}
+            <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-start transition-transform duration-200 hover:-translate-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
+              <h3 className="font-black text-sm uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-2">Scanning Technique</h3>
+              <p className="text-xs leading-relaxed opacity-90">
+                A quick, visual scanning technique. Scan horizontal rows and vertical columns within a specific 3x3 grid to identify where a missing number must go. By tracking which rows and columns already contain that digit in neighboring grids, you can cross-eliminate cells and find the only available spot for it. This is the most fundamental speed-solving technique, often referred to as crosshatching, and is essential for clearing the board quickly in early stages.
               </p>
             </div>
-          </div>
-          
-          <div className="lg:col-span-5 flex flex-col gap-4">
-            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>Sudoku Strategy Guides</h2>
-            <div className="flex flex-col gap-4">
-              <div className={`p-5 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
-                <h3 className="font-black text-sm uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-2">Scanning Technique</h3>
-                <p className="text-xs leading-relaxed">
-                  A quick, visual scanning technique. Scan horizontal rows and vertical columns within a specific 3x3 grid to identify where a missing number must go. By tracking which rows and columns already contain that digit in neighboring grids, you can cross-eliminate cells and find the only available spot for it.
-                </p>
-              </div>
-              
-              <div className={`p-5 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
-                <h3 className="font-black text-sm uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-2">Elimination Method</h3>
-                <p className="text-xs leading-relaxed">
-                  A deeper logic technique. For any given empty cell, list all candidate numbers that do not violate the row, column, or 3x3 region rules. If a cell has only one possible candidate remaining (a 'naked single'), that must be its value. If a candidate can only fit in one specific cell, it goes there.
-                </p>
-              </div>
 
-              <div className={`p-5 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
-                <h3 className="font-black text-sm uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-2">Naked Singles strategy</h3>
-                <p className="text-xs leading-relaxed">
-                  A foundational solving concept. A "Naked Single" occurs when a specific cell has only one viable candidate value remaining after row, column, and box cross-elimination. Filling these values immediately is critical to unlock advanced solving stages.
-                </p>
-              </div>
+            {/* Card 2: Elimination Method */}
+            <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-start transition-transform duration-200 hover:-translate-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
+              <h3 className="font-black text-sm uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-2">Elimination Method</h3>
+              <p className="text-xs leading-relaxed opacity-90">
+                A deeper logic technique. For any given empty cell, list all candidate numbers that do not violate the row, column, or 3x3 region rules. If a cell has only one possible candidate remaining (a 'naked single'), that must be its value. If a candidate can only fit in one specific cell, it goes there. Advanced players rely heavily on our built-in pencil notes feature to track these candidates and expose hidden singles.
+              </p>
+            </div>
+
+            {/* Card 3: Naked Singles */}
+            <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-start transition-transform duration-200 hover:-translate-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
+              <h3 className="font-black text-sm uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-2">Naked Singles Strategy</h3>
+              <p className="text-xs leading-relaxed opacity-90">
+                A foundational solving concept. A "Naked Single" occurs when a specific cell has only one viable candidate value remaining after row, column, and box cross-elimination. Filling these values immediately is critical to unlock advanced solving stages. Because no other number can logically occupy that square without violating the primary rules of the game, it becomes an absolute certainty.
+              </p>
+            </div>
+
+            {/* Card 4: Hidden Pairs & Triples */}
+            <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-start transition-transform duration-200 hover:-translate-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
+              <h3 className="font-black text-sm uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2">Hidden Pairs & Triples</h3>
+              <p className="text-xs leading-relaxed opacity-90">
+                When you progress to Hard or Expert puzzles, simple crosshatching will often leave you stuck. You must look for groups of two or three numbers that are restricted to exactly two or three cells within a specific row, column, or block. Even if those cells have other pencil mark candidates, the "Hidden Pair" dictates that those specific numbers cannot appear anywhere else in that region, allowing you to safely eliminate the other candidates in those cells. Recognizing these patterns requires deep focus and systematic notation.
+              </p>
+            </div>
+
+            {/* Card 5: X-Wing Pattern */}
+            <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-start transition-transform duration-200 hover:-translate-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
+              <h3 className="font-black text-sm uppercase tracking-wider text-rose-600 dark:text-rose-400 mb-2">X-Wing Pattern Recognition</h3>
+              <p className="text-xs leading-relaxed opacity-90">
+                The X-Wing is an advanced logical deduction method used when a specific candidate number appears in exactly two cells within two different rows, and those cells align perfectly in the same two columns. Because the true value must exist exactly once in each row, it forces a diagonal relationship. This mathematically proves that the candidate cannot exist in any other cells within those two intersecting columns. Mastering the X-Wing pattern is the gateway to solving the most extremely difficult puzzles where standard deductive logic completely stalls.
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Collapsible FAQ */}
-        <div className="w-full flex flex-col gap-4">
-          <div className="text-center mb-4">
+        {/* SECTION 3: FREQUENTLY ASKED QUESTIONS */}
+        <div className="w-full max-w-4xl mx-auto mb-8 flex flex-col gap-4">
+          <div className="text-center mb-2">
             <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>Frequently Asked Questions</h2>
             <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Quick answers to common questions</p>
           </div>
@@ -6441,34 +6684,52 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* CTA Anchor Button */}
-        <div className="flex justify-center mt-4">
-          <button
-            onClick={() => {
-              playClickSound();
-              if (context === "home") {
-                generateAndSetNewPuzzle(difficulty);
-                setIsTimerPaused(false);
-                navigateToScreen("game");
-              } else {
-                document.getElementById("status-and-grid-group")?.scrollIntoView({ behavior: "smooth" });
-              }
-            }}
-            className={`px-8 py-4 text-center font-black text-sm tracking-wider uppercase transition-all duration-155 select-none rounded-2xl active:scale-[0.98] active:translate-y-px cursor-pointer border-none shadow-md ${
-              darkMode 
-                ? "bg-emerald-800 hover:bg-emerald-700 text-[#d1fae5]" 
-                : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"
-            }`}
-          >
-            Start Playing
-          </button>
+        {/* SECTION 4: CALL TO ACTION & COMPLIANT FOOTER */}
+        <div className="w-full max-w-4xl mx-auto flex flex-col items-center">
+          {/* CTA Anchor Button */}
+          <div className="flex justify-center mb-8">
+            <button
+              onClick={() => {
+                playClickSound();
+                if (context === "home") {
+                  generateAndSetNewPuzzle(difficulty);
+                  setIsTimerPaused(false);
+                  navigateToScreen("game");
+                } else {
+                  document.getElementById("status-and-grid-group")?.scrollIntoView({ behavior: "smooth" });
+                }
+              }}
+              className={`px-8 py-4 text-center font-black text-sm tracking-wider uppercase transition-all duration-155 select-none rounded-2xl active:scale-[0.98] active:translate-y-px cursor-pointer border-none shadow-md ${
+                darkMode 
+                  ? "bg-emerald-800 hover:bg-emerald-700 text-[#d1fae5]" 
+                  : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"
+              }`}
+            >
+              Start Playing
+            </button>
+          </div>
+
+          {/* Compliant Static Footer */}
+          {!Capacitor.isNativePlatform() && (
+            <footer className="w-full max-w-4xl mx-auto px-4 py-6 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 text-center text-sm font-sans text-stone-600 select-text">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 max-w-xs sm:max-w-none mx-auto text-center sm:flex sm:flex-row sm:justify-center sm:gap-x-6">
+                <a href="/about.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">About Us</a>
+                <a href="/contact.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">Contact Us</a>
+                <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">Privacy Policy</a>
+                <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">Terms of Service</a>
+              </div>
+              <div className="opacity-80 font-mono text-[11px]">
+                © 2026 SudokuSync. All rights reserved.
+              </div>
+            </footer>
+          )}
         </div>
       </section>
     );
   };
 
   return (
-    <div className={`min-h-screen ${darkMode ? "bg-[#18181B] text-[#E5E5E5] selection:bg-[#312E81]" : "bg-[#F3EFE9] text-[#1E1E1E] selection:bg-[#E0F2FE]"} flex flex-col font-sans overflow-hidden`}>
+    <div className={`min-h-screen ${darkMode ? "bg-[#18181B] text-[#E5E5E5] selection:bg-[#312E81]" : "bg-[#F3EFE9] text-[#1E1E1E] selection:bg-[#E0F2FE]"} flex flex-col font-sans overflow-hidden pb-[env(safe-area-inset-bottom,0px)]`}>
       {/* Toast Notification */}
       <AnimatePresence>
         {copiedText && (
@@ -6845,17 +7106,6 @@ useEffect(() => {
               </div>
             </div>
             {renderAdSenseContent("home")}
-            <footer className="w-full max-w-4xl mx-auto px-4 py-8 mt-6 text-center text-xs font-sans text-stone-500 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 animate-fade-in select-text">
-              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-                <a href="/about.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("about"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">About Us</a>
-                <a href="/contact.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("contact"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Contact Us</a>
-                <a href="/privacy.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("privacy"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Privacy Policy</a>
-                <a href="/terms.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("terms"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Terms of Service</a>
-              </div>
-              <div className="opacity-80 font-mono text-[10px]">
-                © 2026 SudokuSync. All rights reserved.
-              </div>
-            </footer>
           </div>
         )}
 
@@ -6932,25 +7182,42 @@ useEffect(() => {
                     </span>
 
                     {/* Center: Multiplayer Invite and Help */}
-                    <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3 pointer-events-none">
-                      <button
-                        onClick={handleOpenMidGameMultiplayer}
-                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
-                        aria-label="Invite Players to Match"
-                        title="Invite Players"
-                      >
-                        <Users className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
-                      </button>
+                    {(() => {
+                      const activeDiff = ((boardState?.difficulty || difficulty).toUpperCase()) as Difficulty;
+                      const headerThemeColor = darkMode ? (
+                        activeDiff === "EASY" ? "text-[#059669] hover:text-[#059669]/80" :
+                        activeDiff === "MEDIUM" ? "text-[#d97706] hover:text-[#d97706]/80" :
+                        activeDiff === "HARD" ? "text-[#7e22ce] hover:text-[#7e22ce]/80" :
+                        "text-[#be185d] hover:text-[#be185d]/80"
+                      ) : (
+                        activeDiff === "EASY" ? "text-[#065F46] hover:text-[#065F46]/80" :
+                        activeDiff === "MEDIUM" ? "text-[#854D0E] hover:text-[#854D0E]/80" :
+                        activeDiff === "HARD" ? "text-[#6B21A8] hover:text-[#6B21A8]/80" :
+                        "text-[#9D174D] hover:text-[#9D174D]/80"
+                      );
 
-                      <button
-                        onClick={() => setShowHowToPlayModal(true)}
-                        className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${darkMode ? "text-sky-400 hover:text-sky-300" : "text-[#2B6CB0] hover:text-[#1d4ed8]"}`}
-                        aria-label="How to play"
-                        title="How to play"
-                      >
-                        <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
-                      </button>
-                    </div>
+                      return (
+                        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3 pointer-events-none">
+                          <button
+                            onClick={handleOpenMidGameMultiplayer}
+                            className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${headerThemeColor}`}
+                            aria-label="Invite Players to Match"
+                            title="Invite Players"
+                          >
+                            <Users className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
+                          </button>
+
+                          <button
+                            onClick={() => setShowHowToPlayModal(true)}
+                            className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${headerThemeColor}`}
+                            aria-label="How to play"
+                            title="How to play"
+                          >
+                            <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
+                          </button>
+                        </div>
+                      );
+                    })()}
 
                     {/* Right: Running Timer and Pause Button */}
                     {timerEnabled ? (
@@ -7004,11 +7271,14 @@ useEffect(() => {
                       highlightIdentical={highlightIdentical}
                       isNumberFirstInputMode={isNumberFirstInputMode}
                       lockedNum={lockedNum}
+                      activeKeypadNum={activeKeypadNum}
                       darkMode={darkMode}
                       playClickSound={playClickSound}
                       onCellClick={(r, c) => {
                         if (visualizingBacktrack || isTimerPaused) return;
                         if (boardState?.isGameOver) {
+                          const cell = boardState.grid[r][c];
+                          setActiveKeypadNum(cell && cell.value !== 0 ? cell.value : null);
                           setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                           return;
                         }
@@ -7017,16 +7287,34 @@ useEffect(() => {
                         if (isNumberFirstInputMode) {
                           const cell = boardState?.grid[r][c];
                           if (cell && cell.value !== 0) {
-                            // Tapping any filled cell immediately sets that number as the active brush digit
+                            // Requirement 4: Completed number restriction in Paintbrush mode
+                            let count = 0;
+                            for (let row = 0; row < 9; row++) {
+                              for (let col = 0; col < 9; col++) {
+                                if (boardState.grid[row][col].value === cell.value) count++;
+                              }
+                            }
+                            if (count >= 9) {
+                              playClickSound();
+                              triggerHapticTap(vibrations);
+                              showToast(`Number ${cell.value} is already completed.`);
+                              addLog(`ℹ️ Number ${cell.value} is completed (9/9).`);
+                              setLockedNum(null);
+                              setActiveKeypadNum(null);
+                              setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
+                              return;
+                            }
+
+                            // Tapping any uncompleted filled cell sets that number as active brush digit
                             playClickSound();
                             setLockedNum(cell.value);
+                            setActiveKeypadNum(cell.value);
                             triggerHapticTap(vibrations);
-                            setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
+                            // Clear cell selection so only this number is highlighted across board
+                            setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
                             addLog(`🎨 Selected paint digit ${cell.value} from grid cell. Click empty cells to fast fill!`);
-                          } else if (lockedNum !== null && cell && !cell.isOriginalClue) {
-                            // Fast fill empty cell with the active brush digit
-                            // Do NOT playClickSound here — handleValueInput will validate and play ONLY error sound if invalid, or click sound if valid!
-                            setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
+                          } else if (lockedNum !== null && cell && !cell.isOriginalClue && cell.value === 0) {
+                            // Fast fill empty cell with active brush digit
                             handleValueInput(lockedNum, r, c);
                           } else {
                             if (!isCurrentlySelected) {
@@ -7036,10 +7324,13 @@ useEffect(() => {
                             setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                           }
                         } else {
+                          // Normal / Cell-First Mode
                           if (!isCurrentlySelected) {
                             playClickSound();
                             triggerHapticTap(vibrations);
                           }
+                          const cell = boardState?.grid[r][c];
+                          setActiveKeypadNum(cell && cell.value !== 0 ? cell.value : null);
                           setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                         }
                       }}
@@ -7081,19 +7372,79 @@ useEffect(() => {
                     onHint={triggerSmartHint}
                     hintInventory={hintInventory}
                     onNumberSelect={(num) => {
+                      // Check remaining count of this digit
+                      let count = 0;
+                      if (boardState) {
+                        for (let r = 0; r < 9; r++) {
+                          for (let c = 0; c < 9; c++) {
+                            if (boardState.grid[r][c].value === num) count++;
+                          }
+                        }
+                      }
+                      const isCompleted = count >= 9;
+
                       if (isNumberFirstInputMode) {
+                        if (isCompleted) {
+                          showToast(`Number ${num} is already completed.`);
+                          return;
+                        }
                         if (lockedNum === num) {
+                          // Requirement 2: Tapping an already selected number deselects it completely
                           setLockedNum(null);
-                          addLog(`🔓 Unlocked digit ${num}.`);
+                          setActiveKeypadNum(null);
+                          setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                          addLog(`🔓 Deselected paint digit ${num}.`);
                         } else {
+                          // Requirement 3: Unified single-number highlighting (clears previous highlights)
                           setLockedNum(num);
+                          setActiveKeypadNum(num);
+                          setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
                           addLog(`🎨 Selected paint digit ${num}. Tap empty cells to fast fill!`);
                         }
                       } else {
-                        handleValueInput(num);
+                        // Cell-First Mode
+                        const selRow = boardState?.selectedRow;
+                        const selCol = boardState?.selectedCol;
+                        const hasCellSelected = selRow !== null && selRow !== undefined && selCol !== null && selCol !== undefined;
+                        const selectedCell = hasCellSelected ? boardState?.grid[selRow][selCol] : null;
+
+                        // Requirement 2: Tapping an already selected/highlighted number a second time deselects it completely
+                        const isCurrentlyActiveNum = (activeKeypadNum === num) || (selectedCell && selectedCell.value === num);
+
+                        if (isCurrentlyActiveNum && (!selectedCell || selectedCell.value !== 0)) {
+                          setActiveKeypadNum(null);
+                          setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                          addLog(`⚪ Deselected number ${num}. Returned board to neutral state.`);
+                          return;
+                        }
+
+                        if (hasCellSelected && selectedCell && selectedCell.value === 0 && !selectedCell.isOriginalClue) {
+                          handleValueInput(num);
+                          if (!pencilMode) {
+                            setActiveKeypadNum(num);
+                          }
+                        } else if (hasCellSelected && selectedCell && selectedCell.value !== 0) {
+                          if (selectedCell.value !== num) {
+                            triggerHapticError(vibrations);
+                            showToast(`🔒 Erase ${selectedCell.value} first to change it.`);
+                            addLog(`🔒 Erase-First Protection: Cell already filled. Erase it first.`);
+                            setActiveKeypadNum(num);
+                            setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                          }
+                        } else {
+                          // No cell selected: toggle single-number highlight across board
+                          if (activeKeypadNum === num) {
+                            setActiveKeypadNum(null);
+                            setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                          } else {
+                            setActiveKeypadNum(num);
+                            setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                          }
+                        }
                       }
                     }}
                     lockedNum={lockedNum}
+                    activeKeypadNum={activeKeypadNum}
                     isNumberFirstInputMode={isNumberFirstInputMode}
                     showRemainingNumbers={showRemainingNumbers}
                     visualizingBacktrack={visualizingBacktrack}
@@ -7153,6 +7504,9 @@ useEffect(() => {
                             onClick={() => {
                               playClickSound();
                               setShowGameOverModal(false);
+                              setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                              setLockedNum(null);
+                              setActiveKeypadNum(null);
                             }}
                             className={`p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 ${darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"}`}
                             title="Close"
@@ -7751,94 +8105,129 @@ useEffect(() => {
                               </div>
 
                               {/* PLAYER ROSTER & INLINE ACTIONS */}
-                              <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 no-scrollbar flex flex-col gap-2 max-h-[190px] my-1.5 py-0.5">
+                              <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 no-scrollbar flex flex-col gap-4 max-h-[190px] my-1.5 py-0.5">
                                 {multiplayerPlayers.length === 0 ? (
                                   <span className="text-xs italic text-stone-500 py-4 text-center">
                                     No past players yet. Share the link below to invite someone.
                                   </span>
                                 ) : (
-                                  multiplayerPlayers.map(player => {
-                                    const { isJoined, isPendingSent, isDeclined, remainingSeconds } = getInviteCooldownState(player.id);
+                                  <>
+                                    {(() => {
+                                      const friends = multiplayerPlayers.filter(p => p.isFriend).sort((a, b) => {
+                                        if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
+                                        return a.name.localeCompare(b.name);
+                                      });
+                                      
+                                      const recentPlayers = multiplayerPlayers.filter(p => !p.isFriend).sort((a, b) => {
+                                        if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
+                                        return a.name.localeCompare(b.name);
+                                      });
 
-                                    return (
-                                      <div
-                                        key={player.id}
-                                        className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-200 ${
-                                          darkMode 
-                                            ? "bg-zinc-900/60 border border-zinc-800/60 text-stone-200" 
-                                            : "bg-white border border-stone-200/60 text-stone-850 shadow-xs"
-                                        }`}
-                                      >
-                                        {/* Left: Status Dot, Username, Inline Friend Toggle */}
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <span className={`w-2 h-2 rounded-full shrink-0 ${
-                                            player.status === 'online' ? "bg-emerald-400 animate-pulse" : "bg-stone-300 dark:bg-zinc-700"
-                                          }`} />
-                                          <span className="font-bold text-xs font-sans truncate">
-                                            {player.name}
-                                          </span>
-                                          {player.isFriend ? (
-                                            <span className={`text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0 ${
-                                              darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
-                                            }`}>
-                                              FRIEND
-                                            </span>
-                                          ) : (
-                                            <button
-                                              onClick={() => handleToggleFriend(player.id, player.name)}
-                                              className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border-none cursor-pointer shrink-0 transition-all active:scale-95 ${
-                                                darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-150 hover:bg-stone-200 text-stone-700"
-                                              }`}
-                                            >
-                                              + Add
-                                            </button>
-                                          )}
-                                        </div>
+                                      const renderRow = (player: any) => {
+                                        const { isJoined, isPendingSent, isDeclined, remainingSeconds } = getInviteCooldownState(player.id);
+                                        return (
+                                          <div
+                                            key={player.id}
+                                            className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-200 ${
+                                              darkMode 
+                                                ? "bg-zinc-900/60 border border-zinc-800/60 text-stone-200" 
+                                                : "bg-white border border-stone-200/60 text-stone-850 shadow-xs"
+                                            }`}
+                                          >
+                                            {/* Left: Status Dot, Add Friend Icon, Username */}
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                                                player.status === 'online' ? "bg-emerald-400 animate-pulse" : "bg-stone-300 dark:bg-zinc-700"
+                                              }`} />
+                                              {player.isFriend ? (
+                                                <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
+                                                  darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
+                                                }`}>
+                                                  ✓
+                                                </span>
+                                              ) : (
+                                                <button
+                                                  onClick={() => handleToggleFriend(player.id, player.name)}
+                                                  className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border-none cursor-pointer shrink-0 transition-all active:scale-95 flex items-center justify-center ${
+                                                    darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-150 hover:bg-stone-200 text-stone-700"
+                                                  }`}
+                                                  title="Add Friend"
+                                                >
+                                                  +
+                                                </button>
+                                              )}
+                                              <span className="font-bold text-xs font-sans truncate">
+                                                {player.name}
+                                              </span>
+                                            </div>
 
-                                        {/* Right: Dedicated match invite button */}
-                                        <div className="shrink-0 ml-2">
-                                          {isJoined ? (
-                                            <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl flex items-center gap-1 ${
-                                              darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
-                                            }`}>
-                                              <Check className="w-3 h-3 stroke-[3]" />
-                                              JOINED
-                                            </span>
-                                          ) : isPendingSent ? (
-                                            <button
-                                              disabled
-                                              className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
-                                                darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]"
-                                              }`}
-                                            >
-                                              SENT ({remainingSeconds}s)...
-                                            </button>
-                                          ) : isDeclined ? (
-                                            <button
-                                              disabled
-                                              className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
-                                                darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
-                                              }`}
-                                            >
-                                              DECLINED ({remainingSeconds}s)
-                                            </button>
-                                          ) : (
-                                            <button
-                                              onClick={() => {
-                                                playClickSound();
-                                                handleInviteFriend(player.id);
-                                              }}
-                                              className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none cursor-pointer transition-all active:scale-95 shadow-xs ${
-                                                darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
-                                              }`}
-                                            >
-                                              INVITE
-                                            </button>
+                                            {/* Right: Dedicated match invite button */}
+                                            <div className="shrink-0 ml-2">
+                                              {isJoined ? (
+                                                <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl flex items-center gap-1 ${
+                                                  darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
+                                                }`}>
+                                                  <Check className="w-3 h-3 stroke-[3]" />
+                                                  JOINED
+                                                </span>
+                                              ) : isPendingSent ? (
+                                                <button
+                                                  disabled
+                                                  className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
+                                                    darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]"
+                                                  }`}
+                                                >
+                                                  SENT ({remainingSeconds}s)...
+                                                </button>
+                                              ) : isDeclined ? (
+                                                <button
+                                                  disabled
+                                                  className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
+                                                    darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
+                                                  }`}
+                                                >
+                                                  DECLINED ({remainingSeconds}s)
+                                                </button>
+                                              ) : (
+                                                <button
+                                                  onClick={() => {
+                                                    playClickSound();
+                                                    handleInviteFriend(player.id);
+                                                  }}
+                                                  className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none cursor-pointer transition-all active:scale-95 shadow-xs ${
+                                                    darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
+                                                  }`}
+                                                >
+                                                  INVITE
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      };
+
+                                      return (
+                                        <>
+                                          {friends.length > 0 && (
+                                            <div className="flex flex-col gap-2">
+                                              <span className={`font-sans font-bold text-[10px] uppercase tracking-wider pl-1 ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
+                                                Friends ({friends.length})
+                                              </span>
+                                              {friends.map(renderRow)}
+                                            </div>
                                           )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })
+                                          {recentPlayers.length > 0 && (
+                                            <div className="flex flex-col gap-2">
+                                              <span className={`font-sans font-bold text-[10px] uppercase tracking-wider pl-1 mt-2 ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
+                                                Recent Players ({recentPlayers.length})
+                                              </span>
+                                              {recentPlayers.map(renderRow)}
+                                            </div>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+                                  </>
                                 )}
                               </div>
 
@@ -7964,6 +8353,9 @@ useEffect(() => {
                       onClick={() => {
                         playClickSound();
                         setShowGameOverModal(false);
+                        setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                        setLockedNum(null);
+                        setActiveKeypadNum(null);
                       }}
                       className={`absolute top-4 right-4 p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 z-50 ${darkMode ? "bg-zinc-700/60 hover:bg-zinc-600 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-500"}`}
                       title="Close"
@@ -8072,20 +8464,11 @@ useEffect(() => {
               )}
 
               {/* Desktop-only AdSense Compliance section */}
-              <div className="hidden lg:block w-full shrink-0">
-                {renderAdSenseContent("game")}
-                <footer className="w-full max-w-4xl mx-auto px-4 py-8 mt-8 text-center text-xs font-sans text-stone-500 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 select-text">
-                  <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-                    <a href="/about.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("about"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">About Us</a>
-                    <a href="/contact.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("contact"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Contact Us</a>
-                    <a href="/privacy.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("privacy"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Privacy Policy</a>
-                    <a href="/terms.html" onClick={(e) => { e.preventDefault(); playClickSound(); setActiveCompliancePage("terms"); }} className="bg-transparent border-none cursor-pointer text-stone-550 hover:text-[#0369A1] dark:text-stone-400 dark:hover:text-[#bae6fd] font-semibold transition-colors no-underline">Terms of Service</a>
-                  </div>
-                  <div className="opacity-80 font-mono text-[10px]">
-                    © 2026 SudokuSync. All rights reserved.
-                  </div>
-                </footer>
-              </div>
+              {!Capacitor.isNativePlatform() && (
+                <div className="hidden lg:block w-full shrink-0">
+                  {renderAdSenseContent("game")}
+                </div>
+              )}
             </div>
           )}
 
@@ -10573,101 +10956,180 @@ useEffect(() => {
                   )}
 
                   {/* Body: Scrollable list of recent players & friends */}
-                  <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 no-scrollbar flex flex-col gap-2 max-h-[260px]">
+                  <div className="flex items-center justify-center px-1 shrink-0 mb-3 mt-1">
+                    {(() => {
+                      const fCount = multiplayerPlayers.filter(p => p.isFriend).length;
+                      const rCount = multiplayerPlayers.length;
+                      return (
+                        <div className={`flex w-full rounded-lg p-1 ${darkMode ? "bg-zinc-900/60" : "bg-stone-200/50"}`}>
+                          <button
+                            onClick={() => setActiveAppInviteTab('recent')}
+                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                              activeAppInviteTab === 'recent'
+                                ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
+                                : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
+                            }`}
+                          >
+                            Recent ({rCount})
+                          </button>
+                          <button
+                            onClick={() => setActiveAppInviteTab('friends')}
+                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                              activeAppInviteTab === 'friends'
+                                ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
+                                : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
+                            }`}
+                          >
+                            Friends ({fCount})
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 no-scrollbar flex flex-col gap-4 max-h-[260px]">
                     {multiplayerPlayers.length === 0 ? (
                       <span className="text-xs italic text-stone-500 py-6 text-center">
                         No past players yet. Share the link below to invite someone to this game!
                       </span>
                     ) : (
-                      multiplayerPlayers.map(player => {
-                        const { isJoined, isPendingSent, isDeclined, remainingSeconds } = getInviteCooldownState(player.id);
+                      <>
+                        {(() => {
+                          const friends = multiplayerPlayers.filter(p => p.isFriend).sort((a, b) => {
+                            if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
+                            return a.name.localeCompare(b.name);
+                          });
+                          
+                          const recentPlayers = [...multiplayerPlayers].sort((a, b) => {
+                            if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
+                            return a.name.localeCompare(b.name);
+                          });
 
-                        return (
-                          <div
-                            key={player.id}
-                            className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-200 ${
-                              darkMode 
-                                ? "bg-zinc-900/60 border border-zinc-800/60 text-stone-200" 
-                                : "bg-white border border-stone-200/60 text-stone-850 shadow-xs"
-                            }`}
-                          >
-                            {/* Left: Status Dot, Username, Inline Friend Toggle */}
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${
-                                player.status === 'online' ? "bg-emerald-400 animate-pulse" : "bg-stone-300 dark:bg-zinc-700"
-                              }`} />
-                              <span className="font-bold text-xs font-sans truncate">
-                                {player.name}
-                              </span>
-                              {player.isFriend ? (
-                                <span className={`text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0 ${
-                                  darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
-                                }`}>
-                                  FRIEND
-                                </span>
-                              ) : (
-                                <button
-                                  onClick={() => handleToggleFriend(player.id, player.name)}
-                                  className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border-none cursor-pointer shrink-0 transition-all active:scale-95 ${
-                                    darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-150 hover:bg-stone-200 text-stone-700"
-                                  }`}
-                                >
-                                  + Add
-                                </button>
-                              )}
-                            </div>
+                          const renderRow = (player: any) => {
+                            const { isJoined, isPendingSent, isDeclined, remainingSeconds } = getInviteCooldownState(player.id);
+                            return (
+                              <div
+                                key={player.id}
+                                className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-200 ${
+                                  darkMode 
+                                    ? "bg-zinc-900/60 border border-zinc-800/60 text-stone-200" 
+                                    : "bg-white border border-stone-200/60 text-stone-850 shadow-xs"
+                                }`}
+                              >
+                                {/* Left: Status Dot, Add Friend Icon, Username */}
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`w-2 h-2 rounded-full shrink-0 ${
+                                    player.status === 'online' ? "bg-emerald-400 animate-pulse" : "bg-stone-300 dark:bg-zinc-700"
+                                  }`} />
+                                  {player.isFriend ? (
+                                    <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
+                                      darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
+                                    }`}>
+                                      ✓ Friend
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleToggleFriend(player.id, player.name)}
+                                      className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border-none cursor-pointer shrink-0 transition-all active:scale-95 flex items-center justify-center ${
+                                        darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-150 hover:bg-stone-200 text-stone-700"
+                                      }`}
+                                      title="Add Friend"
+                                    >
+                                      +
+                                    </button>
+                                  )}
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="font-bold text-xs font-sans truncate">
+                                      {player.name}
+                                    </span>
+                                    {player.lastPlayedAt && (
+                                      <span className="text-[9.5px] text-stone-400">
+                                        {formatMatchTimestamp(player.lastPlayedAt)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
 
-                            {/* Right: Dedicated match invite button */}
-                            <div className="shrink-0 ml-2">
-                              {isJoined ? (
-                                <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl flex items-center gap-1 ${
-                                  darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
-                                }`}>
-                                  <Check className="w-3 h-3 stroke-[3]" />
-                                  JOINED
-                                </span>
-                              ) : isPendingSent ? (
-                                <button
-                                  disabled
-                                  className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
-                                    darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]"
-                                  }`}
-                                >
-                                  SENT ({remainingSeconds}s)...
-                                </button>
-                              ) : isDeclined ? (
-                                <button
-                                  disabled
-                                  className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
-                                    darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
-                                  }`}
-                                >
-                                  DECLINED ({remainingSeconds}s)
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    if (!isOnline) return;
-                                    playClickSound();
-                                    handleInviteFriend(player.id);
-                                  }}
-                                  disabled={!isOnline}
-                                  style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
-                                  className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none transition-all shadow-xs ${
-                                    !isOnline
-                                      ? "opacity-40 cursor-not-allowed pointer-events-none"
-                                      : "cursor-pointer active:scale-95"
-                                  } ${
-                                    darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
-                                  }`}
-                                >
-                                  INVITE
-                                </button>
+                                {/* Right: Dedicated match invite button */}
+                                <div className="shrink-0 ml-2">
+                                  {isJoined ? (
+                                    <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl flex items-center gap-1 ${
+                                      darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
+                                    }`}>
+                                      <Check className="w-3 h-3 stroke-[3]" />
+                                      JOINED
+                                    </span>
+                                  ) : isPendingSent ? (
+                                    <button
+                                      disabled
+                                      className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
+                                        darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]"
+                                      }`}
+                                    >
+                                      SENT ({remainingSeconds}s)...
+                                    </button>
+                                  ) : isDeclined ? (
+                                    <button
+                                      disabled
+                                      className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
+                                        darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
+                                      }`}
+                                    >
+                                      DECLINED ({remainingSeconds}s)
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => {
+                                        if (!isOnline) return;
+                                        playClickSound();
+                                        handleInviteFriend(player.id);
+                                      }}
+                                      disabled={!isOnline}
+                                      style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
+                                      className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none transition-all shadow-xs ${
+                                        !isOnline
+                                          ? "opacity-40 cursor-not-allowed pointer-events-none"
+                                          : "cursor-pointer active:scale-95"
+                                      } ${
+                                        darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
+                                      }`}
+                                    >
+                                      INVITE
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          };
+
+                          return (
+                            <>
+                              {activeAppInviteTab === 'friends' && (
+                                friends.length > 0 ? (
+                                  <div className="flex flex-col gap-2">
+                                    {friends.map(renderRow)}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs italic text-stone-500 py-6 text-center block">
+                                    No friends added yet. Tap [+] next to recent players to add them!
+                                  </span>
+                                )
                               )}
-                            </div>
-                          </div>
-                        );
-                      })
+                              {activeAppInviteTab === 'recent' && (
+                                recentPlayers.length > 0 ? (
+                                  <div className="flex flex-col gap-2">
+                                    {recentPlayers.map(renderRow)}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs italic text-stone-500 py-6 text-center block">
+                                    No recent opponents yet. Start a match to find players!
+                                  </span>
+                                )
+                              )}
+                            </>
+                          );
+                        })()}
+                      </>
                     )}
                   </div>
 
@@ -11105,7 +11567,7 @@ useEffect(() => {
                       </p>
 
                       <div className="flex flex-col gap-3.5 pt-1">
-                        {/* Google Sign-in Placeholder (Disabled) */}
+                        {/* Google Sign-in (Disabled) */}
                         <div className="flex flex-col gap-1 w-full select-none">
                           <button
                             disabled
@@ -11814,7 +12276,7 @@ useEffect(() => {
                         🍪 Advertising Cookie Transparency & Opt-Out Portals:
                       </p>
                       <p>
-                        Google's use of advertising cookies enables it and its partners to serve ads to our users based on their visit to our sites and/or other sites on the Internet. You have the full right to opt out of personalized advertising at any time through the following official privacy portals:
+                        Google's use of advertising cookies, including the DoubleClick cookie (DART cookie), enables it and its partners to serve ads to our users based on their visit to our sites and/or other sites on the Internet. Users may opt out of personalized advertising or manage cookie preferences at any time through the following official privacy portals:
                       </p>
                       <ul className="list-disc pl-5 space-y-1 text-[11.5px]">
                         <li>

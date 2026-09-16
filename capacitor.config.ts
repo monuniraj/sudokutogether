@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.sudokutogether.app',
-  appName: 'Sudoku Together: Multiplayer',
+  appId: 'com.mologic.sudokusync',
+  appName: 'SudokuSync',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

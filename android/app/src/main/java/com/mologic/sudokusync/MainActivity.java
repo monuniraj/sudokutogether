@@ -1,4 +1,4 @@
-package com.sudokutogether.app;
+package com.mologic.sudokusync;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -61,19 +61,9 @@ export const formatMatchTimestamp = (dateStrOrTimestamp?: any, fallback = "Saved
     return `${hours}h ago`;
   }
 
-  // Older than 24 hours (or distant future): Date + local hour and minute
-  const currentYear = new Date().getFullYear();
-  const datePart = d.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    ...(d.getFullYear() !== currentYear ? { year: "numeric" } : {})
-  });
-  const timePart = d.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit"
-  });
-
-  return `${datePart}, ${timePart}`;
+  // Older than 24 hours (or distant future): Xd ago
+  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  return `${days}d ago`;
 };
 
 /**

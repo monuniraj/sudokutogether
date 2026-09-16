@@ -11,27 +11,27 @@ export const DIFFICULTY_GRID_THEMES: Record<Difficulty, {
 }> = {
   EASY: {
     activeCell: { light: "#86EFAC", dark: "#064e3b" },
-    crosshair: { light: "rgba(34, 197, 94, 0.07)", dark: "rgba(6, 78, 59, 0.15)" },
-    paintCrosshair: { light: "rgba(34, 197, 94, 0.025)", dark: "rgba(6, 78, 59, 0.05)" },
-    identical: { light: "#D1FAE5", dark: "#022c22" },
+    crosshair: { light: "rgba(34, 197, 94, 0.12)", dark: "#111116" },
+    paintCrosshair: { light: "rgba(34, 197, 94, 0.12)", dark: "#111116" },
+    identical: { light: "#86EFAC", dark: "#064e3b" },
   },
   MEDIUM: {
     activeCell: { light: "#FEF08A", dark: "#713f12" },
-    crosshair: { light: "rgba(234, 179, 8, 0.07)", dark: "rgba(113, 63, 18, 0.15)" },
-    paintCrosshair: { light: "rgba(234, 179, 8, 0.025)", dark: "rgba(113, 63, 18, 0.05)" },
-    identical: { light: "#FFF99D", dark: "#451a03" },
+    crosshair: { light: "rgba(234, 179, 8, 0.12)", dark: "#111116" },
+    paintCrosshair: { light: "rgba(234, 179, 8, 0.12)", dark: "#111116" },
+    identical: { light: "#FEF08A", dark: "#713f12" },
   },
   HARD: {
     activeCell: { light: "#D8B4FE", dark: "#581c87" },
-    crosshair: { light: "rgba(168, 85, 247, 0.07)", dark: "rgba(88, 28, 135, 0.15)" },
-    paintCrosshair: { light: "rgba(168, 85, 247, 0.025)", dark: "rgba(88, 28, 135, 0.05)" },
-    identical: { light: "#F3E8FF", dark: "#2e1065" },
+    crosshair: { light: "rgba(168, 85, 247, 0.12)", dark: "#111116" },
+    paintCrosshair: { light: "rgba(168, 85, 247, 0.12)", dark: "#111116" },
+    identical: { light: "#D8B4FE", dark: "#581c87" },
   },
   EXPERT: {
     activeCell: { light: "#F9A8D4", dark: "#881337" },
-    crosshair: { light: "rgba(244, 63, 94, 0.07)", dark: "rgba(136, 19, 55, 0.15)" },
-    paintCrosshair: { light: "rgba(244, 63, 94, 0.025)", dark: "rgba(136, 19, 55, 0.05)" },
-    identical: { light: "#FFE4E6", dark: "#4c0519" },
+    crosshair: { light: "rgba(244, 63, 94, 0.12)", dark: "#111116" },
+    paintCrosshair: { light: "rgba(244, 63, 94, 0.12)", dark: "#111116" },
+    identical: { light: "#F9A8D4", dark: "#881337" },
   },
 };
 
@@ -62,6 +62,7 @@ export interface SudokuBoardProps {
   highlightIdentical: boolean;
   isNumberFirstInputMode: boolean;
   lockedNum: number | null;
+  activeKeypadNum?: number | null;
   darkMode: boolean;
   playClickSound: () => void;
   onCellClick: (r: number, c: number) => void;
@@ -78,6 +79,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   highlightIdentical,
   isNumberFirstInputMode,
   lockedNum,
+  activeKeypadNum,
   darkMode,
   playClickSound,
   onCellClick
@@ -100,18 +102,18 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   const diffTheme = DIFFICULTY_GRID_THEMES[currentDiff] || DIFFICULTY_GRID_THEMES.EASY;
 
   const heavyBorderR = darkMode 
-    ? (currentDiff === "EASY" ? "border-r-[#064e3b]/60" : currentDiff === "MEDIUM" ? "border-r-[#713f12]/60" : currentDiff === "HARD" ? "border-r-[#581c87]/60" : "border-r-[#881337]/60")
+    ? (currentDiff === "EASY" ? "border-r-[#064a38]" : currentDiff === "MEDIUM" ? "border-r-[#5c2405]" : currentDiff === "HARD" ? "border-r-[#371477]" : "border-r-[#620720]")
     : (currentDiff === "EASY" ? "border-r-[#065f46]/40" : currentDiff === "MEDIUM" ? "border-r-[#854d0e]/40" : currentDiff === "HARD" ? "border-r-[#6b21a8]/40" : "border-r-[#9d174d]/40");
   const heavyBorderB = darkMode 
-    ? (currentDiff === "EASY" ? "border-b-[#064e3b]/60" : currentDiff === "MEDIUM" ? "border-b-[#713f12]/60" : currentDiff === "HARD" ? "border-b-[#581c87]/60" : "border-b-[#881337]/60")
+    ? (currentDiff === "EASY" ? "border-b-[#064a38]" : currentDiff === "MEDIUM" ? "border-b-[#5c2405]" : currentDiff === "HARD" ? "border-b-[#371477]" : "border-b-[#620720]")
     : (currentDiff === "EASY" ? "border-b-[#065f46]/40" : currentDiff === "MEDIUM" ? "border-b-[#854d0e]/40" : currentDiff === "HARD" ? "border-b-[#6b21a8]/40" : "border-b-[#9d174d]/40");
 
   const lightBorderR = darkMode
-    ? (currentDiff === "EASY" ? "border-r-[#064e3b]/30" : currentDiff === "MEDIUM" ? "border-r-[#713f12]/30" : currentDiff === "HARD" ? "border-r-[#581c87]/30" : "border-r-[#881337]/30")
+    ? (currentDiff === "EASY" ? "border-r-[#054031]" : currentDiff === "MEDIUM" ? "border-r-[#532004]" : currentDiff === "HARD" ? "border-r-[#31126b]" : "border-r-[#58061d]")
     : (currentDiff === "EASY" ? "border-r-[#065f46]/20" : currentDiff === "MEDIUM" ? "border-r-[#854d0e]/20" : currentDiff === "HARD" ? "border-r-[#6b21a8]/20" : "border-r-[#9d174d]/20");
     
   const lightBorderB = darkMode
-    ? (currentDiff === "EASY" ? "border-b-[#064e3b]/30" : currentDiff === "MEDIUM" ? "border-b-[#713f12]/30" : currentDiff === "HARD" ? "border-b-[#581c87]/30" : "border-b-[#881337]/30")
+    ? (currentDiff === "EASY" ? "border-b-[#054031]" : currentDiff === "MEDIUM" ? "border-b-[#532004]" : currentDiff === "HARD" ? "border-b-[#31126b]" : "border-b-[#58061d]")
     : (currentDiff === "EASY" ? "border-b-[#065f46]/20" : currentDiff === "MEDIUM" ? "border-b-[#854d0e]/20" : currentDiff === "HARD" ? "border-b-[#6b21a8]/20" : "border-b-[#9d174d]/20");
 
   // In Number-First mode with locked brush digit, apply ultra-soft crosshair background
@@ -120,7 +122,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
 
   return (
     <div 
-      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-none sudoku-board transition-colors duration-200 ${darkMode ? "bg-zinc-950 border-[3px]" : "bg-white border-[3px]"} ${darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#064e3b]/60" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#713f12]/60" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#581c87]/60" : "border-[#881337]/60") : ((boardState?.difficulty || difficulty) === "EASY" ? "border-[#065f46]/40" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "border-[#854d0e]/40" : (boardState?.difficulty || difficulty) === "HARD" ? "border-[#6b21a8]/40" : "border-[#9d174d]/40")}`}
+      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-none sudoku-board transition-colors duration-200 ${darkMode ? "bg-zinc-900 border-[3px]" : "bg-white border-[3px]"} ${darkMode ? (currentDiff === "EASY" ? "border-[#064a38]" : currentDiff === "MEDIUM" ? "border-[#5c2405]" : currentDiff === "HARD" ? "border-[#371477]" : "border-[#620720]") : (currentDiff === "EASY" ? "border-[#065f46]/40" : currentDiff === "MEDIUM" ? "border-[#854d0e]/40" : currentDiff === "HARD" ? "border-[#6b21a8]/40" : "border-[#9d174d]/40")}`}
       style={{ 
         boxShadow: darkMode ? "0 4px 20px rgba(0,0,0,0.6)" : "0 4px 20px rgba(43,108,176,0.03)",
         width: "100%",
@@ -185,7 +187,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
 
           const activeSelectedNumber = (isNumberFirstInputMode && lockedNum !== null)
             ? lockedNum
-            : selectedCellValue;
+            : (activeKeypadNum !== undefined && activeKeypadNum !== null ? activeKeypadNum : selectedCellValue);
 
           const isIdenticalValue = highlightIdentical && 
             activeSelectedNumber !== 0 && 
@@ -216,21 +218,28 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
             cellBgStyle = {
               backgroundColor: darkMode ? diffTheme.activeCell.dark : diffTheme.activeCell.light,
             };
-            if (darkMode) cellBgClass = "text-white animate-pulse";
+            cellBgClass = darkMode ? "text-white animate-pulse" : "animate-pulse";
           } else if (isIdenticalValue) {
             cellBgStyle = {
               backgroundColor: darkMode ? diffTheme.identical.dark : diffTheme.identical.light,
             };
             if (darkMode) cellBgClass = "text-white";
           } else if (isHighlightedSibling) {
-            const crosshairBg = isPaintModeActiveWithNumber
-              ? (darkMode ? diffTheme.paintCrosshair.dark : diffTheme.paintCrosshair.light)
-              : (darkMode ? diffTheme.crosshair.dark : diffTheme.crosshair.light);
-            cellBgStyle = {
-              backgroundColor: crosshairBg,
-            };
+            if (darkMode) {
+              cellBgStyle = {
+                backgroundColor: "#111116",
+              };
+            } else {
+              cellBgClass = "bg-white";
+            }
           } else {
-            cellBgClass = darkMode ? "bg-zinc-900/60" : "bg-white";
+            if (darkMode) {
+              cellBgClass = "bg-zinc-900";
+            } else {
+              cellBgStyle = {
+                backgroundColor: diffTheme.crosshair.light,
+              };
+            }
           }
 
           let borderClasses = "";
@@ -239,7 +248,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           } else if (c === 8) {
             borderClasses += " border-r-0";
           } else {
-            borderClasses += ` border-r-[0.75px] ${lightBorderR}`;
+            borderClasses += ` border-r-[1.5px] ${lightBorderR}`;
           }
 
           if (r === 2 || r === 5) {
@@ -247,7 +256,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           } else if (r === 8) {
             borderClasses += " border-b-0";
           } else {
-            borderClasses += ` border-b-[0.75px] ${lightBorderB}`;
+            borderClasses += ` border-b-[1.5px] ${lightBorderB}`;
           }
 
           const hasNotesSet = cell.notes instanceof Set ? cell.notes : new Set(cell.notes || []);
@@ -277,21 +286,21 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                   {cell.value}
                 </div>
               ) : (
-                /* Soft muted light grey note digits */
+                /* High-legibility candidate note digits */
                 <div 
-                  className={`absolute inset-px grid grid-cols-3 p-[2px] font-mono leading-none ${darkMode ? "text-sky-400/50" : "text-[#2B6CB0]/55"}`}
+                  className="absolute inset-0 grid grid-cols-3 grid-rows-3 p-0.5 leading-none select-none pointer-events-none"
                   style={{
-                    fontSize: "clamp(6px, min(1.8vw, 1.4vh), 12px)",
-                    lineHeight: "1.1"
+                    fontSize: "clamp(10px, min(2.8vw, 2.4vh), 16px)",
+                    lineHeight: 1
                   }}
                 >
                   {Array.from({ length: 9 }).map((_, id) => {
                     const cand = id + 1;
                     const hasNote = hasNotesSet.has(cand);
                     return (
-                      <div key={id} className={`flex items-center justify-center text-center font-bold ${
+                      <div key={id} className={`w-full h-full flex items-center justify-center text-center ${
                         hasNote 
-                          ? (darkMode ? "text-sky-400/90 font-black font-sans" : "text-[#2B6CB0]/85 font-black font-sans") 
+                          ? (darkMode ? "text-sky-300 font-black font-sans" : "text-blue-800 font-black font-sans") 
                           : "opacity-0"
                       }`}>
                         {cand}

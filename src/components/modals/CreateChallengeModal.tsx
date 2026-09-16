@@ -12,6 +12,7 @@ import {
   Users,
   Link2
 } from "lucide-react";
+import { formatMatchTimestamp } from "../../utils/formatTimestamp";
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 
@@ -84,6 +85,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
 }) => {
   const [openDropdown, setOpenDropdown] = useState<"difficulty" | "mistakes" | "hints" | "timer" | null>(null);
   const [isLobbyLocked, setIsLobbyLocked] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<"recent" | "friends">("recent");
 
   useEffect(() => {
     if (!isOpen) {
@@ -447,106 +449,177 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
 
       {/* 3. PLAYER ROSTER & INLINE ACTIONS */}
       <div className="flex-1 min-h-0 flex flex-col gap-2 select-none">
-        <div className="flex items-center justify-between px-1 shrink-0">
-          <span className={`font-sans font-black uppercase tracking-wider text-[10px] ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
-            Players & Friends:
-          </span>
-          <span className={`text-[10px] font-mono font-bold ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
-            {multiplayerPlayers.length} Available
-          </span>
+        <div className="flex items-center justify-center px-1 shrink-0 mb-1">
+          {(() => {
+            const fCount = multiplayerPlayers.filter(p => p.isFriend).length;
+            const rCount = multiplayerPlayers.length;
+            return (
+              <div className={`flex w-full rounded-lg p-1 ${darkMode ? "bg-zinc-900/60" : "bg-stone-200/50"}`}>
+                <button
+                  onClick={() => setActiveTab('recent')}
+                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                    activeTab === 'recent'
+                      ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
+                      : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
+                  }`}
+                >
+                  Recent ({rCount})
+                </button>
+                <button
+                  onClick={() => setActiveTab('friends')}
+                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                    activeTab === 'friends'
+                      ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
+                      : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
+                  }`}
+                >
+                  Friends ({fCount})
+                </button>
+              </div>
+            );
+          })()}
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-2 no-scrollbar">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-4 no-scrollbar pb-2">
           {multiplayerPlayers.length === 0 ? (
             <span className="text-xs italic text-stone-500 py-6 text-center">
               No past players yet. Share your room code or link below!
             </span>
           ) : (
-            multiplayerPlayers.map(player => {
-              const { isJoined, isPendingSent, isDeclined, remainingSeconds } = getInviteCooldownState(player.id);
+            <>
+              {(() => {
+                const friends = multiplayerPlayers.filter(p => p.isFriend).sort((a, b) => {
+                  if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
+                  return a.name.localeCompare(b.name);
+                });
+                
+                const recentPlayers = [...multiplayerPlayers].sort((a, b) => {
+                  if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
+                  return a.name.localeCompare(b.name);
+                });
 
-              return (
-                <div
-                  key={player.id}
-                  className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-200 shrink-0 ${
-                    darkMode 
-                      ? "bg-zinc-900/60 border border-zinc-800/60 text-stone-200" 
-                      : "bg-white border border-stone-200/60 text-stone-850 shadow-xs"
-                  }`}
-                >
-                  {/* Left: Status Dot, Username, Inline Friend Toggle */}
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${
-                      player.status === 'online' ? "bg-emerald-400 animate-pulse" : "bg-stone-300 dark:bg-zinc-700"
-                    }`} />
-                    <span className="font-bold text-xs font-sans truncate">
-                      {player.name}
-                    </span>
-                    {player.isFriend ? (
-                      <span className={`text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg shrink-0 ${
-                        darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
-                      }`}>
-                        FRIEND
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleToggleFriend(player.id, player.name)}
-                        className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border-none cursor-pointer shrink-0 transition-all active:scale-95 ${
-                          darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-150 hover:bg-stone-200 text-stone-700"
-                        }`}
-                      >
-                        + Add
-                      </button>
-                    )}
-                  </div>
+                const renderRow = (player: any) => {
+                  const { isJoined, isPendingSent, isDeclined, remainingSeconds } = getInviteCooldownState(player.id);
+                  return (
+                    <div
+                      key={player.id}
+                      className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-200 shrink-0 ${
+                        darkMode 
+                          ? "bg-zinc-900/60 border border-zinc-800/60 text-stone-200" 
+                          : "bg-white border border-stone-200/60 text-stone-850 shadow-xs"
+                      }`}
+                    >
+                      {/* Left: Status Dot, Add Friend Icon, Username */}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${
+                          player.status === 'online' ? "bg-emerald-400 animate-pulse" : "bg-stone-300 dark:bg-zinc-700"
+                        }`} />
+                        {player.isFriend ? (
+                          <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
+                            darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
+                          }`}>
+                            ✓ Friend
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleToggleFriend(player.id, player.name)}
+                            className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border-none cursor-pointer shrink-0 transition-all active:scale-95 flex items-center justify-center ${
+                              darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-150 hover:bg-stone-200 text-stone-700"
+                            }`}
+                            title="Add Friend"
+                          >
+                            +
+                          </button>
+                        )}
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-xs font-sans truncate">
+                            {player.name}
+                          </span>
+                          {player.lastPlayedAt && (
+                            <span className="text-[9.5px] text-stone-400">
+                              {formatMatchTimestamp(player.lastPlayedAt)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                  {/* Right: Dedicated match invite button */}
-                  <div className="shrink-0 ml-2">
-                    {isJoined ? (
-                      <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl flex items-center gap-1 ${
-                        darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
-                      }`}>
-                        <Check className="w-3 h-3 stroke-[3]" />
-                        JOINED
-                      </span>
-                    ) : isPendingSent ? (
-                      <button
-                        disabled
-                        className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
-                          darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]"
-                        }`}
-                      >
-                        SENT ({remainingSeconds}s)...
-                      </button>
-                    ) : isDeclined ? (
-                      <button
-                        disabled
-                        className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
-                          darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
-                        }`}
-                      >
-                        DECLINED ({remainingSeconds}s)
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          playClickSound();
-                          setIsLobbyLocked(true);
-                          setOpenDropdown(null);
-                          handleInviteFriend(player.id);
-                        }}
-                        className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none cursor-pointer transition-all active:scale-95 shadow-xs ${
-                          darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
-                        }`}
-                      >
-                        INVITE
-                      </button>
+                      {/* Right: Dedicated match invite button */}
+                      <div className="shrink-0 ml-2">
+                        {isJoined ? (
+                          <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl flex items-center gap-1 ${
+                            darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
+                          }`}>
+                            <Check className="w-3 h-3 stroke-[3]" />
+                            JOINED
+                          </span>
+                        ) : isPendingSent ? (
+                          <button
+                            disabled
+                            className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
+                              darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]"
+                            }`}
+                          >
+                            SENT ({remainingSeconds}s)...
+                          </button>
+                        ) : isDeclined ? (
+                          <button
+                            disabled
+                            className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
+                              darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
+                            }`}
+                          >
+                            DECLINED ({remainingSeconds}s)
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              playClickSound();
+                              setIsLobbyLocked(true);
+                              setOpenDropdown(null);
+                              handleInviteFriend(player.id);
+                            }}
+                            className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none cursor-pointer transition-all active:scale-95 shadow-xs ${
+                              darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
+                            }`}
+                          >
+                            INVITE
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                };
+
+                return (
+                  <>
+                    {activeTab === 'friends' && (
+                      friends.length > 0 ? (
+                        <div className="flex flex-col gap-2">
+                          {friends.map(renderRow)}
+                        </div>
+                      ) : (
+                        <span className="text-xs italic text-stone-500 py-6 text-center block">
+                          No friends added yet. Tap [+] next to recent players to add them!
+                        </span>
+                      )
                     )}
-                  </div>
-                </div>
-              );
-            })
+                    {activeTab === 'recent' && (
+                      recentPlayers.length > 0 ? (
+                        <div className="flex flex-col gap-2">
+                          {recentPlayers.map(renderRow)}
+                        </div>
+                      ) : (
+                        <span className="text-xs italic text-stone-500 py-6 text-center block">
+                          No recent opponents yet. Start a match to find players!
+                        </span>
+                      )
+                    )}
+                  </>
+                );
+              })()}
+            </>
           )}
+
         </div>
       </div>
 

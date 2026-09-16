@@ -12,6 +12,21 @@
   html, body {
     overscroll-behavior: none;
     overscroll-behavior-y: none;
+    -webkit-user-select: none;
+    user-select: none;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Eliminate 300ms tap delay and disable pinch-zoom on interactive game elements */
+  button, input, select, textarea, [role="button"], .sudoku-cell, .keypad-btn {
+    touch-action: manipulation;
+  }
+
+  /* Prevent accidental text selection handles on interactive UI elements during fast tapping */
+  button, [role="button"], .sudoku-cell, .keypad-btn, .select-none {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
   /* Completely hide standard scrollbars everywhere while enabling scroll actions */
