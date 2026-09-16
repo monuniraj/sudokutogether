@@ -3861,9 +3861,17 @@ useEffect(() => {
     triggerRecordWarningAlert("Above 3 hints: Personal best time record is disabled.");
   };
 
+  const toastTimeoutRef = useRef<any>(null);
+
   const showToast = (msg: string) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+      toastTimeoutRef.current = null;
+    }, 3000);
   };
 
   // Sudoku state variables

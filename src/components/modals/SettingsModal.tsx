@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pencil, Check, Lock } from "lucide-react";
+import { Pencil, Check, Lock, Zap } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 
@@ -606,12 +606,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               )}
             </div>
 
-            {/* Paint Mode */}
+            {/* Fast Fill (Paint Mode) */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
+                  <Zap className="w-4 h-4 text-amber-500 fill-current" />
                   <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
-                    Paint Mode
+                    Fast Fill (Paint Mode)
                   </span>
                   <button
                     type="button"
@@ -623,7 +624,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
                       expandedInfo["paint-mode"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
                     }`}
-                    aria-label="Info: Paint Mode"
+                    aria-label="Info: Fast Fill (Paint Mode)"
                     title="Toggle explanation"
                   >
                     <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
