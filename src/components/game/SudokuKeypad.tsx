@@ -1,5 +1,5 @@
 import React from "react";
-import { RotateCcw, Trash2, Pencil, Lightbulb, Check } from "lucide-react";
+import { RotateCcw, Trash2, Pencil, Lightbulb, Check, Zap } from "lucide-react";
 import { triggerHapticTap } from "../../utils/haptics";
 
 export interface SudokuKeypadProps {
@@ -21,6 +21,7 @@ export interface SudokuKeypadProps {
   lockedNum: number | null;
   activeKeypadNum?: number | null;
   isNumberFirstInputMode: boolean;
+  onToggleNumberFirstMode?: () => void;
   showRemainingNumbers: boolean;
   visualizingBacktrack?: boolean;
   darkMode: boolean;
@@ -41,6 +42,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   lockedNum,
   activeKeypadNum,
   isNumberFirstInputMode,
+  onToggleNumberFirstMode,
   showRemainingNumbers,
   visualizingBacktrack,
   darkMode,
@@ -71,6 +73,35 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
 
   return (
     <>
+      {/* QUICK FAST-FILL / PAINTBRUSH TOGGLE SWITCH */}
+      <div className="shrink-0 w-full flex items-center justify-end px-1 -mt-1.5 mb-1 sm:mb-1.5 overflow-visible select-none" id="quick-fast-fill-toggle-container">
+        <button
+          type="button"
+          onClick={() => {
+            playClickSound();
+            triggerHapticTap(vibrations);
+            if (onToggleNumberFirstMode) {
+              onToggleNumberFirstMode();
+            }
+          }}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-sans font-bold tracking-wide transition-all border cursor-pointer active:scale-95 leading-none ${
+            isNumberFirstInputMode
+              ? (darkMode
+                  ? "bg-amber-950/40 text-amber-300 border-amber-500/40 shadow-xs"
+                  : "bg-amber-50 text-amber-800 border-amber-300 shadow-xs")
+              : (darkMode
+                  ? "bg-zinc-850/60 text-zinc-400 border-zinc-700/40 hover:text-zinc-200"
+                  : "bg-stone-100/80 text-stone-500 border-stone-200/80 hover:text-stone-700")
+          }`}
+          title={isNumberFirstInputMode ? "Fast-Fill (Paintbrush) mode ON: Tap a number, then tap cells" : "Switch to Fast-Fill (Paintbrush) mode"}
+          aria-label="Toggle Fast-Fill / Paintbrush mode"
+        >
+          <Zap className={`w-3 h-3 ${isNumberFirstInputMode ? "fill-current text-amber-500 animate-pulse" : "text-stone-400 dark:text-zinc-500"}`} />
+          <span className="leading-none text-[9.5px]">Fast Fill</span>
+          <span className={`w-1.5 h-1.5 rounded-full ${isNumberFirstInputMode ? "bg-amber-500 animate-ping" : "bg-stone-300 dark:bg-zinc-600"}`} />
+        </button>
+      </div>
+
       {/* 1. UTILITY BUTTONS: Undo, Erase, Notes, Hint */}
       <div className="shrink-0 w-full flex flex-col mt-1 px-0.5 overflow-visible" id="game-utility-buttons-deck">
         <div className="grid grid-cols-4 gap-2 lg:gap-2 xl:gap-2.5 relative z-10 w-full overflow-visible">

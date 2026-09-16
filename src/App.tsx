@@ -2054,7 +2054,7 @@ useEffect(() => {
   }, [gisLoaded, googleClientId, authModalTab, currentScreen]);
 
   // --- DYNAMIC RESUME GAME STATE LOOP ---
-  const [savedSessionInfo, setSavedSessionInfo] = useState<{ difficulty: Difficulty; seconds: number } | null>(null);
+  const [savedSessionInfo, setSavedSessionInfo] = useState<{ difficulty: Difficulty; seconds: number; isMultiplayer?: boolean; roomCode?: string } | null>(null);
   const [isTimerPaused, setIsTimerPaused] = useState<boolean>(false);
 
   // Save game state helper
@@ -2071,6 +2071,8 @@ useEffect(() => {
           notes: Array.from(cell.notes) // Convert Set to Array for JSON
         }))
       );
+      const isMulti = challengeMode || Boolean(activeGameId);
+      const effectiveRoomCode = activeGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
       const sessionData = {
         grid: serializedGrid,
         selectedRow: state.selectedRow,
@@ -2082,10 +2084,26 @@ useEffect(() => {
         sessionSeconds: seconds,
         difficulty: diff,
         seed: state.seed,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        // Full multiplayer room metadata
+        isMultiplayer: isMulti,
+        roomCode: effectiveRoomCode,
+        challengeSeed: challengeSeed || state.seed || null,
+        isHost: isHost,
+        challengeMistakeLimit: challengeMistakeLimit,
+        challengeHintLimit: challengeHintLimit,
+        challengeTimerEnabled: challengeTimerEnabled,
+        challengeDifficulty: challengeDifficulty,
+        rematchGameId: rematchGameId,
+        playerCredentials: userProfile?.id ? { id: userProfile.id, name: getActiveDisplayName() } : null
       };
       localStorage.setItem("sudoku_savedSession", JSON.stringify(sessionData));
-      setSavedSessionInfo({ difficulty: diff, seconds });
+      setSavedSessionInfo({
+        difficulty: diff,
+        seconds: seconds,
+        isMultiplayer: isMulti,
+        roomCode: effectiveRoomCode || undefined
+      });
     } catch (error) {
       console.error("Autosave error:", error);
     }
@@ -2113,10 +2131,27 @@ useEffect(() => {
         difficulty: sessionData.difficulty as Difficulty,
         seed: sessionData.seed || (Math.floor(Math.random() * 900000) + 100000)
       };
+
+      // Reconcile wall-clock elapsed time for multiplayer sessions to maintain timer integrity
+      const elapsedWallClock = (sessionData.isMultiplayer && sessionData.timestamp)
+        ? Math.max(0, Math.floor((Date.now() - sessionData.timestamp) / 1000))
+        : 0;
+      const reconciledSeconds = (sessionData.sessionSeconds || 0) + elapsedWallClock;
+
       return {
         state,
-        seconds: sessionData.sessionSeconds,
-        difficulty: sessionData.difficulty as Difficulty
+        seconds: reconciledSeconds,
+        difficulty: sessionData.difficulty as Difficulty,
+        isMultiplayer: Boolean(sessionData.isMultiplayer),
+        roomCode: sessionData.roomCode || null,
+        challengeSeed: sessionData.challengeSeed || null,
+        isHost: sessionData.isHost !== undefined ? sessionData.isHost : true,
+        challengeMistakeLimit: sessionData.challengeMistakeLimit ?? 3,
+        challengeHintLimit: sessionData.challengeHintLimit ?? 3,
+        challengeTimerEnabled: sessionData.challengeTimerEnabled ?? true,
+        challengeDifficulty: (sessionData.challengeDifficulty as Difficulty) || (sessionData.difficulty as Difficulty),
+        rematchGameId: sessionData.rematchGameId || null,
+        playerCredentials: sessionData.playerCredentials || null
       };
     } catch (error) {
       console.error("Resume loading error:", error);
@@ -2139,9 +2174,14 @@ useEffect(() => {
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed && !parsed.isGameOver) {
+            const elapsed = (parsed.isMultiplayer && parsed.timestamp)
+              ? Math.max(0, Math.floor((Date.now() - parsed.timestamp) / 1000))
+              : 0;
             setSavedSessionInfo({
               difficulty: parsed.difficulty,
-              seconds: parsed.sessionSeconds
+              seconds: (parsed.sessionSeconds || 0) + elapsed,
+              isMultiplayer: Boolean(parsed.isMultiplayer),
+              roomCode: parsed.roomCode || undefined
             });
           } else {
             setSavedSessionInfo(null);
@@ -2362,6 +2402,34 @@ useEffect(() => {
       return true;
     }
     return false;
+  };
+
+  // Forfeit active multiplayer match when player explicitly starts a new game or joins another match
+  const markCurrentMultiplayerForfeit = async (roomCodeToForfeit?: string | null) => {
+    const targetRoom = roomCodeToForfeit || activeGameId;
+    const uid = userProfile?.id || "GUEST_ANON";
+    if (!targetRoom || !uid) return;
+    try {
+      const docId = getSeedDocId(targetRoom);
+      const participantRef = doc(db, "challenge_results", docId, "participants", uid);
+      await setDoc(participantRef, {
+        status: "abandoned",
+        isPending: false,
+        isWon: false,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      const playerRef = doc(db, "rooms", targetRoom, "players", uid);
+      await setDoc(playerRef, {
+        status: "abandoned",
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      console.log(`[Multiplayer] Set status abandoned/forfeited for user ${uid} in room ${targetRoom}`);
+      addLog(`🏳️ Forfeited match in Room #${targetRoom}.`);
+    } catch (err) {
+      console.error("[Multiplayer] Failed to mark forfeit in Firestore:", err);
+    }
   };
 
   // Complete multiplayer room state teardown
@@ -3234,6 +3302,11 @@ useEffect(() => {
     });
 
     // 7. Direct synchronous state dispatch (<1ms paint)
+    // Requirement 3: If in an active multiplayer match and joining a different match, mark previous match abandoned/forfeited
+    if (challengeMode && activeGameId && activeGameId !== roomCode && (!boardState || !boardState.isGameOver)) {
+      markCurrentMultiplayerForfeit(activeGameId);
+    }
+
     setSolutionGrid(solution2D.map(r => [...r]));
     setBoardState({
       grid: finishedGrid,
@@ -3839,6 +3912,50 @@ useEffect(() => {
       );
       solveSudokuRecursive(boardArr);
       setSolutionGrid(boardArr);
+
+      // Requirement 2: Re-attach Firestore multiplayer room & listeners on Resume without demoting to solo play
+      if (loaded.isMultiplayer && loaded.roomCode) {
+        setChallengeMode(true);
+        setActiveGameId(loaded.roomCode);
+        setRematchGameId(loaded.roomCode);
+        if (loaded.challengeSeed) setChallengeSeed(loaded.challengeSeed);
+        setIsHost(loaded.isHost);
+        setChallengeMistakeLimit(loaded.challengeMistakeLimit);
+        setChallengeHintLimit(loaded.challengeHintLimit);
+        setChallengeTimerEnabled(loaded.challengeTimerEnabled);
+        setChallengeDifficulty(loaded.challengeDifficulty);
+
+        // Re-attach / register challenge join in Firestore
+        registerChallengeJoin(loaded.roomCode);
+
+        // Sync player status and progress in room
+        const userId = userProfile?.id || "GUEST_ANON";
+        const docId = getSeedDocId(loaded.roomCode);
+        try {
+          setDoc(doc(db, "rooms", loaded.roomCode, "players", userId), {
+            name: getActiveDisplayName(),
+            status: "active",
+            mistakes: loaded.state.currentMistakesCount,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+
+          setDoc(doc(db, "challenge_results", docId, "participants", userId), {
+            status: "solving",
+            isPending: true,
+            mistakes: loaded.state.currentMistakesCount,
+            timeSec: loaded.seconds,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (e) {
+          console.warn("[Firestore] Resume sync notice:", e);
+        }
+
+        addLog(`🔄 Resumed multiplayer match [Room #${loaded.roomCode}]. Re-attached live listeners.`);
+      } else {
+        setChallengeMode(false);
+        setActiveGameId(null);
+      }
+
       return loaded;
     }
     return null;
@@ -5629,6 +5746,14 @@ useEffect(() => {
       ? isChallengeModeOverride 
       : false;
 
+    // Requirement 3: If in an active multiplayer match and player explicitly starts a new game (solo or different match), mark previous match abandoned/forfeited
+    if (challengeMode && activeGameId && (!boardState || !boardState.isGameOver) && (!isChallengeSession || (seedOverride && String(seedOverride).padStart(6, '0').slice(-6) !== activeGameId))) {
+      markCurrentMultiplayerForfeit(activeGameId);
+      if (!isChallengeSession) {
+        cleanupRoomSession();
+      }
+    }
+
     // Build or set active Game ID
     const customLimit = maxMistakesOverride ?? (mistakeLimitEnabled ? 3 : 999);
     const customTimer = timerEnabledOverride ?? timerEnabled;
@@ -6785,11 +6910,11 @@ useEffect(() => {
                 triggerHapticTap(vibrations);
                 const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
                 if (currentScreen === "game") {
-                  cleanupRoomSession();
+                  // Requirement 3: Navigating to Home or Status via Back button must NOT forfeit; session remains intact for Resume
+                  saveCurrentGameToLocal(boardState, sessionSeconds, difficulty);
                   if (isDesktop) {
                     navigateToScreen("status");
                   } else {
-                    saveCurrentGameToLocal(boardState, sessionSeconds, difficulty);
                     setCurrentScreen("home");
                     setNavigationHistory(["home"]);
                     window.history.pushState({ view: "home" }, "", window.location.href);
@@ -7282,10 +7407,35 @@ useEffect(() => {
                           setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                           return;
                         }
+
+                        const cell = boardState?.grid[r][c];
+
+                        // Active digit is the digit currently selected/highlighted on board
+                        const activeDigit = (isNumberFirstInputMode && lockedNum !== null)
+                          ? lockedNum
+                          : (activeKeypadNum !== null && activeKeypadNum !== undefined
+                              ? activeKeypadNum
+                              : (boardState?.selectedRow !== null && boardState?.selectedRow !== undefined && boardState?.selectedCol !== null && boardState?.selectedCol !== undefined
+                                  ? (boardState.grid[boardState.selectedRow]?.[boardState.selectedCol]?.value || 0)
+                                  : 0));
+
+                        // Requirement 1: Board-Level Number Toggle (Select & Deselect Loop)
+                        // When a digit (e.g., '4') is currently active and highlighted on the board,
+                        // tapping ANY cell containing that active digit ('4') must toggle it OFF (deselect the digit,
+                        // clear lockedNum/activeKeypadNum, and remove all matching digit highlights, returning board to neutral state).
+                        if (cell && cell.value !== 0 && activeDigit !== 0 && cell.value === activeDigit) {
+                          playClickSound();
+                          triggerHapticTap(vibrations);
+                          setLockedNum(null);
+                          setActiveKeypadNum(null);
+                          setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                          addLog(`⚪ Deselected number ${cell.value}. Returned board to neutral state.`);
+                          return;
+                        }
+
                         const isCurrentlySelected = boardState?.selectedRow === r && boardState?.selectedCol === c;
 
                         if (isNumberFirstInputMode) {
-                          const cell = boardState?.grid[r][c];
                           if (cell && cell.value !== 0) {
                             // Requirement 4: Completed number restriction in Paintbrush mode
                             let count = 0;
@@ -7329,8 +7479,8 @@ useEffect(() => {
                             playClickSound();
                             triggerHapticTap(vibrations);
                           }
-                          const cell = boardState?.grid[r][c];
-                          setActiveKeypadNum(cell && cell.value !== 0 ? cell.value : null);
+                          const cellVal = cell && cell.value !== 0 ? cell.value : null;
+                          setActiveKeypadNum(cellVal);
                           setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                         }
                       }}
@@ -7446,6 +7596,14 @@ useEffect(() => {
                     lockedNum={lockedNum}
                     activeKeypadNum={activeKeypadNum}
                     isNumberFirstInputMode={isNumberFirstInputMode}
+                    onToggleNumberFirstMode={() => {
+                      const next = !isNumberFirstInputMode;
+                      setIsNumberFirstInputMode(next);
+                      setLockedNum(null);
+                      setActiveKeypadNum(null);
+                      showToast(next ? "⚡ Fast-Fill mode: select number, then tap cells" : "Cell-first mode: select cell, then tap number");
+                      addLog(next ? "⚡ Fast-Fill (Paintbrush) mode activated." : "Normal (Cell-First) mode activated.");
+                    }}
                     showRemainingNumbers={showRemainingNumbers}
                     visualizingBacktrack={visualizingBacktrack}
                     darkMode={darkMode}
@@ -7544,21 +7702,24 @@ useEffect(() => {
 
                             syncedLeaderboard.forEach(r => {
                               const isCurrentUser = r.userId === userProfile?.id;
+                              const isAbandoned = r.status === "abandoned" || r.status === "left" || r.status === "forfeited";
                               resultsMap.set(r.userId, {
                                 id: r.userId,
                                 name: isCurrentUser ? (r.playerName || currentLocalName) : r.playerName,
-                                time: !r.isWon ? 9999 : Number(r.timeSec),
+                                time: isAbandoned ? 99999 : (!r.isWon ? 9999 : Number(r.timeSec)),
                                 elapsedTime: Number(r.timeSec) || 0,
                                 mistakes: Number(r.mistakes),
-                                failed: !r.isWon && !r.isPending,
+                                failed: (!r.isWon && !r.isPending) || isAbandoned,
+                                isAbandoned: isAbandoned,
                                 isMe: isCurrentUser,
                                 isReal: true,
-                                isPending: !isCurrentUser ? !!r.isPending : false
+                                isPending: !isCurrentUser && !isAbandoned ? !!r.isPending : false
                               });
                             });
 
                             const results = Array.from(resultsMap.values());
                             results.sort((a, b) => {
+                              if (a.isAbandoned !== b.isAbandoned) return a.isAbandoned ? 1 : -1;
                               const aPending = !!a.isPending;
                               const bPending = !!b.isPending;
                               if (aPending !== bPending) return aPending ? 1 : -1;
@@ -7582,9 +7743,11 @@ useEffect(() => {
                                 >
                                   <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 pr-2">
                                     <span className={`font-mono text-sm sm:text-base font-black w-7 sm:w-8 text-center flex items-center justify-center flex-shrink-0 shrink-0 ${
-                                      isPending ? "text-amber-500 animate-pulse" : idx === 0 ? "text-yellow-500" : idx === 1 ? "text-slate-400" : idx === 2 ? "text-amber-700" : darkMode ? "text-zinc-600" : "text-stone-400"
+                                      player.isAbandoned ? "text-rose-500" : isPending ? "text-amber-500 animate-pulse" : idx === 0 ? "text-yellow-500" : idx === 1 ? "text-slate-400" : idx === 2 ? "text-amber-700" : darkMode ? "text-zinc-600" : "text-stone-400"
                                     }`}>
-                                      {isPending ? (
+                                      {player.isAbandoned ? (
+                                        <XCircle className="w-4 h-4 text-rose-500 stroke-[2.5]" />
+                                      ) : isPending ? (
                                         <Clock className="w-4 h-4 text-amber-500 animate-spin" />
                                       ) : idx === 0 ? (
                                         <Trophy className="w-4.5 h-4.5 text-yellow-500 fill-yellow-500/20 stroke-[2.5]" />
@@ -7612,14 +7775,27 @@ useEffect(() => {
                                           </span>
                                         )}
                                       </div>
-                                      <span className={`font-sans text-[10px] mt-1.5 uppercase font-bold tracking-wider truncate ${player.failed ? "text-rose-500" : isPending ? "text-amber-500" : darkMode ? "text-zinc-400" : "text-stone-500"}`}>
-                                        {isPending ? "In Progress..." : player.failed ? "Mistake Limit Reached" : "Board Completed"}
+                                      <span className={`font-sans text-[10px] mt-1.5 uppercase font-bold tracking-wider truncate ${player.isAbandoned ? "text-rose-400" : player.failed ? "text-rose-500" : isPending ? "text-amber-500" : darkMode ? "text-zinc-400" : "text-stone-500"}`}>
+                                        {player.isAbandoned ? "Left the game" : isPending ? "In Progress..." : player.failed ? "Mistake Limit Reached" : "Board Completed"}
                                       </span>
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2 flex-shrink-0 shrink-0">
                                     <div className="flex flex-col items-end justify-center gap-0.5 flex-shrink-0 shrink-0 whitespace-nowrap text-right">
-                                      {isPending ? (
+                                      {player.isAbandoned ? (
+                                        <>
+                                          <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap flex-shrink-0 shrink-0 ${
+                                            darkMode ? "bg-rose-950/40 text-rose-300 border border-rose-800/40" : "bg-rose-50 text-rose-700 border border-rose-200/70"
+                                          }`}>
+                                            FORFEITED
+                                          </span>
+                                          <span className={`font-sans text-[8.5px] uppercase font-bold tracking-wider whitespace-nowrap flex-shrink-0 shrink-0 ${
+                                            darkMode ? "text-rose-400/80" : "text-rose-600"
+                                          }`}>
+                                            LEFT MATCH
+                                          </span>
+                                        </>
+                                      ) : isPending ? (
                                         <>
                                           <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap flex-shrink-0 shrink-0 ${
                                             darkMode ? "bg-amber-900/30 text-amber-300 border border-amber-800/40" : "bg-amber-50 text-amber-700 border border-amber-200/70"
