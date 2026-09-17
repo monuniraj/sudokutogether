@@ -8,8 +8,10 @@ export interface SudokuKeypadProps {
     isGameOver?: boolean;
     maxHintsLimit?: number;
     hintsCount: number;
+    difficulty?: string;
     [key: string]: any;
   } | null;
+  difficulty?: string;
   historyLength: number;
   pencilMode: boolean;
   onTogglePencilMode: () => void;
@@ -31,6 +33,7 @@ export interface SudokuKeypadProps {
 
 export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   boardState,
+  difficulty,
   historyLength,
   pencilMode,
   onTogglePencilMode,
@@ -50,6 +53,19 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   vibrations
 }) => {
   const isGameOver = boardState?.isGameOver ?? false;
+
+  const currentDiff = (((difficulty || boardState?.difficulty) ?? "MEDIUM").toUpperCase());
+  const activeKeypadTheme = darkMode ? (
+    currentDiff === "EASY" ? "bg-[#022c22] text-[#d1fae5] active:bg-[#064e3b] border border-emerald-950/80 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
+    currentDiff === "MEDIUM" ? "bg-[#451a03] text-[#fef08a] active:bg-[#713f12] border border-yellow-950/80 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
+    currentDiff === "HARD" ? "bg-[#2e1065] text-[#e9d5ff] active:bg-[#3b0764] border border-purple-950/80 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
+    "bg-[#4c0519] text-[#fecdd3] active:bg-[#881337] border border-rose-950/80 shadow-[0_8px_16px_rgba(0,0,0,0.4)]"
+  ) : (
+    currentDiff === "EASY" ? "bg-[#D1FAE5] text-[#065F46] active:bg-[#A7F3D0] border border-emerald-300 shadow-[0_8px_16px_rgba(6,95,70,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
+    currentDiff === "MEDIUM" ? "bg-[#FFF99D] text-[#854D0E] active:bg-[#FDE047] border border-amber-300 shadow-[0_8px_16px_rgba(133,77,14,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
+    currentDiff === "HARD" ? "bg-[#F3E8FF] text-[#6B21A8] active:bg-[#D8B4FE] border border-purple-300 shadow-[0_8px_16px_rgba(107,33,168,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
+    "bg-[#FFE4E6] text-[#9D174D] active:bg-[#FBCFE8] border border-rose-300 shadow-[0_8px_16px_rgba(157,23,77,0.12),_0_2px_4px_rgba(0,0,0,0.02)]"
+  );
 
   // Remaining count per digit 1..9
   const remainingCounts: Record<number, number> = {};
@@ -73,66 +89,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
 
   return (
     <>
-      {/* DESKTOP HUD-LEVEL FAST-FILL ROW: Horizontally level with board's top HUD row (ERR, ?, Timer) */}
-      <div className="hidden lg:flex w-full items-center justify-end px-1 mb-1 h-[24px] select-none shrink-0" id="desktop-hud-fast-fill-container">
-        <button
-          type="button"
-          onClick={() => {
-            playClickSound();
-            triggerHapticTap(vibrations);
-            if (onToggleNumberFirstMode) {
-              onToggleNumberFirstMode();
-            }
-          }}
-          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-sans font-bold tracking-wide transition-all border cursor-pointer active:scale-95 leading-none ${
-            isNumberFirstInputMode
-              ? (darkMode
-                  ? "bg-sky-950/50 text-[#38bdf8] border-sky-500/40 shadow-xs"
-                  : "bg-[#E0F2FE] text-[#0369A1] border-sky-300 shadow-xs")
-              : (darkMode
-                  ? "bg-zinc-850/60 text-zinc-400 border-zinc-700/40 hover:text-zinc-200"
-                  : "bg-stone-100/80 text-stone-500 border-stone-200/80 hover:text-stone-700")
-          }`}
-          title={isNumberFirstInputMode ? "Fast-Fill (Paintbrush) mode ON: Tap a number, then tap cells" : "Switch to Fast-Fill (Paintbrush) mode"}
-          aria-label="Toggle Fast-Fill / Paintbrush mode"
-        >
-          <Zap className={`w-3 h-3 ${isNumberFirstInputMode ? "fill-current text-[#0369A1] dark:text-[#38bdf8]" : "text-stone-400 dark:text-zinc-500"}`} />
-          <span className="leading-none text-[9.5px]">Fast Fill</span>
-        </button>
-      </div>
-
-      {/* MOBILE QUICK FAST-FILL / PAINTBRUSH TOGGLE SWITCH (Zero-flow height floating anchor) */}
-      <div className="lg:hidden relative w-full h-0 select-none overflow-visible pointer-events-none" id="quick-fast-fill-toggle-container">
-        <div className="absolute right-1 bottom-2 pointer-events-auto flex items-center justify-end z-20">
-          <button
-            type="button"
-            onClick={() => {
-              playClickSound();
-              triggerHapticTap(vibrations);
-              if (onToggleNumberFirstMode) {
-                onToggleNumberFirstMode();
-              }
-            }}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-sans font-bold tracking-wide transition-all border cursor-pointer active:scale-95 leading-none ${
-              isNumberFirstInputMode
-                ? (darkMode
-                    ? "bg-sky-950/50 text-[#38bdf8] border-sky-500/40 shadow-xs"
-                    : "bg-[#E0F2FE] text-[#0369A1] border-sky-300 shadow-xs")
-                : (darkMode
-                    ? "bg-zinc-850/60 text-zinc-400 border-zinc-700/40 hover:text-zinc-200"
-                    : "bg-stone-100/80 text-stone-500 border-stone-200/80 hover:text-stone-700")
-            }`}
-            title={isNumberFirstInputMode ? "Fast-Fill (Paintbrush) mode ON: Tap a number, then tap cells" : "Switch to Fast-Fill (Paintbrush) mode"}
-            aria-label="Toggle Fast-Fill / Paintbrush mode"
-          >
-            <Zap className={`w-3 h-3 ${isNumberFirstInputMode ? "fill-current text-[#0369A1] dark:text-[#38bdf8]" : "text-stone-400 dark:text-zinc-500"}`} />
-            <span className="leading-none text-[9.5px]">Fast Fill</span>
-          </button>
-        </div>
-      </div>
-
       {/* 1. UTILITY BUTTONS: Undo, Erase, Notes, Hint */}
-      <div className="shrink-0 w-full flex flex-col mt-1 px-0.5 overflow-visible" id="game-utility-buttons-deck">
+      <div className="shrink-0 w-full flex flex-col mt-1 lg:mt-0 px-0.5 overflow-visible" id="game-utility-buttons-deck">
         <div className="grid grid-cols-4 gap-2 lg:gap-2 xl:gap-2.5 relative z-10 w-full overflow-visible">
           
           {/* UNDO BUTTON */}
@@ -247,9 +205,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                 disabled={!boardState || isGameOver || visualizingBacktrack || remainingCount <= 0}
                 className={`aspect-[1/1.55] lg:aspect-[1/1.02] w-full relative flex items-center justify-center font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
                   isSelected 
-                    ? (darkMode 
-                        ? "bg-[#713f12] text-[#facc15] active:bg-[#854d0e] border border-yellow-950" 
-                        : "bg-[#FFF99D] text-[#854D0E] active:bg-[#FDE047] shadow-[0_8px_16px_rgba(133,77,14,0.12),_0_2px_4px_rgba(0,0,0,0.02)]")
+                    ? activeKeypadTheme
                     : (darkMode 
                         ? "bg-zinc-900 text-sky-450 hover:bg-zinc-850 border border-zinc-805 shadow-[0_4px_10px_rgba(0,0,0,0.4)]" 
                         : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")

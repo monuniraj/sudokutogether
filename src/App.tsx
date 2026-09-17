@@ -6987,18 +6987,18 @@ useEffect(() => {
             </span>
           </div>
 
-          {/* Right Actions: Responsive cluster (Notification Bell, Sound Toggle, Settings) */}
+          {/* Right Actions: Responsive cluster (Notification Bell, Settings) */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 z-10 justify-end">
-            {/* Button 1: Notification Bell (Mobile: hidden in game board; Desktop: always visible) */}
+            {/* Button 1: Notification Bell (Permanently visible across all screens) */}
             <button
               onClick={() => {
                 playClickSound();
                 triggerHapticTap(vibrations);
                 setShowBellInvitesModal(true);
               }}
-              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] items-center justify-center border-none shadow-xs shrink-0 ${
+              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs shrink-0 ${
                 darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"
-              } ${currentScreen === "game" ? "hidden md:flex" : "flex"}`}
+              }`}
               title="Notifications"
               aria-label="Notifications"
               id="global-top-right-bell-button"
@@ -7008,48 +7008,6 @@ useEffect(() => {
                 <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-black text-white shadow-sm font-mono pointer-events-none">
                   {pendingChallenges.length > 9 ? "9+" : pendingChallenges.length}
                 </span>
-              )}
-            </button>
-
-            {/* Button 2: Sound Toggle (Mobile: visible only in game board; Desktop: always visible side-by-side) */}
-            <button
-              onClick={() => {
-                const nextSound = !soundEffects;
-                triggerHapticTap(vibrations);
-                if (nextSound) {
-                  try {
-                    const audioCtx = getAudioCtx();
-                    if (audioCtx) {
-                      const osc = audioCtx.createOscillator();
-                      const gain = audioCtx.createGain();
-                      osc.connect(gain);
-                      gain.connect(audioCtx.destination);
-                      osc.type = "sine";
-                      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-                      osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
-                      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-                      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-                      osc.start();
-                      osc.stop(audioCtx.currentTime + 0.1);
-                    }
-                  } catch {}
-                }
-                setSoundEffects(nextSound);
-                try {
-                  localStorage.setItem("sudoku_soundEffects", String(nextSound));
-                } catch {}
-              }}
-              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] items-center justify-center border-none shadow-xs shrink-0 ${
-                darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"
-              } ${currentScreen === "game" ? "flex" : "hidden md:flex"}`}
-              title={soundEffects ? "Mute Sound Effects" : "Enable Sound Effects"}
-              aria-label={soundEffects ? "Mute Sound Effects" : "Enable Sound Effects"}
-              id="global-top-right-sound-button"
-            >
-              {soundEffects ? (
-                <Volume2 className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
-              ) : (
-                <VolumeX className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-400" : "text-stone-400"}`} />
               )}
             </button>
 
@@ -7303,13 +7261,13 @@ useEffect(() => {
                   </div>
 
                   {/* ROW 2: HUD GROUP DIRECTLY ABOVE 9x9 BOARD */}
-                  <div className="w-full relative flex items-center justify-between px-1 mb-1 select-none shrink-0" id="unified-bridge-container">
+                  <div className="w-full relative flex items-center justify-between px-1 mb-1 h-[26px] select-none shrink-0" id="unified-bridge-container">
                     {/* Left: Mistakes status metric */}
                     <span className={`font-sans font-black text-xs sm:text-sm tracking-wider leading-none select-none ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
                       ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
                     </span>
 
-                    {/* Center: Multiplayer Invite and Help */}
+                    {/* Center: Balanced 4-Icon Micro-Bar [Zap, Users, HelpCircle, Volume] */}
                     {(() => {
                       const activeDiff = ((boardState?.difficulty || difficulty).toUpperCase()) as Difficulty;
                       const headerThemeColor = darkMode ? (
@@ -7325,23 +7283,100 @@ useEffect(() => {
                       );
 
                       return (
-                        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3 pointer-events-none">
+                        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 pointer-events-none">
+                          {/* 1. Fast Fill (Paint Mode) Toggle */}
                           <button
+                            type="button"
+                            onClick={() => {
+                              playClickSound();
+                              triggerHapticTap(vibrations);
+                              const nextMode = !isNumberFirstInputMode;
+                              setIsNumberFirstInputMode(nextMode);
+                              setLockedNum(null);
+                              setActiveKeypadNum(null);
+                              try {
+                                localStorage.setItem("sudoku_isNumberFirstInputMode", String(nextMode));
+                              } catch {}
+                              showToast(nextMode ? "⚡ Fast Fill (Paint Mode) Activated!" : "Normal Input Mode Restored");
+                              addLog(nextMode ? "⚡ Fast Fill mode enabled." : "✏️ Normal input mode enabled.");
+                            }}
+                            className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
+                              isNumberFirstInputMode
+                                ? (darkMode ? "text-[#38bdf8]" : "text-[#0369A1]")
+                                : (darkMode ? "text-zinc-400 hover:text-zinc-200" : "text-stone-500 hover:text-stone-700")
+                            }`}
+                            aria-label={isNumberFirstInputMode ? "Fast Fill Mode Active" : "Fast Fill Mode Inactive"}
+                            title={isNumberFirstInputMode ? "Fast-Fill (Paintbrush) mode ON: Tap a number, then tap cells" : "Switch to Fast-Fill (Paintbrush) mode"}
+                            id="hud-fast-fill-toggle-button"
+                          >
+                            <Zap className={`w-4 h-4 sm:w-5 sm:h-5 ${isNumberFirstInputMode ? "fill-current" : ""}`} strokeWidth={2} />
+                          </button>
+
+                          {/* 2. Multiplayer Invite */}
+                          <button
+                            type="button"
                             onClick={handleOpenMidGameMultiplayer}
-                            className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${headerThemeColor}`}
+                            className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${headerThemeColor}`}
                             aria-label="Invite Players to Match"
                             title="Invite Players"
+                            id="hud-multiplayer-invite-button"
                           >
                             <Users className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
                           </button>
 
+                          {/* 3. Help / How to Play */}
                           <button
+                            type="button"
                             onClick={() => setShowHowToPlayModal(true)}
-                            className={`p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${headerThemeColor}`}
+                            className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${headerThemeColor}`}
                             aria-label="How to play"
                             title="How to play"
+                            id="hud-how-to-play-button"
                           >
                             <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
+                          </button>
+
+                          {/* 4. Sound / Speaker Toggle */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextSound = !soundEffects;
+                              triggerHapticTap(vibrations);
+                              if (nextSound) {
+                                try {
+                                  const audioCtx = getAudioCtx();
+                                  if (audioCtx) {
+                                    const osc = audioCtx.createOscillator();
+                                    const gain = audioCtx.createGain();
+                                    osc.connect(gain);
+                                    gain.connect(audioCtx.destination);
+                                    osc.type = "sine";
+                                    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                                    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+                                    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                                    osc.start();
+                                    osc.stop(audioCtx.currentTime + 0.1);
+                                  }
+                                } catch {}
+                              }
+                              setSoundEffects(nextSound);
+                              try {
+                                localStorage.setItem("sudoku_soundEffects", String(nextSound));
+                              } catch {}
+                            }}
+                            className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
+                              soundEffects ? headerThemeColor : (darkMode ? "text-zinc-500 hover:text-zinc-400" : "text-stone-400 hover:text-stone-500")
+                            }`}
+                            title={soundEffects ? "Mute Sound Effects" : "Enable Sound Effects"}
+                            aria-label={soundEffects ? "Mute Sound Effects" : "Enable Sound Effects"}
+                            id="hud-sound-toggle-button"
+                          >
+                            {soundEffects ? (
+                              <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
+                            ) : (
+                              <VolumeX className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
+                            )}
                           </button>
                         </div>
                       );
@@ -7523,8 +7558,42 @@ useEffect(() => {
                     </div>
                   </div>
 
+                  {/* LEVEL B (Desktop-only): 100% Vector-Styled Best Time Sticker Card (mirrors #unified-bridge-container, keeping action deck 100% flush with board) */}
+                  <div className="hidden lg:flex w-full items-center justify-between px-1 mb-1 h-[26px] select-none shrink-0" id="desktop-best-time-sticker-card">
+                    {(() => {
+                      const activeDiff = ((boardState?.difficulty || difficulty).toUpperCase()) as Difficulty;
+                      const bestSecs = personalBestTimes[activeDiff] || 0;
+                      const bestTimeDisplay = bestSecs > 0 ? formatTimer(bestSecs) : "--:--";
+
+                      return (
+                        <div className="w-full flex items-center justify-between">
+                          {/* 100% Vector Sticker Card Badge */}
+                          <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wide transition-all border select-none ${
+                            darkMode
+                              ? "bg-zinc-850/80 text-amber-300 border-amber-500/30 shadow-xs"
+                              : "bg-amber-50/90 text-amber-800 border-amber-300/80 shadow-xs"
+                          }`}>
+                            <svg className="w-3 h-3 fill-current text-amber-500 shrink-0" viewBox="0 0 24 24">
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                            </svg>
+                            <span className="leading-none text-[9px] font-sans font-bold uppercase tracking-wider opacity-80">BEST:</span>
+                            <span className="leading-none tabular-nums font-mono font-black text-[10px]">{bestTimeDisplay}</span>
+                          </div>
+
+                          {/* Difficulty Indicator Label */}
+                          <span className={`text-[9.5px] font-mono font-bold tracking-widest uppercase opacity-65 ${
+                            darkMode ? "text-zinc-400" : "text-stone-500"
+                          }`}>
+                            {activeDiff}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
                   {/* 2 & 3. KEYPAD & CONTROLS DECK */}
                   <SudokuKeypad
+                    difficulty={boardState?.difficulty || difficulty}
                     boardState={boardState}
                     historyLength={history.length}
                     pencilMode={pencilMode}
