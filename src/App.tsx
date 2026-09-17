@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { db } from "./firebase";
 import { RulesModal } from "./components/modals/RulesModal";
@@ -1857,7 +1857,7 @@ useEffect(() => {
   const [rematchGameId, setRematchGameId] = useState<string>("");
   const [rematchInvitedPlayers, setRematchInvitedPlayers] = useState<Set<string>>(new Set());
   const [lobbyAcceptedUserIds, setLobbyAcceptedUserIds] = useState<Set<string>>(new Set());
-  const [rematchInviteStates, setRematchInviteStates] = useState<Record<string, { status: "idle" | "sent" | "declined" | "joined"; timerEnd: number }>>({});
+  const [rematchInviteStates, setRematchInviteStates] = useState<Record<string, { status: "idle" | "sent" | "declined" | "joined" | "left"; timerEnd: number }>>({});
   const [lobbyTickTime, setLobbyTickTime] = useState<number>(Date.now());
   const [endGameStep, setEndGameStep] = useState<1 | 2>(1); // 1=Results/Config, 2=Invite Lobby
   const [pendingRematchSeed, setPendingRematchSeed] = useState<number | null>(null); // seed locked when entering Screen 2
@@ -1867,6 +1867,9 @@ useEffect(() => {
 
   // Bell Invites modal
   const [showBellInvitesModal, setShowBellInvitesModal] = useState<boolean>(false);
+  const [showHowToPlayModal, setShowHowToPlayModal] = useState<boolean>(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState<boolean>(false);
+  const [showResetSettingsModal, setShowResetSettingsModal] = useState<boolean>(false);
 
   // Issue 7: Friend System Identity states
   const [showLoginRequiredModal, setShowLoginRequiredModal] = useState<boolean>(false);
@@ -2269,6 +2272,40 @@ useEffect(() => {
   });
   const [sessionStartTime] = useState<number>(() => Date.now());
   const [activeInviteNotification, setActiveInviteNotification] = useState<any | null>(null);
+  const [inviteCountdown, setInviteCountdown] = useState<number>(5);
+  const [isDockingToBell, setIsDockingToBell] = useState<boolean>(false);
+  const [bellPing, setBellPing] = useState<boolean>(false);
+
+  const dockInviteToBell = useCallback(() => {
+    setIsDockingToBell(true);
+    setTimeout(() => {
+      setBellPing(true);
+      setTimeout(() => setBellPing(false), 1200);
+    }, 280);
+    setTimeout(() => {
+      setActiveInviteNotification(null);
+      setIsDockingToBell(false);
+    }, 500);
+  }, []);
+
+  useEffect(() => {
+    if (!activeInviteNotification) return;
+    setInviteCountdown(5);
+    setIsDockingToBell(false);
+
+    const interval = setInterval(() => {
+      setInviteCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          dockInviteToBell();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeInviteNotification?.id, dockInviteToBell]);
 
   // Stats status trackers derived directly from the actual completed games array (no fake data!)
   const gamesPlayed = completedGames.length;
@@ -2438,7 +2475,7 @@ useEffect(() => {
     return false;
   };
 
-  // Forfeit active multiplayer match when player explicitly starts a new game or joins another match
+  // Forfeit / leave active multiplayer match when player explicitly starts a new game, joins another match, or terminates session
   const markCurrentMultiplayerForfeit = async (roomCodeToForfeit?: string | null) => {
     const targetRoom = roomCodeToForfeit || activeGameId;
     const uid = userProfile?.id || "GUEST_ANON";
@@ -2447,7 +2484,7 @@ useEffect(() => {
       const docId = getSeedDocId(targetRoom);
       const participantRef = doc(db, "challenge_results", docId, "participants", uid);
       await setDoc(participantRef, {
-        status: "abandoned",
+        status: "left",
         isPending: false,
         isWon: false,
         updatedAt: serverTimestamp()
@@ -2455,14 +2492,15 @@ useEffect(() => {
 
       const playerRef = doc(db, "rooms", targetRoom, "players", uid);
       await setDoc(playerRef, {
-        status: "abandoned",
+        id: uid,
+        status: "left",
         updatedAt: serverTimestamp()
       }, { merge: true });
 
-      console.log(`[Multiplayer] Set status abandoned/forfeited for user ${uid} in room ${targetRoom}`);
-      addLog(`🏳️ Forfeited match in Room #${targetRoom}.`);
+      console.log(`[Multiplayer] Set status left for user ${uid} in room ${targetRoom}`);
+      addLog(`🏳️ Left match in Room #${targetRoom}.`);
     } catch (err) {
-      console.error("[Multiplayer] Failed to mark forfeit in Firestore:", err);
+      console.error("[Multiplayer] Failed to mark left in Firestore:", err);
     }
   };
 
@@ -2478,6 +2516,8 @@ useEffect(() => {
     setEndGameStep(1);
     setIsRoomLocked(false);
     setRoomPin("");
+    setRematchInviteStates({});
+    setLobbyAcceptedUserIds(new Set());
     addLog("🧹 Room session cleared. Restored clean Solo state.");
   };
 
@@ -2755,6 +2795,13 @@ useEffect(() => {
     };
   }, [userProfile?.id, notificationsEnabled, sessionStartTime]);
 
+  const challengeModeRef = useRef(challengeMode);
+  const activeGameIdRef = useRef(activeGameId);
+  useEffect(() => {
+    challengeModeRef.current = challengeMode;
+    activeGameIdRef.current = activeGameId;
+  }, [challengeMode, activeGameId]);
+
   // Dynamically update friends & past players to "online/live" if another app instance/tab is open in the browser
   useEffect(() => {
     const tabId = Math.random().toString(36).substring(2, 11);
@@ -2817,6 +2864,9 @@ useEffect(() => {
       try {
         localStorage.removeItem(`sudoku_active_tab_${tabId}`);
       } catch (err) {}
+      if (challengeModeRef.current && activeGameIdRef.current) {
+        markCurrentMultiplayerForfeit(activeGameIdRef.current);
+      }
     };
     window.addEventListener("beforeunload", handleUnload);
 
@@ -2856,6 +2906,7 @@ useEffect(() => {
   }, [currentScreen]);
 
   const closeTopmostModal = (): boolean => {
+    if (viewingRankingsGame) { setViewingRankingsGame(null); return true; }
     if (showDeleteAccountModal) { setShowDeleteAccountModal(false); return true; }
     if (showResetSettingsModal) { setShowResetSettingsModal(false); return true; }
     if (activeCompliancePage) { setActiveCompliancePage(null); return true; }
@@ -2884,10 +2935,90 @@ useEffect(() => {
     return false;
   };
 
+  const getOpenModalCount = (): number => {
+    let count = 0;
+    if (viewingRankingsGame) count++;
+    if (showDeleteAccountModal) count++;
+    if (showResetSettingsModal) count++;
+    if (activeCompliancePage) count++;
+    if (showDisplayNameModal) count++;
+    if (showInviteJoinNamePopup) count++;
+    if (showAuthModal) count++;
+    if (showLoginRequiredModal) count++;
+    if (showTargetLoginRequiredModal) count++;
+    if (showBellInvitesModal) count++;
+    if (showRematchInviteModal) count++;
+    if (showInviteModal) count++;
+    if (showFriendsListSection) count++;
+    if (showHistoryChallengeModal) count++;
+    if (showMidGameInviteModal) count++;
+    if (showGameOverModal) count++;
+    if (showCreateChallengeModal) count++;
+    if (showJoinRoomModal) count++;
+    if (showMultiplayerForkModal) count++;
+    if (showHowToPlayModal) count++;
+    return count;
+  };
+
   const closeTopmostModalRef = useRef(closeTopmostModal);
   useEffect(() => {
     closeTopmostModalRef.current = closeTopmostModal;
   });
+
+  const prevOpenModalCountRef = useRef(0);
+  const modalHistoryDepthRef = useRef(0);
+  const isPopstateClosingModalRef = useRef(false);
+  const isProgrammaticBackRef = useRef(false);
+
+  // Synchronize modal open/close states with History API so swipe-back purely closes modals
+  useEffect(() => {
+    const currentCount = getOpenModalCount();
+    const prevCount = prevOpenModalCountRef.current;
+    prevOpenModalCountRef.current = currentCount;
+
+    if (isPopstateClosingModalRef.current) {
+      isPopstateClosingModalRef.current = false;
+      modalHistoryDepthRef.current = Math.max(0, modalHistoryDepthRef.current - (prevCount - currentCount));
+      return;
+    }
+
+    if (currentCount > prevCount) {
+      const diff = currentCount - prevCount;
+      for (let i = 0; i < diff; i++) {
+        window.history.pushState({ modal: true, view: currentScreenRef.current }, "", window.location.href);
+        modalHistoryDepthRef.current++;
+      }
+    } else if (currentCount < prevCount) {
+      const diff = prevCount - currentCount;
+      const pops = Math.min(diff, modalHistoryDepthRef.current);
+      if (pops > 0) {
+        modalHistoryDepthRef.current -= pops;
+        isProgrammaticBackRef.current = true;
+        window.history.go(-pops);
+      }
+    }
+  }, [
+    viewingRankingsGame,
+    showDeleteAccountModal,
+    showResetSettingsModal,
+    activeCompliancePage,
+    showDisplayNameModal,
+    showInviteJoinNamePopup,
+    showAuthModal,
+    showLoginRequiredModal,
+    showTargetLoginRequiredModal,
+    showBellInvitesModal,
+    showRematchInviteModal,
+    showInviteModal,
+    showFriendsListSection,
+    showHistoryChallengeModal,
+    showMidGameInviteModal,
+    showGameOverModal,
+    showCreateChallengeModal,
+    showJoinRoomModal,
+    showMultiplayerForkModal,
+    showHowToPlayModal
+  ]);
 
   // Navigation interceptor using History API and Capacitor Back Button for Android/system swipe-to-back gestures
   useEffect(() => {
@@ -2897,8 +3028,15 @@ useEffect(() => {
     }
 
     const handlePopState = (event: PopStateEvent) => {
-      // 1. If any modal or overlay is open, dismiss it first
-      if (closeTopmostModalRef.current()) {
+      if (isProgrammaticBackRef.current) {
+        isProgrammaticBackRef.current = false;
+        return;
+      }
+
+      // 1. If any modal or overlay is open, dismiss it first and block background route navigation
+      if (getOpenModalCount() > 0) {
+        isPopstateClosingModalRef.current = true;
+        closeTopmostModalRef.current();
         return;
       }
 
@@ -2948,7 +3086,8 @@ useEffect(() => {
       if (Capacitor.isNativePlatform()) {
         CapApp.addListener('backButton', ({ canGoBack }) => {
           // 1. Dismiss topmost modal if open
-          if (closeTopmostModalRef.current()) {
+          if (getOpenModalCount() > 0) {
+            window.history.back();
             return;
           }
           // 2. If on a subscreen (settings, status, game over), go back to home
@@ -3335,9 +3474,8 @@ useEffect(() => {
       puzzle: puzzle2D.map(r => [...r])
     });
 
-    // 7. Direct synchronous state dispatch (<1ms paint)
-    // Requirement 3: If in an active multiplayer match and joining a different match, mark previous match abandoned/forfeited
-    if (challengeMode && activeGameId && activeGameId !== roomCode && (!boardState || !boardState.isGameOver)) {
+    // If in an active multiplayer match and joining a different match, mark previous match left/forfeited
+    if (challengeMode && activeGameId && activeGameId !== roomCode) {
       markCurrentMultiplayerForfeit(activeGameId);
     }
 
@@ -3571,8 +3709,26 @@ useEffect(() => {
               playInviteChime();
               const { gameId, password, senderName } = notification.data || {};
               if (gameId) {
+                const inviteId = notification.id || `push-${Date.now()}`;
+                const inviteObj = {
+                  id: gameId,
+                  inviteId: inviteId,
+                  senderName: senderName || "Player",
+                  fromName: senderName || "Player",
+                  gameId,
+                  password: password || "",
+                  sentAt: Date.now()
+                };
+                setPendingChallenges(prev => {
+                  if (prev.some(p => p.id === gameId || p.inviteId === inviteId)) return prev;
+                  const updated = [inviteObj as any, ...prev].slice(0, 10);
+                  try {
+                    localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+                  } catch (e) {}
+                  return updated;
+                });
                 setActiveInviteNotification({
-                  id: notification.id || Math.random().toString(),
+                  id: inviteId,
                   fromName: senderName || "Player",
                   gameId,
                   password: password || ""
@@ -3958,9 +4114,6 @@ useEffect(() => {
   const [hintExplanation, setHintExplanation] = useState<{ num: number, row: number, col: number } | null>(null);
 
   // Support Modals
-  const [showHowToPlayModal, setShowHowToPlayModal] = useState<boolean>(false);
-  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState<boolean>(false);
-  const [showResetSettingsModal, setShowResetSettingsModal] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [recordWarningMessage, setRecordWarningMessage] = useState<string | null>(null);
   const recordWarningTimerRef = useRef<any>(null);
@@ -4676,26 +4829,27 @@ useEffect(() => {
     navigateToScreen("game");
   };
 
-  // Standardized invite cooldown helper with strict safety caps (30s sent / 60s declined)
+  // Standardized invite cooldown helper with strict safety caps (30s sent / 60s declined / 60s left)
   const getInviteCooldownState = (playerId: string) => {
     const inviteState = rematchInviteStates[playerId];
     const isJoined = inviteState?.status === "joined" || lobbyAcceptedUserIds.has(playerId);
     if (isJoined) {
-      return { isJoined: true, isPendingSent: false, isDeclined: false, remainingSeconds: 0 };
+      return { isJoined: true, isPendingSent: false, isDeclined: false, isLeft: false, remainingSeconds: 0 };
     }
     if (!inviteState || !inviteState.timerEnd) {
-      return { isJoined: false, isPendingSent: false, isDeclined: false, remainingSeconds: 0 };
+      return { isJoined: false, isPendingSent: false, isDeclined: false, isLeft: false, remainingSeconds: 0 };
     }
     const diffMs = inviteState.timerEnd - lobbyTickTime;
     if (diffMs <= 0) {
-      return { isJoined: false, isPendingSent: false, isDeclined: false, remainingSeconds: 0 };
+      return { isJoined: false, isPendingSent: false, isDeclined: false, isLeft: false, remainingSeconds: 0 };
     }
-    const maxCap = inviteState.status === "declined" ? 60 : 30;
+    const maxCap = (inviteState.status === "declined" || inviteState.status === "left") ? 60 : 30;
     const remainingSeconds = Math.min(maxCap, Math.max(0, Math.ceil(diffMs / 1000)));
     return {
       isJoined: false,
       isPendingSent: inviteState.status === "sent" && remainingSeconds > 0,
       isDeclined: inviteState.status === "declined" && remainingSeconds > 0,
+      isLeft: inviteState.status === "left" && remainingSeconds > 0,
       remainingSeconds
     };
   };
@@ -5424,8 +5578,7 @@ useEffect(() => {
       const docId = getSeedDocId(challengeId);
       const participantRef = doc(db, "challenge_results", docId, "participants", userId);
       const existing = await getDoc(participantRef);
-      if (!existing.exists()) {
-        // Only create the pending record if player hasn't submitted yet
+      if (!existing.exists() || existing.data()?.status === "left" || existing.data()?.status === "abandoned" || existing.data()?.status === "disconnected") {
         await setDoc(participantRef, {
           challengeId,
           userId,
@@ -5437,9 +5590,18 @@ useEffect(() => {
           isPending: true,
           date: new Date().toLocaleDateString(),
           timestamp: serverTimestamp()
-        });
+        }, { merge: true });
         console.log(`[Firestore] Registered join for ${userId} (${pName}) on ${challengeId}`);
       }
+
+      // Also register active presence in room players collection
+      const playerRef = doc(db, "rooms", challengeId, "players", userId);
+      await setDoc(playerRef, {
+        id: userId,
+        name: pName,
+        status: "active",
+        updatedAt: serverTimestamp()
+      }, { merge: true });
     } catch (err) {
       console.error("[Firestore] Failed to register join:", err);
     }
@@ -5551,7 +5713,7 @@ useEffect(() => {
         let changed = false;
         const next = { ...prev };
         Object.entries(next).forEach(([uid, state]: [string, any]) => {
-          if ((state.status === "sent" || state.status === "declined") && state.timerEnd > 0 && state.timerEnd <= now) {
+          if ((state.status === "sent" || state.status === "declined" || state.status === "left") && state.timerEnd > 0 && state.timerEnd <= now) {
             delete next[uid];
             changed = true;
           }
@@ -5592,7 +5754,7 @@ useEffect(() => {
     const invitesQuery = query(collection(db, "invites"), where("gameId", "==", rematchGameId));
     const unsubInvites = onSnapshot(invitesQuery, (snapshot) => {
       const accepted = new Set<string>();
-      const updatedStates: Record<string, { status: "idle" | "sent" | "declined" | "joined"; timerEnd: number }> = {};
+      const updatedStates: Record<string, { status: "idle" | "sent" | "declined" | "joined" | "left"; timerEnd: number }> = {};
 
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
@@ -5619,8 +5781,8 @@ useEffect(() => {
         setRematchInviteStates(prev => {
           const next = { ...prev };
           Object.entries(updatedStates).forEach(([uid, state]) => {
-            // Keep existing declined timer if it's already running and has more time left
-            if (state.status === "declined" && next[uid]?.status === "declined" && next[uid].timerEnd > Date.now()) {
+            // Keep existing declined/left timer if it's already running and has more time left
+            if ((state.status === "declined" || state.status === "left") && next[uid]?.status === state.status && next[uid].timerEnd > Date.now()) {
               return;
             }
             next[uid] = state;
@@ -5632,38 +5794,102 @@ useEffect(() => {
       console.warn("Lobby invites listener error:", err);
     });
 
-    // 2. Listen to participants for rematchGameId in case someone joins directly
+    // 2. Listen to participants for rematchGameId in case someone joins or leaves directly
     const docId = getSeedDocId(rematchGameId);
     const participantsCol = collection(db, "challenge_results", docId, "participants");
     const unsubParticipants = onSnapshot(participantsCol, (snapshot) => {
       const joined = new Set<string>();
+      const left = new Set<string>();
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
-        if (data.userId && data.userId !== userProfile?.id) {
-          joined.add(data.userId);
+        const uId = data.userId || docSnap.id;
+        if (uId && uId !== userProfile?.id) {
+          if (data.status === "left" || data.status === "abandoned" || data.status === "disconnected" || data.status === "forfeited") {
+            left.add(uId);
+          } else if (data.status === "active" || data.status === "solving" || data.status === "joined" || data.isPending) {
+            joined.add(uId);
+          }
         }
       });
-      if (joined.size > 0) {
+
+      setLobbyAcceptedUserIds(prev => {
+        const next = new Set(prev);
+        joined.forEach(id => next.add(id));
+        left.forEach(id => next.delete(id));
+        return next;
+      });
+
+      setRematchInviteStates(prev => {
+        const next = { ...prev };
+        let changed = false;
+        joined.forEach(id => {
+          if (next[id]?.status !== "joined") {
+            next[id] = { status: "joined", timerEnd: 0 };
+            changed = true;
+          }
+        });
+        left.forEach(id => {
+          if (next[id]?.status !== "left") {
+            next[id] = { status: "left", timerEnd: Date.now() + 60000 };
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }, (err) => {
+      console.warn("Lobby participants listener error:", err);
+    });
+
+    // 3. Listen to rooms/{rematchGameId}/players for real-time leave/disconnect propagation
+    const roomPlayersCol = collection(db, "rooms", rematchGameId, "players");
+    const unsubRoomPlayers = onSnapshot(roomPlayersCol, (snapshot) => {
+      const roomJoined = new Set<string>();
+      const roomLeft = new Set<string>();
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const uId = data.id || docSnap.id;
+        if (uId && uId !== userProfile?.id) {
+          if (data.status === "left" || data.status === "abandoned" || data.status === "disconnected") {
+            roomLeft.add(uId);
+          } else if (data.status === "active" || data.status === "joined") {
+            roomJoined.add(uId);
+          }
+        }
+      });
+
+      if (roomJoined.size > 0 || roomLeft.size > 0) {
         setLobbyAcceptedUserIds(prev => {
           const next = new Set(prev);
-          joined.forEach(id => next.add(id));
+          roomJoined.forEach(id => next.add(id));
+          roomLeft.forEach(id => next.delete(id));
           return next;
         });
         setRematchInviteStates(prev => {
           const next = { ...prev };
-          joined.forEach(id => {
-            next[id] = { status: "joined", timerEnd: 0 };
+          let changed = false;
+          roomJoined.forEach(id => {
+            if (next[id]?.status !== "joined") {
+              next[id] = { status: "joined", timerEnd: 0 };
+              changed = true;
+            }
           });
-          return next;
+          roomLeft.forEach(id => {
+            if (next[id]?.status !== "left") {
+              next[id] = { status: "left", timerEnd: Date.now() + 60000 };
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
         });
       }
     }, (err) => {
-      console.warn("Lobby participants listener error:", err);
+      console.warn("Lobby room players listener error:", err);
     });
 
     return () => {
       unsubInvites();
       unsubParticipants();
+      unsubRoomPlayers();
     };
   }, [rematchGameId, userProfile?.id]);
 
@@ -5897,8 +6123,8 @@ useEffect(() => {
       ? isChallengeModeOverride 
       : false;
 
-    // Requirement 3: If in an active multiplayer match and player explicitly starts a new game (solo or different match), mark previous match abandoned/forfeited
-    if (challengeMode && activeGameId && (!boardState || !boardState.isGameOver) && (!isChallengeSession || (seedOverride && String(seedOverride).padStart(6, '0').slice(-6) !== activeGameId))) {
+    // If in an active multiplayer match and player explicitly starts a new game (solo or different match), mark previous match left/forfeited
+    if (challengeMode && activeGameId && (!isChallengeSession || (seedOverride && String(seedOverride).padStart(6, '0').slice(-6) !== activeGameId))) {
       markCurrentMultiplayerForfeit(activeGameId);
       if (!isChallengeSession) {
         cleanupRoomSession();
@@ -7177,16 +7403,18 @@ useEffect(() => {
                 triggerHapticTap(vibrations);
                 setShowBellInvitesModal(true);
               }}
-              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs shrink-0 ${
+              className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-300 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs shrink-0 ${
+                bellPing ? "scale-110 ring-2 ring-purple-400" : ""
+              } ${
                 darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-zinc-100" : "bg-white text-stone-700"
               }`}
               title="Notifications"
               aria-label="Notifications"
               id="global-top-right-bell-button"
             >
-              <Bell className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
+              <Bell className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] transition-transform duration-300 ${bellPing ? "scale-125 text-purple-400 rotate-12" : ""} ${darkMode ? "text-zinc-100" : "text-stone-700"}`} />
               {pendingChallenges.length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-black text-white shadow-sm font-mono pointer-events-none">
+                <span className={`absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-black text-white shadow-sm font-mono pointer-events-none transition-transform duration-300 ${bellPing ? "scale-125 animate-pulse bg-purple-500" : "scale-100"}`}>
                   {pendingChallenges.length > 9 ? "9+" : pendingChallenges.length}
                 </span>
               )}
@@ -8573,7 +8801,7 @@ useEffect(() => {
                                       });
 
                                       const renderRow = (player: any) => {
-                                        const { isJoined, isPendingSent, isDeclined, remainingSeconds } = getInviteCooldownState(player.id);
+                                        const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
                                         return (
                                           <div
                                             key={player.id}
@@ -8619,6 +8847,15 @@ useEffect(() => {
                                                   <Check className="w-3 h-3 stroke-[3]" />
                                                   JOINED
                                                 </span>
+                                              ) : isLeft ? (
+                                                <button
+                                                  disabled
+                                                  className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
+                                                    darkMode ? "bg-zinc-800 text-stone-400" : "bg-stone-200 text-stone-600"
+                                                  }`}
+                                                >
+                                                  LEFT ({remainingSeconds}s)
+                                                </button>
                                               ) : isPendingSent ? (
                                                 <button
                                                   disabled
@@ -10375,7 +10612,7 @@ useEffect(() => {
                         return 0;
                       })
                       .map(player => {
-                        const { isJoined, isPendingSent, isDeclined, remainingSeconds } = getInviteCooldownState(player.id);
+                        const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
                         
                         const rowBgClass = isJoined
                           ? (darkMode ? "bg-[#064e3b]/30 text-[#a7f3d0]" : "bg-[#E8F5E9] text-[#1B5E20]")
@@ -10404,6 +10641,10 @@ useEffect(() => {
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-[#a7f3d0] flex items-center gap-1">
                                       <Check className="w-3 h-3 stroke-[3]" />
                                       Joined
+                                    </span>
+                                  ) : isLeft ? (
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 font-mono">
+                                      LEFT ({remainingSeconds}s)
                                     </span>
                                   ) : isPendingSent ? (
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 font-mono">
@@ -11457,7 +11698,7 @@ useEffect(() => {
                           });
 
                           const renderRow = (player: any) => {
-                            const { isJoined, isPendingSent, isDeclined, remainingSeconds } = getInviteCooldownState(player.id);
+                            const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
                             return (
                               <div
                                 key={player.id}
@@ -11510,6 +11751,15 @@ useEffect(() => {
                                       <Check className="w-3 h-3 stroke-[3]" />
                                       JOINED
                                     </span>
+                                  ) : isLeft ? (
+                                    <button
+                                      disabled
+                                      className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
+                                        darkMode ? "bg-zinc-800 text-stone-400" : "bg-stone-200 text-stone-600"
+                                      }`}
+                                    >
+                                      LEFT ({remainingSeconds}s)
+                                    </button>
                                   ) : isPendingSent ? (
                                     <button
                                       disabled
@@ -12499,58 +12749,99 @@ useEffect(() => {
       {/* 📥 IN-APP INVITATION TOAST BANNER */}
       <AnimatePresence>
         {activeInviteNotification && (
-          <div className="fixed inset-x-4 top-[24px] z-[70000] flex justify-center animate-bounce-subtle">
+          <div className="fixed inset-x-4 top-[24px] z-[70000] flex justify-center pointer-events-auto">
             <motion.div
+              drag="y"
+              dragConstraints={{ top: -100, bottom: 0 }}
+              dragElastic={0.2}
+              onDragEnd={(_, info) => {
+                if (info.offset.y < -35 || info.velocity.y < -250) {
+                  dockInviteToBell();
+                }
+              }}
               initial={{ opacity: 0, y: -40, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
+              animate={
+                isDockingToBell
+                  ? {
+                      opacity: 0,
+                      scale: 0.15,
+                      x: typeof window !== "undefined" ? Math.min(window.innerWidth / 2 - 40, 160) : 120,
+                      y: -50,
+                      transition: { duration: 0.45, ease: [0.32, 0.72, 0, 1] }
+                    }
+                  : { opacity: 1, y: 0, scale: 1, x: 0 }
+              }
               exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              className={`w-full max-w-md p-4 rounded-2xl flex items-center justify-between gap-4 backdrop-blur-md border ${
+              className={`relative w-full max-w-md p-4 pt-3 rounded-2xl flex flex-col gap-2.5 backdrop-blur-md border shadow-[0_16px_36px_rgba(0,0,0,0.18)] cursor-grab active:cursor-grabbing overflow-hidden select-none ${
                 darkMode 
-                  ? "bg-zinc-900/95 border-zinc-800 text-stone-100 shadow-[0_16px_36px_rgba(0,0,0,0.5)]" 
-                  : "bg-white/95 border-stone-200 text-stone-900 shadow-[0_16px_36px_rgba(0,0,0,0.12)]"
+                  ? "bg-zinc-900/95 border-zinc-800 text-stone-100" 
+                  : "bg-white/95 border-stone-200 text-stone-900"
               }`}
             >
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-xl ${darkMode ? "bg-purple-950/50 text-purple-300" : "bg-purple-50 text-purple-600"}`}>
-                  <Users className="w-5 h-5" strokeWidth={2.5} />
+              {/* Swipe-up indicator bar */}
+              <div className="w-10 h-1 rounded-full bg-stone-400/40 mx-auto -mt-0.5 mb-0.5" />
+
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-purple-950/50 text-purple-300" : "bg-purple-50 text-purple-600"}`}>
+                    <Users className="w-5 h-5" strokeWidth={2.5} />
+                  </div>
+                  <div className="flex flex-col text-left">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-purple-400" : "text-purple-700"}`}>
+                        Sudoku Invite
+                      </span>
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-purple-500/15 text-purple-500">
+                        {inviteCountdown}s
+                      </span>
+                    </div>
+                    <span className="font-sans text-xs font-semibold mt-0.5">
+                      <strong>{activeInviteNotification.fromName}</strong> invited you to play!
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-col text-left">
-                  <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-purple-400" : "text-purple-700"}`}>
-                    Sudoku Invite
-                  </span>
-                  <span className="font-sans text-xs font-semibold mt-0.5">
-                    <strong>{activeInviteNotification.fromName}</strong> invited you to play!
-                  </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      playClickSound();
+                      try {
+                        await updateDoc(doc(db, "invites", activeInviteNotification.id), { status: "declined" });
+                      } catch (e) {
+                        console.error("Failed to decline invite in DB:", e);
+                      }
+                      setPendingChallenges(prev => prev.filter(c => c.id !== activeInviteNotification.id && c.inviteId !== activeInviteNotification.id));
+                      setActiveInviteNotification(null);
+                    }}
+                    className={`px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 ${
+                      darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
+                    }`}
+                  >
+                    Decline
+                  </button>
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const { gameId, roomCode, id, password } = activeInviteNotification;
+                      await handleAcceptAndLaunchInvite(roomCode || gameId, id, password, true);
+                    }}
+                    className={`px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 text-white ${
+                      darkMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-emerald-600 hover:bg-emerald-550"
+                    }`}
+                  >
+                    Accept
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={async () => {
-                    playClickSound();
-                    try {
-                      await updateDoc(doc(db, "invites", activeInviteNotification.id), { status: "declined" });
-                    } catch (e) {
-                      console.error("Failed to decline invite in DB:", e);
-                    }
-                    setActiveInviteNotification(null);
-                  }}
-                  className={`px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 ${
-                    darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
-                  }`}
-                >
-                  Decline
-                </button>
-                <button
-                  onClick={async () => {
-                    const { gameId, roomCode, id, password } = activeInviteNotification;
-                    await handleAcceptAndLaunchInvite(roomCode || gameId, id, password, true);
-                  }}
-                  className={`px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 text-white ${
-                    darkMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-emerald-600 hover:bg-emerald-550"
-                  }`}
-                >
-                  Accept
-                </button>
+
+              {/* 5-second countdown progress bar */}
+              <div className="w-full h-1 bg-stone-200/50 dark:bg-zinc-800/50 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: "100%" }}
+                  animate={{ width: "0%" }}
+                  transition={{ duration: 5, ease: "linear" }}
+                  className="h-full bg-gradient-to-r from-purple-500 to-indigo-500"
+                />
               </div>
             </motion.div>
           </div>

@@ -35,7 +35,7 @@ export interface CreateChallengeModalProps {
   challengeTimerEnabled: boolean;
   setChallengeTimerEnabled: (val: boolean) => void;
   multiplayerPlayers: Array<{ id: string; name: string; status: 'online' | 'offline'; isFriend?: boolean; [key: string]: any }>;
-  getInviteCooldownState: (playerId: string) => { isJoined: boolean; isPendingSent: boolean; isDeclined: boolean; remainingSeconds: number };
+  getInviteCooldownState: (playerId: string) => { isJoined: boolean; isPendingSent: boolean; isDeclined: boolean; isLeft?: boolean; remainingSeconds: number };
   handleToggleFriend: (playerId: string, playerName: string) => void;
   handleInviteFriend: (playerId: string) => void;
   handleReinviteAll: () => void;
@@ -499,7 +499,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 });
 
                 const renderRow = (player: any) => {
-                  const { isJoined, isPendingSent, isDeclined, remainingSeconds } = getInviteCooldownState(player.id);
+                  const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
                   return (
                     <div
                       key={player.id}
@@ -552,6 +552,15 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                             <Check className="w-3 h-3 stroke-[3]" />
                             JOINED
                           </span>
+                        ) : isLeft ? (
+                          <button
+                            disabled
+                            className={`text-[9.5px] font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-xl border-none opacity-90 cursor-not-allowed ${
+                              darkMode ? "bg-zinc-800 text-stone-400" : "bg-stone-200 text-stone-600"
+                            }`}
+                          >
+                            LEFT ({remainingSeconds}s)
+                          </button>
                         ) : isPendingSent ? (
                           <button
                             disabled
