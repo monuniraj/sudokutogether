@@ -3801,6 +3801,14 @@ useEffect(() => {
       return false;
     }
   });
+  const [autoSwitchCompletedNumber, setAutoSwitchCompletedNumber] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_autoSwitchCompletedNumber");
+      return saved !== null ? saved === "true" : true;
+    } catch {
+      return true;
+    }
+  });
   const [isAutoRemoveNotesEnabled, setIsAutoRemoveNotesEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("sudoku_isAutoRemoveNotesEnabled");
@@ -3833,6 +3841,14 @@ useEffect(() => {
       console.error(e);
     }
   }, [isNumberFirstInputMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("sudoku_autoSwitchCompletedNumber", String(autoSwitchCompletedNumber));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [autoSwitchCompletedNumber]);
 
   useEffect(() => {
     try {
@@ -6404,15 +6420,52 @@ useEffect(() => {
           playNumberCompletionSound();
           triggerHapticCompletion(vibrations);
           addLog(`🎉 All 9 instances of ${num} placed! Number completed.`);
+
+          // Auto-Switch Completed Numbers: find next incomplete digit with wrap-around
+          if (autoSwitchCompletedNumber) {
+            let nextNum: number | null = null;
+            // Search from (num+1) through 9, then wrap 1 through (num-1)
+            for (let offset = 1; offset <= 8; offset++) {
+              const candidate = ((num - 1 + offset) % 9) + 1;
+              let candidateCount = 0;
+              for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                  if (finalGrid[r][c].value === candidate) candidateCount++;
+                }
+              }
+              if (candidateCount < 9) {
+                nextNum = candidate;
+                break;
+              }
+            }
+
+            if (nextNum !== null) {
+              // Switch to next incomplete number on keypad
+              if (isNumberFirstInputMode) {
+                setLockedNum(nextNum);
+              }
+              setActiveKeypadNum(nextNum);
+              // Clear the old cell selection so highlight transitions cleanly
+              setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+              addLog(`🔄 Auto-switched to number ${nextNum}.`);
+            } else {
+              // All numbers complete — game should be won (handled above),
+              // but clear state defensively
+              if (isNumberFirstInputMode) {
+                setLockedNum(null);
+              }
+              setActiveKeypadNum(null);
+            }
+          } else {
+            // autoSwitchCompletedNumber OFF: original behavior — just clear in paint mode
+            if (isNumberFirstInputMode && lockedNum === num) {
+              setLockedNum(null);
+              setActiveKeypadNum(null);
+            }
+          }
         } else {
           playClickSound();
           triggerHapticTap(vibrations);
-        }
-
-        // Requirement 4: In Paintbrush mode, if completed number was locked, unlock it immediately
-        if (isNumCompleted && lockedNum === num) {
-          setLockedNum(null);
-          setActiveKeypadNum(null);
         }
       }
     }
@@ -7415,19 +7468,7 @@ useEffect(() => {
                           {/* 1. Fast Fill (Paint Mode) Toggle */}
                           <button
                             type="button"
-                            onClick={() => {
-                              playClickSound();
-                              triggerHapticTap(vibrations);
-                              const nextMode = !isNumberFirstInputMode;
-                              setIsNumberFirstInputMode(nextMode);
-                              setLockedNum(null);
-                              setActiveKeypadNum(null);
-                              try {
-                                localStorage.setItem("sudoku_isNumberFirstInputMode", String(nextMode));
-                              } catch {}
-                              showToast(nextMode ? "⚡ Fast Fill (Paint Mode) Activated!" : "Normal Input Mode Restored");
-                              addLog(nextMode ? "⚡ Fast Fill mode enabled." : "✏️ Normal input mode enabled.");
-                            }}
+                            onClick={(e) => handleToggleNumberFirstMode(e)}
                             className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
                               isNumberFirstInputMode
                                 ? (darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900")
@@ -8902,6 +8943,8 @@ useEffect(() => {
               setIsAutoRemoveNotesEnabled={setIsAutoRemoveNotesEnabled}
               isNumberFirstInputMode={isNumberFirstInputMode}
               setIsNumberFirstInputMode={setIsNumberFirstInputMode}
+              autoSwitchCompletedNumber={autoSwitchCompletedNumber}
+              setAutoSwitchCompletedNumber={setAutoSwitchCompletedNumber}
               timerEnabled={timerEnabled}
               setTimerEnabled={setTimerEnabled}
               mistakeLimitEnabled={mistakeLimitEnabled}
@@ -8934,8 +8977,8 @@ useEffect(() => {
           {currentScreen === "status" && (
             <StatsModal
               darkMode={darkMode}
-              winsCount={winsCount}
-              gamesPlayed={gamesPlayed}
+              winsCount={totalWinsCount}
+              gamesPlayed={totalGamesPlayed}
               bestTimes={bestTimes}
               activeHistoryTab={activeHistoryTab}
               handleSelectHistoryTab={handleSelectHistoryTab}
