@@ -6311,6 +6311,7 @@ useEffect(() => {
     }));
 
     setActiveKeypadNum(null);
+    setLockedNum(null);
     setBoardState(prev => prev ? { ...prev, grid: newGrid } : null);
   };
 
@@ -7463,11 +7464,14 @@ useEffect(() => {
                                   ? (boardState.grid[boardState.selectedRow]?.[boardState.selectedCol]?.value || 0)
                                   : 0));
 
+                        const isCurrentlySelected = boardState?.selectedRow === r && boardState?.selectedCol === c;
+
                         // Requirement 1: Board-Level Number Toggle (Select & Deselect Loop)
                         // When a digit (e.g., '4') is currently active and highlighted on the board,
-                        // tapping ANY cell containing that active digit ('4') must toggle it OFF (deselect the digit,
+                        // tapping an ALREADY SELECTED cell containing that active digit toggles it OFF (deselect the digit,
                         // clear lockedNum/activeKeypadNum, and remove all matching digit highlights, returning board to neutral state).
-                        if (cell && cell.value !== 0 && activeDigit !== 0 && cell.value === activeDigit) {
+                        // Tapping an unselected cell containing that digit focuses that cell coordinate, allowing tools like Erase to work.
+                        if (cell && cell.value !== 0 && activeDigit !== 0 && cell.value === activeDigit && isCurrentlySelected) {
                           playClickSound();
                           triggerHapticTap(vibrations);
                           setLockedNum(null);
@@ -7476,8 +7480,6 @@ useEffect(() => {
                           addLog(`⚪ Deselected number ${cell.value}. Returned board to neutral state.`);
                           return;
                         }
-
-                        const isCurrentlySelected = boardState?.selectedRow === r && boardState?.selectedCol === c;
 
                         if (isNumberFirstInputMode) {
                           if (cell && cell.value !== 0) {
@@ -7504,9 +7506,9 @@ useEffect(() => {
                             setLockedNum(cell.value);
                             setActiveKeypadNum(cell.value);
                             triggerHapticTap(vibrations);
-                            // Clear cell selection so only this number is highlighted across board
-                            setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
-                            addLog(`🎨 Selected paint digit ${cell.value} from grid cell. Click empty cells to fast fill!`);
+                            // Establish active coordinate focus on the tapped cell so tools like Erase work immediately
+                            setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
+                            addLog(`🎯 Selected cell [${r+1}, ${c+1}] (digit ${cell.value}). Matching digits highlighted.`);
                           } else if (lockedNum !== null && cell && !cell.isOriginalClue && cell.value === 0) {
                             // Fast fill empty cell with active brush digit
                             handleValueInput(lockedNum, r, c);
