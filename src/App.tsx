@@ -7302,8 +7302,8 @@ useEffect(() => {
                             }}
                             className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
                               isNumberFirstInputMode
-                                ? (darkMode ? "text-[#38bdf8]" : "text-[#0369A1]")
-                                : (darkMode ? "text-zinc-400 hover:text-zinc-200" : "text-stone-500 hover:text-stone-700")
+                                ? (darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900")
+                                : (darkMode ? "opacity-50 text-zinc-500 hover:text-zinc-400" : "opacity-50 text-stone-400 hover:text-stone-500")
                             }`}
                             aria-label={isNumberFirstInputMode ? "Fast Fill Mode Active" : "Fast Fill Mode Inactive"}
                             title={isNumberFirstInputMode ? "Fast-Fill (Paintbrush) mode ON: Tap a number, then tap cells" : "Switch to Fast-Fill (Paintbrush) mode"}
@@ -7316,7 +7316,9 @@ useEffect(() => {
                           <button
                             type="button"
                             onClick={handleOpenMidGameMultiplayer}
-                            className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${headerThemeColor}`}
+                            className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
+                              darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900"
+                            }`}
                             aria-label="Invite Players to Match"
                             title="Invite Players"
                             id="hud-multiplayer-invite-button"
@@ -7328,7 +7330,9 @@ useEffect(() => {
                           <button
                             type="button"
                             onClick={() => setShowHowToPlayModal(true)}
-                            className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${headerThemeColor}`}
+                            className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
+                              darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900"
+                            }`}
                             aria-label="How to play"
                             title="How to play"
                             id="hud-how-to-play-button"
@@ -7366,7 +7370,9 @@ useEffect(() => {
                               } catch {}
                             }}
                             className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
-                              soundEffects ? headerThemeColor : (darkMode ? "text-zinc-500 hover:text-zinc-400" : "text-stone-400 hover:text-stone-500")
+                              soundEffects
+                                ? (darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900")
+                                : (darkMode ? "opacity-50 text-zinc-500 hover:text-zinc-400" : "opacity-50 text-stone-400 hover:text-stone-500")
                             }`}
                             title={soundEffects ? "Mute Sound Effects" : "Enable Sound Effects"}
                             aria-label={soundEffects ? "Mute Sound Effects" : "Enable Sound Effects"}
@@ -7558,34 +7564,49 @@ useEffect(() => {
                     </div>
                   </div>
 
-                  {/* LEVEL B (Desktop-only): 100% Vector-Styled Best Time Sticker Card (mirrors #unified-bridge-container, keeping action deck 100% flush with board) */}
-                  <div className="hidden lg:flex w-full items-center justify-between px-1 mb-1 h-[26px] select-none shrink-0" id="desktop-best-time-sticker-card">
+                  {/* 📌 AUTHENTIC CURRENT RECORD / BEST TIME CARD (Desktop lg: ONLY) */}
+                  <div className="hidden lg:flex w-full mb-3 shrink-0 select-none" id="desktop-current-record-container">
                     {(() => {
                       const activeDiff = ((boardState?.difficulty || difficulty).toUpperCase()) as Difficulty;
                       const bestSecs = personalBestTimes[activeDiff] || 0;
-                      const bestTimeDisplay = bestSecs > 0 ? formatTimer(bestSecs) : "--:--";
 
                       return (
-                        <div className="w-full flex items-center justify-between">
-                          {/* 100% Vector Sticker Card Badge */}
-                          <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wide transition-all border select-none ${
-                            darkMode
-                              ? "bg-zinc-850/80 text-amber-300 border-amber-500/30 shadow-xs"
-                              : "bg-amber-50/90 text-amber-800 border-amber-300/80 shadow-xs"
-                          }`}>
-                            <svg className="w-3 h-3 fill-current text-amber-500 shrink-0" viewBox="0 0 24 24">
-                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                            </svg>
-                            <span className="leading-none text-[9px] font-sans font-bold uppercase tracking-wider opacity-80">BEST:</span>
-                            <span className="leading-none tabular-nums font-mono font-black text-[10px]">{bestTimeDisplay}</span>
-                          </div>
+                        <div 
+                          className={`card w-full py-3 px-4 relative rounded-2xl transition-all duration-200 select-none flex flex-col justify-center items-center gap-1.5 rotate-0 ${
+                            darkMode ? (
+                              activeDiff === "EASY" ? "bg-[#022c22] text-[#d1fae5] shadow-[0_8px_20px_rgba(0,0,0,0.4)]" :
+                              activeDiff === "MEDIUM" ? "bg-[#451a03] text-[#fef08a] shadow-[0_8px_20px_rgba(0,0,0,0.4)]" :
+                              activeDiff === "HARD" ? "bg-[#2e1065] text-[#e9d5ff] shadow-[0_8px_20px_rgba(0,0,0,0.4)]" :
+                              "bg-[#4c0519] text-[#fecdd3] shadow-[0_8px_20px_rgba(0,0,0,0.4)]"
+                            ) : (
+                              activeDiff === "EASY" ? "bg-[#D1FAE5] shadow-[0_8px_20px_rgba(6,95,70,0.06)] text-[#065F46]" :
+                              activeDiff === "MEDIUM" ? "bg-[#FFF99D] shadow-[0_8px_20px_rgba(133,77,14,0.06)] text-[#854D0E]" :
+                              activeDiff === "HARD" ? "bg-[#F3E8FF] shadow-[0_8px_20px_rgba(107,33,168,0.06)] text-[#6B21A8]" :
+                              "bg-[#FFE4E6] shadow-[0_8px_20px_rgba(157,23,77,0.06)] text-[#9D174D]"
+                            )
+                          }`}
+                          style={{ border: 'none' }}
+                        >
+                          {/* Subtle top tape aesthetic */}
+                          <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1.5 w-14 h-3 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none transition-colors duration-200 rounded-xs`} />
 
-                          {/* Difficulty Indicator Label */}
-                          <span className={`text-[9.5px] font-mono font-bold tracking-widest uppercase opacity-65 ${
-                            darkMode ? "text-zinc-400" : "text-stone-500"
-                          }`}>
-                            {activeDiff}
-                          </span>
+                          <div className="text-center w-full">
+                            <span className="text-[9.5px] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80">
+                              CURRENT RECORD
+                            </span>
+                            <h2 className="text-base uppercase tracking-tight flex items-center justify-center gap-1.5 font-sans font-black leading-tight">
+                              <Timer className="w-4 h-4 stroke-[3] shrink-0" />
+                              <span>BEST TIME:</span>
+                              <span className="font-mono font-black text-base tabular-nums">
+                                {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
+                              </span>
+                            </h2>
+                            <p className="text-[11px] mt-0.5 select-none handwriting opacity-95 font-semibold leading-tight">
+                              {bestSecs > 0 
+                                ? "Can you break your own record?" 
+                                : "No record yet... Can you set the first one?"}
+                            </p>
+                          </div>
                         </div>
                       );
                     })()}

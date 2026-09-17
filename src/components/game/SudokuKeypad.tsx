@@ -90,7 +90,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   return (
     <>
       {/* 1. UTILITY BUTTONS: Undo, Erase, Notes, Hint */}
-      <div className="shrink-0 w-full flex flex-col mt-1 lg:mt-0 px-0.5 overflow-visible" id="game-utility-buttons-deck">
+      <div className="shrink-0 w-full flex flex-col mt-1 px-0.5 overflow-visible" id="game-utility-buttons-deck">
         <div className="grid grid-cols-4 gap-2 lg:gap-2 xl:gap-2.5 relative z-10 w-full overflow-visible">
           
           {/* UNDO BUTTON */}
