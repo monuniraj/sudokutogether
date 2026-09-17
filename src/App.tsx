@@ -7378,11 +7378,11 @@ useEffect(() => {
 
           {/* PANE 2: ACTIVE GAMEPLAY ARENA */}
           {currentScreen === "game" && (
-            <div className={`flex-1 w-full flex flex-col items-center justify-start p-1 sm:p-3 md:p-6 overflow-y-auto pb-16 select-none pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] selection:bg-[#E0F2FE] bg-transparent touch-auto`}>
+            <div className={`flex-1 w-full flex flex-col items-center justify-start p-1 sm:p-3 md:p-6 overflow-hidden lg:overflow-y-auto pb-16 select-none pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto`}>
               
               {/* Main responsive outer layout container - Centers automatically as a unified cohesive block */}
               <div 
-                className="w-full lg:w-fit flex flex-col lg:flex-row gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto my-2 sm:my-auto shrink-0 min-h-0"
+                className="w-full lg:w-fit flex flex-col lg:flex-row gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto my-auto shrink-0"
                 id="main-responsive-game-container"
               >
                 
@@ -7442,7 +7442,7 @@ useEffect(() => {
                   </div>
 
                   {/* ROW 2: HUD GROUP DIRECTLY ABOVE 9x9 BOARD */}
-                  <div className="w-full relative flex items-center justify-between px-1 mb-1 h-[26px] select-none shrink-0" id="unified-bridge-container">
+                  <div className="w-full relative flex items-center justify-between px-1 mb-1 select-none shrink-0" id="unified-bridge-container">
                     {/* Left: Mistakes status metric */}
                     <span className={`font-sans font-black text-xs sm:text-sm tracking-wider leading-none select-none ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
                       ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
