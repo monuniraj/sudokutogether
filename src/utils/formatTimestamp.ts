@@ -11,7 +11,11 @@ export const formatMatchTimestamp = (dateStrOrTimestamp?: any, fallback = "Saved
 
   let d: Date;
   if (typeof dateStrOrTimestamp === "number") {
-    // Check if seconds instead of milliseconds (10-digit unix epoch)
+    // If it's a small number like < 10000000 (e.g. raw seconds duration), fallback safely
+    if (dateStrOrTimestamp < 10000000) {
+      return fallback;
+    }
+    // Check if seconds instead of milliseconds (10-digit unix epoch vs 13-digit ms)
     d = new Date(dateStrOrTimestamp < 1e11 ? dateStrOrTimestamp * 1000 : dateStrOrTimestamp);
   } else if (dateStrOrTimestamp instanceof Date) {
     d = dateStrOrTimestamp;
@@ -27,10 +31,10 @@ export const formatMatchTimestamp = (dateStrOrTimestamp?: any, fallback = "Saved
       d = new Date(parsedTime);
     } else {
       const numParsed = Number(trimmed);
-      if (!isNaN(numParsed) && numParsed > 0) {
+      if (!isNaN(numParsed) && numParsed > 10000000) {
         d = new Date(numParsed < 1e11 ? numParsed * 1000 : numParsed);
       } else {
-        return trimmed;
+        return fallback;
       }
     }
   } else {
@@ -61,9 +65,18 @@ export const formatMatchTimestamp = (dateStrOrTimestamp?: any, fallback = "Saved
     return `${hours}h ago`;
   }
 
-  // Older than 24 hours (or distant future): Xd ago
-  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
-  return `${days}d ago`;
+  // Between 24 and 48 hours: "Yesterday"
+  if (diffMs >= 24 * 60 * 60 * 1000 && diffMs < 48 * 60 * 60 * 1000) {
+    return "Yesterday";
+  }
+
+  // Older than 48 hours: Clean localized date (e.g. "Sep 16" or "Sep 16, 2025" if different year)
+  const isCurrentYear = d.getFullYear() === new Date(now).getFullYear();
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(isCurrentYear ? {} : { year: "numeric" })
+  });
 };
 
 /**

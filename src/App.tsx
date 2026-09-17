@@ -1481,6 +1481,7 @@ useEffect(() => {
 
   // --- STACK-BASED CRASH-FREE SYSTEM NAVIGATION ---
   const [navigationHistory, setNavigationHistory] = useState<string[]>(["home"]);
+  const isProgrammaticBackRef = useRef<boolean>(false);
 
   const navigateToScreen = (screen: "home" | "status" | "settings" | "game" | "login" | "together") => {
     setCurrentScreen(screen);
@@ -1496,7 +1497,6 @@ useEffect(() => {
     setNavigationHistory(prev => {
       if (prev.length <= 1) {
         setCurrentScreen("home");
-        window.history.pushState({ view: "home" }, "", window.location.href);
         return ["home"];
       }
       const nextStack = prev.slice(0, -1);
@@ -1504,14 +1504,17 @@ useEffect(() => {
       
       if (lastScreen === "game" && (boardState?.isGameOver || !boardState)) {
         setCurrentScreen("home");
-        window.history.pushState({ view: "home" }, "", window.location.href);
         return ["home"];
       }
 
       setCurrentScreen(lastScreen);
-      window.history.pushState({ view: lastScreen }, "", window.location.href);
       return nextStack;
     });
+
+    if (typeof window !== "undefined" && window.history.state?.view && window.history.state.view !== "home") {
+      isProgrammaticBackRef.current = true;
+      window.history.back();
+    }
   };
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
   const [selectedKotlinFile, setSelectedKotlinFile] = useState<"engine" | "board" | "preferences" | "snippets">("snippets");
@@ -1836,7 +1839,6 @@ useEffect(() => {
   const [viewingRankingsGame, setViewingRankingsGame] = useState<CompletedGame | null>(null);
   const [historyRankings, setHistoryRankings] = useState<any[]>([]);
   const [isLoadingHistoryRankings, setIsLoadingHistoryRankings] = useState<boolean>(false);
-  const [showFriendsListSection, setShowFriendsListSection] = useState<boolean>(true);
   const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
   const [incomingChallengeId, setIncomingChallengeId] = useState<string | null>(null);
   const [incomingChallengeDetails, setIncomingChallengeDetails] = useState<{
@@ -2918,7 +2920,6 @@ useEffect(() => {
     if (showBellInvitesModal) { setShowBellInvitesModal(false); return true; }
     if (showRematchInviteModal) { setShowRematchInviteModal(false); return true; }
     if (showInviteModal) { setShowInviteModal(false); return true; }
-    if (showFriendsListSection) { setShowFriendsListSection(false); return true; }
     if (showHistoryChallengeModal) { setShowHistoryChallengeModal(false); return true; }
     if (showMidGameInviteModal) { setShowMidGameInviteModal(false); return true; }
     if (showGameOverModal) { 
@@ -2949,7 +2950,6 @@ useEffect(() => {
     if (showBellInvitesModal) count++;
     if (showRematchInviteModal) count++;
     if (showInviteModal) count++;
-    if (showFriendsListSection) count++;
     if (showHistoryChallengeModal) count++;
     if (showMidGameInviteModal) count++;
     if (showGameOverModal) count++;
@@ -2965,10 +2965,14 @@ useEffect(() => {
     closeTopmostModalRef.current = closeTopmostModal;
   });
 
+  const navigatorPopRef = useRef(navigatorPop);
+  useEffect(() => {
+    navigatorPopRef.current = navigatorPop;
+  });
+
   const prevOpenModalCountRef = useRef(0);
   const modalHistoryDepthRef = useRef(0);
   const isPopstateClosingModalRef = useRef(false);
-  const isProgrammaticBackRef = useRef(false);
 
   // Synchronize modal open/close states with History API so swipe-back purely closes modals
   useEffect(() => {
@@ -3010,7 +3014,6 @@ useEffect(() => {
     showBellInvitesModal,
     showRematchInviteModal,
     showInviteModal,
-    showFriendsListSection,
     showHistoryChallengeModal,
     showMidGameInviteModal,
     showGameOverModal,
@@ -3040,27 +3043,7 @@ useEffect(() => {
         return;
       }
 
-      const params = new URLSearchParams(window.location.search);
-      let chalParam = params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("room");
-      if (!chalParam && window.location.hash) {
-        const qs = window.location.hash.substring(window.location.hash.indexOf("?") + 1);
-        const hashParams = new URLSearchParams(qs);
-        chalParam = hashParams.get("challenge") || hashParams.get("gameId") || hashParams.get("seed") || hashParams.get("room");
-      }
-      if (!chalParam && window.location.hash) {
-        const cleanedHash = window.location.hash.substring(1);
-        if (cleanedHash.startsWith("SUDOKU-")) {
-          chalParam = cleanedHash;
-        }
-      }
-
-      if (chalParam) {
-        const queryPw = params.get("pin") || params.get("pw") || params.get("password");
-        const senderParam = params.get("sender") || params.get("senderName") || params.get("invitedBy") || params.get("sender_name");
-        handleLoadChallengeFromId(chalParam, queryPw || undefined, senderParam || undefined, true);
-        return;
-      }
-
+      // 2. If on a sub-screen or page, navigate back to previous screen
       const state = event.state;
       if (state && typeof state === "object" && state.view) {
         const v = state.view as "home" | "status" | "settings" | "game" | "login" | "together";
@@ -3073,8 +3056,7 @@ useEffect(() => {
           return [...prev, v];
         });
       } else {
-        setCurrentScreen("home");
-        setNavigationHistory(["home"]);
+        navigatorPopRef.current();
       }
     };
 
@@ -3087,12 +3069,13 @@ useEffect(() => {
         CapApp.addListener('backButton', ({ canGoBack }) => {
           // 1. Dismiss topmost modal if open
           if (getOpenModalCount() > 0) {
-            window.history.back();
+            isPopstateClosingModalRef.current = true;
+            closeTopmostModalRef.current();
             return;
           }
-          // 2. If on a subscreen (settings, status, game over), go back to home
+          // 2. If on a subscreen (settings, status, game over), go back to previous screen
           if (currentScreenRef.current !== "home") {
-            navigateToScreen("home");
+            navigatorPopRef.current();
             return;
           }
           // 3. If on home and no modals, exit/minimize
@@ -6074,9 +6057,17 @@ useEffect(() => {
   }, [currentScreen, boardState?.isGameOver, visualizingBacktrack, isTimerPaused]);
 
   const formatTimer = (secs: number) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, "0");
-    const s = (secs % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
+    if (typeof secs !== "number" || isNaN(secs) || secs < 0) return "00:00";
+    if (secs >= 9999) return "--:--";
+    const totalSecs = Math.floor(secs);
+    const hours = Math.floor(totalSecs / 3600);
+    const minutes = Math.floor((totalSecs % 3600) / 60);
+    const seconds = totalSecs % 60;
+
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+    }
+    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   };
 
   // Utility to push log updates
@@ -10803,6 +10794,7 @@ useEffect(() => {
                         id: originalPlayerId,
                         name: viewingRankingsGame.playerName || currentLocalName,
                         time: !viewingRankingsGame.isWon ? 9999 : viewingRankingsGame.timeSec,
+                        elapsedTime: Number(viewingRankingsGame.timeSec) > 0 && Number(viewingRankingsGame.timeSec) < 9999 ? Number(viewingRankingsGame.timeSec) : 0,
                         mistakes: viewingRankingsGame.mistakes,
                         hints: (viewingRankingsGame as any).hints ?? (viewingRankingsGame as any).hintsUsed ?? 0,
                         failed: !viewingRankingsGame.isWon,
@@ -10827,12 +10819,15 @@ useEffect(() => {
                           ? !!item.isWon 
                           : (item.failed !== undefined ? !item.failed : !item.isPending);
                         const isPending = !isCurrentUser && (item.isPending ?? false);
-                        const pTime = !isWon ? 9999 : Number(item.timeSec ?? item.time ?? item.elapsedTime ?? 0);
+                        const rawTime = Number(item.timeSec ?? item.time ?? item.elapsedTime ?? 0);
+                        const pTime = !isWon ? 9999 : rawTime;
+                        const elapsedTime = rawTime > 0 && rawTime < 9999 ? rawTime : (Number(item.elapsedTime) || 0);
 
                         resultsMap.set(pId, {
                           id: pId,
                           name: pName,
                           time: pTime,
+                          elapsedTime: elapsedTime,
                           mistakes: item.mistakes !== undefined ? Number(item.mistakes) : 0,
                           hints: item.hints !== undefined ? Number(item.hints) : ((item as any).hintsUsed ?? 0),
                           failed: !isWon && !isPending,
@@ -10874,7 +10869,11 @@ useEffect(() => {
                       return results.map((player, idx) => {
                         const isPending = !!player.isPending;
                         const positionStr = idx === 0 ? "1st" : idx === 1 ? "2nd" : idx === 2 ? "3rd" : `${idx + 1}th`;
-                        const timeStr = isPending ? "--:--" : formatTimer(player.time);
+                        const timeStr = isPending 
+                          ? "--:--" 
+                          : (player.failed || player.time >= 9999)
+                            ? (player.elapsedTime && player.elapsedTime > 0 && player.elapsedTime < 9999 ? formatTimer(player.elapsedTime) : "--:--")
+                            : formatTimer(player.time);
                         const errorsStr = `${player.mistakes}/${viewingRankingsGame.maxMistakes || 3} Errs`;
                         const hintsStr = `${player.hints ?? 0} Hints`;
                         const statusStr = player.failed ? "FAILED" : isPending ? "PLAYING" : "WON";

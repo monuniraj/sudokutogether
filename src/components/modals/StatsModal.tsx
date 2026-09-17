@@ -171,9 +171,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                 ].map((tier) => {
                   let displayStr = tier.fallback;
                   if (tier.timeSec && tier.timeSec > 0) {
-                    const mins = Math.floor(tier.timeSec / 60);
-                    const secs = tier.timeSec % 60;
-                    displayStr = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+                    displayStr = formatTimer(tier.timeSec);
                   }
 
                   return (
