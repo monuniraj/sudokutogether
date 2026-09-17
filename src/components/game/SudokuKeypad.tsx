@@ -73,8 +73,36 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
 
   return (
     <>
-      {/* QUICK FAST-FILL / PAINTBRUSH TOGGLE SWITCH (Zero-flow height floating anchor) */}
-      <div className="relative w-full h-0 select-none overflow-visible pointer-events-none" id="quick-fast-fill-toggle-container">
+      {/* DESKTOP HUD-LEVEL FAST-FILL ROW: Horizontally level with board's top HUD row (ERR, ?, Timer) */}
+      <div className="hidden lg:flex w-full items-center justify-end px-1 mb-1 h-[24px] select-none shrink-0" id="desktop-hud-fast-fill-container">
+        <button
+          type="button"
+          onClick={() => {
+            playClickSound();
+            triggerHapticTap(vibrations);
+            if (onToggleNumberFirstMode) {
+              onToggleNumberFirstMode();
+            }
+          }}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-sans font-bold tracking-wide transition-all border cursor-pointer active:scale-95 leading-none ${
+            isNumberFirstInputMode
+              ? (darkMode
+                  ? "bg-sky-950/50 text-[#38bdf8] border-sky-500/40 shadow-xs"
+                  : "bg-[#E0F2FE] text-[#0369A1] border-sky-300 shadow-xs")
+              : (darkMode
+                  ? "bg-zinc-850/60 text-zinc-400 border-zinc-700/40 hover:text-zinc-200"
+                  : "bg-stone-100/80 text-stone-500 border-stone-200/80 hover:text-stone-700")
+          }`}
+          title={isNumberFirstInputMode ? "Fast-Fill (Paintbrush) mode ON: Tap a number, then tap cells" : "Switch to Fast-Fill (Paintbrush) mode"}
+          aria-label="Toggle Fast-Fill / Paintbrush mode"
+        >
+          <Zap className={`w-3 h-3 ${isNumberFirstInputMode ? "fill-current text-[#0369A1] dark:text-[#38bdf8]" : "text-stone-400 dark:text-zinc-500"}`} />
+          <span className="leading-none text-[9.5px]">Fast Fill</span>
+        </button>
+      </div>
+
+      {/* MOBILE QUICK FAST-FILL / PAINTBRUSH TOGGLE SWITCH (Zero-flow height floating anchor) */}
+      <div className="lg:hidden relative w-full h-0 select-none overflow-visible pointer-events-none" id="quick-fast-fill-toggle-container">
         <div className="absolute right-1 bottom-2 pointer-events-auto flex items-center justify-end z-20">
           <button
             type="button"
@@ -88,8 +116,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
             className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-sans font-bold tracking-wide transition-all border cursor-pointer active:scale-95 leading-none ${
               isNumberFirstInputMode
                 ? (darkMode
-                    ? "bg-amber-950/40 text-amber-300 border-amber-500/40 shadow-xs"
-                    : "bg-amber-50 text-amber-800 border-amber-300 shadow-xs")
+                    ? "bg-sky-950/50 text-[#38bdf8] border-sky-500/40 shadow-xs"
+                    : "bg-[#E0F2FE] text-[#0369A1] border-sky-300 shadow-xs")
                 : (darkMode
                     ? "bg-zinc-850/60 text-zinc-400 border-zinc-700/40 hover:text-zinc-200"
                     : "bg-stone-100/80 text-stone-500 border-stone-200/80 hover:text-stone-700")
@@ -97,9 +125,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
             title={isNumberFirstInputMode ? "Fast-Fill (Paintbrush) mode ON: Tap a number, then tap cells" : "Switch to Fast-Fill (Paintbrush) mode"}
             aria-label="Toggle Fast-Fill / Paintbrush mode"
           >
-            <Zap className={`w-3 h-3 ${isNumberFirstInputMode ? "fill-current text-amber-500 animate-pulse" : "text-stone-400 dark:text-zinc-500"}`} />
+            <Zap className={`w-3 h-3 ${isNumberFirstInputMode ? "fill-current text-[#0369A1] dark:text-[#38bdf8]" : "text-stone-400 dark:text-zinc-500"}`} />
             <span className="leading-none text-[9.5px]">Fast Fill</span>
-            <span className={`w-1.5 h-1.5 rounded-full ${isNumberFirstInputMode ? "bg-amber-500 animate-ping" : "bg-stone-300 dark:bg-zinc-600"}`} />
           </button>
         </div>
       </div>
@@ -203,7 +230,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
 
       {/* 2. NUMBER PAD: 1-9 */}
       <div className="shrink-0 w-full mt-1 lg:mt-0 pb-0.5 overflow-visible px-1 sm:px-0" id="game-number-pad-deck">
-        <div className="grid grid-cols-9 lg:grid-cols-3 gap-1 sm:gap-1.5 lg:gap-2.5 xl:gap-3 w-full select-none overflow-visible">
+        <div className="grid grid-cols-9 lg:grid-cols-3 gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5 w-full select-none overflow-visible">
           {Array.from({ length: 9 }).map((_, i) => {
             const num = i + 1;
             const isSelected = (isNumberFirstInputMode && lockedNum === num) || (!isNumberFirstInputMode && activeKeypadNum === num);
@@ -218,7 +245,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                   onNumberSelect(num);
                 }}
                 disabled={!boardState || isGameOver || visualizingBacktrack || remainingCount <= 0}
-                className={`aspect-[1/1.55] lg:aspect-[1/1.25] w-full relative flex items-center justify-center font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
+                className={`aspect-[1/1.55] lg:aspect-[1/1.02] w-full relative flex items-center justify-center font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
                   isSelected 
                     ? (darkMode 
                         ? "bg-[#713f12] text-[#facc15] active:bg-[#854d0e] border border-yellow-950" 
@@ -228,7 +255,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                         : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")
                 }`}
               >
-                <div className="flex flex-col items-center justify-center absolute inset-0 py-1 sm:py-1.5 lg:py-2 px-0.5 select-none">
+                <div className="flex flex-col items-center justify-center absolute inset-0 py-1 sm:py-1.5 lg:py-1.5 px-0.5 select-none">
                   <span 
                     className="handwriting font-normal leading-none flex items-center justify-center text-[29px] sm:text-[33px] lg:text-[44px] xl:text-[48px] select-none"
                   >

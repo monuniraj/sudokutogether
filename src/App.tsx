@@ -7239,11 +7239,11 @@ useEffect(() => {
 
           {/* PANE 2: ACTIVE GAMEPLAY ARENA */}
           {currentScreen === "game" && (
-            <div className={`flex-1 w-full flex flex-col items-center justify-start p-1 sm:p-3 md:p-6 overflow-hidden lg:overflow-y-auto pb-16 select-none pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto`}>
+            <div className={`flex-1 w-full flex flex-col items-center justify-start p-1 sm:p-3 md:p-6 overflow-y-auto pb-16 select-none pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] selection:bg-[#E0F2FE] bg-transparent touch-auto`}>
               
               {/* Main responsive outer layout container - Centers automatically as a unified cohesive block */}
               <div 
-                className="w-full lg:w-fit flex flex-col lg:flex-row gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto my-auto shrink-0"
+                className="w-full lg:w-fit flex flex-col lg:flex-row gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto my-2 sm:my-auto shrink-0 min-h-0"
                 id="main-responsive-game-container"
               >
                 
@@ -7494,25 +7494,34 @@ useEffect(() => {
 
                 {/* COLUMN 2: CONTROLS & NUMBERS DECK */}
                 <div 
-                  className="w-full lg:w-[292px] shrink-0 flex flex-col gap-3 sm:gap-4 lg:gap-0 lg:justify-between px-2 py-3 sm:px-2 sm:py-4 lg:p-0 transition-colors duration-300 border-none select-none mt-2 lg:mt-6"
+                  className="w-full lg:w-[292px] shrink-0 flex flex-col gap-3 sm:gap-4 lg:gap-0 lg:justify-between px-2 py-3 sm:px-2 sm:py-4 lg:p-0 transition-colors duration-300 border-none select-none mt-2 lg:mt-0"
                   id="game-controls-column"
                 >
                   
-                  {/* ROW 1: MULTIPLAYER BUTTON (Desktop-only, matches Difficulty buttons baseline and height) */}
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                      setShowMultiplayerForkModal(true);
-                    }}
-                    className={`hidden lg:flex w-full h-[38px] border-none px-4 text-center transition-all duration-150 select-none rounded-xl items-center justify-center gap-2 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px font-mono text-xs uppercase tracking-wider shrink-0 ${
-                      darkMode 
-                        ? "bg-[#2e1065] hover:bg-[#3b0764] text-[#e9d5ff] font-black border border-purple-950/60 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" 
-                        : "bg-[#F3E8FF] hover:bg-[#E9D5FF] active:bg-[#D8B4FE] text-[#6B21A8] font-black shadow-[0_8px_16px_rgba(107,33,168,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
-                    }`}
-                  >
-                    <Users className="w-4 h-4 stroke-[2.5] shrink-0" />
-                    <span>Multiplayer</span>
-                  </button>
+                  {/* ROW 1: MULTIPLAYER BUTTON (Desktop-only, matches Difficulty selector baseline, label spacing, and height) */}
+                  <div className="hidden lg:flex w-full flex-col mb-4 shrink-0" id="desktop-multiplayer-container">
+                    <div className="flex items-center justify-between gap-4 mb-2 select-none invisible pointer-events-none">
+                      <span className="block text-xs font-black uppercase tracking-wider font-mono">
+                        MULTIPLAYER MATCH:
+                      </span>
+                    </div>
+                    <div className="h-[38px] flex flex-row items-stretch w-full pb-1">
+                      <button
+                        onClick={() => {
+                          playClickSound();
+                          setShowMultiplayerForkModal(true);
+                        }}
+                        className={`w-full h-[38px] border-none px-4 text-center transition-all duration-150 select-none rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px font-mono text-xs uppercase tracking-wider shrink-0 ${
+                          darkMode 
+                            ? "bg-[#2e1065] hover:bg-[#3b0764] text-[#e9d5ff] font-black border border-purple-950/60 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" 
+                            : "bg-[#F3E8FF] hover:bg-[#E9D5FF] active:bg-[#D8B4FE] text-[#6B21A8] font-black shadow-[0_8px_16px_rgba(107,33,168,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
+                        }`}
+                      >
+                        <Users className="w-4 h-4 stroke-[2.5] shrink-0" />
+                        <span>Multiplayer</span>
+                      </button>
+                    </div>
+                  </div>
 
                   {/* 2 & 3. KEYPAD & CONTROLS DECK */}
                   <SudokuKeypad

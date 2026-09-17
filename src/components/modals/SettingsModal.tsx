@@ -610,7 +610,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <Zap className="w-4 h-4 text-amber-500 fill-current" />
+                  <Zap className="w-4 h-4 text-[#0369A1] dark:text-[#38bdf8] fill-current" />
                   <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
                     Fast Fill (Paint Mode)
                   </span>
