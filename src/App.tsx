@@ -2273,6 +2273,40 @@ useEffect(() => {
   // Stats status trackers derived directly from the actual completed games array (no fake data!)
   const gamesPlayed = completedGames.length;
   const winsCount = completedGames.filter(g => g.isWon).length;
+
+  // Decoupled cumulative statistics counters that persist across match completions and history caps
+  const [totalGamesPlayed, setTotalGamesPlayed] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_total_games_played");
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 0) return Math.max(val, completedGames.length);
+      }
+      const legacy = localStorage.getItem("sudoku_gamesPlayed");
+      if (legacy !== null) {
+        const val = parseInt(legacy, 10);
+        if (!isNaN(val) && val >= 0) return Math.max(val, completedGames.length);
+      }
+    } catch {}
+    return completedGames.length;
+  });
+
+  const [totalWinsCount, setTotalWinsCount] = useState<number>(() => {
+    const winsInHistory = completedGames.filter(g => g.isWon).length;
+    try {
+      const saved = localStorage.getItem("sudoku_total_wins_count");
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 0) return Math.max(val, winsInHistory);
+      }
+      const legacy = localStorage.getItem("sudoku_winsCount");
+      if (legacy !== null) {
+        const val = parseInt(legacy, 10);
+        if (!isNaN(val) && val >= 0) return Math.max(val, winsInHistory);
+      }
+    } catch {}
+    return winsInHistory;
+  });
   const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
 
   // Helper to parse times stored as raw numbers, numeric strings, or mm:ss / hh:mm:ss strings
@@ -3829,6 +3863,78 @@ useEffect(() => {
   // Active selected number for single-number highlighting / keypad toggle
   const [activeKeypadNum, setActiveKeypadNum] = useState<number | null>(null);
 
+  // Requirement 1 & 2: Responsive toggle for Paint Mode / Fast-Fill with digit inheritance and focus ring cleanup
+  const handleToggleNumberFirstMode = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    playClickSound();
+    triggerHapticTap(vibrations);
+
+    setIsNumberFirstInputMode(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem("sudoku_isNumberFirstInputMode", String(next));
+      } catch {}
+
+      if (next) {
+        // Step 2.2: Digit inheritance when toggling Paint Mode ON
+        const selRow = boardState?.selectedRow;
+        const selCol = boardState?.selectedCol;
+        let inheritDigit: number | null = null;
+        if (selRow !== null && selRow !== undefined && selCol !== null && selCol !== undefined && boardState?.grid) {
+          const val = boardState.grid[selRow]?.[selCol]?.value;
+          if (val && val >= 1 && val <= 9) {
+            let count = 0;
+            for (let r = 0; r < 9; r++) {
+              for (let c = 0; c < 9; c++) {
+                if (boardState.grid[r][c].value === val) count++;
+              }
+            }
+            if (count < 9) {
+              inheritDigit = val;
+            }
+          }
+        }
+        if (!inheritDigit && activeKeypadNum && activeKeypadNum >= 1 && activeKeypadNum <= 9) {
+          let count = 0;
+          if (boardState?.grid) {
+            for (let r = 0; r < 9; r++) {
+              for (let c = 0; c < 9; c++) {
+                if (boardState.grid[r][c].value === activeKeypadNum) count++;
+              }
+            }
+          }
+          if (count < 9) {
+            inheritDigit = activeKeypadNum;
+          }
+        }
+
+        // Step 2.3: Clean up and clear stale coordinate focus ring on the board
+        setBoardState(b => b ? { ...b, selectedRow: null, selectedCol: null } : null);
+
+        if (inheritDigit) {
+          setLockedNum(inheritDigit);
+          setActiveKeypadNum(inheritDigit);
+          showToast(`⚡ Fast Fill ON: Painting number ${inheritDigit}`);
+          addLog(`⚡ Fast Fill (Paint Mode) ON. Inherited number ${inheritDigit}.`);
+        } else {
+          setLockedNum(null);
+          setActiveKeypadNum(null);
+          showToast("⚡ Fast Fill ON: Select a number, then tap cells");
+          addLog("⚡ Fast Fill (Paint Mode) ON.");
+        }
+      } else {
+        setLockedNum(null);
+        setActiveKeypadNum(null);
+        showToast("Normal Input Mode Restored");
+        addLog("✏️ Normal (Cell-First) input mode enabled.");
+      }
+
+      return next;
+    });
+  };
+
   // Rewarded Video Ad simulated card states
   const [rewardType, setRewardType] = useState<"hint_reward" | "mistake_reward" | null>(null);
   const [isWatchingAd, setIsWatchingAd] = useState<boolean>(false);
@@ -4775,6 +4881,27 @@ useEffect(() => {
     const pName = getActiveDisplayName();
     const isMultiplayerMatch = challengeMode || Boolean(activeGameId) || Boolean(rematchGameId);
     const resolvedParts = isMultiplayerMatch ? resolveParticipantsForSave({ id: finalGameId, seed: gameSeed } as CompletedGame) : undefined;
+
+    // Requirement 4: Unconditionally increment decoupled cumulative statistics on every completed match
+    setTotalGamesPlayed(prev => {
+      const next = Math.max(prev, completedGames.length) + 1;
+      try {
+        localStorage.setItem("sudoku_total_games_played", String(next));
+        localStorage.setItem("sudoku_gamesPlayed", String(next));
+      } catch {}
+      return next;
+    });
+    if (isWon) {
+      setTotalWinsCount(prev => {
+        const winsInHistory = completedGames.filter(g => g.isWon).length;
+        const next = Math.max(prev, winsInHistory) + 1;
+        try {
+          localStorage.setItem("sudoku_total_wins_count", String(next));
+          localStorage.setItem("sudoku_winsCount", String(next));
+        } catch {}
+        return next;
+      });
+    }
 
     setCompletedGames(prev => {
       const existsIndex = prev.findIndex(r => r.id === finalGameId);
@@ -7811,7 +7938,7 @@ useEffect(() => {
                                 id: r.userId,
                                 name: isCurrentUser ? (r.playerName || currentLocalName) : r.playerName,
                                 time: isAbandoned ? 99999 : (!r.isWon ? 9999 : Number(r.timeSec)),
-                                elapsedTime: Number(r.timeSec) || 0,
+                                elapsedTime: Number(r.timeSec) > 0 && Number(r.timeSec) < 9999 ? Number(r.timeSec) : (Number(r.elapsedTime) || 0),
                                 mistakes: Number(r.mistakes),
                                 failed: (!r.isWon && !r.isPending) || isAbandoned,
                                 isAbandoned: isAbandoned,
@@ -7829,7 +7956,8 @@ useEffect(() => {
                               if (aPending !== bPending) return aPending ? 1 : -1;
                               if (a.failed !== b.failed) return a.failed ? 1 : -1;
                               if (a.time !== b.time) return a.time - b.time;
-                              return a.mistakes - b.mistakes;
+                              if (a.mistakes !== b.mistakes) return a.mistakes - b.mistakes;
+                              return (a.elapsedTime || 0) - (b.elapsedTime || 0);
                             });
 
                             return results.map((player, idx) => {
@@ -7915,7 +8043,7 @@ useEffect(() => {
                                       ) : player.failed ? (
                                         <>
                                           <span className="font-mono font-black text-xs sm:text-sm text-red-500 tracking-wide whitespace-nowrap flex-shrink-0 shrink-0">
-                                            FAIL • {formatTimer(player.elapsedTime)}
+                                            FAIL • {formatTimer(player.elapsedTime > 0 && player.elapsedTime < 9999 ? player.elapsedTime : 0)}
                                           </span>
                                           <span className={`font-sans text-[8.5px] uppercase font-bold tracking-wider whitespace-nowrap flex-shrink-0 shrink-0 ${
                                             darkMode ? "text-zinc-400" : "text-stone-500"
@@ -7930,7 +8058,7 @@ useEffect(() => {
                                               ? (darkMode ? "text-indigo-200" : "text-indigo-950") 
                                               : (darkMode ? "text-zinc-200" : "text-stone-850")
                                           }`}>
-                                            {formatTimer(player.elapsedTime || player.time)}
+                                            {formatTimer(player.time < 9999 ? player.time : (player.elapsedTime || 0))}
                                           </span>
                                           <span className={`font-sans text-[8.5px] uppercase font-bold tracking-wider whitespace-nowrap flex-shrink-0 shrink-0 ${
                                             player.isMe 

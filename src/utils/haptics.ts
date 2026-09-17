@@ -134,11 +134,13 @@ export const triggerHapticCompletion = (enabled?: boolean): void => {
 
   try {
     if (Capacitor.isNativePlatform()) {
-      Haptics.notification({ type: NotificationType.Success }).catch(() => {
+      // Crisp, light confirmation tap distinct from heavy error vibration
+      Haptics.impact({ style: ImpactStyle.Light }).catch(() => {
         // Fail silently
       });
     } else if (typeof navigator !== 'undefined' && 'vibrate' in navigator && typeof navigator.vibrate === 'function') {
-      navigator.vibrate([40, 50, 60, 50, 100]);
+      // Gentle ascending micro-pattern [25, 35]ms (snappy confirmation tap)
+      navigator.vibrate([25, 35]);
     }
   } catch {
     // Fail silently

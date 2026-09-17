@@ -23,6 +23,8 @@ export interface SettingsModalProps {
   setIsAutoRemoveNotesEnabled: (val: boolean) => void;
   isNumberFirstInputMode: boolean;
   setIsNumberFirstInputMode: (val: boolean) => void;
+  autoSwitchCompletedNumber: boolean;
+  setAutoSwitchCompletedNumber: (val: boolean) => void;
   timerEnabled: boolean;
   setTimerEnabled: (val: boolean) => void;
   mistakeLimitEnabled: boolean;
@@ -69,6 +71,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   setIsAutoRemoveNotesEnabled,
   isNumberFirstInputMode,
   setIsNumberFirstInputMode,
+  autoSwitchCompletedNumber,
+  setAutoSwitchCompletedNumber,
   timerEnabled,
   setTimerEnabled,
   mistakeLimitEnabled,
@@ -631,7 +635,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 </div>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     playClickSound();
                     setIsNumberFirstInputMode(!isNumberFirstInputMode);
                   }}
@@ -653,6 +658,56 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {expandedInfo["paint-mode"] && (
                 <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
                   Locks a selected digit on the keypad so you can tap multiple empty cells to place it rapidly.
+                </div>
+              )}
+            </div>
+
+            {/* Auto-Switch Completed Numbers */}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                    Auto-Switch Completed Numbers
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playClickSound();
+                      toggleInfo("auto-switch-completed");
+                    }}
+                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["auto-switch-completed"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    }`}
+                    aria-label="Info: Auto-Switch Completed Numbers"
+                    title="Toggle explanation"
+                  >
+                    <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setAutoSwitchCompletedNumber(!autoSwitchCompletedNumber);
+                  }}
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
+                    autoSwitchCompletedNumber
+                      ? darkMode
+                        ? "bg-pink-500"
+                        : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
+                      : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
+                  }`}
+                >
+                  <div
+                    className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
+                      autoSwitchCompletedNumber ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              {expandedInfo["auto-switch-completed"] && (
+                <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
+                  Automatically switch to the next incomplete number when a digit is completed in Fast-Fill mode.
                 </div>
               )}
             </div>
