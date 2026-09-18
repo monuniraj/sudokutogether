@@ -191,7 +191,9 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
         <div className="grid grid-cols-9 lg:grid-cols-3 gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5 w-full select-none overflow-visible">
           {Array.from({ length: 9 }).map((_, i) => {
             const num = i + 1;
-            const isSelected = (isNumberFirstInputMode && lockedNum === num) || (!isNumberFirstInputMode && activeKeypadNum === num);
+            const isSelected = isGameOver 
+              ? (activeKeypadNum === num || lockedNum === num)
+              : ((isNumberFirstInputMode && lockedNum === num) || (!isNumberFirstInputMode && activeKeypadNum === num));
             const remainingCount = remainingCounts[num] ?? 0;
 
             return (
@@ -202,7 +204,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                   triggerHapticTap(vibrations);
                   onNumberSelect(num);
                 }}
-                disabled={!boardState || isGameOver || visualizingBacktrack || remainingCount <= 0}
+                disabled={!boardState || visualizingBacktrack || (!isGameOver && remainingCount <= 0)}
                 className={`aspect-[1/1.55] lg:aspect-[1/1.02] w-full relative flex items-center justify-center font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
                   isSelected 
                     ? activeKeypadTheme

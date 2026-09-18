@@ -6340,18 +6340,20 @@ useEffect(() => {
     setShowGameOverModal(false);
     setShowMidGameInviteModal(false);
 
-    // Update room progress in Firestore if active
-    const liveSeed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
-    const liveRoomCode = String(liveSeed).padStart(6, '0').slice(-6);
-    if (userProfile?.id && liveRoomCode) {
-      try {
-        await setDoc(doc(db, "rooms", liveRoomCode, "players", userProfile.id), {
-          progress: 0,
-          mistakes: 0,
-          status: "active",
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-      } catch (e) {}
+    // Update room progress in Firestore if active in online challenge mode
+    if (challengeMode && isOnline) {
+      const liveSeed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
+      const liveRoomCode = String(liveSeed).padStart(6, '0').slice(-6);
+      if (userProfile?.id && liveRoomCode) {
+        try {
+          await setDoc(doc(db, "rooms", liveRoomCode, "players", userProfile.id), {
+            progress: 0,
+            mistakes: 0,
+            status: "active",
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (e) {}
+      }
     }
     addLog("🔄 Puzzle replayed! Personal board, mistakes (0/3), and timer reset to 00:00.");
   };
@@ -6360,6 +6362,12 @@ useEffect(() => {
   const handleOpenMidGameMultiplayer = () => {
     playClickSound();
     setIsTimerPaused(true);
+
+    // If offline, display the mid-game invite modal with offline state without converting the solo game to multiplayer
+    if (!isOnline) {
+      setShowMidGameInviteModal(true);
+      return;
+    }
 
     // If already in an active challenge match (as host or guest), DO NOT re-escalate or clobber Firestore!
     if (challengeMode) {
@@ -7865,8 +7873,28 @@ useEffect(() => {
                         if (visualizingBacktrack || isTimerPaused) return;
                         if (boardState?.isGameOver) {
                           const cell = boardState.grid[r][c];
-                          setActiveKeypadNum(cell && cell.value !== 0 ? cell.value : null);
+                          const isCurrentlySelected = boardState.selectedRow === r && boardState.selectedCol === c;
+                          const isCurrentlyActiveNum = cell && cell.value !== 0 && (activeKeypadNum === cell.value || lockedNum === cell.value);
+
+                          // Second tap on already-selected cell or currently highlighted number toggles it off back to neutral
+                          if (isCurrentlySelected || isCurrentlyActiveNum) {
+                            playClickSound();
+                            triggerHapticTap(vibrations);
+                            setActiveKeypadNum(null);
+                            setLockedNum(null);
+                            setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                            addLog(`⚪ Deselected number. Returned board to neutral state.`);
+                            return;
+                          }
+
+                          playClickSound();
+                          triggerHapticTap(vibrations);
+                          const cellVal = cell && cell.value !== 0 ? cell.value : null;
+                          setActiveKeypadNum(cellVal);
                           setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
+                          if (cellVal) {
+                            addLog(`🎯 Highlighted all ${cellVal}s on board.`);
+                          }
                           return;
                         }
 
@@ -7882,6 +7910,16 @@ useEffect(() => {
                                   : 0));
 
                         const isCurrentlySelected = boardState?.selectedRow === r && boardState?.selectedCol === c;
+
+                        // Requirement: Tapping an already-selected empty cell cleanly deselects it back to neutral
+                        if (isCurrentlySelected && cell && cell.value === 0 && (!isNumberFirstInputMode || lockedNum === null)) {
+                          playClickSound();
+                          triggerHapticTap(vibrations);
+                          setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                          setActiveKeypadNum(null);
+                          addLog(`⚪ Deselected cell [${r + 1}, ${c + 1}]. Returned board to neutral state.`);
+                          return;
+                        }
 
                         // Requirement 1: Board-Level Number Toggle (Select & Deselect Loop)
                         // When a digit (e.g., '4') is currently active and highlighted on the board,
@@ -8043,6 +8081,23 @@ useEffect(() => {
                     onHint={triggerSmartHint}
                     hintInventory={hintInventory}
                     onNumberSelect={(num) => {
+                      if (boardState?.isGameOver) {
+                        playClickSound();
+                        triggerHapticTap(vibrations);
+                        if (activeKeypadNum === num || lockedNum === num) {
+                          setActiveKeypadNum(null);
+                          setLockedNum(null);
+                          setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                          addLog(`⚪ Deselected number ${num}. Returned board to neutral state.`);
+                        } else {
+                          setActiveKeypadNum(num);
+                          setLockedNum(null);
+                          setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                          addLog(`🎯 Highlighted all ${num}s on board.`);
+                        }
+                        return;
+                      }
+
                       // Check remaining count of this digit
                       let count = 0;
                       if (boardState) {
@@ -8159,7 +8214,7 @@ useEffect(() => {
 
               {/* 1. MULTIPLAYER LEADERBOARD MODAL (when challengeMode is true) */}
               {boardState && showGameOverModal && challengeMode && (
-                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 relative" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
                   {/* Backdrop click dismisser — closes overlay and reveals the board beneath */}
                   <div
                     className="absolute inset-0 cursor-pointer"
@@ -9060,7 +9115,7 @@ useEffect(() => {
 
               {/* 2. SOLO GAME OVER AND VICTORY OVERLAY (when challengeMode is false) */}
               {boardState && showGameOverModal && !challengeMode && (
-                <div className="fixed inset-0 z-50 bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm flex items-center justify-center p-6 relative">
+                <div className="fixed inset-0 z-50 bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm flex items-center justify-center p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
                   {/* Backdrop click dismisser — closes overlay and reveals the completed board */}
                   <div
                     className="absolute inset-0 cursor-pointer"
