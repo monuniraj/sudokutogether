@@ -10,7 +10,8 @@ import {
   Check,
   XCircle,
   Users,
-  Link2
+  Link2,
+  AlertTriangle
 } from "lucide-react";
 import { formatMatchTimestamp } from "../../utils/formatTimestamp";
 
@@ -46,6 +47,7 @@ export interface CreateChallengeModalProps {
   showCopiedToast: (msg: string) => void;
   onMistakeLimitAbove3?: () => void;
   onHintLimitAbove3?: () => void;
+  isOnline: boolean;
   darkMode: boolean;
   playClickSound: () => void;
 }
@@ -80,6 +82,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
   showCopiedToast,
   onMistakeLimitAbove3,
   onHintLimitAbove3,
+  isOnline,
   darkMode,
   playClickSound
 }) => {
@@ -115,23 +118,27 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
       {/* 1. HEADER: ROOM CODE & LOCK STATUS */}
       <div className="flex flex-col gap-2 shrink-0 select-none">
         <div className="flex items-center justify-between">
-          {/* Left: 6-digit room code */}
+          {/* Left: 6-digit room code — shows OFFLINE label when device has no internet */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs sm:text-sm font-sans font-black tracking-wider text-stone-850 dark:text-stone-100 flex items-center gap-1.5">
               <span className="text-stone-400 dark:text-stone-500 text-2xs uppercase font-bold">CODE:</span>
-              <span className="font-mono tracking-widest text-sm sm:text-base select-all">{activeRoomCode}</span>
+              <span className={`font-mono tracking-widest text-sm sm:text-base ${isOnline ? "select-all" : "text-amber-600 dark:text-amber-400"}`}>
+                {isOnline ? activeRoomCode : "OFFLINE"}
+              </span>
             </span>
-            <button
-              onClick={() => {
-                playClickSound();
-                copyToClipboard(activeRoomCode);
-                showCopiedToast("Room code copied!");
-              }}
-              title="Copy room code"
-              className="p-1 rounded-lg text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
-            >
-              <Copy className="w-3.5 h-3.5" />
-            </button>
+            {isOnline && (
+              <button
+                onClick={() => {
+                  playClickSound();
+                  copyToClipboard(activeRoomCode);
+                  showCopiedToast("Room code copied!");
+                }}
+                title="Copy room code"
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Right: Lock toggle & Close button */}
@@ -213,6 +220,14 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Offline warning banner — mirrors in-game multiplayer panel */}
+        {!isOnline && (
+          <div className="w-full py-2.5 px-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-2 select-none">
+            <AlertTriangle className="w-4 h-4 stroke-[2.5] text-amber-500 shrink-0" />
+            <span>You are offline. Invite actions are disabled. Start Game will launch in Solo mode.</span>
+          </div>
+        )}
       </div>
 
       {/* 2. COMPACT SETTINGS 2x2 BALANCED GRID (HOMEPAGE PILL STYLING) */}
@@ -582,12 +597,19 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                         ) : (
                           <button
                             onClick={() => {
+                              if (!isOnline) return;
                               playClickSound();
                               setIsLobbyLocked(true);
                               setOpenDropdown(null);
                               handleInviteFriend(player.id);
                             }}
-                            className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none cursor-pointer transition-all active:scale-95 shadow-xs ${
+                            disabled={!isOnline}
+                            style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
+                            className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none transition-all active:scale-95 shadow-xs ${
+                              !isOnline
+                                ? "cursor-not-allowed opacity-40 pointer-events-none"
+                                : "cursor-pointer"
+                            } ${
                               darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
                             }`}
                           >
@@ -636,17 +658,23 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
       <div className="flex flex-col gap-2.5 shrink-0 select-none mt-[14px]">
         {/* Side-by-side equal-width buttons */}
         <div className="grid grid-cols-2 gap-2.5 w-full">
-          {/* Left: RE-INVITE ALL / STOP */}
+          {/* Left: RE-INVITE ALL / STOP — requires network; disabled offline */}
           <button
             onClick={() => {
+              if (!isOnline) return;
               if (!isInvitingAll) {
                 setIsLobbyLocked(true);
                 setOpenDropdown(null);
               }
               handleReinviteAll();
             }}
-            disabled={!isInvitingAll && multiplayerPlayers.length === 0}
-            className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
+            disabled={!isOnline || (!isInvitingAll && multiplayerPlayers.length === 0)}
+            style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
+            className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 text-center flex items-center justify-center gap-1.5 shadow-xs ${
+              !isOnline
+                ? "cursor-not-allowed opacity-40 pointer-events-none"
+                : "cursor-pointer active:scale-95"
+            } ${
               isInvitingAll
                 ? "bg-rose-500 hover:bg-rose-600 text-white animate-pulse"
                 : darkMode
@@ -667,15 +695,22 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             )}
           </button>
 
-          {/* Right: SHARE LINK */}
+          {/* Right: SHARE LINK — requires network; disabled offline */}
           <button
             onClick={() => {
+              if (!isOnline) return;
               playClickSound();
               setIsLobbyLocked(true);
               setOpenDropdown(null);
               onShareLink();
             }}
-            className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
+            disabled={!isOnline}
+            style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
+            className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 text-center flex items-center justify-center gap-1.5 shadow-xs ${
+              !isOnline
+                ? "cursor-not-allowed opacity-40 pointer-events-none"
+                : "cursor-pointer active:scale-95"
+            } ${
               darkMode
                 ? "bg-[#0c4a6e]/50 hover:bg-[#0c4a6e]/80 text-[#bae6fd]"
                 : "bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1]"
@@ -686,7 +721,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           </button>
         </div>
 
-        {/* Full-width primary START GAME button */}
+        {/* Full-width primary START GAME button — online: multiplayer; offline: routes to solo via App.tsx */}
         <button
           onClick={() => {
             playClickSound();
@@ -698,7 +733,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
               : "bg-[#D1FAE5] hover:bg-[#A7F3D0] active:bg-[#6EE7B7] text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.12)]"
           }`}
         >
-          <span>START GAME</span>
+          <span>{isOnline ? "START GAME" : "START SOLO"}</span>
         </button>
       </div>
     </motion.div>

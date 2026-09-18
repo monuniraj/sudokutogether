@@ -1,12 +1,13 @@
 import React from "react";
 import { motion } from "motion/react";
-import { X, Users, ChevronRight, Grid3X3 } from "lucide-react";
+import { X, Users, ChevronRight, Grid3X3, AlertTriangle } from "lucide-react";
 
 export interface MultiplayerForkModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateRoom: () => void;
   onOpenJoinRoom: () => void;
+  isOnline: boolean;
   darkMode: boolean;
   playClickSound: () => void;
 }
@@ -16,6 +17,7 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
   onClose,
   onCreateRoom,
   onOpenJoinRoom,
+  isOnline,
   darkMode,
   playClickSound
 }) => {
@@ -56,9 +58,17 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
         </button>
       </div>
 
+      {/* Offline Banner — visible only when device has no internet */}
+      {!isOnline && (
+        <div className="w-full py-2.5 px-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-2 select-none">
+          <AlertTriangle className="w-4 h-4 stroke-[2.5] text-amber-500 shrink-0" />
+          <span>You are offline. Create a room to start Solo, or reconnect to play multiplayer.</span>
+        </div>
+      )}
+
       {/* Routes Grid */}
       <div className="grid grid-cols-1 gap-2.5">
-        {/* Route 1: Create Room */}
+        {/* Route 1: Create Room — always available; offline starts as Solo */}
         <button
           onClick={() => {
             playClickSound();
@@ -81,13 +91,20 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
           <ChevronRight className="w-5 h-5 stroke-[2.5] opacity-60" />
         </button>
 
-        {/* Route 2: Join Room */}
+        {/* Route 2: Join Room — requires live Firestore; disabled offline */}
         <button
           onClick={() => {
+            if (!isOnline) return;
             playClickSound();
             onOpenJoinRoom();
           }}
-          className={`w-full py-3 px-4 rounded-2xl flex items-center justify-between border-none cursor-pointer transition-all duration-150 text-left shadow-xs active:scale-[0.98] ${
+          disabled={!isOnline}
+          style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
+          className={`w-full py-3 px-4 rounded-2xl flex items-center justify-between border-none transition-all duration-150 text-left shadow-xs ${
+            isOnline
+              ? "cursor-pointer active:scale-[0.98]"
+              : "cursor-not-allowed opacity-40 pointer-events-none"
+          } ${
             darkMode 
               ? "bg-[#0c4a6e]/40 hover:bg-[#0c4a6e]/60 text-sky-200 border border-sky-900/40" 
               : "bg-[#E0F2FE] hover:bg-[#bae6fd] active:bg-[#7dd3fc] text-[#0369a1]"

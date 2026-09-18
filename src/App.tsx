@@ -4679,26 +4679,30 @@ useEffect(() => {
     setShowJoinRoomModal(false);
     setShowCreateChallengeModal(true);
 
-    // Write canonical session record to Firestore in the background with puzzleFlat and solutionFlat
-    setDoc(doc(db, "rooms", roomCode), {
-      roomCode: roomCode,
-      seed: canonicalSeed,
-      difficulty: initialDifficulty,
-      puzzleFlat: generated.puzzleFlat,
-      solutionFlat: generated.solutionFlat,
-      mistakesLimit: 3,
-      hintsLimit: 3,
-      timerEnabled: initialTimer,
-      isLocked: false,
-      pin: "",
-      status: "active",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    }).then(() => {
-      console.log(`[Firestore] Initialized canonical room /rooms/${roomCode} with flat puzzle arrays`);
-    }).catch(err => {
-      console.error("[Firestore] Failed to initialize canonical room document:", err);
-    });
+    // Only write Firestore room record when online — offline sessions are solo-only and need no room document
+    if (isOnline) {
+      setDoc(doc(db, "rooms", roomCode), {
+        roomCode: roomCode,
+        seed: canonicalSeed,
+        difficulty: initialDifficulty,
+        puzzleFlat: generated.puzzleFlat,
+        solutionFlat: generated.solutionFlat,
+        mistakesLimit: 3,
+        hintsLimit: 3,
+        timerEnabled: initialTimer,
+        isLocked: false,
+        pin: "",
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }).then(() => {
+        console.log(`[Firestore] Initialized canonical room /rooms/${roomCode} with flat puzzle arrays`);
+      }).catch(err => {
+        console.error("[Firestore] Failed to initialize canonical room document:", err);
+      });
+    } else {
+      console.log(`[Offline] Skipped Firestore room write for ${roomCode} — device is offline. Game will start as Solo.`);
+    }
   };
 
   const handleExecuteJoinRoomByCode = async () => {
@@ -4785,6 +4789,32 @@ useEffect(() => {
     const canonicalSeed = challengeSeed || 100000;
     const activeRoomCode = String(canonicalSeed).padStart(6, '0').slice(-6);
 
+    // ─── OFFLINE BRANCH: start as a pure Solo game for this instance only ───
+    // setChallengeMode(false) is scoped to this specific game start. As soon as
+    // the user returns online and opens a new multiplayer room, challengeMode will
+    // be set to true again by the normal online path below — no lingering flag.
+    if (!isOnline) {
+      setChallengeMode(false);       // Solo game — no multiplayer end-game screen
+      setActiveGameId(null);         // No room tracking for this instance
+      setRematchGameId(null);        // No rematch session for this instance
+      setChallengeSeed(canonicalSeed);
+      setChallengeDifficulty(challengeDifficulty);
+      setChallengeMistakeLimit(challengeMistakeLimit);
+      setChallengeTimerEnabled(challengeTimerEnabled);
+      setChallengeHintLimit(challengeHintLimit);
+      setDifficulty(challengeDifficulty);
+      setMistakeLimitEnabled(challengeMistakeLimit !== 999);
+      setTimerEnabled(challengeTimerEnabled);
+      // isChallengeModeOverride=false ensures generateAndSetNewPuzzle also sets activeGameId=null internally
+      generateAndSetNewPuzzle(challengeDifficulty, canonicalSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit, undefined, false);
+      setShowCreateChallengeModal(false);
+      setIsTimerPaused(false);
+      showToast("You are offline. Starting in Solo mode.");
+      navigateToScreen("game");
+      return;
+    }
+
+    // ─── ONLINE BRANCH: full multiplayer session (unchanged behavior) ───
     setActiveGameId(activeRoomCode);
     setRematchGameId(activeRoomCode);
     setChallengeMode(true);
@@ -8129,7 +8159,18 @@ useEffect(() => {
 
               {/* 1. MULTIPLAYER LEADERBOARD MODAL (when challengeMode is true) */}
               {boardState && showGameOverModal && challengeMode && (
-                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 relative" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+                  {/* Backdrop click dismisser — closes overlay and reveals the board beneath */}
+                  <div
+                    className="absolute inset-0 cursor-pointer"
+                    onClick={() => {
+                      playClickSound();
+                      setShowGameOverModal(false);
+                      setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                      setLockedNum(null);
+                      setActiveKeypadNum(null);
+                    }}
+                  />
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.95, y: 15 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -9019,7 +9060,18 @@ useEffect(() => {
 
               {/* 2. SOLO GAME OVER AND VICTORY OVERLAY (when challengeMode is false) */}
               {boardState && showGameOverModal && !challengeMode && (
-                <div className="fixed inset-0 z-50 bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm flex items-center justify-center p-6">
+                <div className="fixed inset-0 z-50 bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm flex items-center justify-center p-6 relative">
+                  {/* Backdrop click dismisser — closes overlay and reveals the completed board */}
+                  <div
+                    className="absolute inset-0 cursor-pointer"
+                    onClick={() => {
+                      playClickSound();
+                      setShowGameOverModal(false);
+                      setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                      setLockedNum(null);
+                      setActiveKeypadNum(null);
+                    }}
+                  />
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -10420,6 +10472,7 @@ useEffect(() => {
                   setJoinRoomError(null);
                   setShowJoinRoomModal(true);
                 }}
+                isOnline={isOnline}
                 darkMode={darkMode}
                 playClickSound={playClickSound}
               />
@@ -10491,6 +10544,7 @@ useEffect(() => {
                 showCopiedToast={showCopiedToast}
                 onMistakeLimitAbove3={triggerMistakeLimitAlert}
                 onHintLimitAbove3={triggerHintLimitAlert}
+                isOnline={isOnline}
                 darkMode={darkMode}
                 playClickSound={playClickSound}
               />
