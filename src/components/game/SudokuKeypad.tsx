@@ -56,15 +56,15 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
 
   const currentDiff = (((difficulty || boardState?.difficulty) ?? "MEDIUM").toUpperCase());
   const activeKeypadTheme = darkMode ? (
-    currentDiff === "EASY" ? "bg-[#022c22] text-[#d1fae5] active:bg-[#064e3b] border border-emerald-950/80 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
-    currentDiff === "MEDIUM" ? "bg-[#451a03] text-[#fef08a] active:bg-[#713f12] border border-yellow-950/80 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
-    currentDiff === "HARD" ? "bg-[#2e1065] text-[#e9d5ff] active:bg-[#3b0764] border border-purple-950/80 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
-    "bg-[#4c0519] text-[#fecdd3] active:bg-[#881337] border border-rose-950/80 shadow-[0_8px_16px_rgba(0,0,0,0.4)]"
+    currentDiff === "EASY" ? "bg-[#064e3b] text-[#d1fae5] active:bg-[#064e3b] border border-emerald-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
+    currentDiff === "MEDIUM" ? "bg-[#713f12] text-[#fef08a] active:bg-[#713f12] border border-yellow-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
+    currentDiff === "HARD" ? "bg-[#581c87] text-[#e9d5ff] active:bg-[#581c87] border border-purple-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
+    "bg-[#881337] text-[#fecdd3] active:bg-[#881337] border border-rose-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]"
   ) : (
-    currentDiff === "EASY" ? "bg-[#D1FAE5] text-[#065F46] active:bg-[#A7F3D0] border border-emerald-300 shadow-[0_8px_16px_rgba(6,95,70,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
-    currentDiff === "MEDIUM" ? "bg-[#FFF99D] text-[#854D0E] active:bg-[#FDE047] border border-amber-300 shadow-[0_8px_16px_rgba(133,77,14,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
-    currentDiff === "HARD" ? "bg-[#F3E8FF] text-[#6B21A8] active:bg-[#D8B4FE] border border-purple-300 shadow-[0_8px_16px_rgba(107,33,168,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
-    "bg-[#FFE4E6] text-[#9D174D] active:bg-[#FBCFE8] border border-rose-300 shadow-[0_8px_16px_rgba(157,23,77,0.12),_0_2px_4px_rgba(0,0,0,0.02)]"
+    currentDiff === "EASY" ? "bg-[#86EFAC] text-[#065F46] active:bg-[#86EFAC] border border-emerald-400 shadow-[0_8px_16px_rgba(6,95,70,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
+    currentDiff === "MEDIUM" ? "bg-[#FEF08A] text-[#854D0E] active:bg-[#FEF08A] border border-amber-400 shadow-[0_8px_16px_rgba(133,77,14,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
+    currentDiff === "HARD" ? "bg-[#D8B4FE] text-[#6B21A8] active:bg-[#D8B4FE] border border-purple-400 shadow-[0_8px_16px_rgba(107,33,168,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
+    "bg-[#F9A8D4] text-[#9D174D] active:bg-[#F9A8D4] border border-rose-400 shadow-[0_8px_16px_rgba(157,23,77,0.12),_0_2px_4px_rgba(0,0,0,0.02)]"
   );
 
   // Remaining count per digit 1..9

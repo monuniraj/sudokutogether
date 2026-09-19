@@ -11,26 +11,26 @@ export const DIFFICULTY_GRID_THEMES: Record<Difficulty, {
 }> = {
   EASY: {
     activeCell: { light: "#86EFAC", dark: "#064e3b" },
-    crosshair: { light: "rgba(34, 197, 94, 0.12)", dark: "#111116" },
-    paintCrosshair: { light: "rgba(34, 197, 94, 0.12)", dark: "#111116" },
+    crosshair: { light: "rgba(34, 197, 94, 0.12)", dark: "#051f18" },
+    paintCrosshair: { light: "rgba(34, 197, 94, 0.12)", dark: "#051f18" },
     identical: { light: "#86EFAC", dark: "#064e3b" },
   },
   MEDIUM: {
     activeCell: { light: "#FEF08A", dark: "#713f12" },
-    crosshair: { light: "rgba(234, 179, 8, 0.12)", dark: "#111116" },
-    paintCrosshair: { light: "rgba(234, 179, 8, 0.12)", dark: "#111116" },
+    crosshair: { light: "rgba(234, 179, 8, 0.12)", dark: "#1f1403" },
+    paintCrosshair: { light: "rgba(234, 179, 8, 0.12)", dark: "#1f1403" },
     identical: { light: "#FEF08A", dark: "#713f12" },
   },
   HARD: {
     activeCell: { light: "#D8B4FE", dark: "#581c87" },
-    crosshair: { light: "rgba(168, 85, 247, 0.12)", dark: "#111116" },
-    paintCrosshair: { light: "rgba(168, 85, 247, 0.12)", dark: "#111116" },
+    crosshair: { light: "rgba(168, 85, 247, 0.12)", dark: "#160c2b" },
+    paintCrosshair: { light: "rgba(168, 85, 247, 0.12)", dark: "#160c2b" },
     identical: { light: "#D8B4FE", dark: "#581c87" },
   },
   EXPERT: {
     activeCell: { light: "#F9A8D4", dark: "#881337" },
-    crosshair: { light: "rgba(244, 63, 94, 0.12)", dark: "#111116" },
-    paintCrosshair: { light: "rgba(244, 63, 94, 0.12)", dark: "#111116" },
+    crosshair: { light: "rgba(244, 63, 94, 0.12)", dark: "#210811" },
+    paintCrosshair: { light: "rgba(244, 63, 94, 0.12)", dark: "#210811" },
     identical: { light: "#F9A8D4", dark: "#881337" },
   },
 };
@@ -227,7 +227,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           } else if (isHighlightedSibling) {
             if (darkMode) {
               cellBgStyle = {
-                backgroundColor: "#111116",
+                backgroundColor: diffTheme.crosshair.dark,
               };
             } else {
               cellBgClass = "bg-white";

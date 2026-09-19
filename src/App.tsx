@@ -173,22 +173,22 @@ const DIFFICULTY_GRID_THEMES: Record<Difficulty, {
 }> = {
   EASY: {
     activeCell: { light: "#86EFAC", dark: "#064e3b" },
-    crosshair: { light: "rgba(134, 239, 172, 0.15)", dark: "rgba(6, 78, 59, 0.28)" },
+    crosshair: { light: "rgba(134, 239, 172, 0.15)", dark: "#051f18" },
     identical: { light: "#86EFAC", dark: "#064e3b" },
   },
   MEDIUM: {
     activeCell: { light: "#FEF08A", dark: "#713f12" }, // soft butter yellow
-    crosshair: { light: "rgba(253, 224, 71, 0.15)", dark: "rgba(113, 63, 18, 0.28)" },
+    crosshair: { light: "rgba(253, 224, 71, 0.15)", dark: "#1f1403" },
     identical: { light: "#FEF08A", dark: "#713f12" },
   },
   HARD: {
     activeCell: { light: "#D8B4FE", dark: "#581c87" },
-    crosshair: { light: "rgba(216, 180, 254, 0.15)", dark: "rgba(88, 28, 135, 0.28)" },
+    crosshair: { light: "rgba(216, 180, 254, 0.15)", dark: "#160c2b" },
     identical: { light: "#D8B4FE", dark: "#581c87" },
   },
   EXPERT: {
     activeCell: { light: "#F9A8D4", dark: "#881337" },
-    crosshair: { light: "rgba(249, 168, 212, 0.15)", dark: "rgba(136, 19, 55, 0.28)" },
+    crosshair: { light: "rgba(249, 168, 212, 0.15)", dark: "#210811" },
     identical: { light: "#F9A8D4", dark: "#881337" },
   },
 };
@@ -6698,9 +6698,9 @@ useEffect(() => {
               // Switch to next incomplete number on keypad
               if (isNumberFirstInputMode) {
                 setLockedNum(nextNum);
-                // In Paintbrush mode, clear cell selection so player can tap to fast fill
-                setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
               }
+              // Clear stale cell selection so highlight transitions cleanly to the new active digit
+              setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
               setActiveKeypadNum(nextNum);
               addLog(`🔄 Auto-switched to number ${nextNum}.`);
             } else {
