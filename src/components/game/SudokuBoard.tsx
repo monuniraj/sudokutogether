@@ -102,11 +102,11 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   const diffTheme = DIFFICULTY_GRID_THEMES[currentDiff] || DIFFICULTY_GRID_THEMES.EASY;
 
   const heavyBorderR = darkMode 
-    ? (currentDiff === "EASY" ? "border-r-[#064a38]" : currentDiff === "MEDIUM" ? "border-r-[#5c2405]" : currentDiff === "HARD" ? "border-r-[#371477]" : "border-r-[#620720]")
-    : (currentDiff === "EASY" ? "border-r-[#065f46]/40" : currentDiff === "MEDIUM" ? "border-r-[#854d0e]/40" : currentDiff === "HARD" ? "border-r-[#6b21a8]/40" : "border-r-[#9d174d]/40");
+    ? (currentDiff === "EASY" ? "border-r-[#0b6b52]" : currentDiff === "MEDIUM" ? "border-r-[#7c3207]" : currentDiff === "HARD" ? "border-r-[#4c1d95]" : "border-r-[#881337]")
+    : (currentDiff === "EASY" ? "border-r-[#065f46]/55" : currentDiff === "MEDIUM" ? "border-r-[#854d0e]/55" : currentDiff === "HARD" ? "border-r-[#6b21a8]/55" : "border-r-[#9d174d]/55");
   const heavyBorderB = darkMode 
-    ? (currentDiff === "EASY" ? "border-b-[#064a38]" : currentDiff === "MEDIUM" ? "border-b-[#5c2405]" : currentDiff === "HARD" ? "border-b-[#371477]" : "border-b-[#620720]")
-    : (currentDiff === "EASY" ? "border-b-[#065f46]/40" : currentDiff === "MEDIUM" ? "border-b-[#854d0e]/40" : currentDiff === "HARD" ? "border-b-[#6b21a8]/40" : "border-b-[#9d174d]/40");
+    ? (currentDiff === "EASY" ? "border-b-[#0b6b52]" : currentDiff === "MEDIUM" ? "border-b-[#7c3207]" : currentDiff === "HARD" ? "border-b-[#4c1d95]" : "border-b-[#881337]")
+    : (currentDiff === "EASY" ? "border-b-[#065f46]/55" : currentDiff === "MEDIUM" ? "border-b-[#854d0e]/55" : currentDiff === "HARD" ? "border-b-[#6b21a8]/55" : "border-b-[#9d174d]/55");
 
   const lightBorderR = darkMode
     ? (currentDiff === "EASY" ? "border-r-[#054031]" : currentDiff === "MEDIUM" ? "border-r-[#532004]" : currentDiff === "HARD" ? "border-r-[#31126b]" : "border-r-[#58061d]")
@@ -122,7 +122,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
 
   return (
     <div 
-      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-none sudoku-board transition-colors duration-200 ${darkMode ? "bg-zinc-900 border-[3px]" : "bg-white border-[3px]"} ${darkMode ? (currentDiff === "EASY" ? "border-[#064a38]" : currentDiff === "MEDIUM" ? "border-[#5c2405]" : currentDiff === "HARD" ? "border-[#371477]" : "border-[#620720]") : (currentDiff === "EASY" ? "border-[#065f46]/40" : currentDiff === "MEDIUM" ? "border-[#854d0e]/40" : currentDiff === "HARD" ? "border-[#6b21a8]/40" : "border-[#9d174d]/40")}`}
+      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-none sudoku-board transition-colors duration-200 ${darkMode ? "bg-zinc-900 border-[3px]" : "bg-white border-[3px]"} ${darkMode ? (currentDiff === "EASY" ? "border-[#0b6b52]" : currentDiff === "MEDIUM" ? "border-[#7c3207]" : currentDiff === "HARD" ? "border-[#4c1d95]" : "border-[#881337]") : (currentDiff === "EASY" ? "border-[#065f46]/55" : currentDiff === "MEDIUM" ? "border-[#854d0e]/55" : currentDiff === "HARD" ? "border-[#6b21a8]/55" : "border-[#9d174d]/55")}`}
       style={{ 
         boxShadow: darkMode ? "0 4px 20px rgba(0,0,0,0.6)" : "0 4px 20px rgba(43,108,176,0.03)",
         width: "100%",

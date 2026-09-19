@@ -6698,10 +6698,10 @@ useEffect(() => {
               // Switch to next incomplete number on keypad
               if (isNumberFirstInputMode) {
                 setLockedNum(nextNum);
+                // In Paintbrush mode, clear cell selection so player can tap to fast fill
+                setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
               }
               setActiveKeypadNum(nextNum);
-              // Clear the old cell selection so highlight transitions cleanly
-              setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
               addLog(`🔄 Auto-switched to number ${nextNum}.`);
             } else {
               // All numbers complete — game should be won (handled above),
@@ -6712,13 +6712,19 @@ useEffect(() => {
               setActiveKeypadNum(null);
             }
           } else {
-            // autoSwitchCompletedNumber OFF: original behavior — just clear in paint mode
+            // autoSwitchCompletedNumber OFF: original behavior — just clear in paint mode or normal mode
             if (isNumberFirstInputMode && lockedNum === num) {
               setLockedNum(null);
+              setActiveKeypadNum(null);
+            } else if (!isNumberFirstInputMode && activeKeypadNum === num) {
               setActiveKeypadNum(null);
             }
           }
         } else {
+          // Valid placement, not yet completed: keep this number active in normal mode
+          if (!isNumberFirstInputMode) {
+            setActiveKeypadNum(num);
+          }
           playClickSound();
           triggerHapticTap(vibrations);
         }
@@ -8146,9 +8152,6 @@ useEffect(() => {
 
                         if (hasCellSelected && selectedCell && selectedCell.value === 0 && !selectedCell.isOriginalClue) {
                           handleValueInput(num);
-                          if (!pencilMode) {
-                            setActiveKeypadNum(num);
-                          }
                         } else if (hasCellSelected && selectedCell && selectedCell.value !== 0) {
                           if (selectedCell.value !== num) {
                             triggerHapticError(vibrations);
