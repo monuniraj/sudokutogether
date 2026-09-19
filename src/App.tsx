@@ -1866,6 +1866,7 @@ useEffect(() => {
   const [rematchMatchMode, setRematchMatchMode] = useState<"replay" | "remix">("replay");
   const [isInvitingAll, setIsInvitingAll] = useState<boolean>(false);
   const inviteAllAbortRef = useRef<boolean>(false);
+  const [multiplayerSyncTrigger, setMultiplayerSyncTrigger] = useState<number>(0);
 
   // Bell Invites modal
   const [showBellInvitesModal, setShowBellInvitesModal] = useState<boolean>(false);
@@ -2064,7 +2065,7 @@ useEffect(() => {
 
   // Save game state helper
   const saveCurrentGameToLocal = (state: BoardState | null, seconds: number, diff: Difficulty) => {
-    if (!state || state.isGameOver) {
+    if (!state) {
       localStorage.removeItem("sudoku_savedSession");
       setSavedSessionInfo(null);
       return;
@@ -2085,7 +2086,7 @@ useEffect(() => {
         currentMistakesCount: state.currentMistakesCount,
         maxMistakesLimit: state.maxMistakesLimit,
         hintsCount: state.hintsCount,
-        isGameOver: state.isGameOver,
+        isGameOver: Boolean(state.isGameOver),
         sessionSeconds: seconds,
         difficulty: diff,
         seed: state.seed,
@@ -2132,10 +2133,15 @@ useEffect(() => {
         currentMistakesCount: sessionData.currentMistakesCount,
         maxMistakesLimit: sessionData.maxMistakesLimit,
         hintsCount: sessionData.hintsCount,
-        isGameOver: sessionData.isGameOver,
+        isGameOver: Boolean(sessionData.isGameOver),
         difficulty: sessionData.difficulty as Difficulty,
         seed: sessionData.seed || (Math.floor(Math.random() * 900000) + 100000)
       };
+
+      // Safeguard: If the saved session concluded via mistake limit, ensure mistakes remain strictly intact at the limit (no extra life/reversion)
+      if (state.isGameOver && state.maxMistakesLimit && state.currentMistakesCount < state.maxMistakesLimit) {
+        state.currentMistakesCount = state.maxMistakesLimit;
+      }
 
       // Reconcile wall-clock elapsed time for multiplayer sessions to maintain timer integrity
       const elapsedWallClock = (sessionData.isMultiplayer && sessionData.timestamp)
@@ -2178,7 +2184,7 @@ useEffect(() => {
         const saved = localStorage.getItem("sudoku_savedSession");
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (parsed && !parsed.isGameOver) {
+          if (parsed) {
             const elapsed = (parsed.isMultiplayer && parsed.timestamp)
               ? Math.max(0, Math.floor((Date.now() - parsed.timestamp) / 1000))
               : 0;
@@ -2482,9 +2488,44 @@ useEffect(() => {
     const targetRoom = roomCodeToForfeit || activeGameId;
     const uid = userProfile?.id || "GUEST_ANON";
     if (!targetRoom || !uid) return;
+
+    // TERMINAL STATE LOCK: If current local game is already terminal, DO NOT overwrite with left/forfeit
+    if (boardState?.isGameOver && (!roomCodeToForfeit || roomCodeToForfeit === activeGameId)) {
+      console.log(`[Multiplayer] Local game is in terminal state (${boardState.currentMistakesCount} mistakes, isGameOver=true). Forfeit aborted.`);
+      return;
+    }
+
+    // TERMINAL STATE LOCK: Check local syncedLeaderboard if player already completed or failed via mistakes
+    const existingLocalEntry = syncedLeaderboard.find(r => r.userId === uid);
+    if (existingLocalEntry) {
+      const isTerminalLocal = existingLocalEntry.status === "completed" ||
+                              existingLocalEntry.status === "victory" ||
+                              existingLocalEntry.status === "mistake_game_over" ||
+                              Boolean(existingLocalEntry.isWon) ||
+                              (!existingLocalEntry.isPending && existingLocalEntry.timeSec !== undefined && Number(existingLocalEntry.timeSec) > 0 && Number(existingLocalEntry.timeSec) < 9999);
+      if (isTerminalLocal) {
+        console.log(`[Multiplayer] Terminal state locked for user ${uid} via syncedLeaderboard. Forfeit aborted.`);
+        return;
+      }
+    }
+
     try {
       const docId = getSeedDocId(targetRoom);
       const participantRef = doc(db, "challenge_results", docId, "participants", uid);
+      const existing = await getDoc(participantRef);
+      if (existing.exists()) {
+        const d = existing.data();
+        const isTerminal = d.status === "completed" || 
+                           d.status === "victory" || 
+                           d.status === "mistake_game_over" || 
+                           Boolean(d.isWon) || 
+                           (!d.isPending && d.timeSec !== undefined && Number(d.timeSec) > 0 && Number(d.timeSec) < 9999);
+        if (isTerminal) {
+          console.log(`[Multiplayer] Terminal state locked for user ${uid} in room ${targetRoom}. Forfeit aborted.`);
+          return;
+        }
+      }
+
       await setDoc(participantRef, {
         status: "left",
         isPending: false,
@@ -4179,6 +4220,10 @@ useEffect(() => {
       solveSudokuRecursive(boardArr);
       setSolutionGrid(boardArr);
 
+      if (loaded.state.isGameOver) {
+        hasTriggeredGameOverRef.current = true;
+      }
+
       // Requirement 2: Re-attach Firestore multiplayer room & listeners on Resume without demoting to solo play
       if (loaded.isMultiplayer && loaded.roomCode) {
         setChallengeMode(true);
@@ -4191,27 +4236,35 @@ useEffect(() => {
         setChallengeTimerEnabled(loaded.challengeTimerEnabled);
         setChallengeDifficulty(loaded.challengeDifficulty);
 
-        // Re-attach / register challenge join in Firestore
-        registerChallengeJoin(loaded.roomCode);
+        // Force listener re-attachment & fresh snapshot fetch
+        setMultiplayerSyncTrigger(prev => prev + 1);
+
+        // Re-attach / register challenge join in Firestore if still active
+        if (!loaded.state.isGameOver) {
+          registerChallengeJoin(loaded.roomCode);
+        }
 
         // Sync player status and progress in room
         const userId = userProfile?.id || "GUEST_ANON";
         const docId = getSeedDocId(loaded.roomCode);
+        const playerTerminalStatus = loaded.state.currentMistakesCount >= loaded.state.maxMistakesLimit ? "mistake_game_over" : "completed";
         try {
           setDoc(doc(db, "rooms", loaded.roomCode, "players", userId), {
             name: getActiveDisplayName(),
-            status: "active",
+            status: loaded.state.isGameOver ? playerTerminalStatus : "active",
             mistakes: loaded.state.currentMistakesCount,
             updatedAt: serverTimestamp()
           }, { merge: true });
 
-          setDoc(doc(db, "challenge_results", docId, "participants", userId), {
-            status: "solving",
-            isPending: true,
-            mistakes: loaded.state.currentMistakesCount,
-            timeSec: loaded.seconds,
-            updatedAt: serverTimestamp()
-          }, { merge: true });
+          if (!loaded.state.isGameOver) {
+            setDoc(doc(db, "challenge_results", docId, "participants", userId), {
+              status: "solving",
+              isPending: true,
+              mistakes: loaded.state.currentMistakesCount,
+              timeSec: loaded.seconds,
+              updatedAt: serverTimestamp()
+            }, { merge: true });
+          }
         } catch (e) {
           console.warn("[Firestore] Resume sync notice:", e);
         }
@@ -4238,7 +4291,7 @@ useEffect(() => {
   // Sandbox sticker customization variables
   // Automated background cache on every board touch callback or timer tick
   useEffect(() => {
-    if (currentScreen === "game" && boardState && !boardState.isGameOver) {
+    if (currentScreen === "game" && boardState) {
       saveCurrentGameToLocal(boardState, sessionSeconds, difficulty);
     }
   }, [boardState, sessionSeconds, currentScreen, difficulty]);
@@ -5455,6 +5508,7 @@ useEffect(() => {
         mistakes: Number(rBody.mistakes),
         isWon: !!rBody.isWon,
         isPending: false,
+        status: rBody.status || (rBody.isWon ? "completed" : "mistake_game_over"),
         date: rBody.date || new Date().toLocaleDateString(),
         timestamp: serverTimestamp()
       };
@@ -5469,6 +5523,18 @@ useEffect(() => {
 
       if (shouldUpdate) {
         await setDoc(participantRef, newRecord);
+        try {
+          const roomPlayerRef = doc(db, "rooms", rBody.challengeId, "players", rBody.userId);
+          await setDoc(roomPlayerRef, {
+            id: rBody.userId,
+            name: rBody.playerName,
+            status: rBody.status || (rBody.isWon ? "completed" : "mistake_game_over"),
+            timeSec: Number(rBody.timeSec),
+            mistakes: Number(rBody.mistakes),
+            isWon: !!rBody.isWon,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (err) {}
         console.log(`[Firestore] Result saved for ID ${rBody.challengeId}`);
       } else {
         console.log(`[Firestore] Existing result is better, skipping update.`);
@@ -5540,6 +5606,7 @@ useEffect(() => {
             mistakes: Number(payload.mistakes),
             isWon: !!payload.isWon,
             isPending: false,
+            status: payload.status || (payload.isWon ? "completed" : "mistake_game_over"),
             date: payload.date || new Date().toLocaleDateString(),
             timestamp: serverTimestamp()
           });
@@ -5633,55 +5700,112 @@ useEffect(() => {
 
     const docId = getSeedDocId(activeGameId);
     const participantsCol = collection(db, "challenge_results", docId, "participants");
+    const roomPlayersCol = collection(db, "rooms", activeGameId, "players");
 
     console.log(`[Firestore] Attaching real-time listener for: ${activeGameId}`);
     setIsLoadingLeaderboard(true);
 
-    const unsubscribe = onSnapshot(
-      participantsCol,
-      (snapshot) => {
-        const results = snapshot.docs.map(d => d.data());
-        console.log(`[Firestore] Real-time update: ${results.length} entries for ${activeGameId}`);
-        setSyncedLeaderboard(results);
-        setChallengeLeaderboardCache(prev => ({ ...prev, [activeGameId]: results }));
-        if (challengeSeed) {
-          setChallengeLeaderboardCache(prev => ({ ...prev, [String(challengeSeed)]: results }));
-        }
-        setIsLoadingLeaderboard(false);
+    let latestResults: any[] = [];
+    let latestRoomPlayers: any[] = [];
 
-        // Auto-save all participants as past players
-        const opponents = results.map(r => ({ id: r.userId, name: r.playerName }));
-        saveOpponentsToPastPlayers(opponents);
+    const syncCombinedLeaderboard = () => {
+      const mergedMap = new Map<string, any>();
 
-        // Also enrich completedGames if the active game is already saved in history
-        if (results.length > 0) {
-          setCompletedGames(prev => {
-            const index = prev.findIndex(g => g.id === activeGameId || (challengeSeed && g.seed === challengeSeed));
-            if (index === -1) return prev;
-            const updated = [...prev];
-            const currentCount = Array.isArray(updated[index].participants) ? updated[index].participants.length : 0;
-            if (results.length >= currentCount) {
-              updated[index] = { ...updated[index], participants: results };
-              try {
-                localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
-              } catch {}
-            }
-            return updated;
+      // 1. Seed with room players presence (gives instant visibility to all joined opponents)
+      latestRoomPlayers.forEach(p => {
+        const uId = p.id || p.userId;
+        if (uId) {
+          const isLeft = p.status === "left" || p.status === "abandoned" || p.status === "disconnected" || p.status === "forfeited";
+          const isFinished = p.status === "completed" || p.status === "victory" || p.status === "mistake_game_over";
+          mergedMap.set(uId, {
+            userId: uId,
+            playerName: p.name || p.playerName || "Player",
+            status: p.status || "active",
+            isPending: !isLeft && !isFinished,
+            mistakes: p.mistakes !== undefined ? Number(p.mistakes) : 0,
+            timeSec: p.timeSec !== undefined ? Number(p.timeSec) : (p.elapsedTime !== undefined ? Number(p.elapsedTime) : 0),
+            isWon: p.status === "won" || p.status === "completed" || p.status === "victory" || Boolean(p.isWon),
+            updatedAt: p.updatedAt
           });
         }
+      });
+
+      // 2. Merge / enrich with challenge_results (contains exact completion times & verified results)
+      latestResults.forEach(r => {
+        const uId = r.userId || r.id;
+        if (uId) {
+          const existing = mergedMap.get(uId);
+          mergedMap.set(uId, {
+            ...existing,
+            ...r,
+            userId: uId,
+            playerName: r.playerName || existing?.playerName || "Player",
+            status: r.status || existing?.status || (r.isWon ? "completed" : (!r.isPending ? "mistake_game_over" : "active"))
+          });
+        }
+      });
+
+      const results = Array.from(mergedMap.values());
+      console.log(`[Firestore] Real-time update: ${results.length} combined entries for ${activeGameId}`);
+      setSyncedLeaderboard(results);
+      setChallengeLeaderboardCache(prev => ({ ...prev, [activeGameId]: results }));
+      if (challengeSeed) {
+        setChallengeLeaderboardCache(prev => ({ ...prev, [String(challengeSeed)]: results }));
+      }
+      setIsLoadingLeaderboard(false);
+
+      // Auto-save all participants as past players
+      const opponents = results.map(r => ({ id: r.userId, name: r.playerName }));
+      saveOpponentsToPastPlayers(opponents);
+
+      // Also enrich completedGames if the active game is already saved in history
+      if (results.length > 0) {
+        setCompletedGames(prev => {
+          const index = prev.findIndex(g => g.id === activeGameId || (challengeSeed && g.seed === challengeSeed));
+          if (index === -1) return prev;
+          const updated = [...prev];
+          const currentCount = Array.isArray(updated[index].participants) ? updated[index].participants.length : 0;
+          if (results.length >= currentCount) {
+            updated[index] = { ...updated[index], participants: results };
+            try {
+              localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
+            } catch {}
+          }
+          return updated;
+        });
+      }
+    };
+
+    const unsubParticipants = onSnapshot(
+      participantsCol,
+      (snapshot) => {
+        latestResults = snapshot.docs.map(d => d.data());
+        syncCombinedLeaderboard();
       },
       (err) => {
-        console.error(`[Firestore] Listener error for ${activeGameId}:`, err);
+        console.error(`[Firestore] Participants listener error for ${activeGameId}:`, err);
         setIsLoadingLeaderboard(false);
       }
     );
 
-    // Clean up listener when game changes or challenge mode ends
+    const unsubRoomPlayers = onSnapshot(
+      roomPlayersCol,
+      (snapshot) => {
+        latestRoomPlayers = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
+        syncCombinedLeaderboard();
+      },
+      (err) => {
+        console.error(`[Firestore] Room players listener error for ${activeGameId}:`, err);
+      }
+    );
+
+    // Clean up listeners when game changes or challenge mode ends
     return () => {
-      console.log(`[Firestore] Detaching listener for: ${activeGameId}`);
-      unsubscribe();
+      console.log(`[Firestore] Detaching listeners for: ${activeGameId}`);
+      unsubParticipants();
+      unsubRoomPlayers();
     };
-  }, [challengeMode, activeGameId]);
+  }, [challengeMode, activeGameId, multiplayerSyncTrigger]);
 
   // Real-time synchronization of canonical room document (Lock badge, PIN) while in-game invite modal is open
   useEffect(() => {
@@ -5807,17 +5931,21 @@ useEffect(() => {
       console.warn("Lobby invites listener error:", err);
     });
 
-    // 2. Listen to participants for rematchGameId in case someone joins or leaves directly
+    // 2. Listen to participants for rematchGameId in case someone joins, leaves, or finishes
     const docId = getSeedDocId(rematchGameId);
     const participantsCol = collection(db, "challenge_results", docId, "participants");
     const unsubParticipants = onSnapshot(participantsCol, (snapshot) => {
       const joined = new Set<string>();
       const left = new Set<string>();
+      const finished = new Set<string>();
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         const uId = data.userId || docSnap.id;
         if (uId && uId !== userProfile?.id) {
-          if (data.status === "left" || data.status === "abandoned" || data.status === "disconnected" || data.status === "forfeited") {
+          const isTerminated = data.status === "completed" || data.status === "victory" || data.status === "mistake_game_over" || (!data.isPending && (data.isWon !== undefined || data.timeTaken !== undefined));
+          if (isTerminated) {
+            finished.add(uId);
+          } else if (data.status === "left" || data.status === "abandoned" || data.status === "disconnected" || data.status === "forfeited") {
             left.add(uId);
           } else if (data.status === "active" || data.status === "solving" || data.status === "joined" || data.isPending) {
             joined.add(uId);
@@ -5829,6 +5957,7 @@ useEffect(() => {
         const next = new Set(prev);
         joined.forEach(id => next.add(id));
         left.forEach(id => next.delete(id));
+        finished.forEach(id => next.delete(id));
         return next;
       });
 
@@ -5847,22 +5976,32 @@ useEffect(() => {
             changed = true;
           }
         });
+        finished.forEach(id => {
+          if (next[id] && (next[id].status === "joined" || next[id].status === "sent")) {
+            delete next[id];
+            changed = true;
+          }
+        });
         return changed ? next : prev;
       });
     }, (err) => {
       console.warn("Lobby participants listener error:", err);
     });
 
-    // 3. Listen to rooms/{rematchGameId}/players for real-time leave/disconnect propagation
+    // 3. Listen to rooms/{rematchGameId}/players for real-time leave/disconnect/finish propagation
     const roomPlayersCol = collection(db, "rooms", rematchGameId, "players");
     const unsubRoomPlayers = onSnapshot(roomPlayersCol, (snapshot) => {
       const roomJoined = new Set<string>();
       const roomLeft = new Set<string>();
+      const roomFinished = new Set<string>();
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         const uId = data.id || docSnap.id;
         if (uId && uId !== userProfile?.id) {
-          if (data.status === "left" || data.status === "abandoned" || data.status === "disconnected") {
+          const isTerminated = data.status === "completed" || data.status === "victory" || data.status === "mistake_game_over";
+          if (isTerminated) {
+            roomFinished.add(uId);
+          } else if (data.status === "left" || data.status === "abandoned" || data.status === "disconnected") {
             roomLeft.add(uId);
           } else if (data.status === "active" || data.status === "joined") {
             roomJoined.add(uId);
@@ -5870,11 +6009,12 @@ useEffect(() => {
         }
       });
 
-      if (roomJoined.size > 0 || roomLeft.size > 0) {
+      if (roomJoined.size > 0 || roomLeft.size > 0 || roomFinished.size > 0) {
         setLobbyAcceptedUserIds(prev => {
           const next = new Set(prev);
           roomJoined.forEach(id => next.add(id));
           roomLeft.forEach(id => next.delete(id));
+          roomFinished.forEach(id => next.delete(id));
           return next;
         });
         setRematchInviteStates(prev => {
@@ -5889,6 +6029,12 @@ useEffect(() => {
           roomLeft.forEach(id => {
             if (next[id]?.status !== "left") {
               next[id] = { status: "left", timerEnd: Date.now() + 60000 };
+              changed = true;
+            }
+          });
+          roomFinished.forEach(id => {
+            if (next[id] && (next[id].status === "joined" || next[id].status === "sent")) {
+              delete next[id];
               changed = true;
             }
           });
@@ -6651,6 +6797,15 @@ useEffect(() => {
         triggerHapticError(vibrations);
         addLog(`⚠️ Mistake at Row ${selectedRow + 1} Col ${selectedCol + 1}. Selected digit ${num} is incorrect.`);
         if (isOver) {
+          const terminalState: BoardState = {
+            ...boardState,
+            grid: finalGrid,
+            currentMistakesCount: newMistakes,
+            isGameOver: true,
+            selectedRow,
+            selectedCol
+          };
+          saveCurrentGameToLocal(terminalState, sessionSeconds, difficulty);
           saveGameToHistory(false, newMistakes);
         }
       } else {
@@ -6666,7 +6821,15 @@ useEffect(() => {
         // Check game win
         const currentProgress = finalGrid.every(r => r.every(cell => cell.value === solutionGrid[cell.row][cell.col]));
         if (currentProgress) {
-          setBoardState(prev => prev ? { ...prev, isGameOver: true } : null);
+          const terminalWinState: BoardState = {
+            ...boardState,
+            grid: finalGrid,
+            isGameOver: true,
+            selectedRow,
+            selectedCol
+          };
+          setBoardState(terminalWinState);
+          saveCurrentGameToLocal(terminalWinState, sessionSeconds, difficulty);
           addLog("⭐ Victory! All sudoku square criteria satisfied uniquely!");
           playWinSound();
           saveGameToHistory(true, boardState ? boardState.currentMistakesCount : 0);
