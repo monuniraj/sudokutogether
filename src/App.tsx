@@ -2949,6 +2949,8 @@ useEffect(() => {
   }, [currentScreen]);
 
   const closeTopmostModal = (): boolean => {
+    if (openDropdown) { setOpenDropdown(null); return true; }
+    if (playerToUnfriend) { setPlayerToUnfriend(null); return true; }
     if (viewingRankingsGame) { setViewingRankingsGame(null); return true; }
     if (showDeleteAccountModal) { setShowDeleteAccountModal(false); return true; }
     if (showResetSettingsModal) { setShowResetSettingsModal(false); return true; }
@@ -2979,6 +2981,8 @@ useEffect(() => {
 
   const getOpenModalCount = (): number => {
     let count = 0;
+    if (openDropdown) count++;
+    if (playerToUnfriend) count++;
     if (viewingRankingsGame) count++;
     if (showDeleteAccountModal) count++;
     if (showResetSettingsModal) count++;
@@ -3001,15 +3005,14 @@ useEffect(() => {
     return count;
   };
 
+  const getOpenModalCountRef = useRef(getOpenModalCount);
+  getOpenModalCountRef.current = getOpenModalCount;
+
   const closeTopmostModalRef = useRef(closeTopmostModal);
-  useEffect(() => {
-    closeTopmostModalRef.current = closeTopmostModal;
-  });
+  closeTopmostModalRef.current = closeTopmostModal;
 
   const navigatorPopRef = useRef(navigatorPop);
-  useEffect(() => {
-    navigatorPopRef.current = navigatorPop;
-  });
+  navigatorPopRef.current = navigatorPop;
 
   const prevOpenModalCountRef = useRef(0);
   const modalHistoryDepthRef = useRef(0);
@@ -3043,6 +3046,8 @@ useEffect(() => {
       }
     }
   }, [
+    openDropdown,
+    playerToUnfriend,
     viewingRankingsGame,
     showDeleteAccountModal,
     showResetSettingsModal,
@@ -3078,10 +3083,12 @@ useEffect(() => {
       }
 
       // 1. If any modal or overlay is open, dismiss it first and block background route navigation
-      if (getOpenModalCount() > 0) {
-        isPopstateClosingModalRef.current = true;
-        closeTopmostModalRef.current();
-        return;
+      if (getOpenModalCountRef.current() > 0) {
+        const didClose = closeTopmostModalRef.current();
+        if (didClose) {
+          isPopstateClosingModalRef.current = true;
+          return;
+        }
       }
 
       // 2. If on a sub-screen or page, navigate back to previous screen
@@ -3109,10 +3116,11 @@ useEffect(() => {
       if (Capacitor.isNativePlatform()) {
         CapApp.addListener('backButton', ({ canGoBack }) => {
           // 1. Dismiss topmost modal if open
-          if (getOpenModalCount() > 0) {
-            isPopstateClosingModalRef.current = true;
-            closeTopmostModalRef.current();
-            return;
+          if (getOpenModalCountRef.current() > 0) {
+            const didClose = closeTopmostModalRef.current();
+            if (didClose) {
+              return;
+            }
           }
           // 2. If on a subscreen (settings, status, game over), go back to previous screen
           if (currentScreenRef.current !== "home") {
