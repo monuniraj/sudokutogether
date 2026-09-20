@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Check, Lock, XCircle } from "lucide-react";
+import { X, Check, Lock, XCircle, RefreshCw } from "lucide-react";
 
 export interface IncomingInviteModalProps {
   isOpen: boolean;
@@ -18,6 +18,7 @@ export interface IncomingInviteModalProps {
   setInvitePasswordError: (err: string | null) => void;
   onDecline: () => void;
   onAccept: () => void;
+  isJoiningRoomLoading?: boolean;
   darkMode: boolean;
   playClickSound: () => void;
 }
@@ -32,13 +33,20 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
   setInvitePasswordError,
   onDecline,
   onAccept,
+  isJoiningRoomLoading = false,
   darkMode,
   playClickSound
 }) => {
   return (
     <AnimatePresence>
       {isOpen && incomingChallengeDetails && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm p-4">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm p-4"
+        >
           {/* Backdrop (backdrop-click dismissal disabled to prevent accidental closure while typing password) */}
           <div className="absolute inset-0 pointer-events-none" />
 
@@ -46,6 +54,7 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ type: "spring", damping: 28, stiffness: 220 }}
             className={`modal card relative w-full max-w-sm rounded-[32px] p-8 border-none flex flex-col gap-6 shadow-[0_12px_40px_rgba(0,0,0,0.08)] select-none z-[10001] text-center transition-colors duration-300 ${
               darkMode ? "bg-[#2A2D24] text-[#FDFBF7]" : "bg-[#FDFBF7] text-[#4B5563]"
             }`}
@@ -87,6 +96,7 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
                 <input
                   type="text"
                   maxLength={16}
+                  disabled={isJoiningRoomLoading}
                   placeholder="Passcode..."
                   value={enteredInvitePassword}
                   onChange={(e) => {
@@ -95,7 +105,7 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
                   }}
                   className={`w-full py-2.5 px-3 rounded-[16px] text-center text-xs font-mono font-bold tracking-widest border-none focus:outline-none focus:ring-0 select-none ${
                     darkMode ? "bg-black/20 text-stone-100 placeholder-zinc-700" : "bg-white text-stone-850 placeholder-stone-300"
-                  }`}
+                  } ${isJoiningRoomLoading ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
                 {invitePasswordError && (
                   <span className="text-[10px] font-bold text-rose-600 text-center uppercase tracking-wide mt-0.5 flex items-center justify-center gap-1">
@@ -107,32 +117,49 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
             )}
 
             {/* ACTION FOOTER */}
-            <div className="flex w-full gap-3 mt-2">
-              <button
-                onClick={() => {
-                  playClickSound();
-                  onDecline();
-                }}
-                className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${
-                  darkMode ? "bg-[#3F4238] text-[#FDFBF7] hover:bg-[#4E5146]" : "bg-[#F3F4F6] text-[#4B5563] hover:bg-[#E5E7EB]"
-                }`}
-              >
-                <X className="w-7 h-7" strokeWidth={1.5} />
-              </button>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  onAccept();
-                }}
-                className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${
-                  darkMode ? "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]" : "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]"
-                }`}
-              >
-                <Check className="w-7 h-7" strokeWidth={1.5} />
-              </button>
+            <div className="flex flex-col gap-2 w-full mt-2">
+              <div className="flex w-full gap-3">
+                <button
+                  disabled={isJoiningRoomLoading}
+                  onClick={() => {
+                    playClickSound();
+                    onDecline();
+                  }}
+                  className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none ${
+                    isJoiningRoomLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                  } ${
+                    darkMode ? "bg-[#3F4238] text-[#FDFBF7] hover:bg-[#4E5146]" : "bg-[#F3F4F6] text-[#4B5563] hover:bg-[#E5E7EB]"
+                  }`}
+                >
+                  <X className="w-7 h-7" strokeWidth={1.5} />
+                </button>
+                <button
+                  disabled={isJoiningRoomLoading}
+                  onClick={() => {
+                    playClickSound();
+                    onAccept();
+                  }}
+                  className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none ${
+                    isJoiningRoomLoading ? "opacity-90 cursor-not-allowed" : "cursor-pointer"
+                  } ${
+                    darkMode ? "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]" : "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]"
+                  }`}
+                >
+                  {isJoiningRoomLoading ? (
+                    <RefreshCw className="w-6 h-6 animate-spin stroke-[2]" />
+                  ) : (
+                    <Check className="w-7 h-7" strokeWidth={1.5} />
+                  )}
+                </button>
+              </div>
+              {isJoiningRoomLoading && (
+                <span className="text-xs font-sans font-bold text-emerald-600 dark:text-emerald-400 animate-pulse mt-0.5">
+                  Connecting to match arena...
+                </span>
+              )}
             </div>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { db } from "./firebase";
 import { RulesModal } from "./components/modals/RulesModal";
@@ -2067,8 +2067,10 @@ useEffect(() => {
 
   // Save game state helper
   const saveCurrentGameToLocal = (state: BoardState | null, seconds: number, diff: Difficulty) => {
-    if (!state) {
-      localStorage.removeItem("sudoku_savedSession");
+    if (!state || state.isGameOver) {
+      try {
+        localStorage.removeItem("sudoku_savedSession");
+      } catch {}
       setSavedSessionInfo(null);
       return;
     }
@@ -2122,6 +2124,11 @@ useEffect(() => {
       const saved = localStorage.getItem("sudoku_savedSession");
       if (!saved) return null;
       const sessionData = JSON.parse(saved);
+      if (!sessionData || sessionData.isGameOver) {
+        try { localStorage.removeItem("sudoku_savedSession"); } catch {}
+        setSavedSessionInfo(null);
+        return null;
+      }
       const revivedGrid: SudokuCell[][] = sessionData.grid.map((row: any) => 
         row.map((cell: any) => ({
           ...cell,
@@ -2186,7 +2193,7 @@ useEffect(() => {
         const saved = localStorage.getItem("sudoku_savedSession");
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (parsed) {
+          if (parsed && !parsed.isGameOver) {
             const elapsed = (parsed.isMultiplayer && parsed.timestamp)
               ? Math.max(0, Math.floor((Date.now() - parsed.timestamp) / 1000))
               : 0;
@@ -2197,6 +2204,7 @@ useEffect(() => {
               roomCode: parsed.roomCode || undefined
             });
           } else {
+            try { localStorage.removeItem("sudoku_savedSession"); } catch {}
             setSavedSessionInfo(null);
           }
         } else {
@@ -2207,6 +2215,39 @@ useEffect(() => {
       }
     }
   }, [currentScreen]);
+
+  // Memoized top-10 sorted bell invites to avoid recalculation churn on active Firestore events
+  const sortedBellInvites = useMemo(() => {
+    return [...pendingChallenges]
+      .filter((invite: any) => {
+        if (!invite) return false;
+        const hasId = Boolean(invite.id || invite.inviteId || invite.roomCode || invite.gameId);
+        const hasSender = Boolean(invite.senderName || invite.fromName || invite.hostName);
+        return hasId || hasSender;
+      })
+      .sort((a: any, b: any) => {
+        const getMs = (inv: any) => {
+          if (!inv) return 0;
+          if (typeof inv.sentAt === "number") return inv.sentAt;
+          if (typeof inv.timestamp === "number") return inv.timestamp;
+          if (inv.timestamp?.toMillis && typeof inv.timestamp.toMillis === "function") return inv.timestamp.toMillis();
+          if (inv.timestamp?.toDate && typeof inv.timestamp.toDate === "function") return inv.timestamp.toDate().getTime();
+          if (inv.createdAt?.toMillis && typeof inv.createdAt.toMillis === "function") return inv.createdAt.toMillis();
+          if (inv.createdAt?.toDate && typeof inv.createdAt.toDate === "function") return inv.createdAt.toDate().getTime();
+          if (inv.sentAt) {
+            const p = Date.parse(inv.sentAt);
+            if (!isNaN(p)) return p;
+          }
+          if (inv.receivedAt) {
+            const p = Date.parse(inv.receivedAt);
+            if (!isNaN(p)) return p;
+          }
+          return 0;
+        };
+        return getMs(b) - getMs(a);
+      })
+      .slice(0, 10);
+  }, [pendingChallenges]);
 
   // New settings toggles
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -3389,7 +3430,9 @@ useEffect(() => {
       return { success: false, error: "Please enter a valid 6-digit room code." };
     }
 
-    // 2. Update Firestore invite status if doc ID provided
+    setIsJoiningRoomLoading(true);
+    try {
+      // 2. Update Firestore invite status if doc ID provided
     if (options?.inviteDocId) {
       try {
         await updateDoc(doc(db, "invites", options.inviteDocId), { status: "accepted" });
@@ -3570,6 +3613,12 @@ useEffect(() => {
     showToast(`✓ Joined Room ${roomCode}!`);
     addLog(`✓ Joined canonical room #${roomCode}! Entering game arena...`);
     return { success: true };
+    } catch (err: any) {
+      console.error("[executeJoinRoom] Unexpected join error:", err);
+      return { success: false, error: err?.message || "Failed to connect to room." };
+    } finally {
+      setIsJoiningRoomLoading(false);
+    }
   };
 
   const handleAcceptAndLaunchInvite = async (
@@ -5407,6 +5456,12 @@ useEffect(() => {
     };
 
     submitGameResult(rBody);
+
+    // Purge active session persistence so completed puzzle is never re-opened via Resume
+    try {
+      localStorage.removeItem("sudoku_savedSession");
+    } catch {}
+    setSavedSessionInfo(null);
   };
 
   const handleReplayGame = (game: CompletedGame) => {
@@ -5624,9 +5679,11 @@ useEffect(() => {
           if (index === -1) return prev;
           const updated = [...prev];
           updated[index] = repairGameParticipants(updated[index], results);
-          try {
-            localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
-          } catch {}
+          setTimeout(() => {
+            try {
+              localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
+            } catch {}
+          }, 0);
           return updated;
         });
 
@@ -5635,9 +5692,11 @@ useEffect(() => {
           if (index === -1) return prev;
           const updated = [...prev];
           updated[index] = repairGameParticipants(updated[index], results);
-          try {
-            localStorage.setItem("sudoku_saved_games", JSON.stringify(updated));
-          } catch {}
+          setTimeout(() => {
+            try {
+              localStorage.setItem("sudoku_saved_games", JSON.stringify(updated));
+            } catch {}
+          }, 0);
           return updated;
         });
       } else if (initialParticipants.length > 0) {
@@ -8057,7 +8116,7 @@ useEffect(() => {
  
                 {/* 🔄 RESUME SOLO & MULTIPLAYER SIDE-BY-SIDE GRID - Adhering to the 'Zen' Design System */}
                 <div className="w-full grid grid-cols-2 gap-3.5 select-none shrink-0" id="solo-multiplayer-split-container">
-                  {/* Left Button ('Resume') */}
+                  {/* Left Button ('Resume' when active session exists, dynamically adapts to 'Play' when finished) */}
                   <button
                     onClick={() => {
                       playClickSound();
@@ -8069,19 +8128,32 @@ useEffect(() => {
                           navigateToScreen("game");
                         }
                       } else {
-                        showToast("Select a difficulty above and click PLAY NEW GAME!");
+                        generateAndSetNewPuzzle(difficulty);
+                        setIsTimerPaused(false);
+                        navigateToScreen("game");
                       }
                     }}
                     className={`border-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
                       savedSessionInfo
                         ? (darkMode ? "bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc] border border-[#bae6fd]/15" : "bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]")
-                        : (darkMode ? "bg-zinc-800/40 text-stone-500 cursor-not-allowed opacity-60 border border-zinc-700/30" : "bg-stone-100/60 text-stone-400 cursor-not-allowed opacity-60 shadow-[0_8px_30px_rgba(0,0,0,0.02)]")
+                        : (darkMode ? "bg-[#022c22]/30 hover:bg-[#022c22]/50 text-[#a7f3d0] border border-[#a7f3d0]/15" : "bg-[#D1FAE5]/70 hover:bg-[#D1FAE5]/90 active:bg-[#A7F3D0]/70 text-[#065F46] shadow-[0_8px_30px_rgba(6,95,70,0.04)]")
                     }`}
                   >
-                    <RotateCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0 ${savedSessionInfo ? "animate-pulse" : ""}`} />
-                    <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
-                      Resume
-                    </span>
+                    {savedSessionInfo ? (
+                      <>
+                        <RotateCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0 animate-pulse" />
+                        <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
+                          Resume
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current shrink-0" />
+                        <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
+                          Play
+                        </span>
+                      </>
+                    )}
                   </button>
  
                   {/* Right Button ('Multiplayer') */}
@@ -11421,7 +11493,13 @@ useEffect(() => {
       {/* 🏆 HISTORICAL CHALLENGE RANKINGS MODAL */}
       <AnimatePresence>
         {viewingRankingsGame && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+          >
             {/* Backdrop click dismisser */}
             <div 
               className="absolute inset-0 cursor-pointer" 
@@ -11450,6 +11528,9 @@ useEffect(() => {
                   <h4 className="text-lg font-sans font-black uppercase tracking-wide">
                     Match Results
                   </h4>
+                  {isLoadingHistoryRankings && (
+                    <RefreshCw className="w-3.5 h-3.5 text-rose-500 animate-spin ml-1" />
+                  )}
                 </div>
                 <button 
                   onClick={() => { playClickSound(); setViewingRankingsGame(null); }}
@@ -11475,7 +11556,7 @@ useEffect(() => {
               </div>
 
               {/* Loader */}
-              {isLoadingHistoryRankings ? (
+              {isLoadingHistoryRankings && historyRankings.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
                   <div className="w-8 h-8 rounded-full border-3 border-t-rose-500 border-r-rose-400/20 border-b-rose-400/20 border-l-rose-400/20 animate-spin" />
                   <span className="text-xs font-sans text-stone-500 animate-pulse">Syncing results...</span>
@@ -11664,7 +11745,7 @@ useEffect(() => {
                 </>
               )}
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -11921,6 +12002,7 @@ useEffect(() => {
 
           handleAcceptInvitationWithProfileCheck(launch);
         }}
+        isJoiningRoomLoading={isJoiningRoomLoading}
         darkMode={darkMode}
         playClickSound={playClickSound}
       />
@@ -12654,7 +12736,13 @@ useEffect(() => {
 
       <AnimatePresence>
         {showDisplayNameModal && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+          >
             {/* Backdrop (backdrop-click dismissal disabled to prevent accidental closure while typing name) */}
             <div className="absolute inset-0 pointer-events-none" />
 
@@ -12663,7 +12751,7 @@ useEffect(() => {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ type: "spring", damping: 28, stiffness: 220 }}
-              className={`relative w-full max-w-[430px] rounded-2xl p-6 md:p-8 border-none flex flex-col gap-6 select-none z-[10001] text-left transition-all duration-300 ${
+              className={`relative w-full max-w-[430px] rounded-2xl p-6 md:p-8 border-none flex flex-col gap-6 select-none z-[10001] text-left transition-colors duration-300 ${
                 darkMode ? "bg-[#1A1A1A] text-stone-200" : "bg-[#FDFBF7] text-stone-850"
               }`}
               style={{
@@ -12779,7 +12867,7 @@ useEffect(() => {
                 </button>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -13290,7 +13378,13 @@ useEffect(() => {
       {/* 🔔 BELL NOTIFICATIONS MODAL OVERLAY */}
       <AnimatePresence>
         {showBellInvitesModal && (
-          <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          >
             {/* Backdrop click dismisser */}
             <div 
               className="absolute inset-0 cursor-pointer" 
@@ -13304,7 +13398,8 @@ useEffect(() => {
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className={`relative w-full max-w-md rounded-3xl p-6 border-none flex flex-col gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.15)] select-none z-[100001] transition-all duration-300 ${
+              transition={{ type: "spring", damping: 28, stiffness: 220 }}
+              className={`relative w-full max-w-md rounded-3xl p-6 border-none flex flex-col gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.15)] select-none z-[100001] transition-colors duration-300 ${
                 darkMode ? "bg-zinc-900 text-stone-100" : "bg-white text-stone-850"
               }`}
             >
@@ -13330,46 +13425,12 @@ useEffect(() => {
 
               {/* Scrollable list */}
               <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-3.5 max-h-[50vh] pr-0.5">
-                {(() => {
-                  const sortedInvites = [...pendingChallenges]
-                    .filter((invite: any) => {
-                      if (!invite) return false;
-                      const hasId = Boolean(invite.id || invite.inviteId || invite.roomCode || invite.gameId);
-                      const hasSender = Boolean(invite.senderName || invite.fromName || invite.hostName);
-                      return hasId || hasSender;
-                    })
-                    .sort((a: any, b: any) => {
-                      const getMs = (inv: any) => {
-                        if (!inv) return 0;
-                        if (typeof inv.sentAt === "number") return inv.sentAt;
-                        if (typeof inv.timestamp === "number") return inv.timestamp;
-                        if (inv.timestamp?.toMillis && typeof inv.timestamp.toMillis === "function") return inv.timestamp.toMillis();
-                        if (inv.timestamp?.toDate && typeof inv.timestamp.toDate === "function") return inv.timestamp.toDate().getTime();
-                        if (inv.createdAt?.toMillis && typeof inv.createdAt.toMillis === "function") return inv.createdAt.toMillis();
-                        if (inv.createdAt?.toDate && typeof inv.createdAt.toDate === "function") return inv.createdAt.toDate().getTime();
-                        if (inv.sentAt) {
-                          const p = Date.parse(inv.sentAt);
-                          if (!isNaN(p)) return p;
-                        }
-                        if (inv.receivedAt) {
-                          const p = Date.parse(inv.receivedAt);
-                          if (!isNaN(p)) return p;
-                        }
-                        return 0;
-                      };
-                      return getMs(b) - getMs(a);
-                    })
-                    .slice(0, 10);
-
-                  if (sortedInvites.length === 0) {
-                    return (
-                      <div className="py-12 text-center text-stone-500 font-sans text-sm italic">
-                        No pending challenge invites.
-                      </div>
-                    );
-                  }
-
-                  return sortedInvites.map((challenge) => {
+                {sortedBellInvites.length === 0 ? (
+                  <div className="py-12 text-center text-stone-500 font-sans text-sm italic">
+                    No pending challenge invites.
+                  </div>
+                ) : (
+                  sortedBellInvites.map((challenge) => {
                     const senderDisplayName = challenge.senderName || (challenge as any).fromName || (challenge as any).hostName || "Player";
                     const challengeDifficulty = challenge.difficulty || "MEDIUM";
                     const timestampVal = challenge.sentAt ?? (challenge as any).timestamp ?? (challenge as any).createdAt ?? challenge.receivedAt;
@@ -13418,27 +13479,40 @@ useEffect(() => {
 
                         <div className="flex gap-2 w-full mt-0.5">
                           <button
+                            disabled={isJoiningRoomLoading}
                             onClick={() => handleDeclineBellInvite(challenge)}
-                            className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 ${
+                            className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 ${
+                              isJoiningRoomLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                            } ${
                               darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
                             }`}
                           >
                             Decline
                           </button>
                           <button
+                            disabled={isJoiningRoomLoading}
                             onClick={() => handleAcceptAndPlayBellInvite(challenge)}
-                            className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 text-white bg-indigo-600 hover:bg-indigo-700"
+                            className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border-none transition-all active:scale-95 text-white flex items-center justify-center gap-1.5 ${
+                              isJoiningRoomLoading ? "opacity-80 cursor-not-allowed bg-indigo-700" : "cursor-pointer bg-indigo-600 hover:bg-indigo-700"
+                            }`}
                           >
-                            Accept & Play
+                            {isJoiningRoomLoading ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin stroke-[2]" />
+                                <span>Joining...</span>
+                              </>
+                            ) : (
+                              <span>Accept & Play</span>
+                            )}
                           </button>
                         </div>
                       </div>
                     );
-                  });
-                })()}
+                  })
+                )}
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -13516,16 +13590,27 @@ useEffect(() => {
                     Decline
                   </button>
                   <button
+                    disabled={isJoiningRoomLoading}
                     onClick={async (e) => {
                       e.stopPropagation();
+                      if (isJoiningRoomLoading) return;
                       const { gameId, roomCode, id, password } = activeInviteNotification;
                       await handleAcceptAndLaunchInvite(roomCode || gameId, id, password, true);
                     }}
-                    className={`px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 text-white ${
-                      darkMode ? "bg-emerald-600 hover:bg-emerald-500" : "bg-emerald-600 hover:bg-emerald-550"
+                    className={`px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 text-white flex items-center justify-center gap-1.5 ${
+                      isJoiningRoomLoading
+                        ? "opacity-80 cursor-not-allowed bg-emerald-700"
+                        : "cursor-pointer bg-emerald-600 hover:bg-emerald-500"
                     }`}
                   >
-                    Accept
+                    {isJoiningRoomLoading ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin stroke-[2]" />
+                        <span>Joining...</span>
+                      </>
+                    ) : (
+                      <span>Accept</span>
+                    )}
                   </button>
                 </div>
               </div>
@@ -13581,6 +13666,34 @@ useEffect(() => {
               <span className="font-sans font-medium text-sm tracking-wide">{toastMessage}</span>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🚀 IMMEDIATE THEME-MATCHED MATCH CONNECTING OVERLAY */}
+      <AnimatePresence>
+        {isJoiningRoomLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[100050] flex items-center justify-center bg-black/40 backdrop-blur-xs pointer-events-auto select-none"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 8 }}
+              className={`px-6 py-4 rounded-3xl flex items-center gap-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.2)] border ${
+                darkMode ? "bg-zinc-900 border-zinc-700 text-stone-100" : "bg-[#FDFBF7] border-stone-200 text-stone-850"
+              }`}
+            >
+              <RefreshCw className="w-5 h-5 text-emerald-500 animate-spin stroke-[2.5]" />
+              <div className="flex flex-col text-left">
+                <span className="font-sans font-black text-xs uppercase tracking-wider">Connecting to Match...</span>
+                <span className={`text-[10px] font-sans ${darkMode ? "text-stone-400" : "text-stone-500"}`}>Synchronizing room seed & arena</span>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
