@@ -174,19 +174,19 @@ const DIFFICULTY_GRID_THEMES: Record<Difficulty, {
   identical: { light: string; dark: string };
 }> = {
   EASY: {
-    activeCell: { light: "#86EFAC", dark: "#064e3b" },
+    activeCell: { light: "#86EFAC", dark: "#0e8365" },
     crosshair: { light: "rgba(134, 239, 172, 0.15)", dark: "#051f18" },
-    identical: { light: "#86EFAC", dark: "#064e3b" },
+    identical: { light: "#86EFAC", dark: "#0e8365" },
   },
   MEDIUM: {
-    activeCell: { light: "#FEF08A", dark: "#713f12" }, // soft butter yellow
+    activeCell: { light: "#FCD34D", dark: "#713f12" }, // rich amber yellow
     crosshair: { light: "rgba(253, 224, 71, 0.15)", dark: "#1f1403" },
-    identical: { light: "#FEF08A", dark: "#713f12" },
+    identical: { light: "#FCD34D", dark: "#713f12" },
   },
   HARD: {
-    activeCell: { light: "#D8B4FE", dark: "#581c87" },
+    activeCell: { light: "#D8B4FE", dark: "#581db8" },
     crosshair: { light: "rgba(216, 180, 254, 0.15)", dark: "#160c2b" },
-    identical: { light: "#D8B4FE", dark: "#581c87" },
+    identical: { light: "#D8B4FE", dark: "#581db8" },
   },
   EXPERT: {
     activeCell: { light: "#F9A8D4", dark: "#881337" },

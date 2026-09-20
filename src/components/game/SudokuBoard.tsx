@@ -10,22 +10,22 @@ export const DIFFICULTY_GRID_THEMES: Record<Difficulty, {
   identical: { light: string; dark: string };
 }> = {
   EASY: {
-    activeCell: { light: "#86EFAC", dark: "#34D399" },
+    activeCell: { light: "#86EFAC", dark: "#0e8365" },
     crosshair: { light: "rgba(34, 197, 94, 0.12)", dark: "#051f18" },
     paintCrosshair: { light: "rgba(34, 197, 94, 0.12)", dark: "#051f18" },
-    identical: { light: "#86EFAC", dark: "#34D399" },
+    identical: { light: "#86EFAC", dark: "#0e8365" },
   },
   MEDIUM: {
-    activeCell: { light: "#FEF08A", dark: "#713f12" },
+    activeCell: { light: "#FCD34D", dark: "#713f12" },
     crosshair: { light: "rgba(234, 179, 8, 0.12)", dark: "#1f1403" },
     paintCrosshair: { light: "rgba(234, 179, 8, 0.12)", dark: "#1f1403" },
-    identical: { light: "#FEF08A", dark: "#713f12" },
+    identical: { light: "#FCD34D", dark: "#713f12" },
   },
   HARD: {
-    activeCell: { light: "#D8B4FE", dark: "#581c87" },
+    activeCell: { light: "#D8B4FE", dark: "#581db8" },
     crosshair: { light: "rgba(168, 85, 247, 0.12)", dark: "#160c2b" },
     paintCrosshair: { light: "rgba(168, 85, 247, 0.12)", dark: "#160c2b" },
-    identical: { light: "#D8B4FE", dark: "#581c87" },
+    identical: { light: "#D8B4FE", dark: "#581db8" },
   },
   EXPERT: {
     activeCell: { light: "#F9A8D4", dark: "#881337" },
@@ -273,12 +273,12 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                   className={`absolute inset-0 flex items-center justify-center text-center select-none ${
                     cell.isOriginalClue 
                       ? (darkMode 
-                          ? ((isSelected || isIdenticalValue) && difficulty === "EASY" ? "text-[#022c22] font-sans font-extrabold" : "text-white font-sans font-normal")
+                          ? ((isSelected || isIdenticalValue) && (currentDiff === "EASY" || currentDiff === "HARD") ? "text-white font-sans font-extrabold" : "text-white font-sans font-normal")
                           : "text-stone-900 font-sans font-normal")
                       : isMistake
                         ? (darkMode ? "text-rose-300 handwriting font-black animate-pulse" : "text-rose-700 handwriting font-black animate-pulse")
                         : (darkMode 
-                            ? ((isSelected || isIdenticalValue) && difficulty === "EASY" ? "text-[#022c22] handwriting font-extrabold" : "text-[#38bdf8] handwriting font-normal")
+                            ? ((isSelected || isIdenticalValue) && (currentDiff === "EASY" || currentDiff === "HARD") ? "text-white handwriting font-extrabold" : "text-[#38bdf8] handwriting font-normal")
                             : "text-[#2B6CB0] handwriting font-normal")
                   }`}
                   style={{

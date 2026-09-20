@@ -56,13 +56,13 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
 
   const currentDiff = (((difficulty || boardState?.difficulty) ?? "MEDIUM").toUpperCase());
   const activeKeypadTheme = darkMode ? (
-    currentDiff === "EASY" ? "bg-[#34D399] text-[#022c22] font-black active:bg-[#34D399] border border-emerald-400 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
+    currentDiff === "EASY" ? "bg-[#0e8365] text-white font-black active:bg-[#0e8365] border border-emerald-500/70 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
     currentDiff === "MEDIUM" ? "bg-[#713f12] text-[#fef08a] active:bg-[#713f12] border border-yellow-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
-    currentDiff === "HARD" ? "bg-[#581c87] text-[#e9d5ff] active:bg-[#581c87] border border-purple-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
+    currentDiff === "HARD" ? "bg-[#581db8] text-white font-black active:bg-[#581db8] border border-purple-500/70 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
     "bg-[#881337] text-[#fecdd3] active:bg-[#881337] border border-rose-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]"
   ) : (
     currentDiff === "EASY" ? "bg-[#86EFAC] text-[#065F46] active:bg-[#86EFAC] border border-emerald-400 shadow-[0_8px_16px_rgba(6,95,70,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
-    currentDiff === "MEDIUM" ? "bg-[#FEF08A] text-[#854D0E] active:bg-[#FEF08A] border border-amber-400 shadow-[0_8px_16px_rgba(133,77,14,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
+    currentDiff === "MEDIUM" ? "bg-[#FCD34D] text-[#78350F] font-black active:bg-[#FCD34D] border border-amber-500 shadow-[0_8px_16px_rgba(133,77,14,0.16),_0_2px_4px_rgba(0,0,0,0.02)]" :
     currentDiff === "HARD" ? "bg-[#D8B4FE] text-[#6B21A8] active:bg-[#D8B4FE] border border-purple-400 shadow-[0_8px_16px_rgba(107,33,168,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
     "bg-[#F9A8D4] text-[#9D174D] active:bg-[#F9A8D4] border border-rose-400 shadow-[0_8px_16px_rgba(157,23,77,0.12),_0_2px_4px_rgba(0,0,0,0.02)]"
   );
@@ -221,7 +221,11 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                   </span>
                   {showRemainingNumbers && (
                     <span className={`text-[11px] sm:text-xs lg:text-[14px] xl:text-[15px] font-mono leading-none mt-0.5 sm:mt-1 lg:mt-1.5 font-bold flex items-center justify-center ${
-                      isSelected && currentDiff === "EASY" && darkMode ? "text-[#064e3b]" : "text-slate-500 dark:text-slate-400"
+                      isSelected && darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
+                        ? "text-white/85"
+                        : isSelected && !darkMode && currentDiff === "MEDIUM"
+                          ? "text-[#78350F]/85"
+                          : "text-slate-500 dark:text-slate-400"
                     } ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
                       {remainingCount > 0 ? remainingCount : <Check className="w-3 h-3 lg:w-3.5 lg:h-3.5 stroke-[2.5]" />}
                     </span>
