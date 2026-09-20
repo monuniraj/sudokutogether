@@ -1859,7 +1859,7 @@ useEffect(() => {
   const [rematchGameId, setRematchGameId] = useState<string>("");
   const [rematchInvitedPlayers, setRematchInvitedPlayers] = useState<Set<string>>(new Set());
   const [lobbyAcceptedUserIds, setLobbyAcceptedUserIds] = useState<Set<string>>(new Set());
-  const [rematchInviteStates, setRematchInviteStates] = useState<Record<string, { status: "idle" | "sent" | "declined" | "joined" | "left"; timerEnd: number }>>({});
+  const [rematchInviteStates, setRematchInviteStates] = useState<Record<string, { status: "idle" | "sent" | "declined" | "joined" | "left"; timerEnd: number; joinedAt?: number }>>({});
   const [lobbyTickTime, setLobbyTickTime] = useState<number>(Date.now());
   const [endGameStep, setEndGameStep] = useState<1 | 2>(1); // 1=Results/Config, 2=Invite Lobby
   const [pendingRematchSeed, setPendingRematchSeed] = useState<number | null>(null); // seed locked when entering Screen 2
@@ -4900,14 +4900,14 @@ useEffect(() => {
     const inviteState = rematchInviteStates[playerId];
     const isJoined = inviteState?.status === "joined" || lobbyAcceptedUserIds.has(playerId);
     if (isJoined) {
-      return { isJoined: true, isPendingSent: false, isDeclined: false, isLeft: false, remainingSeconds: 0 };
+      return { isJoined: true, isPendingSent: false, isDeclined: false, isLeft: false, remainingSeconds: 0, joinedAt: inviteState?.joinedAt };
     }
     if (!inviteState || !inviteState.timerEnd) {
-      return { isJoined: false, isPendingSent: false, isDeclined: false, isLeft: false, remainingSeconds: 0 };
+      return { isJoined: false, isPendingSent: false, isDeclined: false, isLeft: false, remainingSeconds: 0, joinedAt: undefined };
     }
     const diffMs = inviteState.timerEnd - lobbyTickTime;
     if (diffMs <= 0) {
-      return { isJoined: false, isPendingSent: false, isDeclined: false, isLeft: false, remainingSeconds: 0 };
+      return { isJoined: false, isPendingSent: false, isDeclined: false, isLeft: false, remainingSeconds: 0, joinedAt: undefined };
     }
     const maxCap = (inviteState.status === "declined" || inviteState.status === "left") ? 60 : 30;
     const remainingSeconds = Math.min(maxCap, Math.max(0, Math.ceil(diffMs / 1000)));
@@ -4916,7 +4916,8 @@ useEffect(() => {
       isPendingSent: inviteState.status === "sent" && remainingSeconds > 0,
       isDeclined: inviteState.status === "declined" && remainingSeconds > 0,
       isLeft: inviteState.status === "left" && remainingSeconds > 0,
-      remainingSeconds
+      remainingSeconds,
+      joinedAt: inviteState.joinedAt
     };
   };
 
@@ -5825,6 +5826,111 @@ useEffect(() => {
     return () => unsub();
   }, [showMidGameInviteModal, activeGameId, challengeSeed, boardState?.seed]);
 
+  // Pre-game lobby: real-time participant presence sync for CreateChallengeModal
+  useEffect(() => {
+    if (!showCreateChallengeModal || !isOnline || !rematchGameId) return;
+
+    const roomPlayersCol = collection(db, "rooms", rematchGameId, "players");
+    const unsub = onSnapshot(roomPlayersCol, (snapshot) => {
+      const joined: Array<{ id: string; name: string; updatedAt?: any }> = [];
+      const leftIds: string[] = [];
+
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const uId = data.id || docSnap.id;
+        if (!uId || uId === userProfile?.id) return;
+
+        const isLeft = data.status === "left" || data.status === "abandoned" || data.status === "disconnected";
+        const isActive = data.status === "active" || data.status === "joined";
+
+        if (isActive) {
+          joined.push({ id: uId, name: data.name || "Player", updatedAt: data.updatedAt });
+        } else if (isLeft) {
+          leftIds.push(uId);
+        }
+      });
+
+      const now = Date.now();
+
+      // Upsert new joiners into multiplayerPlayers roster
+      if (joined.length > 0) {
+        setMultiplayerPlayers(prev => {
+          let next = [...prev];
+          let changed = false;
+          joined.forEach(({ id, name }) => {
+            const existing = next.findIndex(p => p.id === id);
+            if (existing === -1) {
+              next.push({ id, name, isFriend: false, status: "online" as const, inviteStatus: "idle" as const, lastPlayedAt: now });
+              changed = true;
+            } else if (next[existing].status !== "online") {
+              next[existing] = { ...next[existing], status: "online" as const };
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+
+        // Mark them as joined in invite states
+        setRematchInviteStates(prev => {
+          const next = { ...prev };
+          let changed = false;
+          joined.forEach(({ id, updatedAt }) => {
+            let joinTs = now;
+            if (updatedAt?.toMillis) {
+              joinTs = updatedAt.toMillis();
+            } else if (typeof updatedAt === "number") {
+              joinTs = updatedAt;
+            }
+            if (next[id]?.status !== "joined") {
+              next[id] = { status: "joined", timerEnd: 0, joinedAt: joinTs };
+              changed = true;
+            } else if (!next[id]?.joinedAt) {
+              next[id] = { ...next[id], joinedAt: joinTs };
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+
+        // Also add to accepted set
+        setLobbyAcceptedUserIds(prev => {
+          const next = new Set(prev);
+          let changed = false;
+          joined.forEach(({ id }) => { if (!next.has(id)) { next.add(id); changed = true; } });
+          return changed ? next : prev;
+        });
+      }
+
+      // Handle players who left
+      if (leftIds.length > 0) {
+        setRematchInviteStates(prev => {
+          const next = { ...prev };
+          let changed = false;
+          leftIds.forEach(id => {
+            if (next[id]?.status !== "left") {
+              next[id] = { status: "left", timerEnd: now + 60000, joinedAt: next[id]?.joinedAt || now };
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+        setLobbyAcceptedUserIds(prev => {
+          const next = new Set(prev);
+          let changed = false;
+          leftIds.forEach(id => { if (next.has(id)) { next.delete(id); changed = true; } });
+          return changed ? next : prev;
+        });
+        setMultiplayerPlayers(prev =>
+          prev.map(p => leftIds.includes(p.id) ? { ...p, status: "offline" as const } : p)
+        );
+      }
+    }, (err) => {
+      console.warn("[Firestore] Pre-game lobby players listener error:", err);
+    });
+
+    return () => unsub();
+  }, [showCreateChallengeModal, isOnline, rematchGameId, userProfile?.id]);
+
   // Active 1-second interval ticker for invite countdowns across active views (SENT 30s / DECLINED 60s)
   // OPTIMIZATION: Runs strictly when an invite/lobby modal is open, completely eliminating root re-renders during active gameplay!
   useEffect(() => {
@@ -5891,7 +5997,7 @@ useEffect(() => {
     const invitesQuery = query(collection(db, "invites"), where("gameId", "==", rematchGameId));
     const unsubInvites = onSnapshot(invitesQuery, (snapshot) => {
       const accepted = new Set<string>();
-      const updatedStates: Record<string, { status: "idle" | "sent" | "declined" | "joined" | "left"; timerEnd: number }> = {};
+      const updatedStates: Record<string, { status: "idle" | "sent" | "declined" | "joined" | "left"; timerEnd: number; joinedAt?: number }> = {};
 
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
@@ -5900,7 +6006,7 @@ useEffect(() => {
 
         if (data.status === "accepted") {
           accepted.add(toUserId);
-          updatedStates[toUserId] = { status: "joined", timerEnd: 0 };
+          updatedStates[toUserId] = { status: "joined", timerEnd: 0, joinedAt: Date.now() };
         } else if (data.status === "declined") {
           updatedStates[toUserId] = { status: "declined", timerEnd: Date.now() + 60000 };
         }
@@ -5966,13 +6072,13 @@ useEffect(() => {
         let changed = false;
         joined.forEach(id => {
           if (next[id]?.status !== "joined") {
-            next[id] = { status: "joined", timerEnd: 0 };
+            next[id] = { status: "joined", timerEnd: 0, joinedAt: next[id]?.joinedAt || Date.now() };
             changed = true;
           }
         });
         left.forEach(id => {
           if (next[id]?.status !== "left") {
-            next[id] = { status: "left", timerEnd: Date.now() + 60000 };
+            next[id] = { status: "left", timerEnd: Date.now() + 60000, joinedAt: next[id]?.joinedAt || Date.now() };
             changed = true;
           }
         });
@@ -6022,13 +6128,13 @@ useEffect(() => {
           let changed = false;
           roomJoined.forEach(id => {
             if (next[id]?.status !== "joined") {
-              next[id] = { status: "joined", timerEnd: 0 };
+              next[id] = { status: "joined", timerEnd: 0, joinedAt: next[id]?.joinedAt || Date.now() };
               changed = true;
             }
           });
           roomLeft.forEach(id => {
             if (next[id]?.status !== "left") {
-              next[id] = { status: "left", timerEnd: Date.now() + 60000 };
+              next[id] = { status: "left", timerEnd: Date.now() + 60000, joinedAt: next[id]?.joinedAt || Date.now() };
               changed = true;
             }
           });
@@ -11961,15 +12067,30 @@ useEffect(() => {
                     ) : (
                       <>
                         {(() => {
-                          const friends = multiplayerPlayers.filter(p => p.isFriend).sort((a, b) => {
-                            if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
-                            return a.name.localeCompare(b.name);
-                          });
-                          
-                          const recentPlayers = [...multiplayerPlayers].sort((a, b) => {
-                            if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
-                            return a.name.localeCompare(b.name);
-                          });
+                          const sortPlayers = (list: typeof multiplayerPlayers) => {
+                            return [...list].sort((a, b) => {
+                              const stateA = getInviteCooldownState(a.id);
+                              const stateB = getInviteCooldownState(b.id);
+                              const isRoomA = Boolean(stateA.isJoined || stateA.isLeft);
+                              const isRoomB = Boolean(stateB.isJoined || stateB.isLeft);
+
+                              if (isRoomA !== isRoomB) {
+                                return isRoomA ? -1 : 1;
+                              }
+
+                              if (isRoomA && isRoomB) {
+                                const timeA = stateA.joinedAt || a.lastPlayedAt || 0;
+                                const timeB = stateB.joinedAt || b.lastPlayedAt || 0;
+                                if (timeA !== timeB) return timeB - timeA;
+                              }
+
+                              if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
+                              return (a.name || "").localeCompare(b.name || "");
+                            });
+                          };
+
+                          const friends = sortPlayers(multiplayerPlayers.filter(p => p.isFriend));
+                          const recentPlayers = sortPlayers(multiplayerPlayers);
 
                           const renderRow = (player: any) => {
                             const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);

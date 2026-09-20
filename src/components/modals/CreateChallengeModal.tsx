@@ -36,7 +36,7 @@ export interface CreateChallengeModalProps {
   challengeTimerEnabled: boolean;
   setChallengeTimerEnabled: (val: boolean) => void;
   multiplayerPlayers: Array<{ id: string; name: string; status: 'online' | 'offline'; isFriend?: boolean; [key: string]: any }>;
-  getInviteCooldownState: (playerId: string) => { isJoined: boolean; isPendingSent: boolean; isDeclined: boolean; isLeft?: boolean; remainingSeconds: number };
+  getInviteCooldownState: (playerId: string) => { isJoined: boolean; isPendingSent: boolean; isDeclined: boolean; isLeft?: boolean; remainingSeconds: number; joinedAt?: number };
   handleToggleFriend: (playerId: string, playerName: string) => void;
   handleInviteFriend: (playerId: string) => void;
   handleReinviteAll: () => void;
@@ -503,15 +503,30 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           ) : (
             <>
               {(() => {
-                const friends = multiplayerPlayers.filter(p => p.isFriend).sort((a, b) => {
-                  if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
-                  return a.name.localeCompare(b.name);
-                });
-                
-                const recentPlayers = [...multiplayerPlayers].sort((a, b) => {
-                  if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
-                  return a.name.localeCompare(b.name);
-                });
+                const sortPlayers = (list: typeof multiplayerPlayers) => {
+                  return [...list].sort((a, b) => {
+                    const stateA = getInviteCooldownState(a.id);
+                    const stateB = getInviteCooldownState(b.id);
+                    const isRoomA = Boolean(stateA.isJoined || stateA.isLeft);
+                    const isRoomB = Boolean(stateB.isJoined || stateB.isLeft);
+
+                    if (isRoomA !== isRoomB) {
+                      return isRoomA ? -1 : 1;
+                    }
+
+                    if (isRoomA && isRoomB) {
+                      const timeA = stateA.joinedAt || a.lastPlayedAt || 0;
+                      const timeB = stateB.joinedAt || b.lastPlayedAt || 0;
+                      if (timeA !== timeB) return timeB - timeA;
+                    }
+
+                    if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
+                    return (a.name || "").localeCompare(b.name || "");
+                  });
+                };
+
+                const friends = sortPlayers(multiplayerPlayers.filter(p => p.isFriend));
+                const recentPlayers = sortPlayers(multiplayerPlayers);
 
                 const renderRow = (player: any) => {
                   const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
