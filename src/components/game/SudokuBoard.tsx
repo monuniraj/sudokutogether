@@ -10,10 +10,10 @@ export const DIFFICULTY_GRID_THEMES: Record<Difficulty, {
   identical: { light: string; dark: string };
 }> = {
   EASY: {
-    activeCell: { light: "#86EFAC", dark: "#064e3b" },
+    activeCell: { light: "#86EFAC", dark: "#34D399" },
     crosshair: { light: "rgba(34, 197, 94, 0.12)", dark: "#051f18" },
     paintCrosshair: { light: "rgba(34, 197, 94, 0.12)", dark: "#051f18" },
-    identical: { light: "#86EFAC", dark: "#064e3b" },
+    identical: { light: "#86EFAC", dark: "#34D399" },
   },
   MEDIUM: {
     activeCell: { light: "#FEF08A", dark: "#713f12" },
@@ -272,10 +272,14 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                 <div 
                   className={`absolute inset-0 flex items-center justify-center text-center select-none ${
                     cell.isOriginalClue 
-                      ? (darkMode ? "text-white font-sans font-normal" : "text-stone-900 font-sans font-normal")
+                      ? (darkMode 
+                          ? ((isSelected || isIdenticalValue) && difficulty === "EASY" ? "text-[#022c22] font-sans font-extrabold" : "text-white font-sans font-normal")
+                          : "text-stone-900 font-sans font-normal")
                       : isMistake
                         ? (darkMode ? "text-rose-300 handwriting font-black animate-pulse" : "text-rose-700 handwriting font-black animate-pulse")
-                        : (darkMode ? "text-[#38bdf8] handwriting font-normal" : "text-[#2B6CB0] handwriting font-normal")
+                        : (darkMode 
+                            ? ((isSelected || isIdenticalValue) && difficulty === "EASY" ? "text-[#022c22] handwriting font-extrabold" : "text-[#38bdf8] handwriting font-normal")
+                            : "text-[#2B6CB0] handwriting font-normal")
                   }`}
                   style={{
                     fontSize: cell.isOriginalClue 

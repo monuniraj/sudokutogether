@@ -11,7 +11,8 @@ import {
   XCircle,
   Users,
   Link2,
-  AlertTriangle
+  AlertTriangle,
+  Plus
 } from "lucide-react";
 import { formatMatchTimestamp } from "../../utils/formatTimestamp";
 
@@ -553,12 +554,12 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                         ) : (
                           <button
                             onClick={() => handleToggleFriend(player.id, player.name)}
-                            className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border-none cursor-pointer shrink-0 transition-all active:scale-95 flex items-center justify-center ${
-                              darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-150 hover:bg-stone-200 text-stone-700"
+                            className={`w-7 h-7 rounded-lg border-none cursor-pointer shrink-0 transition-all active:scale-95 flex items-center justify-center ${
+                              darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300 hover:text-white" : "bg-stone-150 hover:bg-stone-200 text-stone-700 hover:text-stone-900"
                             }`}
                             title="Add Friend"
                           >
-                            +
+                            <Plus className="w-5 h-5 stroke-[2.5]" />
                           </button>
                         )}
                         <div className="flex flex-col min-w-0">

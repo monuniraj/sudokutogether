@@ -9184,12 +9184,12 @@ useEffect(() => {
                                               ) : (
                                                 <button
                                                   onClick={() => handleToggleFriend(player.id, player.name)}
-                                                  className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border-none cursor-pointer shrink-0 transition-all active:scale-95 flex items-center justify-center ${
-                                                    darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-150 hover:bg-stone-200 text-stone-700"
+                                                  className={`w-7 h-7 rounded-lg border-none cursor-pointer shrink-0 transition-all active:scale-95 flex items-center justify-center ${
+                                                    darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300 hover:text-white" : "bg-stone-150 hover:bg-stone-200 text-stone-700 hover:text-stone-900"
                                                   }`}
                                                   title="Add Friend"
                                                 >
-                                                  +
+                                                  <Plus className="w-5 h-5 stroke-[2.5]" />
                                                 </button>
                                               )}
                                               <span className="font-bold text-xs font-sans truncate">
@@ -11041,26 +11041,26 @@ useEffect(() => {
                                   <button
                                     onClick={() => handleToggleFriend(player.id, player.name)}
                                     title="Unfriend"
-                                    className={`p-1 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center ${
+                                    className={`w-7 h-7 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center shrink-0 ${
                                       darkMode 
                                         ? "bg-zinc-700/50 text-stone-300 hover:bg-zinc-600" 
                                         : "bg-stone-200/50 text-stone-600 hover:bg-stone-300"
                                     }`}
                                   >
-                                    <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                                    <Minus className="w-5 h-5 stroke-[2.5]" />
                                   </button>
                                 </>
                               ) : (
                                 <button
                                   onClick={() => handleToggleFriend(player.id, player.name)}
                                   title="Add friend"
-                                  className={`p-1 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center ${
+                                  className={`w-7 h-7 rounded-full border-none cursor-pointer transition-all active:scale-90 flex items-center justify-center shrink-0 ${
                                     darkMode 
                                       ? "bg-[#4c0519] text-[#fecdd3] hover:bg-[#831843]" 
                                       : "bg-[#FCE7F3] text-[#9D174D] hover:bg-[#FBCFE8]"
                                   }`}
                                 >
-                                  <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                                  <Plus className="w-5 h-5 stroke-[2.5]" />
                                 </button>
                               )}
                             </div>
@@ -12117,12 +12117,12 @@ useEffect(() => {
                                   ) : (
                                     <button
                                       onClick={() => handleToggleFriend(player.id, player.name)}
-                                      className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border-none cursor-pointer shrink-0 transition-all active:scale-95 flex items-center justify-center ${
-                                        darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-150 hover:bg-stone-200 text-stone-700"
+                                      className={`w-7 h-7 rounded-lg border-none cursor-pointer shrink-0 transition-all active:scale-95 flex items-center justify-center ${
+                                        darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300 hover:text-white" : "bg-stone-150 hover:bg-stone-200 text-stone-700 hover:text-stone-900"
                                       }`}
                                       title="Add Friend"
                                     >
-                                      +
+                                      <Plus className="w-5 h-5 stroke-[2.5]" />
                                     </button>
                                   )}
                                   <div className="flex flex-col min-w-0">
