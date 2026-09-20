@@ -39,14 +39,8 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
     <AnimatePresence>
       {isOpen && incomingChallengeDetails && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm p-4">
-          {/* Backdrop click dismisser */}
-          <div 
-            className="absolute inset-0 cursor-pointer" 
-            onClick={() => {
-              playClickSound();
-              onClose();
-            }} 
-          />
+          {/* Backdrop (backdrop-click dismissal disabled to prevent accidental closure while typing password) */}
+          <div className="absolute inset-0 pointer-events-none" />
 
           <motion.div 
             initial={{ opacity: 0, scale: 0.95, y: 10 }}

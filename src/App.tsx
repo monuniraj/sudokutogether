@@ -8487,10 +8487,11 @@ useEffect(() => {
               {/* 1. MULTIPLAYER LEADERBOARD MODAL (when challengeMode is true) */}
               {boardState && showGameOverModal && challengeMode && (
                 <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-                  {/* Backdrop click dismisser — closes overlay and reveals the board beneath */}
+                  {/* Backdrop click dismisser — closes overlay and reveals the board beneath (disabled in Step 2 Rematch/PIN screen to prevent accidental closure) */}
                   <div
-                    className="absolute inset-0 cursor-pointer"
+                    className={`absolute inset-0 ${endGameStep === 2 ? "pointer-events-none" : "cursor-pointer"}`}
                     onClick={() => {
+                      if (endGameStep === 2) return;
                       playClickSound();
                       setShowGameOverModal(false);
                       setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
@@ -10775,14 +10776,13 @@ useEffect(() => {
       <AnimatePresence>
         {(showMultiplayerForkModal || showJoinRoomModal || showCreateChallengeModal) && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-            {/* Backdrop click dismisser */}
+            {/* Backdrop click dismisser (disabled for JoinRoomModal and CreateChallengeModal to prevent accidental closure while typing) */}
             <div 
-              className="absolute inset-0 cursor-pointer" 
+              className={`absolute inset-0 ${(showJoinRoomModal || showCreateChallengeModal) ? "pointer-events-none" : "cursor-pointer"}`} 
               onClick={() => {
+                if (showJoinRoomModal || showCreateChallengeModal) return;
                 playClickSound();
                 setShowMultiplayerForkModal(false);
-                setShowJoinRoomModal(false);
-                setShowCreateChallengeModal(false);
               }} 
             />
 
@@ -12335,15 +12335,8 @@ useEffect(() => {
       <AnimatePresence>
         {showDisplayNameModal && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-            {/* Backdrop click dismisser */}
-            <div 
-              className="absolute inset-0 cursor-pointer" 
-              onClick={() => {
-                playClickSound();
-                setShowDisplayNameModal(false);
-                setDisplayNameCallbackAction(null);
-              }} 
-            />
+            {/* Backdrop (backdrop-click dismissal disabled to prevent accidental closure while typing name) */}
+            <div className="absolute inset-0 pointer-events-none" />
 
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
@@ -12473,14 +12466,8 @@ useEffect(() => {
       <AnimatePresence>
         {showInviteJoinNamePopup && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-            <div 
-              className="absolute inset-0 cursor-pointer" 
-              onClick={() => {
-                playClickSound();
-                setShowInviteJoinNamePopup(false);
-                inviteJoinCallbackRef.current = null;
-              }} 
-            />
+            {/* Backdrop (backdrop-click dismissal disabled to prevent accidental closure while typing name) */}
+            <div className="absolute inset-0 pointer-events-none" />
 
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
@@ -12572,14 +12559,8 @@ useEffect(() => {
       <AnimatePresence>
         {showAuthModal && (
           <div className="fixed inset-0 z-[10000] flex items-end justify-center bg-[#1E1E1E]/60 backdrop-blur-xs">
-            {/* Backdrop click dismisser */}
-            <div 
-              className="absolute inset-0 cursor-pointer" 
-              onClick={() => {
-                playClickSound();
-                setShowAuthModal(false);
-              }} 
-            />
+            {/* Backdrop (backdrop-click dismissal disabled to prevent accidental closure while entering credentials) */}
+            <div className="absolute inset-0 pointer-events-none" />
 
             <motion.div 
               initial={{ y: "100%", opacity: 0.9 }}
