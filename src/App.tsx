@@ -10,6 +10,7 @@ import { CreateChallengeModal } from "./components/modals/CreateChallengeModal";
 import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
 import { SudokuBoard } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
+import { ConfettiBurst } from "./components/common/ConfettiBurst";
 import { formatMatchTimestamp, formatInviteTimestamp } from "./utils/formatTimestamp";
 import {
   doc,
@@ -87,7 +88,8 @@ import {
   Rocket,
   TrendingUp,
   Link2,
-  XCircle
+  XCircle,
+  Crown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Capacitor } from '@capacitor/core';
@@ -2458,6 +2460,7 @@ useEffect(() => {
   }, [personalBestTimes]);
 
   const [isNewRecordAchieved, setIsNewRecordAchieved] = useState<boolean>(false);
+  const [showCelebrationConfetti, setShowCelebrationConfetti] = useState<boolean>(false);
 
   // Derived bestTimes and current difficulty record
   const bestTimes = personalBestTimes;
@@ -2967,6 +2970,7 @@ useEffect(() => {
     if (showMidGameInviteModal) { setShowMidGameInviteModal(false); return true; }
     if (showGameOverModal) { 
       setShowGameOverModal(false); 
+      setShowCelebrationConfetti(false);
       setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
       setLockedNum(null);
       setActiveKeypadNum(null);
@@ -3911,41 +3915,130 @@ useEffect(() => {
     }
   };
 
-  // Celebration win fanfare (chord / arpeggio)
-  const playWinSound = () => {
-    if (!soundEffects) return; // settings guard cond
+  // Standard puzzle completion chime (warm, pleasant major chord arpeggio)
+  const playStandardWinSound = () => {
+    if (!soundEffects) return;
     try {
       const audioCtx = getAudioCtx();
       if (!audioCtx) return;
-      
-      const playNote = (freq: number, start: number, duration: number, type: OscillatorType = "triangle") => {
+
+      const playNote = (freq: number, start: number, duration: number, type: OscillatorType = "sine", peakGain: number = 0.09) => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        
+
         osc.type = type;
         osc.frequency.setValueAtTime(freq, start);
-        
-        gain.gain.setValueAtTime(0.10, start);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
-        
+
+        gain.gain.setValueAtTime(0.001, start);
+        gain.gain.linearRampToValueAtTime(peakGain, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
         osc.start(start);
         osc.stop(start + duration);
       };
-      
+
       const now = audioCtx.currentTime;
-      playNote(261.63, now, 0.25); // C4
-      playNote(329.63, now + 0.12, 0.25); // E4
-      playNote(392.00, now + 0.24, 0.25); // G4
-      playNote(523.25, now + 0.36, 0.4); // C5
-      playNote(659.25, now + 0.52, 0.4); // E5
-      playNote(783.99, now + 0.68, 1.0, "sine"); // G5
-      playNote(1046.50, now + 0.68, 1.0, "sine"); // C6
+      playNote(261.63, now, 0.35, "triangle", 0.08); // C4
+      playNote(329.63, now + 0.10, 0.35, "triangle", 0.08); // E4
+      playNote(392.00, now + 0.20, 0.40, "sine", 0.09); // G4
+      playNote(523.25, now + 0.30, 0.50, "sine", 0.10); // C5
+      playNote(659.25, now + 0.42, 0.65, "sine", 0.09); // E5
+      playNote(783.99, now + 0.54, 1.10, "sine", 0.09); // G5
+      playNote(1046.50, now + 0.54, 1.10, "sine", 0.06); // C6
     } catch (e) {
-      console.error("Audio Web Synth Win Error:", e);
+      console.error("Audio Standard Win Error:", e);
     }
   };
+
+  // 1st Place Victory fanfare (triumphant brass-like major chord fanfare)
+  const playFirstPlaceFanfareSound = () => {
+    if (!soundEffects) return;
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const playTone = (freq: number, start: number, duration: number, type: OscillatorType = "triangle", vol: number = 0.10) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.001, start);
+        gain.gain.linearRampToValueAtTime(vol, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+        osc.start(start);
+        osc.stop(start + duration);
+      };
+
+      const now = audioCtx.currentTime;
+      // Opening fanfare motif: C4 -> E4 -> G4 -> C5
+      playTone(261.63, now, 0.16, "triangle", 0.10); // C4
+      playTone(329.63, now + 0.12, 0.16, "triangle", 0.10); // E4
+      playTone(392.00, now + 0.24, 0.18, "triangle", 0.11); // G4
+      playTone(523.25, now + 0.36, 0.28, "triangle", 0.12); // C5
+
+      // Triumphant chord burst at 0.50s (C4 + G4 + C5 + E5 + G5 + C6)
+      const chordStart = now + 0.50;
+      playTone(261.63, chordStart, 1.4, "triangle", 0.08); // C4 foundation
+      playTone(392.00, chordStart, 1.4, "triangle", 0.09); // G4
+      playTone(523.25, chordStart, 1.5, "sine", 0.11); // C5
+      playTone(659.25, chordStart, 1.5, "sine", 0.10); // E5
+      playTone(783.99, chordStart, 1.6, "sine", 0.10); // G5
+      playTone(1046.50, chordStart, 1.8, "sine", 0.08); // C6 crown note
+    } catch (e) {
+      console.error("Audio First Place Fanfare Error:", e);
+    }
+  };
+
+  // Record Broken celebration sound (high-sparkle energetic arpeggio chime)
+  const playRecordBreakSound = () => {
+    if (!soundEffects) return;
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const playSparkle = (freq: number, start: number, duration: number, vol: number = 0.08) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.001, start);
+        gain.gain.linearRampToValueAtTime(vol, start + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+        osc.start(start);
+        osc.stop(start + duration);
+      };
+
+      const now = audioCtx.currentTime;
+      // Rapid ascending shimmer arpeggio
+      playSparkle(523.25, now, 0.20, 0.07); // C5
+      playSparkle(659.25, now + 0.07, 0.20, 0.08); // E5
+      playSparkle(783.99, now + 0.14, 0.22, 0.09); // G5
+      playSparkle(987.77, now + 0.21, 0.24, 0.09); // B5
+      playSparkle(1046.50, now + 0.28, 0.35, 0.11); // C6
+      playSparkle(1318.51, now + 0.36, 0.40, 0.10); // E6
+      playSparkle(1567.98, now + 0.44, 0.50, 0.09); // G6
+      playSparkle(2093.00, now + 0.52, 1.20, 0.08); // High sparkle C7
+      // Harmonic octave overtones on the finale
+      playSparkle(1046.50, now + 0.52, 1.20, 0.09); // C6 swell
+      playSparkle(2637.02, now + 0.55, 0.80, 0.04); // E7 delicate twinkle
+    } catch (e) {
+      console.error("Audio Record Break Error:", e);
+    }
+  };
+
+  const playWinSound = playStandardWinSound;
 
   // Mini-win sound on completing all 9 instances of a number (bright, distinct ascending bell chime)
   const playNumberCompletionSound = () => {
@@ -5116,10 +5209,28 @@ useEffect(() => {
       !isHintsDisqualified && 
       sessionSeconds > 0;
 
+    let isRecordBroken = false;
     if (qualifiesForPersonalBest) {
-      updatePersonalBestTime(difficulty, sessionSeconds);
+      isRecordBroken = updatePersonalBestTime(difficulty, sessionSeconds);
     } else {
       setIsNewRecordAchieved(false);
+    }
+
+    if (isWon) {
+      if (isRecordBroken) {
+        playRecordBreakSound();
+        setShowCelebrationConfetti(true);
+      } else if (challengeMode) {
+        const hasFaster = syncedLeaderboard.some(r => r.userId !== userProfile?.id && r.isWon && Number(r.timeSec) > 0 && Number(r.timeSec) < sessionSeconds);
+        if (!hasFaster) {
+          playFirstPlaceFanfareSound();
+          setShowCelebrationConfetti(true);
+        } else {
+          playStandardWinSound();
+        }
+      } else {
+        playStandardWinSound();
+      }
     }
 
     // Check if duplicate record exists or update with participants
@@ -6393,6 +6504,7 @@ useEffect(() => {
     setVisualizingBacktrack(false);
     setGeneratorLogs([]);
     setIsNewRecordAchieved(false);
+    setShowCelebrationConfetti(false);
     addLog("⚡ Initiating unique sudoku puzzle algorithm...");
 
     // Determine the seed (either user override or generate a new random seed)
@@ -6945,7 +7057,6 @@ useEffect(() => {
           setBoardState(terminalWinState);
           saveCurrentGameToLocal(terminalWinState, sessionSeconds, difficulty);
           addLog("⭐ Victory! All sudoku square criteria satisfied uniquely!");
-          playWinSound();
           saveGameToHistory(true, boardState ? boardState.currentMistakesCount : 0);
         } else if (isNumCompleted) {
           // Requirement 6: Number Completion Audio & Haptic Feedback
@@ -7135,7 +7246,6 @@ useEffect(() => {
     if (currentProgress) {
       setBoardState(prev => prev ? { ...prev, isGameOver: true } : null);
       addLog("⭐ Victory! All sudoku square criteria satisfied uniquely!");
-      playWinSound();
       saveGameToHistory(true, boardState ? boardState.currentMistakesCount : 0);
     }
   };
@@ -8599,53 +8709,97 @@ useEffect(() => {
 
                             return results.map((player, idx) => {
                               const isPending = !!player.isPending;
+                              const isPodium1 = idx === 0 && !player.failed && !player.isAbandoned;
+                              const isPodium2 = idx === 1 && !player.failed && !player.isAbandoned;
+                              const isPodium3 = idx === 2 && !player.failed && !player.isAbandoned;
                               const positionStr = idx === 0 ? "1st" : idx === 1 ? "2nd" : idx === 2 ? "3rd" : `${idx + 1}th`;
                               
                               return (
                                 <div 
                                   key={player.id}
                                   className={`flex items-center justify-between p-3 rounded-2xl transition-all ${
-                                    player.isMe 
+                                    isPodium1
+                                      ? (darkMode 
+                                          ? "bg-gradient-to-r from-amber-950/40 via-yellow-950/20 to-amber-950/40 border-2 border-amber-400/60 shadow-[0_0_24px_rgba(245,158,11,0.18)]" 
+                                          : "bg-gradient-to-r from-amber-50/90 via-yellow-50/70 to-amber-50/90 border-2 border-amber-400 shadow-[0_6px_20px_rgba(245,158,11,0.14)]")
+                                      : isPodium2
+                                      ? (darkMode
+                                          ? "bg-slate-800/35 border border-slate-400/40 shadow-sm"
+                                          : "bg-slate-50/80 border border-slate-300 shadow-[0_2px_8px_rgba(148,163,184,0.1)]")
+                                      : isPodium3
+                                      ? (darkMode
+                                          ? "bg-amber-950/20 border border-amber-700/40 shadow-xs"
+                                          : "bg-amber-50/40 border border-amber-600/30 shadow-[0_2px_8px_rgba(180,83,9,0.06)]")
+                                      : player.isMe 
                                       ? (darkMode ? "bg-[#1e1b4b]/60 border border-indigo-900/50 shadow-md" : "bg-[#EEF2FF] border border-[#C7D2FE] shadow-[0_4px_12px_rgba(99,102,241,0.05)]") 
                                       : (darkMode ? "bg-zinc-800/40" : "bg-stone-55")
                                   }`}
                                 >
                                   <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 pr-2">
                                     <span className={`font-mono text-sm sm:text-base font-black w-7 sm:w-8 text-center flex items-center justify-center flex-shrink-0 shrink-0 ${
-                                      player.isAbandoned ? "text-rose-500" : isPending ? "text-amber-500 animate-pulse" : idx === 0 ? "text-yellow-500" : idx === 1 ? "text-slate-400" : idx === 2 ? "text-amber-700" : darkMode ? "text-zinc-600" : "text-stone-400"
+                                      player.isAbandoned ? "text-rose-500" : isPending ? "text-amber-500 animate-pulse" : isPodium1 ? "text-amber-500" : isPodium2 ? "text-slate-400" : isPodium3 ? "text-amber-700 dark:text-amber-500" : darkMode ? "text-zinc-600" : "text-stone-400"
                                     }`}>
                                       {player.isAbandoned ? (
                                         <XCircle className="w-4 h-4 text-rose-500 stroke-[2.5]" />
                                       ) : isPending ? (
                                         <Clock className="w-4 h-4 text-amber-500 animate-spin" />
-                                      ) : idx === 0 ? (
-                                        <Trophy className="w-4.5 h-4.5 text-yellow-500 fill-yellow-500/20 stroke-[2.5]" />
-                                      ) : idx === 1 ? (
-                                        <Award className="w-4 h-4 text-slate-400 stroke-[2.5]" />
-                                      ) : idx === 2 ? (
-                                        <Award className="w-4 h-4 text-amber-700 stroke-[2.5]" />
+                                      ) : isPodium1 ? (
+                                        <Trophy className="w-5 h-5 text-amber-500 fill-amber-400/30 stroke-[2.5] animate-bounce" />
+                                      ) : isPodium2 ? (
+                                        <Award className="w-4.5 h-4.5 text-slate-400 stroke-[2.5]" />
+                                      ) : isPodium3 ? (
+                                        <Award className="w-4.5 h-4.5 text-amber-700 dark:text-amber-500 stroke-[2.5]" />
                                       ) : (
                                         positionStr
                                       )}
                                     </span>
                                     <div className="flex flex-col min-w-0 flex-1">
-                                      <div className="flex items-center gap-1.5 min-w-0">
-                                        <span className={`font-sans font-bold text-sm leading-none truncate ${player.isMe ? (darkMode ? "text-indigo-300" : "text-indigo-950") : (darkMode ? "text-zinc-200" : "text-stone-850")}`}>
+                                      <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                        <span className={`font-sans font-bold text-sm leading-none truncate ${
+                                          isPodium1 ? (darkMode ? "text-amber-300 font-black" : "text-amber-950 font-black") :
+                                          player.isMe ? (darkMode ? "text-indigo-300" : "text-indigo-950") : 
+                                          (darkMode ? "text-zinc-200" : "text-stone-850")
+                                        }`}>
                                           {player.name}
                                         </span>
+                                        {isPodium1 && (
+                                          <span className="flex items-center gap-1 text-[9px] bg-gradient-to-r from-amber-500/25 to-yellow-400/25 text-amber-600 dark:text-amber-300 border border-amber-400/60 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shadow-xs shrink-0">
+                                            <Crown className="w-3 h-3 text-amber-500 fill-amber-400/40 shrink-0" />
+                                            <span>WINNER • 1ST</span>
+                                          </span>
+                                        )}
+                                        {isPodium2 && (
+                                          <span className="text-[9px] bg-slate-400/15 text-slate-600 dark:text-slate-300 border border-slate-400/40 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shrink-0">
+                                            SILVER • 2ND
+                                          </span>
+                                        )}
+                                        {isPodium3 && (
+                                          <span className="text-[9px] bg-amber-700/15 text-amber-700 dark:text-amber-400 border border-amber-700/40 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shrink-0">
+                                            BRONZE • 3RD
+                                          </span>
+                                        )}
                                         {player.isMe && (
-                                          <span className="text-[9px] bg-indigo-500/20 text-indigo-500 px-1.5 py-0.5 rounded uppercase tracking-wider font-black flex-shrink-0 shrink-0">
+                                          <span className="text-[9px] bg-indigo-500/20 text-indigo-500 dark:text-indigo-300 border border-indigo-400/30 px-1.5 py-0.5 rounded uppercase tracking-wider font-black flex-shrink-0 shrink-0">
                                             You
                                           </span>
                                         )}
                                         {player.isMe && isNewRecordAchieved && !player.failed && (
-                                          <span className="text-[8.5px] bg-amber-400/20 text-amber-600 dark:text-amber-400 border border-amber-400/40 px-1.5 py-0.5 rounded uppercase tracking-wider font-black animate-pulse flex-shrink-0 shrink-0">
-                                            NEW BEST TIME!
-                                          </span>
+                                          <motion.span 
+                                            initial={{ scale: 0.8, opacity: 0 }}
+                                            animate={{ scale: [0.8, 1.15, 1], opacity: 1 }}
+                                            transition={{ type: "spring", stiffness: 350, damping: 14 }}
+                                            className="text-[8.5px] bg-gradient-to-r from-amber-500/20 to-yellow-400/20 text-amber-600 dark:text-amber-300 border border-amber-400/60 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shadow-xs flex items-center gap-1 shrink-0"
+                                          >
+                                            <Sparkles className="w-2.5 h-2.5 text-amber-500 animate-pulse" />
+                                            <span>NEW BEST TIME!</span>
+                                          </motion.span>
                                         )}
                                       </div>
-                                      <span className={`font-sans text-[10px] mt-1.5 uppercase font-bold tracking-wider truncate ${player.isAbandoned ? "text-rose-400" : player.failed ? "text-rose-500" : isPending ? "text-amber-500" : darkMode ? "text-zinc-400" : "text-stone-500"}`}>
-                                        {player.isAbandoned ? "Left the game" : isPending ? "In Progress..." : player.failed ? "Mistake Limit Reached" : "Board Completed"}
+                                      <span className={`font-sans text-[10px] mt-1.5 uppercase font-bold tracking-wider truncate ${
+                                        isPodium1 ? (darkMode ? "text-amber-400/90 font-bold" : "text-amber-700 font-bold") :
+                                        player.isAbandoned ? "text-rose-400" : player.failed ? "text-rose-500" : isPending ? "text-amber-500" : darkMode ? "text-zinc-400" : "text-stone-500"
+                                      }`}>
+                                        {player.isAbandoned ? "Left the game" : isPending ? "In Progress..." : player.failed ? "Mistake Limit Reached" : isPodium1 ? "1st Place Finish" : "Board Completed"}
                                       </span>
                                     </div>
                                   </div>
@@ -9435,10 +9589,16 @@ useEffect(() => {
                         {(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) ? "Try Again" : "Solved!"}
                       </h3>
                       {isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) && (
-                        <div className="flex items-center justify-center gap-1.5 py-1 px-3 mt-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-sans font-black text-xs uppercase tracking-wider animate-bounce">
-                          <Trophy className="w-4 h-4 stroke-[2.5] text-amber-500 shrink-0" />
-                          <span>New Personal Best!</span>
-                        </div>
+                        <motion.div 
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: [0, 1.15, 1], opacity: 1 }}
+                          transition={{ type: "spring", stiffness: 320, damping: 14 }}
+                          className="relative overflow-hidden flex items-center justify-center gap-1.5 py-1.5 px-3.5 mt-1.5 rounded-full bg-gradient-to-r from-amber-500/25 via-yellow-400/30 to-amber-500/25 border border-amber-400/70 text-amber-600 dark:text-amber-300 font-sans font-black text-xs uppercase tracking-wider shadow-[0_4px_16px_rgba(245,158,11,0.25)] select-none"
+                        >
+                          <Trophy className="w-4 h-4 stroke-[2.5] text-amber-500 animate-bounce shrink-0" />
+                          <span className="tracking-wide">NEW PERSONAL BEST!</span>
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
+                        </motion.div>
                       )}
                       <p className={`text-sm font-sans mt-1 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
                         {(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) 
@@ -9459,8 +9619,18 @@ useEffect(() => {
                            {boardState.currentMistakesCount}/{boardState.maxMistakesLimit}
                          </span>
                        </div>
-                       <div className="flex flex-col items-center">
-                         <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>Best</span>
+                       <div className={`flex flex-col items-center transition-all ${
+                         isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit)
+                           ? "p-1.5 rounded-xl ring-2 ring-amber-400/80 bg-amber-400/10 shadow-[0_0_16px_rgba(245,158,11,0.3)] animate-pulse"
+                           : ""
+                       }`}>
+                         <span className={`text-[10px] uppercase font-bold tracking-widest ${
+                           isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit)
+                             ? "text-amber-500 font-black"
+                             : (darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]")
+                         }`}>
+                           Best
+                         </span>
                          <span className={`text-base sm:text-lg font-mono font-bold text-amber-500`}>
                            {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
                          </span>
@@ -13271,6 +13441,14 @@ useEffect(() => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 🎉 CELEBRATION CONFETTI BURST OVERLAY */}
+      {showCelebrationConfetti && (
+        <ConfettiBurst
+          darkMode={darkMode}
+          onComplete={() => setShowCelebrationConfetti(false)}
+        />
+      )}
 
       {/* Decorative dashed margin footers */}
       {activeTab !== "sudoku" && (
