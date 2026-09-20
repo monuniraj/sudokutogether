@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from "react";
 interface ConfettiBurstProps {
   darkMode?: boolean;
   onComplete?: () => void;
+  onBurst?: (burstIndex: number) => void;
 }
 
 interface Particle {
@@ -17,9 +18,11 @@ interface Particle {
   shape: "rect" | "circle" | "spark";
   tiltAngle: number;
   tiltAngleInc: number;
+  bornAt: number;
+  lifespan: number;
 }
 
-export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, onComplete }) => {
+export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, onComplete, onBurst }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -31,7 +34,7 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
 
     let animFrameId: number;
     const startTime = performance.now();
-    const duration = 1800; // 1.8 seconds total celebratory burst
+    const totalDuration = 2400; // 2.4 seconds total celebratory sequence
 
     // Size canvas to viewport
     const width = (canvas.width = window.innerWidth);
@@ -39,8 +42,8 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
 
     // Color palettes tuned specifically for light and dark modes
     const lightColors = [
-      "#34D399", // Emerald
       "#10B981", // Deep emerald
+      "#34D399", // Emerald
       "#F59E0B", // Amber gold
       "#FBBF24", // Warm gold
       "#8B5CF6", // Violet
@@ -61,63 +64,114 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     ];
 
     const colors = darkMode ? darkColors : lightColors;
-
-    // Create 75 diverse confetti particles bursting from dual origins
     const particles: Particle[] = [];
-    const particleCount = 80;
 
-    for (let i = 0; i < particleCount; i++) {
-      // 50% left cannon, 50% right cannon
-      const fromLeft = i % 2 === 0;
-      const originX = fromLeft ? width * 0.25 : width * 0.75;
-      const originY = height * 0.45;
+    // Burst timestamps relative to startTime (in ms)
+    const burstSchedule = [
+      { delay: 0, count: 50, type: "dual" },         // Burst 1: Dual cannons from left & right
+      { delay: 600, count: 40, type: "high-cross" }, // Burst 2: High angled cross-burst
+      { delay: 1200, count: 35, type: "center" }     // Burst 3: Celebratory center flare
+    ];
 
-      const angle = fromLeft
-        ? -Math.PI / 3 + (Math.random() - 0.5) * 0.9 // angled right and up
-        : (-2 * Math.PI) / 3 + (Math.random() - 0.5) * 0.9; // angled left and up
+    const firedBursts = new Set<number>();
 
-      const speed = 7 + Math.random() * 9;
-      const shapeRand = Math.random();
+    const spawnBurst = (type: string, count: number, currentTime: number) => {
+      for (let i = 0; i < count; i++) {
+        let originX: number;
+        let originY: number;
+        let angle: number;
+        let speed: number;
 
-      particles.push({
-        x: originX,
-        y: originY,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 2, // extra initial upward kick
-        size: 5 + Math.random() * 6,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        rotation: Math.random() * 360,
-        vRotation: (Math.random() - 0.5) * 12,
-        shape: shapeRand > 0.4 ? "rect" : shapeRand > 0.15 ? "circle" : "spark",
-        tiltAngle: Math.random() * Math.PI,
-        tiltAngleInc: (Math.random() * 0.08) + 0.04
-      });
-    }
+        if (type === "dual") {
+          const fromLeft = i % 2 === 0;
+          originX = fromLeft ? width * 0.18 : width * 0.82;
+          originY = height * 0.48;
+          angle = fromLeft
+            ? -Math.PI / 3 + (Math.random() - 0.5) * 0.85
+            : (-2 * Math.PI) / 3 + (Math.random() - 0.5) * 0.85;
+          speed = 8 + Math.random() * 9;
+        } else if (type === "high-cross") {
+          const fromLeft = i % 2 === 0;
+          originX = fromLeft ? width * 0.28 : width * 0.72;
+          originY = height * 0.38;
+          angle = fromLeft
+            ? -Math.PI / 3.5 + (Math.random() - 0.5) * 0.75
+            : (-2.2 * Math.PI) / 3.5 + (Math.random() - 0.5) * 0.75;
+          speed = 7 + Math.random() * 8;
+        } else {
+          // Center umbrella burst
+          originX = width * 0.50;
+          originY = height * 0.35;
+          angle = Math.random() * Math.PI * 2;
+          speed = 4 + Math.random() * 8;
+        }
+
+        const shapeRand = Math.random();
+        particles.push({
+          x: originX,
+          y: originY,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - (type === "center" ? 1.5 : 3),
+          size: 5 + Math.random() * 6.5,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rotation: Math.random() * 360,
+          vRotation: (Math.random() - 0.5) * 14,
+          shape: shapeRand > 0.4 ? "rect" : shapeRand > 0.15 ? "circle" : "spark",
+          tiltAngle: Math.random() * Math.PI,
+          tiltAngleInc: (Math.random() * 0.08) + 0.04,
+          bornAt: currentTime,
+          lifespan: 1400 + Math.random() * 400
+        });
+      }
+    };
 
     const render = (now: number) => {
       const elapsed = now - startTime;
-      const progress = Math.min(1, elapsed / duration);
+      const progress = Math.min(1, elapsed / totalDuration);
 
-      // Fade out smoothly during the last 30% of the duration
-      const alpha = progress > 0.7 ? Math.max(0, 1 - (progress - 0.7) / 0.3) : 1;
+      // Check for scheduled bursts
+      burstSchedule.forEach((burst, idx) => {
+        if (elapsed >= burst.delay && !firedBursts.has(idx)) {
+          firedBursts.add(idx);
+          spawnBurst(burst.type, burst.count, now);
+          if (onBurst) {
+            try { onBurst(idx); } catch (e) {}
+          }
+        }
+      });
+
+      // Fade out overall sequence smoothly over the last 600ms
+      const globalAlpha = progress > 0.75 ? Math.max(0, 1 - (progress - 0.75) / 0.25) : 1;
 
       ctx.clearRect(0, 0, width, height);
 
-      particles.forEach(p => {
+      // Render active particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        const age = now - p.bornAt;
+        if (age > p.lifespan) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        // Particle specific fadeout near end of individual life
+        const pAlpha = age > p.lifespan * 0.7 
+          ? Math.max(0, 1 - (age - p.lifespan * 0.7) / (p.lifespan * 0.3)) 
+          : 1;
+
         // Physics
         p.x += p.vx;
         p.y += p.vy;
         p.vy += 0.28; // Gravity
-        p.vx *= 0.985; // Air resistance
+        p.vx *= 0.985; // Air drag
         p.vy *= 0.985;
         p.rotation += p.vRotation;
         p.tiltAngle += p.tiltAngleInc;
 
-        // 3D fluttering ribbon oscillation
         const xOffset = Math.sin(p.tiltAngle) * 3;
 
         ctx.save();
-        ctx.globalAlpha = alpha;
+        ctx.globalAlpha = globalAlpha * pAlpha;
         ctx.translate(p.x + xOffset, p.y);
         ctx.rotate((p.rotation * Math.PI) / 180);
         ctx.fillStyle = p.color;
@@ -127,7 +181,6 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
           ctx.arc(0, 0, p.size * 0.45, 0, Math.PI * 2);
           ctx.fill();
         } else if (p.shape === "spark") {
-          // Small 4-point star spark
           ctx.beginPath();
           const s = p.size * 0.6;
           ctx.moveTo(0, -s);
@@ -137,14 +190,13 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
           ctx.closePath();
           ctx.fill();
         } else {
-          // Fluttering rectangle
           const tiltScale = Math.cos(p.tiltAngle);
           ctx.scale(1, tiltScale);
           ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
         }
 
         ctx.restore();
-      });
+      }
 
       if (progress < 1) {
         animFrameId = requestAnimationFrame(render);
@@ -158,10 +210,14 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
 
     animFrameId = requestAnimationFrame(render);
 
+    // Strict cleanup on unmount: immediately cancel animation and wipe canvas
     return () => {
       cancelAnimationFrame(animFrameId);
+      if (ctx) {
+        ctx.clearRect(0, 0, width, height);
+      }
     };
-  }, [darkMode, onComplete]);
+  }, [darkMode, onComplete, onBurst]);
 
   return (
     <canvas

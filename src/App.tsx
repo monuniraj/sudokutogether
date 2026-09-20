@@ -4038,6 +4038,88 @@ useEffect(() => {
     }
   };
 
+  // Natural party popper / confetti blast pop (bandpass noise burst + pressurized sub-thump + streamer flutter)
+  const playPartyPopperSound = (burstIndex: number = 0) => {
+    if (!soundEffects) return;
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const t = audioCtx.currentTime;
+      // Slight scale in intensity across consecutive bursts
+      const intensityScale = burstIndex === 0 ? 1.0 : burstIndex === 1 ? 0.82 : 0.68;
+
+      // 1. Crisp pressurized noise pop (bandpass filtered white noise burst)
+      const bufferSize = Math.floor(audioCtx.sampleRate * 0.08); // 80ms noise buffer
+      const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+
+      const whiteNoise = audioCtx.createBufferSource();
+      whiteNoise.buffer = noiseBuffer;
+
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(1400, t);
+      filter.frequency.exponentialRampToValueAtTime(320, t + 0.07);
+      filter.Q.setValueAtTime(1.8, t);
+
+      const noiseGain = audioCtx.createGain();
+      noiseGain.gain.setValueAtTime(0.001, t);
+      noiseGain.gain.linearRampToValueAtTime(0.24 * intensityScale, t + 0.003);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.075);
+
+      whiteNoise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(audioCtx.destination);
+
+      whiteNoise.start(t);
+      whiteNoise.stop(t + 0.08);
+
+      // 2. Sub-thump (pressurized cork / air displacement thump)
+      const subOsc = audioCtx.createOscillator();
+      const subGain = audioCtx.createGain();
+      subOsc.type = "sine";
+      subOsc.frequency.setValueAtTime(170, t);
+      subOsc.frequency.exponentialRampToValueAtTime(45, t + 0.05);
+
+      subGain.gain.setValueAtTime(0.001, t);
+      subGain.gain.linearRampToValueAtTime(0.20 * intensityScale, t + 0.004);
+      subGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.065);
+
+      subOsc.connect(subGain);
+      subGain.connect(audioCtx.destination);
+
+      subOsc.start(t);
+      subOsc.stop(t + 0.07);
+
+      // 3. Delicate streamer flutter twinkle
+      const flutterPitches = [2093.00, 2637.02, 3135.96]; // C7, E7, G7
+      flutterPitches.forEach((freq, i) => {
+        const spk = audioCtx.createOscillator();
+        const spkG = audioCtx.createGain();
+        const sTime = t + 0.02 + i * 0.018;
+
+        spk.type = "sine";
+        spk.frequency.setValueAtTime(freq, sTime);
+
+        spkG.gain.setValueAtTime(0.0001, sTime);
+        spkG.gain.linearRampToValueAtTime(0.02 * intensityScale, sTime + 0.005);
+        spkG.gain.exponentialRampToValueAtTime(0.0001, sTime + 0.06);
+
+        spk.connect(spkG);
+        spkG.connect(audioCtx.destination);
+
+        spk.start(sTime);
+        spk.stop(sTime + 0.07);
+      });
+    } catch (e) {
+      console.error("Audio Party Popper Error:", e);
+    }
+  };
+
   const playWinSound = playStandardWinSound;
 
   // Mini-win sound on completing all 9 instances of a number (bright, distinct ascending bell chime)
@@ -5217,18 +5299,26 @@ useEffect(() => {
     }
 
     if (isWon) {
-      if (isRecordBroken) {
-        playRecordBreakSound();
-        setShowCelebrationConfetti(true);
-      } else if (challengeMode) {
+      if (challengeMode) {
         const hasFaster = syncedLeaderboard.some(r => r.userId !== userProfile?.id && r.isWon && Number(r.timeSec) > 0 && Number(r.timeSec) < sessionSeconds);
         if (!hasFaster) {
+          // Triumphant 1st Place Victory fanfare
           playFirstPlaceFanfareSound();
           setShowCelebrationConfetti(true);
+        } else if (isRecordBroken) {
+          // Shattered personal record in multiplayer match
+          playRecordBreakSound();
+          setShowCelebrationConfetti(true);
         } else {
+          // Standard completion chime
           playStandardWinSound();
         }
+      } else if (isRecordBroken) {
+        // Solo New Personal Best arpeggio
+        playRecordBreakSound();
+        setShowCelebrationConfetti(true);
       } else {
+        // Standard solo completion chime
         playStandardWinSound();
       }
     }
@@ -6735,6 +6825,17 @@ useEffect(() => {
     playClickSound();
     setIsTimerPaused(true);
 
+    // Guard: Prevent inviting players into an already-completed/solved game session
+    if (boardState?.isGameOver) {
+      if (challengeMode) {
+        setEndGameStep(1);
+        setShowGameOverModal(true);
+      } else {
+        setShowCreateChallengeModal(true);
+      }
+      return;
+    }
+
     // If offline, display the mid-game invite modal with offline state without converting the solo game to multiplayer
     if (!isOnline) {
       setShowMidGameInviteModal(true);
@@ -8131,19 +8232,56 @@ useEffect(() => {
                             <Zap className={`w-4 h-4 sm:w-5 sm:h-5 ${isNumberFirstInputMode ? "fill-current" : ""}`} strokeWidth={2} />
                           </button>
 
-                          {/* 2. Multiplayer Invite */}
-                          <button
-                            type="button"
-                            onClick={handleOpenMidGameMultiplayer}
-                            className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
-                              darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900"
-                            }`}
-                            aria-label="Invite Players to Match"
-                            title="Invite Players"
-                            id="hud-multiplayer-invite-button"
-                          >
-                            <Users className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
-                          </button>
+                          {/* 2. Multiplayer Invite / Solved Board Guard */}
+                          {boardState?.isGameOver ? (
+                            challengeMode ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playClickSound();
+                                  setEndGameStep(1);
+                                  setShowGameOverModal(true);
+                                }}
+                                className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
+                                  darkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-700"
+                                }`}
+                                aria-label="View Match Results & Rematch"
+                                title="View Match Results & Rematch"
+                                id="hud-multiplayer-results-button"
+                              >
+                                <Trophy className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playClickSound();
+                                  setShowCreateChallengeModal(true);
+                                }}
+                                className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
+                                  darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900"
+                                }`}
+                                aria-label="Start Multiplayer Challenge"
+                                title="Start Multiplayer Challenge"
+                                id="hud-multiplayer-invite-button"
+                              >
+                                <Users className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
+                              </button>
+                            )
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleOpenMidGameMultiplayer}
+                              className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
+                                darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900"
+                              }`}
+                              aria-label="Invite Players to Match"
+                              title="Invite Players"
+                              id="hud-multiplayer-invite-button"
+                            >
+                              <Users className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
+                            </button>
+                          )}
 
                           {/* 3. Help / How to Play */}
                           <button
@@ -8612,6 +8750,7 @@ useEffect(() => {
                       if (endGameStep === 2) return;
                       playClickSound();
                       setShowGameOverModal(false);
+                      setShowCelebrationConfetti(false);
                       setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
                       setLockedNum(null);
                       setActiveKeypadNum(null);
@@ -8640,6 +8779,7 @@ useEffect(() => {
                             onClick={() => {
                               playClickSound();
                               setShowGameOverModal(false);
+                              setShowCelebrationConfetti(false);
                               setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
                               setLockedNum(null);
                               setActiveKeypadNum(null);
@@ -8720,8 +8860,8 @@ useEffect(() => {
                                   className={`flex items-center justify-between p-3 rounded-2xl transition-all ${
                                     isPodium1
                                       ? (darkMode 
-                                          ? "bg-gradient-to-r from-amber-950/40 via-yellow-950/20 to-amber-950/40 border-2 border-amber-400/60 shadow-[0_0_24px_rgba(245,158,11,0.18)]" 
-                                          : "bg-gradient-to-r from-amber-50/90 via-yellow-50/70 to-amber-50/90 border-2 border-amber-400 shadow-[0_6px_20px_rgba(245,158,11,0.14)]")
+                                          ? "bg-gradient-to-r from-amber-950/50 via-yellow-950/25 to-amber-950/50 border-2 border-amber-400 ring-2 ring-amber-400/70 shadow-[0_0_28px_rgba(245,158,11,0.22)]" 
+                                          : "bg-gradient-to-r from-amber-50 via-yellow-50/80 to-amber-50 border-2 border-amber-400 ring-2 ring-amber-300/80 shadow-[0_6px_24px_rgba(245,158,11,0.18)]")
                                       : isPodium2
                                       ? (darkMode
                                           ? "bg-slate-800/35 border border-slate-400/40 shadow-sm"
@@ -8744,7 +8884,7 @@ useEffect(() => {
                                       ) : isPending ? (
                                         <Clock className="w-4 h-4 text-amber-500 animate-spin" />
                                       ) : isPodium1 ? (
-                                        <Trophy className="w-5 h-5 text-amber-500 fill-amber-400/30 stroke-[2.5] animate-bounce" />
+                                        <Trophy className="w-5 h-5 text-amber-500 fill-amber-400/40 stroke-[2.5] animate-bounce shrink-0" />
                                       ) : isPodium2 ? (
                                         <Award className="w-4.5 h-4.5 text-slate-400 stroke-[2.5]" />
                                       ) : isPodium3 ? (
@@ -8763,8 +8903,8 @@ useEffect(() => {
                                           {player.name}
                                         </span>
                                         {isPodium1 && (
-                                          <span className="flex items-center gap-1 text-[9px] bg-gradient-to-r from-amber-500/25 to-yellow-400/25 text-amber-600 dark:text-amber-300 border border-amber-400/60 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shadow-xs shrink-0">
-                                            <Crown className="w-3 h-3 text-amber-500 fill-amber-400/40 shrink-0" />
+                                          <span className="flex items-center gap-1 text-[9px] bg-gradient-to-r from-amber-500/30 to-yellow-400/30 text-amber-600 dark:text-amber-200 border border-amber-400/80 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shadow-xs shrink-0">
+                                            <Crown className="w-3 h-3 text-amber-500 fill-amber-400/50 shrink-0" />
                                             <span>WINNER • 1ST</span>
                                           </span>
                                         )}
@@ -9557,6 +9697,7 @@ useEffect(() => {
                     onClick={() => {
                       playClickSound();
                       setShowGameOverModal(false);
+                      setShowCelebrationConfetti(false);
                       setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
                       setLockedNum(null);
                       setActiveKeypadNum(null);
@@ -9572,6 +9713,7 @@ useEffect(() => {
                       onClick={() => {
                         playClickSound();
                         setShowGameOverModal(false);
+                        setShowCelebrationConfetti(false);
                         setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
                         setLockedNum(null);
                         setActiveKeypadNum(null);
@@ -13446,6 +13588,7 @@ useEffect(() => {
       {showCelebrationConfetti && (
         <ConfettiBurst
           darkMode={darkMode}
+          onBurst={(burstIdx) => playPartyPopperSound(burstIdx)}
           onComplete={() => setShowCelebrationConfetti(false)}
         />
       )}
