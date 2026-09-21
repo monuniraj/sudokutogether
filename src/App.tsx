@@ -11,6 +11,7 @@ import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
 import { SudokuBoard } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
 import { ConfettiBurst } from "./components/common/ConfettiBurst";
+import { ApplauseBadge } from "./components/common/ApplauseBadge";
 import { formatMatchTimestamp, formatInviteTimestamp } from "./utils/formatTimestamp";
 import {
   doc,
@@ -2512,6 +2513,52 @@ useEffect(() => {
   const [isNewRecordAchieved, setIsNewRecordAchieved] = useState<boolean>(false);
   const [showCelebrationConfetti, setShowCelebrationConfetti] = useState<boolean>(false);
 
+  // Strict Particle Canvas Lifecycle Guard: immediately unmount & dispose confetti whenever end-game is dismissed, any secondary modal is opened, or screen changes
+  useEffect(() => {
+    if (
+      !showGameOverModal ||
+      currentScreen !== "game" ||
+      showHowToPlayModal ||
+      showResetSettingsModal ||
+      showMidGameInviteModal ||
+      showRematchInviteModal ||
+      showHistoryChallengeModal ||
+      viewingRankingsGame !== null ||
+      showInviteModal ||
+      showMultiplayerForkModal ||
+      showJoinRoomModal ||
+      showCreateChallengeModal ||
+      activeCompliancePage !== null
+    ) {
+      setShowCelebrationConfetti(false);
+    }
+  }, [
+    showGameOverModal,
+    currentScreen,
+    showHowToPlayModal,
+    showResetSettingsModal,
+    showMidGameInviteModal,
+    showRematchInviteModal,
+    showHistoryChallengeModal,
+    viewingRankingsGame,
+    showInviteModal,
+    showMultiplayerForkModal,
+    showJoinRoomModal,
+    showCreateChallengeModal,
+    activeCompliancePage
+  ]);
+
+  // Immediately terminate and dispose confetti if the tab is backgrounded
+  useEffect(() => {
+    const handleVisChange = () => {
+      if (document.hidden) {
+        setShowCelebrationConfetti(false);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisChange);
+    return () => document.removeEventListener("visibilitychange", handleVisChange);
+  }, []);
+
   // Derived bestTimes and current difficulty record
   const bestTimes = personalBestTimes;
   const bestTime = bestTimes[difficulty];
@@ -4178,6 +4225,152 @@ useEffect(() => {
     }
   };
 
+  // Warm clapping and applause sound effect (rhythmic clapping cadence + optional triumphant finish for 1st place)
+  const playApplauseSound = (isFirstPlace: boolean = true) => {
+    if (!soundEffects) return;
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+
+      // Function to generate a single warm hand-clap impulse
+      const playClap = (startTime: number, volume: number = 0.12, centerFreq: number = 1200) => {
+        const bufferSize = Math.floor(audioCtx.sampleRate * 0.045); // 45ms impulse
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 0.009));
+        }
+
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = "bandpass";
+        filter.frequency.setValueAtTime(centerFreq, startTime);
+        filter.Q.setValueAtTime(2.2, startTime);
+
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.0001, startTime);
+        gain.gain.linearRampToValueAtTime(volume, startTime + 0.002);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.045);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        noise.start(startTime);
+        noise.stop(startTime + 0.05);
+      };
+
+      // Rhythmic 3-step pop clapping cadence
+      const clapTimings = [
+        0.00, 0.16, 0.32, 0.48, // Initial rhythmic claps
+        0.62, 0.74, 0.86, 0.98, 1.10, 1.22, 1.36, 1.50, 1.66 // Supportive wave
+      ];
+
+      clapTimings.forEach((t, i) => {
+        const jitter = (Math.random() - 0.5) * 0.02;
+        const freq = 1050 + Math.random() * 350;
+        const vol = i < 4 ? 0.12 : Math.min(0.14, 0.08 + (i * 0.005));
+        playClap(now + t + jitter, vol, freq);
+      });
+
+      // Triumphant chord fanfare overlay for 1st place
+      if (isFirstPlace) {
+        const playTriumphTone = (freq: number, startOffset: number, duration: number, vol: number) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, now + startOffset);
+
+          gain.gain.setValueAtTime(0.0001, now + startOffset);
+          gain.gain.linearRampToValueAtTime(vol, now + startOffset + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + duration);
+
+          osc.start(now + startOffset);
+          osc.stop(now + startOffset + duration);
+        };
+
+        playTriumphTone(523.25, 0.35, 0.6, 0.06); // C5
+        playTriumphTone(659.25, 0.50, 0.7, 0.07); // E5
+        playTriumphTone(783.99, 0.65, 0.9, 0.08); // G5
+        playTriumphTone(1046.50, 0.80, 1.4, 0.09); // High C6 crown
+      } else {
+        // Soft supportive warm major third swell for 2nd/3rd or normal win
+        const playSupportTone = (freq: number, startOffset: number, duration: number, vol: number) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, now + startOffset);
+
+          gain.gain.setValueAtTime(0.0001, now + startOffset);
+          gain.gain.linearRampToValueAtTime(vol, now + startOffset + 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + duration);
+
+          osc.start(now + startOffset);
+          osc.stop(now + startOffset + duration);
+        };
+
+        playSupportTone(523.25, 0.40, 0.8, 0.04); // C5
+        playSupportTone(659.25, 0.60, 1.0, 0.04); // E5
+      }
+    } catch (e) {
+      console.error("Audio Applause Error:", e);
+    }
+  };
+
+  // Defeat / Game Over sound (soft, gentle descending minor tone encouraging retry)
+  const playDefeatSound = () => {
+    if (!soundEffects) return;
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      // Gentle minor descent: G4 -> Eb4 -> C4 -> Bb3
+      const descentNotes = [
+        { freq: 392.00, offset: 0.00, dur: 0.38, vol: 0.07 }, // G4
+        { freq: 311.13, offset: 0.22, dur: 0.42, vol: 0.065 }, // Eb4
+        { freq: 261.63, offset: 0.46, dur: 0.50, vol: 0.06 }, // C4
+        { freq: 233.08, offset: 0.72, dur: 0.85, vol: 0.05 }  // Bb3 soft resting tone
+      ];
+
+      descentNotes.forEach(n => {
+        const osc = audioCtx.createOscillator();
+        const filter = audioCtx.createBiquadFilter();
+        const gain = audioCtx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(n.freq, now + n.offset);
+
+        // Lowpass filter to create a warm, muted, velvety comforting tone
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(560, now + n.offset);
+
+        gain.gain.setValueAtTime(0.0001, now + n.offset);
+        gain.gain.linearRampToValueAtTime(n.vol, now + n.offset + 0.025); // Soft pillowy attack
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + n.offset + n.dur);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start(now + n.offset);
+        osc.stop(now + n.offset + n.dur);
+      });
+    } catch (e) {
+      console.error("Audio Defeat Sound Error:", e);
+    }
+  };
+
   const playWinSound = playStandardWinSound;
 
   // Mini-win sound on completing all 9 instances of a number (bright, distinct ascending bell chime)
@@ -5363,26 +5556,28 @@ useEffect(() => {
     if (isWon) {
       if (challengeMode) {
         const hasFaster = syncedLeaderboard.some(r => r.userId !== userProfile?.id && r.isWon && Number(r.timeSec) > 0 && Number(r.timeSec) < sessionSeconds);
-        if (!hasFaster) {
-          // Triumphant 1st Place Victory fanfare
-          playFirstPlaceFanfareSound();
-          setShowCelebrationConfetti(true);
-        } else if (isRecordBroken) {
-          // Shattered personal record in multiplayer match
+        if (isRecordBroken) {
+          // STRICT RULE: Particle cannons strictly reserved for Personal Best
           playRecordBreakSound();
           setShowCelebrationConfetti(true);
+        } else if (!hasFaster) {
+          // 1st Place Podium Win: Clapping & Triumphant finish
+          playApplauseSound(true);
         } else {
-          // Standard completion chime
-          playStandardWinSound();
+          // 2nd / 3rd Podium or standard win: Warm supportive applause
+          playApplauseSound(false);
         }
       } else if (isRecordBroken) {
-        // Solo New Personal Best arpeggio
+        // Solo New Personal Best: Particle cannons + Sparkle arpeggio
         playRecordBreakSound();
         setShowCelebrationConfetti(true);
       } else {
-        // Standard solo completion chime
-        playStandardWinSound();
+        // Standard solo win: Warm clapping & supportive applause
+        playApplauseSound(false);
       }
+    } else {
+      // Defeat / 3 Mistakes Exceeded: Soft, gentle descending minor tone
+      playDefeatSound();
     }
 
     // Check if duplicate record exists or update with participants
@@ -8996,19 +9191,35 @@ useEffect(() => {
                                           {player.name}
                                         </span>
                                         {isPodium1 && (
-                                          <span className="flex items-center gap-1 text-[9px] bg-gradient-to-r from-amber-500/30 to-yellow-400/30 text-amber-600 dark:text-amber-200 border border-amber-400/80 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shadow-xs shrink-0">
-                                            <Crown className="w-3 h-3 text-amber-500 fill-amber-400/50 shrink-0" />
-                                            <span>WINNER • 1ST</span>
-                                          </span>
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            <span className="flex items-center gap-1 text-[9px] bg-gradient-to-r from-amber-500/30 to-yellow-400/30 text-amber-600 dark:text-amber-200 border border-amber-400/80 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shadow-xs shrink-0">
+                                              <Crown className="w-3 h-3 text-amber-500 fill-amber-400/50 shrink-0" />
+                                              <span>WINNER • 1ST</span>
+                                            </span>
+                                            <ApplauseBadge rank={1} darkMode={darkMode} size="sm" />
+                                          </div>
                                         )}
                                         {isPodium2 && (
-                                          <span className="text-[9px] bg-slate-400/15 text-slate-600 dark:text-slate-300 border border-slate-400/40 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shrink-0">
-                                            SILVER • 2ND
-                                          </span>
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            <span className="text-[9px] bg-slate-400/15 text-slate-600 dark:text-slate-300 border border-slate-400/40 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shrink-0">
+                                              SILVER • 2ND
+                                            </span>
+                                            <ApplauseBadge rank={2} darkMode={darkMode} size="sm" />
+                                          </div>
                                         )}
                                         {isPodium3 && (
-                                          <span className="text-[9px] bg-amber-700/15 text-amber-700 dark:text-amber-400 border border-amber-700/40 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shrink-0">
-                                            BRONZE • 3RD
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            <span className="text-[9px] bg-amber-700/15 text-amber-700 dark:text-amber-400 border border-amber-700/40 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shrink-0">
+                                              BRONZE • 3RD
+                                            </span>
+                                            <ApplauseBadge rank={3} darkMode={darkMode} size="sm" />
+                                          </div>
+                                        )}
+                                        {player.failed && (
+                                          <span className={`text-[8.5px] font-sans font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 ${
+                                            darkMode ? "bg-rose-950/40 text-rose-300 border-rose-800/40" : "bg-rose-50 text-rose-700 border-rose-200"
+                                          }`}>
+                                            Better Luck Next Time
                                           </span>
                                         )}
                                         {player.isMe && (
@@ -9816,61 +10027,101 @@ useEffect(() => {
                     >
                       <X className="w-4 h-4" strokeWidth={2.5} />
                     </button>
-                    <div className="flex flex-col items-center gap-1">
-                      <span className={`text-[10px] font-sans font-bold uppercase tracking-widest ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
-                        {difficulty} Difficulty
-                      </span>
-                      <h3 className={`text-3xl font-sans font-medium tracking-tight mt-2 ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
-                        {(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) ? "Try Again" : "Solved!"}
-                      </h3>
-                      {isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) && (
-                        <motion.div 
-                          initial={{ scale: 0, opacity: 0 }}
-                          animate={{ scale: [0, 1.15, 1], opacity: 1 }}
-                          transition={{ type: "spring", stiffness: 320, damping: 14 }}
-                          className="relative overflow-hidden flex items-center justify-center gap-1.5 py-1.5 px-3.5 mt-1.5 rounded-full bg-gradient-to-r from-amber-500/25 via-yellow-400/30 to-amber-500/25 border border-amber-400/70 text-amber-600 dark:text-amber-300 font-sans font-black text-xs uppercase tracking-wider shadow-[0_4px_16px_rgba(245,158,11,0.25)] select-none"
-                        >
-                          <Trophy className="w-4 h-4 stroke-[2.5] text-amber-500 animate-bounce shrink-0" />
-                          <span className="tracking-wide">NEW PERSONAL BEST!</span>
-                          <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
-                        </motion.div>
-                      )}
-                      <p className={`text-sm font-sans mt-1 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
-                        {(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) 
-                          ? `You accumulated ${boardState.maxMistakesLimit} mistakes.`
-                          : `Great job completing the board.`}
-                      </p>
-                    </div>
+                    {(() => {
+                      const isFailed = Boolean(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit);
+                      return (
+                        <>
+                          <div className="flex flex-col items-center gap-1">
+                            <span className={`text-[10px] font-sans font-bold uppercase tracking-widest ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
+                              {difficulty} Difficulty
+                            </span>
+                            {isFailed ? (
+                              <motion.h3 
+                                animate={{ x: [0, -5, 5, -4, 4, -2, 2, 0] }}
+                                transition={{ duration: 0.5, ease: "easeInOut" }}
+                                className={`text-3xl font-sans font-black tracking-tight mt-2 ${darkMode ? "text-rose-200" : "text-stone-850"}`}
+                              >
+                                Game Over
+                              </motion.h3>
+                            ) : (
+                              <h3 className={`text-3xl font-sans font-medium tracking-tight mt-2 ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
+                                Solved!
+                              </h3>
+                            )}
 
-                    {/* Stats */}
-                    <div className="grid grid-cols-3 gap-2 py-3 px-3 rounded-2xl bg-stone-500/5 dark:bg-stone-500/10 text-center items-center">
-                       <div className="flex flex-col items-center">
-                         <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>Time</span>
-                         <span className={`text-base sm:text-lg font-mono font-bold ${darkMode ? "text-[#E5E7EB]" : "text-[#4B5563]"}`}>{formatTimer(sessionSeconds)}</span>
-                       </div>
-                       <div className="flex flex-col items-center border-x border-stone-200 dark:border-zinc-700">
-                         <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>Errors</span>
-                         <span className={`text-base sm:text-lg font-mono font-bold ${boardState.currentMistakesCount > 0 ? "text-rose-500" : (darkMode ? "text-[#E5E7EB]" : "text-[#4B5563]")}`}>
-                           {boardState.currentMistakesCount}/{boardState.maxMistakesLimit}
-                         </span>
-                       </div>
-                       <div className={`flex flex-col items-center transition-all ${
-                         isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit)
-                           ? "p-1.5 rounded-xl ring-2 ring-amber-400/80 bg-amber-400/10 shadow-[0_0_16px_rgba(245,158,11,0.3)] animate-pulse"
-                           : ""
-                       }`}>
-                         <span className={`text-[10px] uppercase font-bold tracking-widest ${
-                           isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit)
-                             ? "text-amber-500 font-black"
-                             : (darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]")
-                         }`}>
-                           Best
-                         </span>
-                         <span className={`text-base sm:text-lg font-mono font-bold text-amber-500`}>
-                           {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
-                         </span>
-                       </div>
-                    </div>
+                            {isFailed ? (
+                              <motion.div
+                                initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                transition={{ duration: 0.35, delay: 0.15 }}
+                                className={`inline-flex items-center gap-1.5 py-1 px-3 mt-1.5 rounded-full font-sans font-bold text-xs uppercase tracking-wider ${
+                                  darkMode 
+                                    ? "bg-rose-950/40 text-rose-300 border border-rose-800/40" 
+                                    : "bg-rose-50 text-rose-700 border border-rose-200"
+                                }`}
+                              >
+                                <span>Better Luck Next Time</span>
+                              </motion.div>
+                            ) : isNewRecordAchieved ? (
+                              <motion.div 
+                                initial={{ scale: 0, opacity: 0 }}
+                                animate={{ scale: [0, 1.15, 1], opacity: 1 }}
+                                transition={{ type: "spring", stiffness: 320, damping: 14 }}
+                                className="relative overflow-hidden flex items-center justify-center gap-1.5 py-1.5 px-3.5 mt-1.5 rounded-full bg-gradient-to-r from-amber-500/25 via-yellow-400/30 to-amber-500/25 border border-amber-400/70 text-amber-600 dark:text-amber-300 font-sans font-black text-xs uppercase tracking-wider shadow-[0_4px_16px_rgba(245,158,11,0.25)] select-none"
+                              >
+                                <Trophy className="w-4 h-4 stroke-[2.5] text-amber-500 animate-bounce shrink-0" />
+                                <span className="tracking-wide">NEW PERSONAL BEST!</span>
+                                <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
+                              </motion.div>
+                            ) : (
+                              <div className="mt-1.5">
+                                <ApplauseBadge rank="win" darkMode={darkMode} size="sm" />
+                              </div>
+                            )}
+
+                            <p className={`text-sm font-sans mt-1 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
+                              {isFailed 
+                                ? `You reached ${boardState.maxMistakesLimit} mistakes.`
+                                : `Great job completing the board.`}
+                            </p>
+                          </div>
+
+                          {/* Stats */}
+                          <div className="grid grid-cols-3 gap-2 py-3 px-3 rounded-2xl bg-stone-500/5 dark:bg-stone-500/10 text-center items-center">
+                            <div className="flex flex-col items-center">
+                              <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>Time</span>
+                              <span className={`text-base sm:text-lg font-mono font-bold ${darkMode ? "text-[#E5E7EB]" : "text-[#4B5563]"}`}>{formatTimer(sessionSeconds)}</span>
+                            </div>
+                            <div className={`flex flex-col items-center border-x border-stone-200 dark:border-zinc-700 transition-all ${
+                              isFailed
+                                ? "p-1.5 rounded-xl bg-rose-500/10 dark:bg-rose-950/30 ring-2 ring-rose-400/60 shadow-[0_0_14px_rgba(244,63,94,0.18)] animate-pulse"
+                                : ""
+                            }`}>
+                              <span className={`text-[10px] uppercase font-bold tracking-widest ${isFailed ? "text-rose-500 font-black" : (darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]")}`}>Errors</span>
+                              <span className={`text-base sm:text-lg font-mono font-bold text-rose-500`}>
+                                {boardState.currentMistakesCount}/{boardState.maxMistakesLimit}
+                              </span>
+                            </div>
+                            <div className={`flex flex-col items-center transition-all ${
+                              isNewRecordAchieved && !isFailed
+                                ? "p-1.5 rounded-xl ring-2 ring-amber-400/80 bg-amber-400/10 shadow-[0_0_16px_rgba(245,158,11,0.3)] animate-pulse"
+                                : ""
+                            }`}>
+                              <span className={`text-[10px] uppercase font-bold tracking-widest ${
+                                isNewRecordAchieved && !isFailed
+                                  ? "text-amber-500 font-black"
+                                  : (darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]")
+                              }`}>
+                                Best
+                              </span>
+                              <span className={`text-base sm:text-lg font-mono font-bold text-amber-500`}>
+                                {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
+                              </span>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
 
                     {/* Invite Friends / Play Together Action Button */}
                     <button

@@ -33,8 +33,9 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     if (!ctx) return;
 
     let animFrameId: number;
+    let isDisposed = false;
     const startTime = performance.now();
-    const totalDuration = 2400; // 2.4 seconds total celebratory sequence
+    const totalDuration = 3500; // Strict 3.5 seconds maximum sequence duration
 
     // Size canvas to viewport
     const width = (canvas.width = window.innerWidth);
@@ -66,52 +67,42 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     const colors = darkMode ? darkColors : lightColors;
     const particles: Particle[] = [];
 
-    // Burst timestamps relative to startTime (in ms)
+    // Exactly 5 crisp burst waves over 3.5 seconds total
     const burstSchedule = [
-      { delay: 0, count: 50, type: "dual" },         // Burst 1: Dual cannons from left & right
-      { delay: 600, count: 40, type: "high-cross" }, // Burst 2: High angled cross-burst
-      { delay: 1200, count: 35, type: "center" }     // Burst 3: Celebratory center flare
+      { delay: 0, count: 42, waveIndex: 0 },
+      { delay: 650, count: 38, waveIndex: 1 },
+      { delay: 1300, count: 38, waveIndex: 2 },
+      { delay: 1950, count: 34, waveIndex: 3 },
+      { delay: 2600, count: 34, waveIndex: 4 }
     ];
 
     const firedBursts = new Set<number>();
 
-    const spawnBurst = (type: string, count: number, currentTime: number) => {
-      for (let i = 0; i < count; i++) {
-        let originX: number;
-        let originY: number;
-        let angle: number;
-        let speed: number;
+    // Spawn dual corner cannons strictly positioned at bottom-left and bottom-right of the modal card
+    const spawnCornerCannons = (count: number, currentTime: number) => {
+      const cardHalfWidth = Math.min(width * 0.44, 250);
+      const leftOriginX = Math.max(16, width * 0.5 - cardHalfWidth - 16);
+      const rightOriginX = Math.min(width - 16, width * 0.5 + cardHalfWidth + 16);
+      const cannonY = Math.min(height * 0.88, height * 0.5 + 230);
 
-        if (type === "dual") {
-          const fromLeft = i % 2 === 0;
-          originX = fromLeft ? width * 0.18 : width * 0.82;
-          originY = height * 0.48;
-          angle = fromLeft
-            ? -Math.PI / 3 + (Math.random() - 0.5) * 0.85
-            : (-2 * Math.PI) / 3 + (Math.random() - 0.5) * 0.85;
-          speed = 8 + Math.random() * 9;
-        } else if (type === "high-cross") {
-          const fromLeft = i % 2 === 0;
-          originX = fromLeft ? width * 0.28 : width * 0.72;
-          originY = height * 0.38;
-          angle = fromLeft
-            ? -Math.PI / 3.5 + (Math.random() - 0.5) * 0.75
-            : (-2.2 * Math.PI) / 3.5 + (Math.random() - 0.5) * 0.75;
-          speed = 7 + Math.random() * 8;
-        } else {
-          // Center umbrella burst
-          originX = width * 0.50;
-          originY = height * 0.35;
-          angle = Math.random() * Math.PI * 2;
-          speed = 4 + Math.random() * 8;
-        }
+      for (let i = 0; i < count; i++) {
+        const fromLeft = i % 2 === 0;
+        const originX = fromLeft ? leftOriginX : rightOriginX;
+        const originY = cannonY;
+
+        // Angle: Upward and inward so particles arc across and frame the modal card
+        // Left cannon shoots up-right (~-63°); Right cannon shoots up-left (~-117°)
+        const baseAngle = fromLeft ? -Math.PI * 0.36 : -Math.PI * 0.64;
+        const angleSpread = (Math.random() - 0.5) * 0.38;
+        const angle = baseAngle + angleSpread;
+        const speed = 10.5 + Math.random() * 7.5;
 
         const shapeRand = Math.random();
         particles.push({
           x: originX,
           y: originY,
           vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - (type === "center" ? 1.5 : 3),
+          vy: Math.sin(angle) * speed - 2.5,
           size: 5 + Math.random() * 6.5,
           color: colors[Math.floor(Math.random() * colors.length)],
           rotation: Math.random() * 360,
@@ -120,28 +111,56 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
           tiltAngle: Math.random() * Math.PI,
           tiltAngleInc: (Math.random() * 0.08) + 0.04,
           bornAt: currentTime,
-          lifespan: 1400 + Math.random() * 400
+          lifespan: 1300 + Math.random() * 450
         });
       }
     };
 
+    const dispose = () => {
+      if (isDisposed) return;
+      isDisposed = true;
+      cancelAnimationFrame(animFrameId);
+      particles.length = 0;
+      if (ctx) {
+        ctx.clearRect(0, 0, width, height);
+      }
+      if (onComplete) {
+        onComplete();
+      }
+    };
+
+    // Strict 3.5-second maximum lifespan timer safety valve
+    const cleanupTimer = setTimeout(() => {
+      dispose();
+    }, 3500);
+
+    // Cancel animation immediately if tab is backgrounded
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        dispose();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     const render = (now: number) => {
+      if (isDisposed) return;
+
       const elapsed = now - startTime;
       const progress = Math.min(1, elapsed / totalDuration);
 
-      // Check for scheduled bursts
-      burstSchedule.forEach((burst, idx) => {
-        if (elapsed >= burst.delay && !firedBursts.has(idx)) {
-          firedBursts.add(idx);
-          spawnBurst(burst.type, burst.count, now);
+      // Check for scheduled dual-corner bursts
+      burstSchedule.forEach((burst) => {
+        if (elapsed >= burst.delay && !firedBursts.has(burst.waveIndex)) {
+          firedBursts.add(burst.waveIndex);
+          spawnCornerCannons(burst.count, now);
           if (onBurst) {
-            try { onBurst(idx); } catch (e) {}
+            try { onBurst(burst.waveIndex); } catch (e) {}
           }
         }
       });
 
       // Fade out overall sequence smoothly over the last 600ms
-      const globalAlpha = progress > 0.75 ? Math.max(0, 1 - (progress - 0.75) / 0.25) : 1;
+      const globalAlpha = progress > 0.78 ? Math.max(0, 1 - (progress - 0.78) / 0.22) : 1;
 
       ctx.clearRect(0, 0, width, height);
 
@@ -162,9 +181,9 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
         // Physics
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.28; // Gravity
-        p.vx *= 0.985; // Air drag
-        p.vy *= 0.985;
+        p.vy += 0.26; // Gentle gravity
+        p.vx *= 0.984; // Air drag
+        p.vy *= 0.984;
         p.rotation += p.vRotation;
         p.tiltAngle += p.tiltAngleInc;
 
@@ -201,10 +220,7 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
       if (progress < 1) {
         animFrameId = requestAnimationFrame(render);
       } else {
-        ctx.clearRect(0, 0, width, height);
-        if (onComplete) {
-          onComplete();
-        }
+        dispose();
       }
     };
 
@@ -212,6 +228,9 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
 
     // Strict cleanup on unmount: immediately cancel animation and wipe canvas
     return () => {
+      clearTimeout(cleanupTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      isDisposed = true;
       cancelAnimationFrame(animFrameId);
       if (ctx) {
         ctx.clearRect(0, 0, width, height);
