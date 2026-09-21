@@ -222,11 +222,11 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           )}
         </AnimatePresence>
 
-        {/* Offline warning banner — mirrors in-game multiplayer panel */}
+        {/* Offline warning banner */}
         {!isOnline && (
           <div className="w-full py-2.5 px-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-2 select-none">
             <AlertTriangle className="w-4 h-4 stroke-[2.5] text-amber-500 shrink-0" />
-            <span>You are offline. Invite actions are disabled. Start Game will launch in Solo mode.</span>
+            <span>You are offline. Please connect to the internet to play multiplayer.</span>
           </div>
         )}
       </div>
@@ -737,19 +737,23 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           </button>
         </div>
 
-        {/* Full-width primary START GAME button — online: multiplayer; offline: routes to solo via App.tsx */}
+        {/* Full-width primary START GAME button */}
         <button
           onClick={() => {
+            if (!isOnline) return;
             playClickSound();
             onStartGame();
           }}
-          className={`w-full py-3.5 sm:py-4 px-4 text-xs sm:text-sm font-sans font-black uppercase tracking-wider rounded-2xl border-none transition-all duration-150 cursor-pointer text-center hover:scale-[1.01] active:scale-98 shadow-md flex items-center justify-center gap-2 ${
-            darkMode
-              ? "bg-[#022c22] hover:bg-[#064e3b] text-[#d1fae5] shadow-[0_8px_20px_rgba(0,0,0,0.5)]"
-              : "bg-[#D1FAE5] hover:bg-[#A7F3D0] active:bg-[#6EE7B7] text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.12)]"
+          disabled={!isOnline}
+          className={`w-full py-3.5 sm:py-4 px-4 text-xs sm:text-sm font-sans font-black uppercase tracking-wider rounded-2xl border-none transition-all duration-150 text-center shadow-md flex items-center justify-center gap-2 ${
+            !isOnline
+              ? "opacity-50 cursor-not-allowed bg-stone-300 dark:bg-zinc-800 text-stone-500 dark:text-stone-400"
+              : darkMode
+              ? "cursor-pointer hover:scale-[1.01] active:scale-98 bg-[#022c22] hover:bg-[#064e3b] text-[#d1fae5] shadow-[0_8px_20px_rgba(0,0,0,0.5)]"
+              : "cursor-pointer hover:scale-[1.01] active:scale-98 bg-[#D1FAE5] hover:bg-[#A7F3D0] active:bg-[#6EE7B7] text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.12)]"
           }`}
         >
-          <span>{isOnline ? "START GAME" : "START SOLO"}</span>
+          <span>{isOnline ? "START GAME" : "OFFLINE"}</span>
         </button>
       </div>
     </motion.div>

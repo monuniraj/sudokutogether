@@ -1855,6 +1855,15 @@ useEffect(() => {
   const [enteredInvitePassword, setEnteredInvitePassword] = useState<string>("");
   const [invitePasswordError, setInvitePasswordError] = useState<string | null>(null);
 
+  // Dynamic Recovery: If connection drops while inside room creation or join dialogs, safely return to the offline notice
+  useEffect(() => {
+    if (!isOnline && (showCreateChallengeModal || showJoinRoomModal)) {
+      setShowCreateChallengeModal(false);
+      setShowJoinRoomModal(false);
+      setShowMultiplayerForkModal(true);
+    }
+  }, [isOnline, showCreateChallengeModal, showJoinRoomModal]);
+
   // Rematch state variables for Issue 6
   const [showRematchInviteModal, setShowRematchInviteModal] = useState<boolean>(false);
   const [rematchParticipants, setRematchParticipants] = useState<Array<{ id: string; name: string; isReal: boolean }>>([]);
@@ -4926,6 +4935,10 @@ useEffect(() => {
   };
 
   const openCreateRoomModal = (initialDifficulty: Difficulty = "EASY", initialTimer: boolean = true) => {
+    if (!isOnline) {
+      setShowMultiplayerForkModal(true);
+      return;
+    }
     const canonicalSeed = Math.floor(100000 + Math.random() * 900000);
     const roomCode = canonicalSeed.toString();
 
@@ -6890,14 +6903,18 @@ useEffect(() => {
         setEndGameStep(1);
         setShowGameOverModal(true);
       } else {
+        if (!isOnline) {
+          setShowMultiplayerForkModal(true);
+          return;
+        }
         setShowCreateChallengeModal(true);
       }
       return;
     }
 
-    // If offline, display the mid-game invite modal with offline state without converting the solo game to multiplayer
+    // Guard: If offline, show the dedicated visual WifiOff notice instead of opening room setup or invite pipeline
     if (!isOnline) {
-      setShowMidGameInviteModal(true);
+      setShowMultiplayerForkModal(true);
       return;
     }
 
@@ -8328,6 +8345,10 @@ useEffect(() => {
                                 type="button"
                                 onClick={() => {
                                   playClickSound();
+                                  if (!isOnline) {
+                                    setShowMultiplayerForkModal(true);
+                                    return;
+                                  }
                                   setShowCreateChallengeModal(true);
                                 }}
                                 className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
@@ -11175,6 +11196,9 @@ useEffect(() => {
                 if (showJoinRoomModal || showCreateChallengeModal) return;
                 playClickSound();
                 setShowMultiplayerForkModal(false);
+                if (currentScreen === "game" && !boardState?.isGameOver) {
+                  setIsTimerPaused(false);
+                }
               }} 
             />
 
@@ -11182,7 +11206,12 @@ useEffect(() => {
               {/* 1. ROUTE SELECTION (LOBBY) */}
               <MultiplayerForkModal
                 isOpen={showMultiplayerForkModal}
-                onClose={() => setShowMultiplayerForkModal(false)}
+                onClose={() => {
+                  setShowMultiplayerForkModal(false);
+                  if (currentScreen === "game" && !boardState?.isGameOver) {
+                    setIsTimerPaused(false);
+                  }
+                }}
                 onCreateRoom={() => openCreateRoomModal()}
                 onOpenJoinRoom={() => {
                   setShowMultiplayerForkModal(false);
