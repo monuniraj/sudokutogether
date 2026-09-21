@@ -4004,7 +4004,7 @@ useEffect(() => {
     }
   };
 
-  // Play an immediate, distinct error/alert audio tone (clean negative beep)
+  // Play an immediate, distinct error/alert audio tone (clean negative beep with softened harmonics)
   const playMistakeSound = () => {
     if (!soundEffects) return; // settings guard cond
     try {
@@ -4012,16 +4012,22 @@ useEffect(() => {
       if (!audioCtx) return;
 
       const osc = audioCtx.createOscillator();
+      const filter = audioCtx.createBiquadFilter();
       const gain = audioCtx.createGain();
 
-      osc.connect(gain);
+      // Soften harsh high-frequency harmonics of the sawtooth wave with a gentle lowpass filter
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(1600, audioCtx.currentTime);
+
+      osc.connect(filter);
+      filter.connect(gain);
       gain.connect(audioCtx.destination);
 
       osc.type = "sawtooth";
       osc.frequency.setValueAtTime(220, audioCtx.currentTime); // A3
       osc.frequency.exponentialRampToValueAtTime(140, audioCtx.currentTime + 0.18);
 
-      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.095, audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
 
       osc.start();
@@ -4047,7 +4053,7 @@ useEffect(() => {
           gain.connect(audioCtx.destination);
           osc.type = "sine";
           osc.frequency.setValueAtTime(freq, start);
-          gain.gain.setValueAtTime(0.08, start);
+          gain.gain.setValueAtTime(0.11, start);
           gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
           osc.start(start);
           osc.stop(start + duration);
@@ -4071,7 +4077,7 @@ useEffect(() => {
       const audioCtx = getAudioCtx();
       if (!audioCtx) return;
 
-      const playNote = (freq: number, start: number, duration: number, type: OscillatorType = "sine", peakGain: number = 0.09) => {
+      const playNote = (freq: number, start: number, duration: number, type: OscillatorType = "sine", peakGain: number = 0.13) => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.connect(gain);
@@ -4089,13 +4095,13 @@ useEffect(() => {
       };
 
       const now = audioCtx.currentTime;
-      playNote(261.63, now, 0.35, "triangle", 0.08); // C4
-      playNote(329.63, now + 0.10, 0.35, "triangle", 0.08); // E4
-      playNote(392.00, now + 0.20, 0.40, "sine", 0.09); // G4
-      playNote(523.25, now + 0.30, 0.50, "sine", 0.10); // C5
-      playNote(659.25, now + 0.42, 0.65, "sine", 0.09); // E5
-      playNote(783.99, now + 0.54, 1.10, "sine", 0.09); // G5
-      playNote(1046.50, now + 0.54, 1.10, "sine", 0.06); // C6
+      playNote(261.63, now, 0.35, "triangle", 0.12); // C4
+      playNote(329.63, now + 0.10, 0.35, "triangle", 0.12); // E4
+      playNote(392.00, now + 0.20, 0.40, "sine", 0.13); // G4
+      playNote(523.25, now + 0.30, 0.50, "sine", 0.14); // C5
+      playNote(659.25, now + 0.42, 0.65, "sine", 0.14); // E5
+      playNote(783.99, now + 0.54, 1.10, "sine", 0.14); // G5
+      playNote(1046.50, now + 0.54, 1.10, "sine", 0.10); // C6
     } catch (e) {
       console.error("Audio Standard Win Error:", e);
     }
@@ -4108,7 +4114,7 @@ useEffect(() => {
       const audioCtx = getAudioCtx();
       if (!audioCtx) return;
 
-      const playTone = (freq: number, start: number, duration: number, type: OscillatorType = "triangle", vol: number = 0.10) => {
+      const playTone = (freq: number, start: number, duration: number, type: OscillatorType = "triangle", vol: number = 0.14) => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.connect(gain);
@@ -4127,19 +4133,19 @@ useEffect(() => {
 
       const now = audioCtx.currentTime;
       // Opening fanfare motif: C4 -> E4 -> G4 -> C5
-      playTone(261.63, now, 0.16, "triangle", 0.10); // C4
-      playTone(329.63, now + 0.12, 0.16, "triangle", 0.10); // E4
-      playTone(392.00, now + 0.24, 0.18, "triangle", 0.11); // G4
-      playTone(523.25, now + 0.36, 0.28, "triangle", 0.12); // C5
+      playTone(261.63, now, 0.16, "triangle", 0.13); // C4
+      playTone(329.63, now + 0.12, 0.16, "triangle", 0.13); // E4
+      playTone(392.00, now + 0.24, 0.18, "triangle", 0.14); // G4
+      playTone(523.25, now + 0.36, 0.28, "triangle", 0.15); // C5
 
       // Triumphant chord burst at 0.50s (C4 + G4 + C5 + E5 + G5 + C6)
       const chordStart = now + 0.50;
-      playTone(261.63, chordStart, 1.4, "triangle", 0.08); // C4 foundation
-      playTone(392.00, chordStart, 1.4, "triangle", 0.09); // G4
-      playTone(523.25, chordStart, 1.5, "sine", 0.11); // C5
-      playTone(659.25, chordStart, 1.5, "sine", 0.10); // E5
-      playTone(783.99, chordStart, 1.6, "sine", 0.10); // G5
-      playTone(1046.50, chordStart, 1.8, "sine", 0.08); // C6 crown note
+      playTone(261.63, chordStart, 1.4, "triangle", 0.11); // C4 foundation
+      playTone(392.00, chordStart, 1.4, "triangle", 0.12); // G4
+      playTone(523.25, chordStart, 1.5, "sine", 0.14); // C5
+      playTone(659.25, chordStart, 1.5, "sine", 0.13); // E5
+      playTone(783.99, chordStart, 1.6, "sine", 0.13); // G5
+      playTone(1046.50, chordStart, 1.8, "sine", 0.11); // C6 crown note
     } catch (e) {
       console.error("Audio First Place Fanfare Error:", e);
     }
@@ -4152,7 +4158,7 @@ useEffect(() => {
       const audioCtx = getAudioCtx();
       if (!audioCtx) return;
 
-      const playSparkle = (freq: number, start: number, duration: number, vol: number = 0.08) => {
+      const playSparkle = (freq: number, start: number, duration: number, vol: number = 0.11) => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.connect(gain);
@@ -4171,17 +4177,17 @@ useEffect(() => {
 
       const now = audioCtx.currentTime;
       // Rapid ascending shimmer arpeggio
-      playSparkle(523.25, now, 0.20, 0.07); // C5
-      playSparkle(659.25, now + 0.07, 0.20, 0.08); // E5
-      playSparkle(783.99, now + 0.14, 0.22, 0.09); // G5
-      playSparkle(987.77, now + 0.21, 0.24, 0.09); // B5
-      playSparkle(1046.50, now + 0.28, 0.35, 0.11); // C6
-      playSparkle(1318.51, now + 0.36, 0.40, 0.10); // E6
-      playSparkle(1567.98, now + 0.44, 0.50, 0.09); // G6
-      playSparkle(2093.00, now + 0.52, 1.20, 0.08); // High sparkle C7
+      playSparkle(523.25, now, 0.20, 0.10); // C5
+      playSparkle(659.25, now + 0.07, 0.20, 0.11); // E5
+      playSparkle(783.99, now + 0.14, 0.22, 0.12); // G5
+      playSparkle(987.77, now + 0.21, 0.24, 0.12); // B5
+      playSparkle(1046.50, now + 0.28, 0.35, 0.14); // C6
+      playSparkle(1318.51, now + 0.36, 0.40, 0.13); // E6
+      playSparkle(1567.98, now + 0.44, 0.50, 0.12); // G6
+      playSparkle(2093.00, now + 0.52, 1.20, 0.11); // High sparkle C7
       // Harmonic octave overtones on the finale
-      playSparkle(1046.50, now + 0.52, 1.20, 0.09); // C6 swell
-      playSparkle(2637.02, now + 0.55, 0.80, 0.04); // E7 delicate twinkle
+      playSparkle(1046.50, now + 0.52, 1.20, 0.12); // C6 swell
+      playSparkle(2637.02, now + 0.55, 0.80, 0.06); // E7 delicate twinkle
     } catch (e) {
       console.error("Audio Record Break Error:", e);
     }
@@ -4210,7 +4216,7 @@ useEffect(() => {
         const now = ctx.currentTime;
 
         // Function to generate a single warm acoustic hand-clap impulse
-        const playClap = (startTime: number, volume: number = 0.12, centerFreq: number = 1200) => {
+        const playClap = (startTime: number, volume: number = 0.13, centerFreq: number = 1200) => {
           const bufferSize = Math.floor(ctx.sampleRate * 0.045); // 45ms impulse
           const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
           const data = buffer.getChannelData(0);
@@ -4244,7 +4250,7 @@ useEffect(() => {
           const championClapTimings = [0.35, 0.65, 0.95, 1.25, 1.55];
           championClapTimings.forEach((t, i) => {
             const freq = 1100 + i * 40;
-            const vol = 0.12 + i * 0.015;
+            const vol = 0.13 + i * 0.015;
             playClap(now + t, vol, freq);
           });
 
@@ -4266,17 +4272,17 @@ useEffect(() => {
             osc.stop(now + startOffset + duration);
           };
 
-          playTriumphTone(523.25, 0.35, 0.6, 0.06); // C5
-          playTriumphTone(659.25, 0.65, 0.7, 0.07); // E5
-          playTriumphTone(783.99, 0.95, 0.9, 0.08); // G5
-          playTriumphTone(1046.50, 1.25, 1.2, 0.10); // C6 crown
+          playTriumphTone(523.25, 0.35, 0.6, 0.10); // C5
+          playTriumphTone(659.25, 0.65, 0.7, 0.11); // E5
+          playTriumphTone(783.99, 0.95, 0.9, 0.12); // G5
+          playTriumphTone(1046.50, 1.25, 1.2, 0.14); // C6 crown
         } else {
           // SUPPORTIVE (2nd / 3rd Place & Standard Solo Completion):
           // 3 claps synchronized with vector hand impacts (0.40s, 0.80s, 1.20s)
           const supportiveClapTimings = [0.40, 0.80, 1.20];
           supportiveClapTimings.forEach((t, i) => {
             const freq = 1000 + i * 50;
-            const vol = 0.11 + i * 0.015;
+            const vol = 0.12 + i * 0.015;
             playClap(now + t, vol, freq);
           });
 
@@ -4298,9 +4304,9 @@ useEffect(() => {
             osc.stop(now + startOffset + duration);
           };
 
-          playSupportTone(523.25, 0.40, 0.7, 0.05); // C5
-          playSupportTone(659.25, 0.80, 0.8, 0.06); // E5
-          playSupportTone(783.99, 1.20, 1.0, 0.07); // G5
+          playSupportTone(523.25, 0.40, 0.7, 0.09); // C5
+          playSupportTone(659.25, 0.80, 0.8, 0.10); // E5
+          playSupportTone(783.99, 1.20, 1.0, 0.11); // G5
         }
       };
 
@@ -4326,10 +4332,10 @@ useEffect(() => {
       const now = audioCtx.currentTime;
       // Gentle minor descent: G4 -> Eb4 -> C4 -> Bb3
       const descentNotes = [
-        { freq: 392.00, offset: 0.00, dur: 0.38, vol: 0.07 }, // G4
-        { freq: 311.13, offset: 0.22, dur: 0.42, vol: 0.065 }, // Eb4
-        { freq: 261.63, offset: 0.46, dur: 0.50, vol: 0.06 }, // C4
-        { freq: 233.08, offset: 0.72, dur: 0.85, vol: 0.05 }  // Bb3 soft resting tone
+        { freq: 392.00, offset: 0.00, dur: 0.42, vol: 0.14 }, // G4
+        { freq: 311.13, offset: 0.22, dur: 0.46, vol: 0.135 }, // Eb4
+        { freq: 261.63, offset: 0.46, dur: 0.52, vol: 0.13 }, // C4
+        { freq: 233.08, offset: 0.72, dur: 0.90, vol: 0.12 }  // Bb3 soft resting tone
       ];
 
       descentNotes.forEach(n => {
@@ -4342,7 +4348,7 @@ useEffect(() => {
 
         // Lowpass filter to create a warm, muted, velvety comforting tone
         filter.type = "lowpass";
-        filter.frequency.setValueAtTime(560, now + n.offset);
+        filter.frequency.setValueAtTime(950, now + n.offset);
 
         gain.gain.setValueAtTime(0.0001, now + n.offset);
         gain.gain.linearRampToValueAtTime(n.vol, now + n.offset + 0.025); // Soft pillowy attack
@@ -8396,14 +8402,14 @@ useEffect(() => {
                             navigateToScreen("game");
                           }
                         }}
-                        className={`py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
+                        className={`border-none outline-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
                           isGameCompleted
                             ? (darkMode 
-                                ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20" 
+                                ? "border-none bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 dark:border-none dark:bg-amber-500/10 dark:text-amber-400" 
                                 : "border-none bg-[#FFF99D] hover:bg-[#FDE047] active:bg-[#FDE047] text-[#854D0E] shadow-[0_8px_30px_rgba(133,77,14,0.06)]")
                             : isGameInProgress
-                            ? (darkMode ? "bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc] border border-[#bae6fd]/15" : "border-none bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]")
-                            : (darkMode ? "bg-[#022c22]/30 hover:bg-[#022c22]/50 text-[#a7f3d0] border border-[#a7f3d0]/15" : "border-none bg-[#D1FAE5]/70 hover:bg-[#D1FAE5]/90 active:bg-[#A7F3D0]/70 text-[#065F46] shadow-[0_8px_30px_rgba(6,95,70,0.04)]")
+                            ? (darkMode ? "border-none bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc]" : "border-none bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]")
+                            : (darkMode ? "border-none bg-[#022c22]/30 hover:bg-[#022c22]/50 text-[#a7f3d0]" : "border-none bg-[#D1FAE5]/70 hover:bg-[#D1FAE5]/90 active:bg-[#A7F3D0]/70 text-[#065F46] shadow-[0_8px_30px_rgba(6,95,70,0.04)]")
                         }`}
                       >
                         {isGameCompleted ? (
@@ -8438,8 +8444,8 @@ useEffect(() => {
                       playClickSound();
                       setShowMultiplayerForkModal(true);
                     }}
-                    className={`border-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
-                      darkMode ? "bg-[#3b0764]/20 hover:bg-[#3b0764]/40 border border-[#f5f3ff]/15 text-[#d8b4fe]" : "bg-[#f3e8ff]/60 hover:bg-[#e9d5ff]/60 active:bg-[#d8b4fe]/60 shadow-[0_8px_30px_rgba(107,33,168,0.04)] text-[#6B21A8]"
+                    className={`border-none outline-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
+                      darkMode ? "border-none bg-[#3b0764]/20 hover:bg-[#3b0764]/40 text-[#d8b4fe]" : "border-none bg-[#f3e8ff]/60 hover:bg-[#e9d5ff]/60 active:bg-[#d8b4fe]/60 shadow-[0_8px_30px_rgba(107,33,168,0.04)] text-[#6B21A8]"
                     }`}
                   >
                     <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0" />
@@ -8582,45 +8588,24 @@ useEffect(() => {
 
                           {/* 2. Multiplayer Invite / Solved Board Guard */}
                           {boardState?.isGameOver ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  playClickSound();
-                                  if (challengeMode) {
-                                    setEndGameStep(1);
-                                  }
-                                  setShowGameOverModal(true);
-                                }}
-                                className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
-                                  darkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-700"
-                                }`}
-                                aria-label={challengeMode ? "View Match Results & Rematch" : "View Game Summary"}
-                                title={challengeMode ? "View Match Results & Rematch" : "View Game Summary"}
-                                id="hud-results-summary-button"
-                              >
-                                <Trophy className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  playClickSound();
-                                  if (!isOnline) {
-                                    setShowMultiplayerForkModal(true);
-                                    return;
-                                  }
-                                  setShowCreateChallengeModal(true);
-                                }}
-                                className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
-                                  darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900"
-                                }`}
-                                aria-label="Start Multiplayer Challenge"
-                                title="Start Multiplayer Challenge"
-                                id="hud-multiplayer-invite-button"
-                              >
-                                <Users className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
-                              </button>
-                            </>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playClickSound();
+                                if (challengeMode) {
+                                  setEndGameStep(1);
+                                }
+                                setShowGameOverModal(true);
+                              }}
+                              className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
+                                darkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-700"
+                              }`}
+                              aria-label={challengeMode ? "View Match Results & Rematch" : "View Game Summary"}
+                              title={challengeMode ? "View Match Results & Rematch" : "View Game Summary"}
+                              id="hud-results-summary-button"
+                            >
+                              <Trophy className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
+                            </button>
                           ) : (
                             <button
                               type="button"
@@ -8796,7 +8781,7 @@ useEffect(() => {
                         const isCurrentlySelected = boardState?.selectedRow === r && boardState?.selectedCol === c;
 
                         // Requirement: Tapping an already-selected empty cell cleanly deselects it back to neutral
-                        if (isCurrentlySelected && cell && cell.value === 0 && (!isNumberFirstInputMode || lockedNum === null)) {
+                        if (isCurrentlySelected && cell && cell.value === 0 && !isNumberFirstInputMode) {
                           playClickSound();
                           triggerHapticTap(vibrations);
                           setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
@@ -8848,15 +8833,16 @@ useEffect(() => {
                             // Establish active coordinate focus on the tapped cell so tools like Erase work immediately
                             setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                             addLog(`🎯 Selected cell [${r+1}, ${c+1}] (digit ${cell.value}). Matching digits highlighted.`);
-                          } else if (lockedNum !== null && cell && !cell.isOriginalClue && cell.value === 0) {
-                            // Fast fill empty cell with active brush digit
-                            handleValueInput(lockedNum, r, c);
-                          } else {
-                            if (!isCurrentlySelected) {
+                          } else if (cell && cell.value === 0) {
+                            if (lockedNum !== null && !cell.isOriginalClue) {
+                              // Fast fill empty cell with active brush digit
+                              handleValueInput(lockedNum, r, c);
+                            } else {
+                              // In Paint mode with NO active brush selected: do NOT select the cell!
                               playClickSound();
                               triggerHapticTap(vibrations);
+                              showToast("Select a number from the keypad to paint");
                             }
-                            setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                           }
                         } else {
                           // Normal / Cell-First Mode
@@ -9201,16 +9187,18 @@ useEffect(() => {
                             });
 
                             return results.map((player, idx) => {
+                              const isMultiplayerCompetitive = results.length >= 2;
                               const isPending = !!player.isPending;
-                              const isPodium1 = idx === 0 && !player.failed && !player.isAbandoned;
-                              const isPodium2 = idx === 1 && !player.failed && !player.isAbandoned;
-                              const isPodium3 = idx === 2 && !player.failed && !player.isAbandoned;
-                              const positionStr = idx === 0 ? "1st" : idx === 1 ? "2nd" : idx === 2 ? "3rd" : `${idx + 1}th`;
+                              const isPodium1 = isMultiplayerCompetitive && idx === 0 && !player.failed && !player.isAbandoned;
+                              const isPodium2 = isMultiplayerCompetitive && idx === 1 && !player.failed && !player.isAbandoned;
+                              const isPodium3 = isMultiplayerCompetitive && idx === 2 && !player.failed && !player.isAbandoned;
+                              const isSoloComplete = !isMultiplayerCompetitive && idx === 0 && !player.failed && !player.isAbandoned;
+                              const positionStr = isMultiplayerCompetitive ? (idx === 0 ? "1st" : idx === 1 ? "2nd" : idx === 2 ? "3rd" : `${idx + 1}th`) : "—";
                               
                               return (
                                 <div 
                                   key={player.id}
-                                  className={`flex items-center justify-between p-3 rounded-2xl transition-all ${
+                                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-2xl gap-2 sm:gap-3 transition-all ${
                                     isPodium1
                                       ? (darkMode 
                                           ? "bg-gradient-to-r from-amber-950/50 via-yellow-950/25 to-amber-950/50 border-2 border-amber-400 ring-2 ring-amber-400/70 shadow-[0_0_28px_rgba(245,158,11,0.22)]" 
@@ -9228,9 +9216,9 @@ useEffect(() => {
                                       : (darkMode ? "bg-zinc-800/40" : "bg-stone-55")
                                   }`}
                                 >
-                                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 pr-2">
+                                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                                     <span className={`font-mono text-sm sm:text-base font-black w-7 sm:w-8 text-center flex items-center justify-center flex-shrink-0 shrink-0 ${
-                                      player.isAbandoned ? "text-rose-500" : isPending ? "text-amber-500 animate-pulse" : isPodium1 ? "text-amber-500" : isPodium2 ? "text-slate-400" : isPodium3 ? "text-amber-700 dark:text-amber-500" : darkMode ? "text-zinc-600" : "text-stone-400"
+                                      player.isAbandoned ? "text-rose-500" : isPending ? "text-amber-500 animate-pulse" : isPodium1 ? "text-amber-500" : isPodium2 ? "text-slate-400" : isPodium3 ? "text-amber-700 dark:text-amber-500" : isSoloComplete ? "text-emerald-500" : darkMode ? "text-zinc-600" : "text-stone-400"
                                     }`}>
                                       {player.isAbandoned ? (
                                         <XCircle className="w-4 h-4 text-rose-500 stroke-[2.5]" />
@@ -9242,6 +9230,8 @@ useEffect(() => {
                                         <Award className="w-4.5 h-4.5 text-slate-400 stroke-[2.5]" />
                                       ) : isPodium3 ? (
                                         <Award className="w-4.5 h-4.5 text-amber-700 dark:text-amber-500 stroke-[2.5]" />
+                                      ) : isSoloComplete ? (
+                                        <Check className="w-5 h-5 text-emerald-500 stroke-[3] shrink-0" />
                                       ) : (
                                         positionStr
                                       )}
@@ -9264,6 +9254,11 @@ useEffect(() => {
                                             <ClappingHands tier="champion" rank={1} darkMode={darkMode} size="sm" />
                                           </div>
                                         )}
+                                        {isSoloComplete && (
+                                          <span className="text-[9px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shrink-0">
+                                            SOLO CLEAR
+                                          </span>
+                                        )}
                                         {isPodium2 && (
                                           <div className="flex items-center gap-1.5 shrink-0">
                                             <span className="text-[9px] bg-slate-400/15 text-slate-600 dark:text-slate-300 border border-slate-400/40 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shrink-0">
@@ -9281,7 +9276,7 @@ useEffect(() => {
                                           </div>
                                         )}
                                         {player.failed && (
-                                          <span className={`text-[8.5px] font-sans font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 ${
+                                          <span className={`text-[8px] sm:text-[8.5px] font-sans font-bold uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded-full border shrink-0 ${
                                             darkMode ? "bg-rose-950/40 text-rose-300 border-rose-800/40" : "bg-rose-50 text-rose-700 border-rose-200"
                                           }`}>
                                             Better Luck Next Time
@@ -9312,8 +9307,8 @@ useEffect(() => {
                                       </span>
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-2 flex-shrink-0 shrink-0">
-                                    <div className="flex flex-col items-end justify-center gap-0.5 flex-shrink-0 shrink-0 whitespace-nowrap text-right">
+                                  <div className="flex items-center sm:items-end justify-between sm:justify-end gap-2 pl-9 sm:pl-0 shrink-0 border-t sm:border-t-0 pt-1 sm:pt-0 border-stone-200/40 dark:border-zinc-800/40">
+                                    <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 sm:gap-0.5 w-full sm:w-auto whitespace-nowrap text-right">
                                       {player.isAbandoned ? (
                                         <>
                                           <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider whitespace-nowrap flex-shrink-0 shrink-0 ${
