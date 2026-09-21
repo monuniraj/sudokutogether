@@ -12,6 +12,7 @@ import { SudokuBoard } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
 import { ConfettiBurst } from "./components/common/ConfettiBurst";
 import { ClappingHands } from "./components/common/ClappingHands";
+import { playPartyPopperSound as synthesizePartyPopper } from "./utils/soundEffects";
 import { formatMatchTimestamp, formatInviteTimestamp } from "./utils/formatTimestamp";
 import {
   doc,
@@ -2077,6 +2078,45 @@ useEffect(() => {
 
   // --- DYNAMIC RESUME GAME STATE LOOP ---
   const [savedSessionInfo, setSavedSessionInfo] = useState<{ difficulty: Difficulty; seconds: number; isMultiplayer?: boolean; roomCode?: string } | null>(null);
+  const [lastCompletedSession, setLastCompletedSession] = useState<{
+    state: BoardState;
+    seconds: number;
+    difficulty: Difficulty;
+    isChallenge?: boolean;
+    challengeSeed?: number | null;
+  } | null>(() => {
+    try {
+      const stored = localStorage.getItem("sudoku_lastCompletedSession");
+      if (!stored) return null;
+      const data = JSON.parse(stored);
+      if (!data || !data.grid) return null;
+      const revivedGrid: SudokuCell[][] = data.grid.map((row: any) => 
+        row.map((cell: any) => ({
+          ...cell,
+          notes: new Set<number>(cell.notes || [])
+        }))
+      );
+      return {
+        state: {
+          grid: revivedGrid,
+          selectedRow: data.selectedRow ?? null,
+          selectedCol: data.selectedCol ?? null,
+          currentMistakesCount: data.currentMistakesCount ?? 0,
+          maxMistakesLimit: data.maxMistakesLimit ?? 3,
+          hintsCount: data.hintsCount ?? 0,
+          isGameOver: true,
+          difficulty: data.difficulty as Difficulty,
+          seed: data.seed
+        },
+        seconds: data.sessionSeconds ?? 0,
+        difficulty: data.difficulty as Difficulty,
+        isChallenge: data.challengeMode ?? false,
+        challengeSeed: data.challengeSeed ?? null
+      };
+    } catch {
+      return null;
+    }
+  });
   const [isTimerPaused, setIsTimerPaused] = useState<boolean>(false);
 
   // Save game state helper
@@ -4147,83 +4187,13 @@ useEffect(() => {
     }
   };
 
-  // Natural party popper / confetti blast pop (bandpass noise burst + pressurized sub-thump + streamer flutter)
+  // Layered melodic party cannon pop with ascending pentatonic chimes across burst waves
   const playPartyPopperSound = (burstIndex: number = 0) => {
     if (!soundEffects) return;
     try {
       const audioCtx = getAudioCtx();
       if (!audioCtx) return;
-
-      const t = audioCtx.currentTime;
-      // Slight scale in intensity across consecutive bursts
-      const intensityScale = burstIndex === 0 ? 1.0 : burstIndex === 1 ? 0.82 : 0.68;
-
-      // 1. Crisp pressurized noise pop (bandpass filtered white noise burst)
-      const bufferSize = Math.floor(audioCtx.sampleRate * 0.08); // 80ms noise buffer
-      const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-      const output = noiseBuffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        output[i] = Math.random() * 2 - 1;
-      }
-
-      const whiteNoise = audioCtx.createBufferSource();
-      whiteNoise.buffer = noiseBuffer;
-
-      const filter = audioCtx.createBiquadFilter();
-      filter.type = "bandpass";
-      filter.frequency.setValueAtTime(1400, t);
-      filter.frequency.exponentialRampToValueAtTime(320, t + 0.07);
-      filter.Q.setValueAtTime(1.8, t);
-
-      const noiseGain = audioCtx.createGain();
-      noiseGain.gain.setValueAtTime(0.001, t);
-      noiseGain.gain.linearRampToValueAtTime(0.24 * intensityScale, t + 0.003);
-      noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.075);
-
-      whiteNoise.connect(filter);
-      filter.connect(noiseGain);
-      noiseGain.connect(audioCtx.destination);
-
-      whiteNoise.start(t);
-      whiteNoise.stop(t + 0.08);
-
-      // 2. Sub-thump (pressurized cork / air displacement thump)
-      const subOsc = audioCtx.createOscillator();
-      const subGain = audioCtx.createGain();
-      subOsc.type = "sine";
-      subOsc.frequency.setValueAtTime(170, t);
-      subOsc.frequency.exponentialRampToValueAtTime(45, t + 0.05);
-
-      subGain.gain.setValueAtTime(0.001, t);
-      subGain.gain.linearRampToValueAtTime(0.20 * intensityScale, t + 0.004);
-      subGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.065);
-
-      subOsc.connect(subGain);
-      subGain.connect(audioCtx.destination);
-
-      subOsc.start(t);
-      subOsc.stop(t + 0.07);
-
-      // 3. Delicate streamer flutter twinkle
-      const flutterPitches = [2093.00, 2637.02, 3135.96]; // C7, E7, G7
-      flutterPitches.forEach((freq, i) => {
-        const spk = audioCtx.createOscillator();
-        const spkG = audioCtx.createGain();
-        const sTime = t + 0.02 + i * 0.018;
-
-        spk.type = "sine";
-        spk.frequency.setValueAtTime(freq, sTime);
-
-        spkG.gain.setValueAtTime(0.0001, sTime);
-        spkG.gain.linearRampToValueAtTime(0.02 * intensityScale, sTime + 0.005);
-        spkG.gain.exponentialRampToValueAtTime(0.0001, sTime + 0.06);
-
-        spk.connect(spkG);
-        spkG.connect(audioCtx.destination);
-
-        spk.start(sTime);
-        spk.stop(sTime + 0.07);
-      });
+      synthesizePartyPopper(audioCtx, burstIndex, soundEffects);
     } catch (e) {
       console.error("Audio Party Popper Error:", e);
     }
@@ -5689,6 +5659,34 @@ useEffect(() => {
       localStorage.removeItem("sudoku_savedSession");
     } catch {}
     setSavedSessionInfo(null);
+
+    // Save completed session for post-game Review on Home Screen
+    if (boardState) {
+      const completedSessionData = {
+        state: boardState,
+        seconds: sessionSeconds,
+        difficulty: difficulty,
+        isChallenge: challengeMode,
+        challengeSeed: challengeSeed
+      };
+      setLastCompletedSession(completedSessionData);
+      try {
+        localStorage.setItem("sudoku_lastCompletedSession", JSON.stringify({
+          grid: boardState.grid.map(row => row.map(cell => ({ ...cell, notes: Array.from(cell.notes) }))),
+          selectedRow: boardState.selectedRow,
+          selectedCol: boardState.selectedCol,
+          currentMistakesCount: boardState.currentMistakesCount,
+          maxMistakesLimit: boardState.maxMistakesLimit,
+          hintsCount: boardState.hintsCount,
+          isGameOver: true,
+          sessionSeconds: sessionSeconds,
+          difficulty: difficulty,
+          seed: boardState.seed,
+          challengeMode: challengeMode,
+          challengeSeed: challengeSeed
+        }));
+      } catch {}
+    }
   };
 
   const handleReplayGame = (game: CompletedGame) => {
@@ -6881,6 +6879,10 @@ useEffect(() => {
     setGeneratorLogs([]);
     setIsNewRecordAchieved(false);
     setShowCelebrationConfetti(false);
+    setLastCompletedSession(null);
+    try {
+      localStorage.removeItem("sudoku_lastCompletedSession");
+    } catch {}
     addLog("⚡ Initiating unique sudoku puzzle algorithm...");
 
     // Determine the seed (either user override or generate a new random seed)
@@ -8347,45 +8349,77 @@ useEffect(() => {
  
                 {/* 🔄 RESUME SOLO & MULTIPLAYER SIDE-BY-SIDE GRID - Adhering to the 'Zen' Design System */}
                 <div className="w-full grid grid-cols-2 gap-3.5 select-none shrink-0" id="solo-multiplayer-split-container">
-                  {/* Left Button ('Resume' when active session exists, dynamically adapts to 'Play' when finished) */}
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                      if (savedSessionInfo) {
-                        const loaded = resumeSavedSession();
-                        if (loaded) {
-                          setDifficulty(loaded.difficulty);
-                          setIsTimerPaused(false);
-                          navigateToScreen("game");
-                        }
-                      } else {
-                        generateAndSetNewPuzzle(difficulty);
-                        setIsTimerPaused(false);
-                        navigateToScreen("game");
-                      }
-                    }}
-                    className={`border-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
-                      savedSessionInfo
-                        ? (darkMode ? "bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc] border border-[#bae6fd]/15" : "bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]")
-                        : (darkMode ? "bg-[#022c22]/30 hover:bg-[#022c22]/50 text-[#a7f3d0] border border-[#a7f3d0]/15" : "bg-[#D1FAE5]/70 hover:bg-[#D1FAE5]/90 active:bg-[#A7F3D0]/70 text-[#065F46] shadow-[0_8px_30px_rgba(6,95,70,0.04)]")
-                    }`}
-                  >
-                    {savedSessionInfo ? (
-                      <>
-                        <RotateCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0 animate-pulse" />
-                        <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
-                          Resume
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current shrink-0" />
-                        <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
-                          Play
-                        </span>
-                      </>
-                    )}
-                  </button>
+                  {/* Left Button ('Resume' when active session exists, 'Review' when completed, or fallback to 'Play') */}
+                  {(() => {
+                    const isGameInProgress = Boolean(savedSessionInfo) || Boolean(boardState && !boardState.isGameOver);
+                    const isGameCompleted = !isGameInProgress && (Boolean(boardState?.isGameOver) || Boolean(lastCompletedSession));
+
+                    return (
+                      <button
+                        onClick={() => {
+                          playClickSound();
+                          if (isGameCompleted) {
+                            if (!boardState && lastCompletedSession) {
+                              setBoardState(lastCompletedSession.state);
+                              setSessionSeconds(lastCompletedSession.seconds);
+                              setDifficulty(lastCompletedSession.difficulty);
+                            }
+                            setIsTimerPaused(true);
+                            setShowGameOverModal(false);
+                            navigateToScreen("game");
+                          } else if (isGameInProgress) {
+                            if (savedSessionInfo) {
+                              const loaded = resumeSavedSession();
+                              if (loaded) {
+                                setDifficulty(loaded.difficulty);
+                                setIsTimerPaused(false);
+                                navigateToScreen("game");
+                              }
+                            } else {
+                              setIsTimerPaused(false);
+                              navigateToScreen("game");
+                            }
+                          } else {
+                            generateAndSetNewPuzzle(difficulty);
+                            setIsTimerPaused(false);
+                            navigateToScreen("game");
+                          }
+                        }}
+                        className={`border-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
+                          isGameCompleted
+                            ? (darkMode 
+                                ? "bg-[#451a03] hover:bg-[#713f12] active:bg-[#713f12] text-[#fef08a]" 
+                                : "bg-[#FFF99D] hover:bg-[#FDE047] active:bg-[#FDE047] text-[#854D0E] shadow-[0_8px_30px_rgba(133,77,14,0.06)]")
+                            : isGameInProgress
+                            ? (darkMode ? "bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc] border border-[#bae6fd]/15" : "bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]")
+                            : (darkMode ? "bg-[#022c22]/30 hover:bg-[#022c22]/50 text-[#a7f3d0] border border-[#a7f3d0]/15" : "bg-[#D1FAE5]/70 hover:bg-[#D1FAE5]/90 active:bg-[#A7F3D0]/70 text-[#065F46] shadow-[0_8px_30px_rgba(6,95,70,0.04)]")
+                        }`}
+                      >
+                        {isGameCompleted ? (
+                          <>
+                            <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5] shrink-0" />
+                            <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
+                              Review
+                            </span>
+                          </>
+                        ) : isGameInProgress ? (
+                          <>
+                            <RotateCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0 animate-pulse" />
+                            <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
+                              Resume
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current shrink-0" />
+                            <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
+                              Play
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()}
  
                   {/* Right Button ('Multiplayer') */}
                   <button
@@ -8537,24 +8571,25 @@ useEffect(() => {
 
                           {/* 2. Multiplayer Invite / Solved Board Guard */}
                           {boardState?.isGameOver ? (
-                            challengeMode ? (
+                            <>
                               <button
                                 type="button"
                                 onClick={() => {
                                   playClickSound();
-                                  setEndGameStep(1);
+                                  if (challengeMode) {
+                                    setEndGameStep(1);
+                                  }
                                   setShowGameOverModal(true);
                                 }}
                                 className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
                                   darkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-700"
                                 }`}
-                                aria-label="View Match Results & Rematch"
-                                title="View Match Results & Rematch"
-                                id="hud-multiplayer-results-button"
+                                aria-label={challengeMode ? "View Match Results & Rematch" : "View Game Summary"}
+                                title={challengeMode ? "View Match Results & Rematch" : "View Game Summary"}
+                                id="hud-results-summary-button"
                               >
                                 <Trophy className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
                               </button>
-                            ) : (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -8574,7 +8609,7 @@ useEffect(() => {
                               >
                                 <Users className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
                               </button>
-                            )
+                            </>
                           ) : (
                             <button
                               type="button"
