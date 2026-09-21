@@ -131,7 +131,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
       }}
     >
       {/* MINIMALIST PAUSE SCREEN OVERLAY */}
-      {isTimerPaused && (
+      {isTimerPaused && !boardState.isGameOver && (
         <div 
           onClick={() => {
             playClickSound();

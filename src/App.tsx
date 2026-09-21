@@ -6818,6 +6818,17 @@ useEffect(() => {
     };
   }, []);
 
+  // Platform-aware portrait orientation lock strictly for native mobile apps (desktop web browsers remain completely untouched)
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        if (window.screen?.orientation && typeof (window.screen.orientation as any).lock === "function") {
+          (window.screen.orientation as any).lock("portrait").catch(() => {});
+        }
+      } catch {}
+    }
+  }, []);
+
   // Game running session timer increment effect
   useEffect(() => {
     let interval: any = null;
@@ -8364,7 +8375,7 @@ useEffect(() => {
                               setSessionSeconds(lastCompletedSession.seconds);
                               setDifficulty(lastCompletedSession.difficulty);
                             }
-                            setIsTimerPaused(true);
+                            setIsTimerPaused(false);
                             setShowGameOverModal(false);
                             navigateToScreen("game");
                           } else if (isGameInProgress) {
@@ -8388,7 +8399,7 @@ useEffect(() => {
                         className={`border-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
                           isGameCompleted
                             ? (darkMode 
-                                ? "bg-[#451a03] hover:bg-[#713f12] active:bg-[#713f12] text-[#fef08a]" 
+                                ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20" 
                                 : "bg-[#FFF99D] hover:bg-[#FDE047] active:bg-[#FDE047] text-[#854D0E] shadow-[0_8px_30px_rgba(133,77,14,0.06)]")
                             : isGameInProgress
                             ? (darkMode ? "bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc] border border-[#bae6fd]/15" : "bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]")
