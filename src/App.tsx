@@ -8396,14 +8396,14 @@ useEffect(() => {
                             navigateToScreen("game");
                           }
                         }}
-                        className={`border-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
+                        className={`py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
                           isGameCompleted
                             ? (darkMode 
-                                ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20" 
-                                : "bg-[#FFF99D] hover:bg-[#FDE047] active:bg-[#FDE047] text-[#854D0E] shadow-[0_8px_30px_rgba(133,77,14,0.06)]")
+                                ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20" 
+                                : "border-none bg-[#FFF99D] hover:bg-[#FDE047] active:bg-[#FDE047] text-[#854D0E] shadow-[0_8px_30px_rgba(133,77,14,0.06)]")
                             : isGameInProgress
-                            ? (darkMode ? "bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc] border border-[#bae6fd]/15" : "bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]")
-                            : (darkMode ? "bg-[#022c22]/30 hover:bg-[#022c22]/50 text-[#a7f3d0] border border-[#a7f3d0]/15" : "bg-[#D1FAE5]/70 hover:bg-[#D1FAE5]/90 active:bg-[#A7F3D0]/70 text-[#065F46] shadow-[0_8px_30px_rgba(6,95,70,0.04)]")
+                            ? (darkMode ? "bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc] border border-[#bae6fd]/15" : "border-none bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]")
+                            : (darkMode ? "bg-[#022c22]/30 hover:bg-[#022c22]/50 text-[#a7f3d0] border border-[#a7f3d0]/15" : "border-none bg-[#D1FAE5]/70 hover:bg-[#D1FAE5]/90 active:bg-[#A7F3D0]/70 text-[#065F46] shadow-[0_8px_30px_rgba(6,95,70,0.04)]")
                         }`}
                       >
                         {isGameCompleted ? (
@@ -8743,7 +8743,7 @@ useEffect(() => {
                       boardState={boardState}
                       difficulty={difficulty}
                       solutionGrid={solutionGrid}
-                      isTimerPaused={isTimerPaused}
+                      isTimerPaused={isTimerPaused && !boardState?.isGameOver}
                       onResumeSession={() => setIsTimerPaused(false)}
                       visualizingBacktrack={visualizingBacktrack}
                       highlightAreas={highlightAreas}
@@ -8754,7 +8754,7 @@ useEffect(() => {
                       darkMode={darkMode}
                       playClickSound={playClickSound}
                       onCellClick={(r, c) => {
-                        if (visualizingBacktrack || isTimerPaused) return;
+                        if (visualizingBacktrack || (isTimerPaused && !boardState?.isGameOver)) return;
                         if (boardState?.isGameOver) {
                           const cell = boardState.grid[r][c];
                           const isCurrentlySelected = boardState.selectedRow === r && boardState.selectedCol === c;
