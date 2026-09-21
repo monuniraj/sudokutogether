@@ -11,7 +11,7 @@ import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
 import { SudokuBoard } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
 import { ConfettiBurst } from "./components/common/ConfettiBurst";
-import { ApplauseBadge } from "./components/common/ApplauseBadge";
+import { ClappingHands } from "./components/common/ClappingHands";
 import { formatMatchTimestamp, formatInviteTimestamp } from "./utils/formatTimestamp";
 import {
   doc,
@@ -125,12 +125,16 @@ const getAudioCtx = () => {
 // Web Audio gesture auto-resume & background mute lifecycle handlers
 if (typeof window !== "undefined") {
   const unlockAudioOnGesture = () => {
-    if (globalAudioCtx && globalAudioCtx.state === "suspended") {
+    if (!globalAudioCtx) {
+      getAudioCtx();
+    } else if (globalAudioCtx.state === "suspended") {
       globalAudioCtx.resume().catch(() => {});
     }
   };
   window.addEventListener("touchstart", unlockAudioOnGesture, { passive: true });
+  window.addEventListener("touchend", unlockAudioOnGesture, { passive: true });
   window.addEventListener("pointerdown", unlockAudioOnGesture, { passive: true });
+  window.addEventListener("click", unlockAudioOnGesture, { passive: true });
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
@@ -4225,102 +4229,117 @@ useEffect(() => {
     }
   };
 
-  // Warm clapping and applause sound effect (rhythmic clapping cadence + optional triumphant finish for 1st place)
+  // Clapping and applause sound effect synchronized with ClappingHands vector strikes
   const playApplauseSound = (isFirstPlace: boolean = true) => {
     if (!soundEffects) return;
     try {
       const audioCtx = getAudioCtx();
       if (!audioCtx) return;
 
-      const now = audioCtx.currentTime;
+      const scheduleApplause = (ctx: AudioContext) => {
+        const now = ctx.currentTime;
 
-      // Function to generate a single warm hand-clap impulse
-      const playClap = (startTime: number, volume: number = 0.12, centerFreq: number = 1200) => {
-        const bufferSize = Math.floor(audioCtx.sampleRate * 0.045); // 45ms impulse
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 0.009));
+        // Function to generate a single warm acoustic hand-clap impulse
+        const playClap = (startTime: number, volume: number = 0.12, centerFreq: number = 1200) => {
+          const bufferSize = Math.floor(ctx.sampleRate * 0.045); // 45ms impulse
+          const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.009));
+          }
+
+          const noise = ctx.createBufferSource();
+          noise.buffer = buffer;
+
+          const filter = ctx.createBiquadFilter();
+          filter.type = "bandpass";
+          filter.frequency.setValueAtTime(centerFreq, startTime);
+          filter.Q.setValueAtTime(2.2, startTime);
+
+          const gain = ctx.createGain();
+          gain.gain.setValueAtTime(0.0001, startTime);
+          gain.gain.linearRampToValueAtTime(volume, startTime + 0.002);
+          gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.045);
+
+          noise.connect(filter);
+          filter.connect(gain);
+          gain.connect(ctx.destination);
+
+          noise.start(startTime);
+          noise.stop(startTime + 0.05);
+        };
+
+        if (isFirstPlace) {
+          // CHAMPION (1st Place): 5 claps synchronized with vector hand impacts (0.35s, 0.65s, 0.95s, 1.25s, 1.55s)
+          const championClapTimings = [0.35, 0.65, 0.95, 1.25, 1.55];
+          championClapTimings.forEach((t, i) => {
+            const freq = 1100 + i * 40;
+            const vol = 0.12 + i * 0.015;
+            playClap(now + t, vol, freq);
+          });
+
+          // Triumphant fanfare arpeggio notes synchronized with the champion claps
+          const playTriumphTone = (freq: number, startOffset: number, duration: number, vol: number) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, now + startOffset);
+
+            gain.gain.setValueAtTime(0.0001, now + startOffset);
+            gain.gain.linearRampToValueAtTime(vol, now + startOffset + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + duration);
+
+            osc.start(now + startOffset);
+            osc.stop(now + startOffset + duration);
+          };
+
+          playTriumphTone(523.25, 0.35, 0.6, 0.06); // C5
+          playTriumphTone(659.25, 0.65, 0.7, 0.07); // E5
+          playTriumphTone(783.99, 0.95, 0.9, 0.08); // G5
+          playTriumphTone(1046.50, 1.25, 1.2, 0.10); // C6 crown
+        } else {
+          // SUPPORTIVE (2nd / 3rd Place & Standard Solo Completion):
+          // 3 claps synchronized with vector hand impacts (0.40s, 0.80s, 1.20s)
+          const supportiveClapTimings = [0.40, 0.80, 1.20];
+          supportiveClapTimings.forEach((t, i) => {
+            const freq = 1000 + i * 50;
+            const vol = 0.11 + i * 0.015;
+            playClap(now + t, vol, freq);
+          });
+
+          // Soft supportive warm major third resolution chime triad (C5, E5, G5)
+          const playSupportTone = (freq: number, startOffset: number, duration: number, vol: number) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, now + startOffset);
+
+            gain.gain.setValueAtTime(0.0001, now + startOffset);
+            gain.gain.linearRampToValueAtTime(vol, now + startOffset + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + duration);
+
+            osc.start(now + startOffset);
+            osc.stop(now + startOffset + duration);
+          };
+
+          playSupportTone(523.25, 0.40, 0.7, 0.05); // C5
+          playSupportTone(659.25, 0.80, 0.8, 0.06); // E5
+          playSupportTone(783.99, 1.20, 1.0, 0.07); // G5
         }
-
-        const noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
-
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = "bandpass";
-        filter.frequency.setValueAtTime(centerFreq, startTime);
-        filter.Q.setValueAtTime(2.2, startTime);
-
-        const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.0001, startTime);
-        gain.gain.linearRampToValueAtTime(volume, startTime + 0.002);
-        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.045);
-
-        noise.connect(filter);
-        filter.connect(gain);
-        gain.connect(audioCtx.destination);
-
-        noise.start(startTime);
-        noise.stop(startTime + 0.05);
       };
 
-      // Rhythmic 3-step pop clapping cadence
-      const clapTimings = [
-        0.00, 0.16, 0.32, 0.48, // Initial rhythmic claps
-        0.62, 0.74, 0.86, 0.98, 1.10, 1.22, 1.36, 1.50, 1.66 // Supportive wave
-      ];
-
-      clapTimings.forEach((t, i) => {
-        const jitter = (Math.random() - 0.5) * 0.02;
-        const freq = 1050 + Math.random() * 350;
-        const vol = i < 4 ? 0.12 : Math.min(0.14, 0.08 + (i * 0.005));
-        playClap(now + t + jitter, vol, freq);
-      });
-
-      // Triumphant chord fanfare overlay for 1st place
-      if (isFirstPlace) {
-        const playTriumphTone = (freq: number, startOffset: number, duration: number, vol: number) => {
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
-          osc.connect(gain);
-          gain.connect(audioCtx.destination);
-
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(freq, now + startOffset);
-
-          gain.gain.setValueAtTime(0.0001, now + startOffset);
-          gain.gain.linearRampToValueAtTime(vol, now + startOffset + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + duration);
-
-          osc.start(now + startOffset);
-          osc.stop(now + startOffset + duration);
-        };
-
-        playTriumphTone(523.25, 0.35, 0.6, 0.06); // C5
-        playTriumphTone(659.25, 0.50, 0.7, 0.07); // E5
-        playTriumphTone(783.99, 0.65, 0.9, 0.08); // G5
-        playTriumphTone(1046.50, 0.80, 1.4, 0.09); // High C6 crown
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().then(() => {
+          scheduleApplause(audioCtx);
+        }).catch(() => {});
       } else {
-        // Soft supportive warm major third swell for 2nd/3rd or normal win
-        const playSupportTone = (freq: number, startOffset: number, duration: number, vol: number) => {
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
-          osc.connect(gain);
-          gain.connect(audioCtx.destination);
-
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(freq, now + startOffset);
-
-          gain.gain.setValueAtTime(0.0001, now + startOffset);
-          gain.gain.linearRampToValueAtTime(vol, now + startOffset + 0.04);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + duration);
-
-          osc.start(now + startOffset);
-          osc.stop(now + startOffset + duration);
-        };
-
-        playSupportTone(523.25, 0.40, 0.8, 0.04); // C5
-        playSupportTone(659.25, 0.60, 1.0, 0.04); // E5
+        scheduleApplause(audioCtx);
       }
     } catch (e) {
       console.error("Audio Applause Error:", e);
@@ -9196,7 +9215,7 @@ useEffect(() => {
                                               <Crown className="w-3 h-3 text-amber-500 fill-amber-400/50 shrink-0" />
                                               <span>WINNER • 1ST</span>
                                             </span>
-                                            <ApplauseBadge rank={1} darkMode={darkMode} size="sm" />
+                                            <ClappingHands tier="champion" rank={1} darkMode={darkMode} size="sm" />
                                           </div>
                                         )}
                                         {isPodium2 && (
@@ -9204,7 +9223,7 @@ useEffect(() => {
                                             <span className="text-[9px] bg-slate-400/15 text-slate-600 dark:text-slate-300 border border-slate-400/40 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shrink-0">
                                               SILVER • 2ND
                                             </span>
-                                            <ApplauseBadge rank={2} darkMode={darkMode} size="sm" />
+                                            <ClappingHands tier="supportive" rank={2} darkMode={darkMode} size="sm" />
                                           </div>
                                         )}
                                         {isPodium3 && (
@@ -9212,7 +9231,7 @@ useEffect(() => {
                                             <span className="text-[9px] bg-amber-700/15 text-amber-700 dark:text-amber-400 border border-amber-700/40 px-2 py-0.5 rounded-full uppercase tracking-wider font-black shrink-0">
                                               BRONZE • 3RD
                                             </span>
-                                            <ApplauseBadge rank={3} darkMode={darkMode} size="sm" />
+                                            <ClappingHands tier="supportive" rank={3} darkMode={darkMode} size="sm" />
                                           </div>
                                         )}
                                         {player.failed && (
@@ -10074,8 +10093,8 @@ useEffect(() => {
                                 <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
                               </motion.div>
                             ) : (
-                              <div className="mt-1.5">
-                                <ApplauseBadge rank="win" darkMode={darkMode} size="sm" />
+                              <div className="mt-1.5 flex justify-center">
+                                <ClappingHands tier="supportive" darkMode={darkMode} size="md" />
                               </div>
                             )}
 
