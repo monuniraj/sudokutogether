@@ -219,14 +219,14 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                         : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")
                 }`}
               >
-                <div className="flex flex-col items-center justify-center absolute inset-0 py-1 sm:py-1.5 lg:py-1.5 px-0.5 select-none">
+                <div className="flex flex-col items-center justify-center absolute inset-0 py-1 sm:py-1.5 lg:py-2 px-0.5 select-none">
                   <span 
                     className="handwriting font-normal leading-none flex items-center justify-center text-[29px] sm:text-[33px] lg:text-[44px] xl:text-[48px] select-none"
                   >
                     {num}
                   </span>
                   {showRemainingNumbers && (
-                    <span className={`text-[10px] font-mono leading-none mt-1 flex items-center justify-center ${
+                    <span className={`text-[10px] sm:text-[11.5px] lg:text-[15px] xl:text-[16.5px] font-mono leading-none mt-1 lg:mt-1.5 flex items-center justify-center ${
                       isSelected 
                         ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
                             ? "text-white/85 font-semibold"
@@ -235,7 +235,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                               : "text-stone-700 dark:text-zinc-200 font-semibold")
                         : "text-stone-400 dark:text-zinc-500"
                     } ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
-                      {remainingCount > 0 ? remainingCount : <Check className="w-3 h-3 lg:w-3.5 lg:h-3.5 stroke-[2.5]" />}
+                      {remainingCount > 0 ? remainingCount : <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4 stroke-[2.5]" />}
                     </span>
                   )}
                 </div>

@@ -86,6 +86,7 @@ import {
   Mail,
   Phone,
   Trophy,
+  ThumbsUp,
   Brain,
   Zap,
   Rocket,
@@ -2694,13 +2695,13 @@ useEffect(() => {
     }, 2500);
 
     // Phase 4b (2.8s: Salute & Victory Claps):
-    // Celebratory corner cannon blast fires + 5 synchronized victory claps with triumphant fanfare
+    // Celebratory corner cannon blast fires in a rhythmic 5-burst cadence + 5 synchronized victory claps
+    const saluteBursts: ReturnType<typeof setTimeout>[] = [];
     const timerSalute = setTimeout(() => {
       setPbStage("salute");
       setConfettiMode("cannon-only");
       setConfettiBurstKey(prev => prev + 1);
       setShowCelebrationConfetti(true);
-      playPartyPopperSound(0);
       playApplauseSound(true);
     }, 2800);
 
@@ -2716,6 +2717,7 @@ useEffect(() => {
       clearTimeout(timerDock);
       clearTimeout(timerSalute);
       clearTimeout(timerComplete);
+      saluteBursts.forEach(clearTimeout);
     };
   }, [showGameOverModal, isNewRecordAchieved, challengeMode, previousRecordTime, sessionSeconds]);
 
@@ -4712,6 +4714,14 @@ useEffect(() => {
   const [lockedNum, setLockedNum] = useState<number | null>(null);
   // Active selected number for single-number highlighting / keypad toggle
   const [activeKeypadNum, setActiveKeypadNum] = useState<number | null>(null);
+  // Standard solo victory celebration state: transitions clapping hands to thumbs-up without flicker
+  const [soloVictoryClappingComplete, setSoloVictoryClappingComplete] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!showGameOverModal) {
+      setSoloVictoryClappingComplete(false);
+    }
+  }, [showGameOverModal]);
 
   // Requirement 1 & 2: Responsive toggle for Paint Mode / Fast-Fill with digit inheritance and focus ring cleanup
   const handleToggleNumberFirstMode = (e?: React.MouseEvent) => {
@@ -7895,6 +7905,12 @@ useEffect(() => {
     addLog(`💡 Smart hint injected for Cell (Row ${selectedRow + 1}, Col ${selectedCol + 1}) → ${solvedNum}`);
     setHintExplanation({ num: solvedNum, row: selectedRow, col: selectedCol });
 
+    // Fast Fill (Paint Mode) Hint Sync: sync active paintbrush digit to revealed hint
+    if (isNumberFirstInputMode) {
+      setLockedNum(solvedNum);
+      setActiveKeypadNum(solvedNum);
+    }
+
     // Check game win if hint completes the puzzle
     const currentProgress = finalGrid.every(r => r.every(cell => cell.value === solutionGrid[cell.row][cell.col]));
     if (currentProgress) {
@@ -8796,7 +8812,7 @@ useEffect(() => {
                   {/* ROW 2: HUD GROUP DIRECTLY ABOVE 9x9 BOARD */}
                   <div className="w-full relative flex items-center justify-between px-1 mb-1 select-none shrink-0" id="unified-bridge-container">
                     {/* Left: Mistakes status metric */}
-                    <span className={`font-mono font-semibold text-sm sm:text-base tracking-tight leading-none select-none flex items-center ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
+                    <span className={`font-mono font-medium text-sm sm:text-base tracking-wider uppercase leading-none select-none flex items-center ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
                       ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
                     </span>
 
@@ -8953,7 +8969,7 @@ useEffect(() => {
                           )}
                         </button>
                         <span 
-                          className={`font-mono tabular-nums font-semibold text-sm sm:text-base tracking-tight leading-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
+                          className={`font-mono tabular-nums font-medium text-sm sm:text-base tracking-wider leading-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
                           style={{ fontVariantNumeric: "tabular-nums" }}
                         >
                           {isTimerPaused ? "PAUSED" : formatTimer(sessionSeconds)}
@@ -8961,7 +8977,7 @@ useEffect(() => {
                       </div>
                     ) : (
                       <span 
-                        className={`font-mono tabular-nums font-semibold text-sm sm:text-base tracking-tight leading-none select-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
+                        className={`font-mono tabular-nums font-medium text-sm sm:text-base tracking-wider leading-none select-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
                         style={{ fontVariantNumeric: "tabular-nums" }}
                       >
                         --:--
@@ -10362,10 +10378,10 @@ useEffect(() => {
                                             ease: "easeInOut"
                                           }
                                     }}
-                                    className={`relative flex items-center justify-center gap-1.5 py-1 px-3.5 rounded-full font-sans font-bold text-[11px] uppercase tracking-wider select-none shadow-xs transition-colors duration-300 ${
+                                    className={`relative flex items-center justify-center gap-1.5 py-1 px-3.5 rounded-full font-sans font-bold text-[11px] uppercase tracking-wider select-none border-none transition-colors duration-300 ${
                                       darkMode
-                                        ? "bg-[#292218] border border-amber-400/25 text-[#F3DFB0]"
-                                        : "bg-[#FDF6E9] border border-amber-300/40 text-[#9B7020]"
+                                        ? "bg-[#292218] text-[#F3DFB0]"
+                                        : "bg-[#FDF6E9] text-[#9B7020]"
                                     }`}
                                   >
                                     <Trophy className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300 shrink-0" />
@@ -10375,8 +10391,25 @@ useEffect(() => {
                                 )}
                               </div>
                             ) : (
-                              <div className="mt-1.5 flex justify-center">
-                                <ClappingHands tier="champion" darkMode={darkMode} size="md" />
+                              <div className="h-8 min-h-[32px] mt-1.5 flex items-center justify-center">
+                                {!soloVictoryClappingComplete ? (
+                                  <ClappingHands 
+                                    tier="champion" 
+                                    darkMode={darkMode} 
+                                    size="md" 
+                                    onComplete={() => setSoloVictoryClappingComplete(true)}
+                                  />
+                                ) : (
+                                  <motion.div
+                                    initial={{ scale: 0.85, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    transition={{ duration: 0.25, ease: "easeOut" }}
+                                    className="flex items-center gap-1.5 text-amber-500"
+                                  >
+                                    <ThumbsUp className="w-5 h-5 fill-amber-500/20 stroke-[2.2]" />
+                                    <ThumbsUp className="w-5 h-5 fill-amber-500/20 stroke-[2.2]" />
+                                  </motion.div>
+                                )}
                               </div>
                             )}
 

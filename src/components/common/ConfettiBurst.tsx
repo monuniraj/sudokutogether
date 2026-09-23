@@ -77,11 +77,17 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     // Existing particles are never wiped out or truncated.
     const particles: Particle[] = [];
 
-    // 5 distinct burst waves scheduled across the first 2.0s for 'all', or a single burst for specific modes
+    // 5 distinct burst waves scheduled across the first 2.0s for 'all', or 5 rhythmic cannon bursts for 'cannon-only', or a single burst for 'top-only'
     const burstSchedule = mode === "top-only"
       ? [{ delay: 0, count: 28, waveIndex: 0 }]
       : mode === "cannon-only"
-      ? [{ delay: 0, count: 42, waveIndex: 0 }]
+      ? [
+          { delay: 0, count: 42, waveIndex: 0 },
+          { delay: 440, count: 38, waveIndex: 1 },
+          { delay: 880, count: 38, waveIndex: 2 },
+          { delay: 1320, count: 34, waveIndex: 3 },
+          { delay: 1760, count: 34, waveIndex: 4 }
+        ]
       : [
           { delay: 0, count: 40, waveIndex: 0 },
           { delay: 480, count: 36, waveIndex: 1 },
@@ -171,7 +177,7 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     };
 
     // Safety timer adjusted for mode
-    const safetyDuration = mode === "cannon-only" ? 2400 : mode === "top-only" ? 3800 : 5200;
+    const safetyDuration = mode === "cannon-only" ? 4200 : mode === "top-only" ? 3800 : 5200;
     const safetyTimer = setTimeout(() => {
       dispose();
     }, safetyDuration);
