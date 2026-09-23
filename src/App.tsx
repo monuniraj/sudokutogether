@@ -2557,9 +2557,10 @@ useEffect(() => {
 
   const [isNewRecordAchieved, setIsNewRecordAchieved] = useState<boolean>(false);
   const [previousRecordTime, setPreviousRecordTime] = useState<number | null>(null);
-  const [pbStage, setPbStage] = useState<"initial" | "highbeam" | "rolling" | "locked" | "badged" | "completed">("initial");
+  const [pbStage, setPbStage] = useState<"initial" | "elevating" | "rolling" | "docked" | "salute" | "completed">("initial");
   const [rollingBestTime, setRollingBestTime] = useState<number | null>(null);
   const [confettiMode, setConfettiMode] = useState<"all" | "top-only" | "cannon-only">("all");
+  const [confettiBurstKey, setConfettiBurstKey] = useState<number>(0);
   const [showCelebrationConfetti, setShowCelebrationConfetti] = useState<boolean>(false);
 
   // Strict Particle Canvas Lifecycle Guard: immediately unmount & dispose confetti whenever end-game is dismissed, any secondary modal is opened, or screen changes
@@ -2634,7 +2635,7 @@ useEffect(() => {
     return false;
   };
 
-  // Synchronized High-Beam & Odometer PB choreography
+  // Synchronized Extended Personal Best (~3.2s Relaxed Sequence)
   useEffect(() => {
     if (!showGameOverModal) {
       setPbStage("initial");
@@ -2646,67 +2647,75 @@ useEffect(() => {
       return;
     }
 
-    // t = 0ms: Initial state
+    // Phase 1 (0.0s - 1.2s: Uninterrupted Confetti Shower):
+    // Top streamer shower falls smoothly; TIME & BEST static; badge hidden; bottom cannons silent
     setPbStage("initial");
-    const initialPrevBest = previousRecordTime && previousRecordTime > 0 
-      ? previousRecordTime 
-      : (sessionSeconds + Math.max(12, Math.floor(sessionSeconds * 0.15)));
-    setRollingBestTime(initialPrevBest);
+    setRollingBestTime(null);
 
-    // t ≈ 500ms (High-Beam Sync): Both TIME and BEST blink twice simultaneously in a soft pastel highlight pulse
-    const timerHighBeam = setTimeout(() => {
-      setPbStage("highbeam");
-    }, 500);
+    // Phase 2 (1.2s - 1.8s: Elevation & Bounce):
+    // TIME lifts vertically out of slot and scale-bounces into warm champagne-gold accent
+    const timerElevate = setTimeout(() => {
+      setPbStage("elevating");
+    }, 1200);
 
-    // t ≈ 700ms - 1100ms (Odometer Roll): Digits in the BEST slot smoothly roll down rapidly until they match TIME digits
+    // Phase 3 (1.8s - 2.5s: Dual Match & Odometer Sync):
+    // BEST lifts and matches elevated scale; digits roll down rapidly to match TIME exactly
     let rollInterval: any = null;
     const timerRoll = setTimeout(() => {
       setPbStage("rolling");
-      const startBest = initialPrevBest;
+      const startBest = previousRecordTime && previousRecordTime > 0 
+        ? previousRecordTime 
+        : (sessionSeconds + Math.max(14, Math.floor(sessionSeconds * 0.18)));
       const targetTime = sessionSeconds;
       const totalDiff = startBest - targetTime;
       let step = 0;
-      const totalSteps = 8;
+      const totalSteps = 12; // 12 steps over 600ms = 50ms per step
+      setRollingBestTime(startBest);
       rollInterval = setInterval(() => {
         step++;
         if (step >= totalSteps) {
           clearInterval(rollInterval);
+          rollInterval = null;
           setRollingBestTime(targetTime);
+          playRecordOverwriteSound();
         } else {
           const progress = step / totalSteps;
           const currentVal = Math.max(targetTime, Math.round(startBest - totalDiff * progress));
           setRollingBestTime(currentVal);
         }
-      }, 50); // 8 steps * 50ms = 400ms (700ms to 1100ms)
-    }, 700);
+      }, 50);
+    }, 1800);
 
-    // t ≈ 1150ms (Color Lock): Both TIME and BEST lock into the exact same warm champagne-gold pastel color simultaneously
-    const timerLock = setTimeout(() => {
-      setPbStage("locked");
+    // Phase 4a (2.5s: Descent & Badge Reveal):
+    // Both numbers smoothly descend and dock back into card slots; 'NEW PERSONAL BEST' badge drops in
+    const timerDock = setTimeout(() => {
+      setPbStage("docked");
       setRollingBestTime(sessionSeconds);
-      playRecordOverwriteSound();
-    }, 1150);
+    }, 2500);
 
-    // t ≈ 1250ms (Badge Reveal): "NEW PERSONAL BEST" badge smoothly drops in above stats with soft, calm continuous breathing glow
-    const timerBadge = setTimeout(() => {
-      setPbStage("badged");
-    }, 1250);
-
-    // t ≈ 1350ms (Salute): Single corner cannon fires once to celebrate the new record
+    // Phase 4b (2.8s: Salute & Victory Claps):
+    // Celebratory corner cannon blast fires + 5 synchronized victory claps with triumphant fanfare
     const timerSalute = setTimeout(() => {
-      setPbStage("completed");
+      setPbStage("salute");
       setConfettiMode("cannon-only");
+      setConfettiBurstKey(prev => prev + 1);
       setShowCelebrationConfetti(true);
       playPartyPopperSound(0);
-    }, 1350);
+      playApplauseSound(true);
+    }, 2800);
+
+    // Phase 4c (3.2s: Completed state):
+    const timerComplete = setTimeout(() => {
+      setPbStage("completed");
+    }, 3200);
 
     return () => {
-      clearTimeout(timerHighBeam);
+      clearTimeout(timerElevate);
       clearTimeout(timerRoll);
       if (rollInterval) clearInterval(rollInterval);
-      clearTimeout(timerLock);
-      clearTimeout(timerBadge);
+      clearTimeout(timerDock);
       clearTimeout(timerSalute);
+      clearTimeout(timerComplete);
     };
   }, [showGameOverModal, isNewRecordAchieved, challengeMode, previousRecordTime, sessionSeconds]);
 
@@ -5792,11 +5801,10 @@ useEffect(() => {
           playApplauseSound(false);
         }
       } else if (isRecordBroken) {
-        // Solo New Personal Best: Single gentle top streamer shower at t = 0ms (cannon salute fires at t = 1350ms)
+        // Solo New Personal Best: Single gentle top streamer shower at t = 0ms (cannon salute & claps fire in Phase 4 at t ≈ 2.8s)
         playRecordBreakSound();
         setConfettiMode("top-only");
         setShowCelebrationConfetti(true);
-        playApplauseSound(true);
       } else {
         // Standard solo win: Single gentle top shower; clean, static stats without roll animation or badges
         setConfettiMode("top-only");
@@ -9363,7 +9371,7 @@ useEffect(() => {
                     initial={{ opacity: 0, scale: 0.95, y: 15 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                    className={`modal card p-4 sm:p-6 md:p-8 w-[92%] sm:w-full max-w-lg max-h-[85dvh] my-auto mx-auto relative flex flex-col gap-3 sm:gap-4 rounded-[28px] shadow-[0_24px_50px_rgba(0,0,0,0.2)] overflow-hidden ${darkMode ? "bg-zinc-900 border border-zinc-700/50" : "bg-[#FDFBF7] border border-stone-200"}`}
+                    className={`modal card p-4 sm:p-6 md:p-8 w-[92%] sm:w-full max-w-lg max-h-[85vh] sm:max-h-[88vh] my-auto mx-auto relative flex flex-col gap-3 sm:gap-4 rounded-[28px] shadow-[0_24px_50px_rgba(0,0,0,0.2)] overflow-hidden ${darkMode ? "bg-zinc-900 border border-zinc-700/50" : "bg-[#FDFBF7] border border-stone-200"}`}
                   >
                     {/* ── 2-STEP END-GAME FLOW ── */}
                     {endGameStep === 1 ? (
@@ -9397,7 +9405,7 @@ useEffect(() => {
                         <div className={`w-full h-px shrink-0 ${darkMode ? "bg-zinc-800" : "bg-stone-200"}`} />
 
                         {/* SCREEN 1: ONLY Middle Leaderboard Player List is Scrollable */}
-                        <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 no-scrollbar flex flex-col gap-2">
+                        <div className="max-h-[38vh] sm:max-h-[42vh] overflow-y-auto overscroll-contain pr-1 custom-scrollbar flex flex-col gap-2">
                           {(() => {
                             const didCurrentPlayerFail = mistakeLimitEnabled && 
                               (boardState.maxMistakesLimit === 0 
@@ -9465,38 +9473,39 @@ useEffect(() => {
                                   className={`flex items-center justify-between p-3.5 rounded-2xl gap-3 transition-all border-none ${
                                     isPodium1
                                       ? (darkMode 
-                                          ? "bg-[#252017] text-[#EDE0BA] shadow-[0_2px_12px_rgba(0,0,0,0.25)]" 
-                                          : "bg-[#FAF5EC] text-[#745316] shadow-[0_2px_12px_rgba(217,170,80,0.06)]")
+                                          ? "bg-[#4c0519]/70 text-[#fecdd3] shadow-[0_2px_12px_rgba(0,0,0,0.25)]" 
+                                          : "bg-[#FFE4E6] text-[#9D174D] shadow-[0_2px_12px_rgba(244,63,94,0.08)]")
                                       : isPodium2
                                       ? (darkMode
-                                          ? "bg-[#202227] text-[#CBD5E1] shadow-xs"
-                                          : "bg-[#F3F4F6] text-[#475569] shadow-xs")
+                                          ? "bg-[#2e1065]/70 text-[#e9d5ff] shadow-xs"
+                                          : "bg-[#F3E8FF] text-[#6B21A8] shadow-xs")
                                       : isPodium3
                                       ? (darkMode
-                                          ? "bg-[#25201C] text-[#DBC2AC] shadow-xs"
-                                          : "bg-[#F8F4EF] text-[#7C5A3E] shadow-xs")
-                                      : player.failed
-                                      ? (darkMode ? "bg-zinc-800/30 text-zinc-500" : "bg-stone-100/60 text-stone-500")
-                                      : player.isMe 
-                                      ? (darkMode ? "bg-[#1E1F33] text-[#C7D2FE]" : "bg-[#F1F4FF] text-[#3730A3]") 
-                                      : (darkMode ? "bg-zinc-800/40 text-zinc-400" : "bg-stone-100/70 text-stone-600")
+                                          ? "bg-[#451a03]/70 text-[#fef08a] shadow-xs"
+                                          : "bg-[#FFF99D] text-[#854D0E] shadow-xs")
+                                      : (darkMode ? "bg-zinc-800/40 text-zinc-400" : "bg-stone-100/80 text-stone-500")
                                   }`}
                                 >
                                   {/* Left: Rank Medal/Trophy icon + Player Name + subtle 'YOU' badge + subtle 'New PB' pill badge */}
                                   <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                                     <span className={`font-mono text-sm sm:text-base font-black w-7 sm:w-8 text-center flex items-center justify-center shrink-0 ${
-                                      player.isAbandoned ? "text-rose-500" : isPending ? "text-amber-500 animate-pulse" : isPodium1 ? "text-amber-500" : isPodium2 ? "text-slate-400" : isPodium3 ? "text-amber-700 dark:text-amber-500" : darkMode ? "text-zinc-500" : "text-stone-400"
+                                      player.isAbandoned ? "text-rose-500" :
+                                      isPending ? "text-amber-500 animate-pulse" :
+                                      isPodium1 ? (darkMode ? "text-[#fecdd3]" : "text-[#9D174D]") :
+                                      isPodium2 ? (darkMode ? "text-[#e9d5ff]" : "text-[#6B21A8]") :
+                                      isPodium3 ? (darkMode ? "text-[#fef08a]" : "text-[#854D0E]") :
+                                      (darkMode ? "text-zinc-400" : "text-stone-500")
                                     }`}>
                                       {player.isAbandoned ? (
                                         <XCircle className="w-4 h-4 text-rose-500 stroke-[2.5]" />
                                       ) : isPending ? (
                                         <Clock className="w-4 h-4 text-amber-500 animate-spin" />
                                       ) : isPodium1 ? (
-                                        <Trophy className="w-5 h-5 text-amber-500 fill-amber-400/40 stroke-[2.5] shrink-0" />
+                                        <Trophy className={`w-5 h-5 stroke-[2.5] shrink-0 ${darkMode ? "text-[#fecdd3] fill-[#9F1239]/60" : "text-[#9D174D] fill-[#FECDD3]"}`} />
                                       ) : isPodium2 ? (
-                                        <Award className="w-4.5 h-4.5 text-slate-400 stroke-[2.5] shrink-0" />
+                                        <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-[#e9d5ff]" : "text-[#6B21A8]"}`} />
                                       ) : isPodium3 ? (
-                                        <Award className="w-4.5 h-4.5 text-amber-700 dark:text-amber-500 stroke-[2.5] shrink-0" />
+                                        <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-[#fef08a]" : "text-[#854D0E]"}`} />
                                       ) : (
                                         positionStr
                                       )}
@@ -9504,23 +9513,23 @@ useEffect(() => {
 
                                     <div className="flex items-center gap-2 min-w-0 flex-wrap">
                                       <span className={`font-sans font-bold text-sm leading-none truncate ${
-                                        isPodium1 ? (darkMode ? "text-[#EDE0BA]" : "text-[#745316]") :
-                                        isPodium2 ? (darkMode ? "text-[#CBD5E1]" : "text-[#475569]") :
-                                        isPodium3 ? (darkMode ? "text-[#DBC2AC]" : "text-[#7C5A3E]") :
-                                        player.isMe ? (darkMode ? "text-indigo-200" : "text-indigo-950") :
-                                        (darkMode ? "text-zinc-200" : "text-stone-800")
+                                        isPodium1 ? (darkMode ? "text-[#fecdd3]" : "text-[#9D174D]") :
+                                        isPodium2 ? (darkMode ? "text-[#e9d5ff]" : "text-[#6B21A8]") :
+                                        isPodium3 ? (darkMode ? "text-[#fef08a]" : "text-[#854D0E]") :
+                                        player.isMe ? (darkMode ? "text-indigo-300 font-bold" : "text-indigo-950 font-bold") :
+                                        (darkMode ? "text-zinc-300 font-medium" : "text-stone-700 font-medium")
                                       }`}>
                                         {player.name}
                                       </span>
 
                                       {player.isMe && (
-                                        <span className="text-[9px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 px-1.5 py-0.5 rounded font-sans font-semibold uppercase tracking-wider shrink-0">
+                                        <span className="text-[9px] bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 px-1.5 py-0.5 rounded font-sans font-semibold uppercase tracking-wider shrink-0">
                                           You
                                         </span>
                                       )}
 
                                       {player.isMe && isNewRecordAchieved && !player.failed && (
-                                        <span className="text-[8.5px] bg-amber-400/15 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-sans font-medium uppercase tracking-wider flex items-center gap-1 shrink-0 animate-pulse">
+                                        <span className="text-[8.5px] bg-amber-400/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-sans font-medium uppercase tracking-wider flex items-center gap-1 shrink-0 animate-pulse">
                                           <Sparkles className="w-2.5 h-2.5 text-amber-500" />
                                           <span>New PB</span>
                                         </span>
@@ -9543,22 +9552,27 @@ useEffect(() => {
                                         <span className="font-mono font-semibold text-xs sm:text-sm text-rose-500">
                                           Failed
                                         </span>
-                                        <span className="font-mono text-[9px] text-stone-400 dark:text-zinc-500">
+                                        <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400">
                                           {player.mistakes} errors
                                         </span>
                                       </>
                                     ) : (
                                       <>
                                         <span className={`font-mono font-bold text-sm sm:text-base ${
-                                          isPodium1 ? (darkMode ? "text-[#EDE0BA]" : "text-[#745316]") :
-                                          isPodium2 ? (darkMode ? "text-[#CBD5E1]" : "text-[#475569]") :
-                                          isPodium3 ? (darkMode ? "text-[#DBC2AC]" : "text-[#7C5A3E]") :
-                                          player.isMe ? (darkMode ? "text-indigo-200" : "text-indigo-950") :
-                                          (darkMode ? "text-zinc-200" : "text-stone-850")
+                                          isPodium1 ? (darkMode ? "text-[#fecdd3]" : "text-[#9D174D]") :
+                                          isPodium2 ? (darkMode ? "text-[#e9d5ff]" : "text-[#6B21A8]") :
+                                          isPodium3 ? (darkMode ? "text-[#fef08a]" : "text-[#854D0E]") :
+                                          player.isMe ? (darkMode ? "text-indigo-300 font-bold" : "text-indigo-950 font-bold") :
+                                          (darkMode ? "text-zinc-300 font-bold" : "text-stone-700 font-bold")
                                         }`}>
                                           {formatTimer(player.time < 9999 ? player.time : (player.elapsedTime || 0))}
                                         </span>
-                                        <span className="font-sans text-[9px] text-stone-400 dark:text-zinc-500">
+                                        <span className={`font-sans text-[9px] ${
+                                          isPodium1 ? (darkMode ? "text-[#fecdd3]/80" : "text-[#9D174D]/80") :
+                                          isPodium2 ? (darkMode ? "text-[#e9d5ff]/80" : "text-[#6B21A8]/80") :
+                                          isPodium3 ? (darkMode ? "text-[#fef08a]/80" : "text-[#854D0E]/80") :
+                                          (darkMode ? "text-zinc-400" : "text-stone-500")
+                                        }`}>
                                           {player.mistakes === 0 ? "0 errors" : `${player.mistakes} ${player.mistakes === 1 ? "error" : "errors"}`}
                                         </span>
                                       </>
@@ -10322,7 +10336,7 @@ useEffect(() => {
                               </motion.div>
                             ) : isNewRecordAchieved ? (
                               <div className="min-h-[38px] mt-1.5 flex items-center justify-center">
-                                {(pbStage === "badged" || pbStage === "completed") && (
+                                {(pbStage === "docked" || pbStage === "salute" || pbStage === "completed") && (
                                   <motion.div 
                                     key="pb-badge"
                                     initial={{ y: -16, opacity: 0 }}
@@ -10370,35 +10384,36 @@ useEffect(() => {
                             {/* TIME Display (Left) */}
                             <motion.div 
                               animate={
-                                isNewRecordAchieved && !isFailed && pbStage === "highbeam"
-                                  ? { 
-                                      opacity: [1, 0.3, 1, 0.3, 1],
-                                      backgroundColor: [
-                                        "transparent",
-                                        darkMode ? "rgba(245, 218, 138, 0.22)" : "rgba(245, 218, 138, 0.35)",
-                                        "transparent",
-                                        darkMode ? "rgba(245, 218, 138, 0.22)" : "rgba(245, 218, 138, 0.35)",
-                                        "transparent"
-                                      ]
-                                    }
-                                  : {}
+                                isNewRecordAchieved && !isFailed
+                                  ? pbStage === "elevating"
+                                    ? { y: [0, -10, -8], scale: [1.0, 1.2, 1.08] }
+                                    : pbStage === "rolling"
+                                    ? { y: -8, scale: 1.08 }
+                                    : { y: 0, scale: 1.0 }
+                                  : { y: 0, scale: 1.0 }
                               }
-                              transition={{ duration: 0.45, ease: "easeInOut" }}
+                              transition={
+                                pbStage === "elevating"
+                                  ? { duration: 0.6, ease: "easeOut" }
+                                  : pbStage === "rolling"
+                                  ? { duration: 0.25 }
+                                  : { duration: 0.4, ease: "easeOut" }
+                              }
                               className={`flex flex-col items-center p-1.5 rounded-xl transition-colors duration-300 ${
-                                isNewRecordAchieved && !isFailed && (pbStage === "locked" || pbStage === "badged" || pbStage === "completed")
-                                  ? (darkMode ? "bg-[#292218] text-[#F3DFB0]" : "bg-[#FDF6E9] text-[#9B7020]")
+                                isNewRecordAchieved && !isFailed && pbStage !== "initial"
+                                  ? (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
                                   : ""
                               }`}
                             >
-                              <span className={`text-[10px] uppercase font-extrabold tracking-widest ${
-                                isNewRecordAchieved && !isFailed && (pbStage === "locked" || pbStage === "badged" || pbStage === "completed")
+                              <span className={`text-[10px] uppercase font-bold tracking-widest ${
+                                isNewRecordAchieved && !isFailed && pbStage !== "initial"
                                   ? (darkMode ? "text-[#E3CF9E]" : "text-[#9B7020]")
-                                  : (darkMode ? "text-zinc-200" : "text-stone-700")
+                                  : (darkMode ? "text-zinc-400" : "text-stone-500")
                               }`}>
                                 Time
                               </span>
-                              <span className={`text-base sm:text-lg font-mono font-black tracking-tight ${
-                                isNewRecordAchieved && !isFailed && (pbStage === "locked" || pbStage === "badged" || pbStage === "completed")
+                              <span className={`text-base sm:text-lg font-mono font-bold tracking-tight ${
+                                isNewRecordAchieved && !isFailed && pbStage !== "initial"
                                   ? (darkMode ? "text-[#F3DFB0]" : "text-[#9B7020]")
                                   : (darkMode ? "text-white" : "text-stone-900")
                               }`}>
@@ -10412,7 +10427,7 @@ useEffect(() => {
                                 ? "p-1.5 rounded-xl bg-rose-500/10 dark:bg-rose-950/30 ring-2 ring-rose-400/60 shadow-[0_0_14px_rgba(244,63,94,0.18)] animate-pulse"
                                 : ""
                             }`}>
-                              <span className={`text-[10px] uppercase font-bold tracking-widest ${isFailed ? "text-rose-500 font-black" : (darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]")}`}>Errors</span>
+                              <span className={`text-[10px] uppercase font-bold tracking-widest ${isFailed ? "text-rose-500 font-black" : (darkMode ? "text-zinc-400" : "text-stone-500")}`}>Errors</span>
                               <span className={`text-base sm:text-lg font-mono font-bold text-rose-500`}>
                                 {boardState.currentMistakesCount}/{boardState.maxMistakesLimit}
                               </span>
@@ -10422,44 +10437,43 @@ useEffect(() => {
                             {isNewRecordAchieved && !isFailed ? (
                               <motion.div 
                                 animate={
-                                  pbStage === "highbeam"
-                                    ? { 
-                                        opacity: [1, 0.3, 1, 0.3, 1],
-                                        backgroundColor: [
-                                          "transparent",
-                                          darkMode ? "rgba(245, 218, 138, 0.22)" : "rgba(245, 218, 138, 0.35)",
-                                          "transparent",
-                                          darkMode ? "rgba(245, 218, 138, 0.22)" : "rgba(245, 218, 138, 0.35)",
-                                          "transparent"
-                                        ]
-                                      }
-                                    : {}
+                                  pbStage === "rolling"
+                                    ? { y: -8, scale: 1.08 }
+                                    : { y: 0, scale: 1.0 }
                                 }
-                                transition={{ duration: 0.45, ease: "easeInOut" }}
+                                transition={
+                                  pbStage === "rolling"
+                                    ? { duration: 0.35, ease: "easeOut" }
+                                    : { duration: 0.4, ease: "easeOut" }
+                                }
                                 className={`flex flex-col items-center p-1.5 rounded-xl transition-colors duration-300 ${
-                                  pbStage === "locked" || pbStage === "badged" || pbStage === "completed"
-                                    ? (darkMode ? "bg-[#292218] text-[#F3DFB0]" : "bg-[#FDF6E9] text-[#9B7020]")
+                                  pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
+                                    ? (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
                                     : ""
                                 }`}
                               >
-                                <span className={`text-[10px] uppercase font-extrabold tracking-widest ${
-                                  pbStage === "locked" || pbStage === "badged" || pbStage === "completed"
+                                <span className={`text-[10px] uppercase font-bold tracking-widest ${
+                                  pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
                                     ? (darkMode ? "text-[#E3CF9E]" : "text-[#9B7020]")
-                                    : "text-amber-500"
+                                    : (darkMode ? "text-zinc-400" : "text-stone-500")
                                 }`}>
                                   Best
                                 </span>
-                                <span className={`text-base sm:text-lg font-mono font-black tracking-tight ${
-                                  pbStage === "locked" || pbStage === "badged" || pbStage === "completed"
+                                <span className={`text-base sm:text-lg font-mono font-bold tracking-tight ${
+                                  pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
                                     ? (darkMode ? "text-[#F3DFB0]" : "text-[#9B7020]")
                                     : (darkMode ? "text-zinc-400" : "text-stone-500")
                                 }`}>
-                                  {formatTimer(rollingBestTime ?? (previousRecordTime || sessionSeconds))}
+                                  {pbStage === "initial" || pbStage === "elevating"
+                                    ? (previousRecordTime && previousRecordTime > 0 ? formatTimer(previousRecordTime) : "--:--")
+                                    : pbStage === "rolling"
+                                    ? formatTimer(rollingBestTime ?? sessionSeconds)
+                                    : formatTimer(sessionSeconds)}
                                 </span>
                               </motion.div>
                             ) : (
                               <div className="flex flex-col items-center p-1.5">
-                                <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>
+                                <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-zinc-400" : "text-stone-500"}`}>
                                   Best
                                 </span>
                                 <span className="text-base sm:text-lg font-mono font-bold text-amber-500">
@@ -14329,6 +14343,7 @@ useEffect(() => {
       {/* 🎉 CELEBRATION CONFETTI BURST OVERLAY */}
       {showCelebrationConfetti && (
         <ConfettiBurst
+          key={`${confettiMode}-${confettiBurstKey}`}
           darkMode={darkMode}
           mode={confettiMode}
           onBurst={(burstIdx) => playPartyPopperSound(burstIdx)}
