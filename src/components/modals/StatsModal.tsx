@@ -73,10 +73,10 @@ export const StatsModal: React.FC<StatsModalProps> = ({
         <div className="w-full grid grid-cols-2 gap-4 shrink-0">
           {/* Gauge Card: Win Rate */}
           <div
-            className={`p-5 flex flex-col items-center justify-center text-center relative rounded-2xl transition-all duration-300 ${
+            className={`p-5 flex flex-col items-center justify-center text-center relative rounded-2xl border-none transition-all duration-300 ${
               darkMode
-                ? "bg-[#0c4a6e]/20 border border-[#f5f3ff]/15 text-sky-200"
-                : "bg-[#E0F2FE]/60 border-none shadow-[0_4px_20px_rgba(3,105,161,0.06)]"
+                ? "bg-[#0c4a6e]/20 text-sky-200"
+                : "bg-[#E0F2FE]/60 shadow-[0_4px_20px_rgba(3,105,161,0.06)]"
             }`}
           >
             <span className="text-xs font-semibold tracking-wider text-stone-600 dark:text-zinc-300 uppercase mb-3">
@@ -123,14 +123,14 @@ export const StatsModal: React.FC<StatsModalProps> = ({
 
           {/* Personal Best Records Card */}
           <div
-            className={`p-5 flex flex-col text-left font-sans rounded-2xl justify-between h-full transition-all duration-300 ${
+            className={`p-5 flex flex-col text-left font-sans rounded-2xl justify-between h-full border-none transition-all duration-300 ${
               darkMode
-                ? "bg-[#2e1065]/20 border border-[#f5f3ff]/15 text-purple-200"
-                : "bg-[#F3E8FF]/60 border-none shadow-[0_4px_20px_rgba(107,33,168,0.06)]"
+                ? "bg-[#2e1065]/20 text-purple-200"
+                : "bg-[#F3E8FF]/60 shadow-[0_4px_20px_rgba(107,33,168,0.06)]"
             }`}
           >
             <div>
-              <span className="text-xs font-semibold tracking-wider text-stone-600 dark:text-zinc-300 uppercase block mb-4">
+              <span className="text-xs font-semibold tracking-wider text-stone-600 dark:text-zinc-300 uppercase flex items-center justify-center text-center mb-4">
                 Personal Bests
               </span>
 
@@ -195,22 +195,22 @@ export const StatsModal: React.FC<StatsModalProps> = ({
 
         {/* ⚔️ DUAL-SECTION COMPETE HISTORY MODULE */}
         <div
-          className={`w-full rounded-2xl flex flex-col font-sans shrink-0 overflow-hidden transition-all duration-300 ${
+          className={`w-full rounded-2xl flex flex-col font-sans shrink-0 overflow-hidden border-none transition-all duration-300 ${
             darkMode
-              ? "bg-[#9d174d]/20 border border-[#f5f3ff]/15 text-[#fbcfe8]"
-              : "bg-[#FDF2F8]/45 border-none shadow-[0_4px_20px_rgba(219,39,119,0.02)]"
+              ? "bg-[#9d174d]/20 text-[#fbcfe8]"
+              : "bg-[#FDF2F8]/45 shadow-[0_4px_20px_rgba(219,39,119,0.02)]"
           }`}
           id="game-history-tabs-container"
         >
           {/* Tab Selectors - Borderless, clean negative space inside */}
           <div
-            className={`grid grid-cols-3 p-1.5 font-sans text-xs flex items-center justify-center font-semibold uppercase tracking-wider gap-0.5 ${
+            className={`grid grid-cols-3 p-1.5 font-sans text-xs items-center justify-center font-semibold uppercase tracking-wider gap-1 ${
               darkMode ? "bg-[#9d174d]/5" : "bg-[#FDF2F8]/20"
             }`}
           >
             <button
               onClick={() => handleSelectHistoryTab("completed")}
-              className={`py-2 px-1.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center gap-1.5 uppercase font-bold tracking-wider ${
+              className={`py-2 px-2.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center text-center gap-1.5 uppercase font-bold tracking-wider ${
                 activeHistoryTab === "completed"
                   ? darkMode
                     ? "bg-[#9d174d]/55 text-[#fbcfe8]"
@@ -222,7 +222,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
             >
               <span>History</span>
               <span
-                className={`text-[9.5px] px-1.5 py-0.25 rounded-md ${
+                className={`text-[9.5px] px-1.5 py-0.5 rounded-md leading-none flex items-center justify-center ${
                   darkMode ? "bg-[#9d174d]/45 text-[#fbcfe8]/80" : "bg-pink-100/50 text-[#9D174D]/80"
                 }`}
               >
@@ -232,7 +232,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
 
             <button
               onClick={() => handleSelectHistoryTab("saved")}
-              className={`py-2 px-1.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center gap-1.5 uppercase font-bold tracking-wider ${
+              className={`py-2 px-2.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center text-center gap-1.5 uppercase font-bold tracking-wider ${
                 activeHistoryTab === "saved"
                   ? darkMode
                     ? "bg-[#9d174d]/55 text-[#fbcfe8]"
@@ -244,7 +244,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
             >
               <span>Saved</span>
               <span
-                className={`text-[9.5px] px-1.5 py-0.25 rounded-md ${
+                className={`text-[9.5px] px-1.5 py-0.5 rounded-md leading-none flex items-center justify-center ${
                   darkMode ? "bg-[#9d174d]/45 text-[#fbcfe8]/80" : "bg-pink-100/50 text-[#9D174D]/80"
                 }`}
               >
@@ -254,7 +254,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
 
             <button
               onClick={() => handleSelectHistoryTab("friends")}
-              className={`py-2 px-1.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center gap-1.5 uppercase font-bold tracking-wider ${
+              className={`py-2 px-2.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center text-center gap-1.5 uppercase font-bold tracking-wider ${
                 activeHistoryTab === "friends"
                   ? darkMode
                     ? "bg-[#9d174d]/55 text-[#fbcfe8]"
@@ -266,7 +266,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
             >
               <span>Friends</span>
               <span
-                className={`text-[9.5px] px-1.5 py-0.25 rounded-md ${
+                className={`text-[9.5px] px-1.5 py-0.5 rounded-md leading-none flex items-center justify-center ${
                   darkMode ? "bg-[#9d174d]/45 text-[#fbcfe8]/80" : "bg-pink-100/50 text-[#9D174D]/80"
                 }`}
               >
@@ -549,13 +549,13 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                     <div className="flex flex-col h-full">
                       {/* Segmented Control Header */}
                       <div className="flex items-center justify-center px-1 shrink-0 mb-3 mt-1">
-                        <div className={`flex w-full rounded-lg p-1 ${darkMode ? "bg-zinc-900/60" : "bg-stone-200/50"}`}>
+                        <div className={`flex w-full rounded-lg p-1 ${darkMode ? "bg-black/35" : "bg-stone-200/50"}`}>
                           <button
                             onClick={() => setActivePlayersTab('recent')}
                             className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
                               activePlayersTab === 'recent'
-                                ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
-                                : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
+                                ? (darkMode ? "bg-[#2A0818] text-[#fbcfe8] shadow-sm" : "bg-white text-[#9D174D] shadow-sm")
+                                : (darkMode ? "bg-transparent text-pink-300/60 hover:text-[#fbcfe8]" : "bg-transparent text-stone-500 hover:text-stone-700")
                             }`}
                           >
                             Recent ({recentPlayers.length})
@@ -564,8 +564,8 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                             onClick={() => setActivePlayersTab('friends')}
                             className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
                               activePlayersTab === 'friends'
-                                ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
-                                : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
+                                ? (darkMode ? "bg-[#2A0818] text-[#fbcfe8] shadow-sm" : "bg-white text-[#9D174D] shadow-sm")
+                                : (darkMode ? "bg-transparent text-pink-300/60 hover:text-[#fbcfe8]" : "bg-transparent text-stone-500 hover:text-stone-700")
                             }`}
                           >
                             Friends ({friends.length})

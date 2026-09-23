@@ -143,8 +143,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
               <div
-                className="w-10 h-10 rounded-full border-none flex items-center justify-center text-md font-sans font-black text-white shrink-0 shadow-sm"
-                style={{ backgroundColor: userProfile?.avatarColor || "#8B5CF6" }}
+                className="w-10 h-10 rounded-full border-none flex items-center justify-center text-md font-sans font-black text-white shrink-0 shadow-sm bg-purple-600"
               >
                 {userProfile?.name ? userProfile.name.charAt(0).toUpperCase() : "V"}
               </div>
@@ -263,7 +262,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </svg>
                 <span>Connect Google Account</span>
               </button>
-              <p className="text-[10px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-normal font-sans text-center">
+              <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 mt-1.5 font-sans text-center">
                 Cloud synchronization across devices will be available in a future update.
               </p>
             </div>
@@ -280,7 +279,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <span
-              className={`text-base font-bold tracking-tight leading-none ${
+              className={`text-[11px] sm:text-xs font-semibold tracking-wider uppercase leading-none ${
                 darkMode ? "text-sky-300" : "text-[#0369A1]"
               }`}
             >
@@ -289,7 +288,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* Dark Mode Theme */}
             <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-stone-300" : "text-stone-850"}`}>
+              <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
                 Dark Mode Theme
               </span>
               <button
@@ -312,7 +311,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* Sound Effects */}
             <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-stone-300" : "text-stone-850"}`}>
+              <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
                 Sound Effects
               </span>
               <button
@@ -339,7 +338,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* Haptic Vibrations */}
             <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-stone-300" : "text-stone-850"}`}>
+              <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
                 Haptic Vibrations
               </span>
               <button
@@ -373,7 +372,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Push Notifications */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
-                <span className={`text-sm font-medium ${darkMode ? "text-stone-300" : "text-stone-850"}`}>
+                <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
                   Push Notifications
                 </span>
                 <button
@@ -388,7 +387,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </button>
               </div>
-              <p className="text-[10px] text-stone-500 dark:text-zinc-400 leading-normal font-sans m-0">
+              <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 font-sans m-0">
                 Available in the upcoming mobile app release.
               </p>
             </div>
@@ -403,7 +402,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <span
-              className={`text-base font-bold tracking-tight leading-none ${
+              className={`text-[11px] sm:text-xs font-semibold tracking-wider uppercase leading-none ${
                 darkMode ? "text-pink-300" : "text-[#9D174D]"
               }`}
             >
@@ -414,7 +413,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
                     Highlight Identical
                   </span>
                   <button
@@ -464,7 +463,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
                     Remaining Numbers
                   </span>
                   <button
@@ -514,7 +513,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
                     Highlight Area
                   </span>
                   <button
@@ -564,7 +563,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
                     Auto-Remove Notes
                   </span>
                   <button
@@ -614,8 +613,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <Zap className="w-4 h-4 text-[#0369A1] dark:text-[#38bdf8] fill-current" />
-                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                  <Zap className="w-4 h-4 text-pink-600 dark:text-pink-400 fill-current" />
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
                     Fast Fill (Paint Mode)
                   </span>
                   <button
@@ -666,7 +665,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-stone-850"}`}>
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
                     Auto-Switch Completed Numbers
                   </span>
                   <button
@@ -724,7 +723,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <span
-              className={`text-base font-bold tracking-tight leading-none ${
+              className={`text-[11px] sm:text-xs font-semibold tracking-wider uppercase leading-none ${
                 darkMode ? "text-emerald-300" : "text-[#135236]"
               }`}
             >
@@ -736,7 +735,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1.5">
-                    <span className={`text-sm font-medium ${darkMode ? "text-[#a7f3d0]/90" : "text-stone-850"}`}>
+                    <span className={`text-sm font-medium ${darkMode ? "text-emerald-100" : "text-emerald-950"}`}>
                       Active Timer Clock
                     </span>
                     <button
@@ -798,7 +797,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1.5">
-                    <span className={`text-sm font-medium ${darkMode ? "text-[#a7f3d0]/90" : "text-stone-850"}`}>
+                    <span className={`text-sm font-medium ${darkMode ? "text-emerald-100" : "text-emerald-950"}`}>
                       Strict Mistake Limit
                     </span>
                     <button
@@ -870,22 +869,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <span
-              className={`text-[10.5px] font-mono font-black uppercase tracking-wider border-b pb-1.5 ${
+              className={`text-[11px] sm:text-xs font-semibold tracking-wider uppercase leading-none border-b pb-1.5 ${
                 darkMode ? "text-amber-300 border-[#fde68a]/20" : "text-amber-800 border-amber-200"
               }`}
             >
-              Support & Info
+              SUPPORT & INFO
             </span>
 
-            <div className="flex flex-col gap-2 font-mono">
+            <div className="flex flex-col gap-2 font-sans">
               <button
                 onClick={() => {
                   playClickSound();
                   onOpenHowToPlay();
                 }}
-                className={`w-full py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
+                className={`w-full py-2.5 px-4 text-sm font-medium text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
                   darkMode
-                    ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-200"
+                    ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-100"
                     : "bg-white hover:bg-amber-50 text-amber-950"
                 }`}
               >
@@ -906,9 +905,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   playClickSound();
                   onOpenCompliancePage("terms");
                 }}
-                className={`w-full py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
+                className={`w-full py-2.5 px-4 text-sm font-medium text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
                   darkMode
-                    ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-200"
+                    ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-100"
                     : "bg-white hover:bg-amber-50 text-amber-950"
                 }`}
               >
@@ -929,9 +928,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   playClickSound();
                   onOpenCompliancePage("privacy");
                 }}
-                className={`w-full py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
+                className={`w-full py-2.5 px-4 text-sm font-medium text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
                   darkMode
-                    ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-200"
+                    ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-100"
                     : "bg-white hover:bg-amber-50 text-amber-950"
                 }`}
               >
@@ -952,9 +951,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   playClickSound();
                   onOpenCompliancePage("about");
                 }}
-                className={`w-full py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
+                className={`w-full py-2.5 px-4 text-sm font-medium text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
                   darkMode
-                    ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-200"
+                    ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-100"
                     : "bg-white hover:bg-amber-50 text-amber-950"
                 }`}
               >
@@ -975,9 +974,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   playClickSound();
                   onOpenCompliancePage("contact");
                 }}
-                className={`w-full py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
+                className={`w-full py-2.5 px-4 text-sm font-medium text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
                   darkMode
-                    ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-200"
+                    ? "bg-amber-950/40 hover:bg-amber-950/60 text-amber-100"
                     : "bg-white hover:bg-amber-50 text-amber-950"
                 }`}
               >
@@ -1004,7 +1003,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onOpenDeleteAccountModal();
                   }
                 }}
-                className={`w-full mt-2 py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
+                className={`w-full mt-2 py-2.5 px-4 text-sm font-medium text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
                   darkMode
                     ? "bg-red-900/40 hover:bg-red-900/60 text-red-300"
                     : "bg-red-50 hover:bg-red-100 text-red-700"
@@ -1031,10 +1030,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   playClickSound();
                   onOpenResetSettingsModal();
                 }}
-                className={`w-full mt-2 py-2.5 px-4 text-[11px] uppercase font-black tracking-wider text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
+                className={`w-full mt-2 py-2.5 px-4 text-sm font-medium text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
                   darkMode
-                    ? "bg-stone-800/40 hover:bg-stone-800/60 text-stone-300"
-                    : "bg-stone-100 hover:bg-stone-200 text-stone-700"
+                    ? "bg-stone-800/40 hover:bg-stone-800/60 text-amber-100"
+                    : "bg-stone-100 hover:bg-stone-200 text-amber-950"
                 }`}
               >
                 <span>Reset Settings</span>

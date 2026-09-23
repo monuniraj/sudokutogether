@@ -8465,7 +8465,7 @@ useEffect(() => {
               <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
               <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
             </h1>
-            <span className="text-[11px] tracking-widest uppercase font-medium text-stone-500 dark:text-zinc-400 leading-none select-none mt-1 text-center truncate max-w-full block">
+            <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#d1fae5]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#fef08a]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#065F46]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#854D0E]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
               {currentScreen === "together" ? "Together Mode" : currentScreen === "settings" ? "Settings" : currentScreen === "login" ? "Authorization" : currentScreen === "status" ? "Player Insights" : (boardState?.difficulty || difficulty)}
             </span>
           </div>
@@ -8730,11 +8730,11 @@ useEffect(() => {
 
           {/* PANE 2: ACTIVE GAMEPLAY ARENA */}
           {currentScreen === "game" && (
-            <div className={`h-[100dvh] max-h-[100dvh] w-full overflow-hidden flex flex-col justify-between select-none overscroll-none p-1 sm:p-3 md:p-6 lg:overflow-y-auto pb-[clamp(32px,5vh,64px)] pt-[calc(70px+env(safe-area-inset-top,0px)+clamp(12px,4.3vh,36px))] md:pt-[76px] lg:pt-[85px] selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto`}>
+            <div className={`h-[100dvh] max-h-[100dvh] w-full overflow-hidden flex flex-col justify-start select-none overscroll-none p-1 sm:p-3 md:p-6 lg:overflow-y-auto pb-[clamp(24px,4vh,48px)] pt-[calc(70px+env(safe-area-inset-top,0px)+clamp(20px,3.5vh,36px))] md:pt-[76px] lg:pt-[85px] selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto`}>
               
               {/* Main responsive outer layout container - Centers automatically as a unified cohesive block */}
               <div 
-                className="w-full lg:w-fit flex-1 flex flex-col lg:flex-row gap-5 lg:gap-7 justify-start lg:justify-center items-center lg:items-stretch select-none mx-auto my-0 lg:my-auto shrink-0"
+                className="w-full lg:w-fit flex flex-col lg:flex-row gap-4 sm:gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto my-auto shrink-0"
                 id="main-responsive-game-container"
               >
                 
@@ -8794,9 +8794,9 @@ useEffect(() => {
                   </div>
 
                   {/* ROW 2: HUD GROUP DIRECTLY ABOVE 9x9 BOARD */}
-                  <div className="w-full relative flex items-center justify-between px-1 mb-1 select-none shrink-0 h-8 sm:h-9" id="unified-bridge-container">
+                  <div className="w-full relative flex items-center justify-between px-1 mb-1 select-none shrink-0" id="unified-bridge-container">
                     {/* Left: Mistakes status metric */}
-                    <span className={`font-mono font-semibold text-xs sm:text-sm tracking-tight leading-none select-none flex items-center ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
+                    <span className={`font-mono font-semibold text-sm sm:text-base tracking-tight leading-none select-none flex items-center ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
                       ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
                     </span>
 
@@ -8953,7 +8953,7 @@ useEffect(() => {
                           )}
                         </button>
                         <span 
-                          className={`font-mono tabular-nums font-semibold text-xs sm:text-sm tracking-tight leading-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
+                          className={`font-mono tabular-nums font-semibold text-sm sm:text-base tracking-tight leading-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
                           style={{ fontVariantNumeric: "tabular-nums" }}
                         >
                           {isTimerPaused ? "PAUSED" : formatTimer(sessionSeconds)}
@@ -8961,7 +8961,7 @@ useEffect(() => {
                       </div>
                     ) : (
                       <span 
-                        className={`font-mono tabular-nums font-semibold text-xs sm:text-sm tracking-tight leading-none select-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
+                        className={`font-mono tabular-nums font-semibold text-sm sm:text-base tracking-tight leading-none select-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
                         style={{ fontVariantNumeric: "tabular-nums" }}
                       >
                         --:--
@@ -10343,26 +10343,34 @@ useEffect(() => {
                                     animate={{ 
                                       y: 0, 
                                       opacity: 1,
-                                      boxShadow: [
-                                        "0 2px 8px rgba(217, 170, 80, 0.18)",
-                                        "0 2px 18px rgba(217, 170, 80, 0.38)",
-                                        "0 2px 8px rgba(217, 170, 80, 0.18)"
-                                      ]
+                                      boxShadow: pbStage === "completed"
+                                        ? "0 0px 0px rgba(0,0,0,0)"
+                                        : [
+                                            "0 2px 8px rgba(217, 170, 80, 0.18)",
+                                            "0 2px 18px rgba(217, 170, 80, 0.38)",
+                                            "0 2px 8px rgba(217, 170, 80, 0.18)"
+                                          ]
                                     }}
                                     transition={{ 
                                       y: { duration: 0.35, ease: "easeOut" },
                                       opacity: { duration: 0.2 },
-                                      boxShadow: {
-                                        duration: 2.8,
-                                        repeat: Infinity,
-                                        ease: "easeInOut"
-                                      }
+                                      boxShadow: pbStage === "completed"
+                                        ? { duration: 0.4, ease: "easeOut" }
+                                        : {
+                                            duration: 2.8,
+                                            repeat: Infinity,
+                                            ease: "easeInOut"
+                                          }
                                     }}
-                                    className="relative flex items-center justify-center gap-1.5 py-1 px-3.5 rounded-full bg-[#FAF3E3] dark:bg-[#2C2419] text-[#9B7020] dark:text-[#EEDCB0] font-sans font-bold text-[11px] uppercase tracking-wider select-none shadow-xs"
+                                    className={`relative flex items-center justify-center gap-1.5 py-1 px-3.5 rounded-full font-sans font-bold text-[11px] uppercase tracking-wider select-none shadow-xs transition-colors duration-300 ${
+                                      darkMode
+                                        ? "bg-[#292218] border border-amber-400/25 text-[#F3DFB0]"
+                                        : "bg-[#FDF6E9] border border-amber-300/40 text-[#9B7020]"
+                                    }`}
                                   >
-                                    <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                                    <span>NEW PERSONAL BEST</span>
-                                    <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+                                    <Trophy className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300 shrink-0" />
+                                    <span className="text-amber-600 dark:text-amber-300">NEW PERSONAL BEST</span>
+                                    <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-300 shrink-0" />
                                   </motion.div>
                                 )}
                               </div>
@@ -10399,9 +10407,11 @@ useEffect(() => {
                                   ? { duration: 0.25 }
                                   : { duration: 0.4, ease: "easeOut" }
                               }
-                              className={`flex flex-col items-center p-1.5 rounded-xl transition-colors duration-300 ${
+                              className={`flex flex-col items-center p-1.5 rounded-xl transition-all duration-300 ${
                                 isNewRecordAchieved && !isFailed && pbStage !== "initial"
-                                  ? (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
+                                  ? pbStage === "completed"
+                                    ? (darkMode ? "bg-amber-400/10 text-[#F3DFB0]" : "bg-[#FDF6E9] text-[#9B7020]")
+                                    : (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
                                   : ""
                               }`}
                             >
@@ -10446,8 +10456,10 @@ useEffect(() => {
                                     ? { duration: 0.35, ease: "easeOut" }
                                     : { duration: 0.4, ease: "easeOut" }
                                 }
-                                className={`flex flex-col items-center p-1.5 rounded-xl transition-colors duration-300 ${
-                                  pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
+                                className={`flex flex-col items-center p-1.5 rounded-xl transition-all duration-300 ${
+                                  pbStage === "completed"
+                                    ? (darkMode ? "bg-amber-400/10 text-[#F3DFB0]" : "bg-[#FDF6E9] text-[#9B7020]")
+                                    : (pbStage === "rolling" || pbStage === "docked" || pbStage === "salute")
                                     ? (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
                                     : ""
                                 }`}
@@ -10801,7 +10813,7 @@ useEffect(() => {
 
                 {/* Social Game History Panel with custom two-tab pill interface - Styled beautifully in Pastel Pink! */}
                 <div 
-                  className={`w-full rounded-2xl flex flex-col font-sans shrink-0 overflow-hidden transition-all duration-300 ${
+                  className={`w-full rounded-2xl flex flex-col font-sans shrink-0 overflow-hidden border-none transition-all duration-300 ${
                     darkMode 
                       ? "bg-[#9d174d]/10 text-stone-200 shadow-md" 
                       : "bg-[#FDF2F8]/45 text-[#3b0764] shadow-[0_8px_30px_rgba(219,39,119,0.02)]"
@@ -11205,7 +11217,7 @@ useEffect(() => {
                       </svg>
                       <span>Connect with Google</span>
                     </button>
-                    <p className="text-[10.5px] text-stone-500 dark:text-zinc-400 mt-1 leading-normal font-sans text-center max-w-[210px]">
+                    <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 mt-1 font-sans text-center max-w-[210px]">
                       Cloud synchronization across devices will be available in a future update.
                     </p>
                   </div>
@@ -13709,7 +13721,7 @@ useEffect(() => {
                             </svg>
                             <span>Connect with Google</span>
                           </button>
-                          <p className="text-[10.5px] text-stone-500 dark:text-zinc-400 mt-1 leading-normal font-sans text-center">
+                          <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 mt-1 font-sans text-center">
                             Cloud synchronization across devices will be available in a future update.
                           </p>
                         </div>
