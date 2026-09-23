@@ -8203,9 +8203,9 @@ useEffect(() => {
 
         {/* SECTION 1: HOW TO PLAY SUDOKU */}
         <div className="w-full max-w-4xl mx-auto mb-12 flex flex-col gap-4">
-          <div className="text-center sm:text-left">
-            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>How to Play Sudoku</h2>
-            <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Fundamental rules & logic guidelines</p>
+          <div className="how-to-play-header rules-heading-container text-center flex flex-col items-center w-full mx-auto">
+            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight text-center w-full ${darkMode ? "text-white" : "text-[#333333]"}`}>How to Play Sudoku</h2>
+            <p className={`text-xs mt-1 font-mono uppercase tracking-wider text-center w-full ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Fundamental rules & logic guidelines</p>
           </div>
           <div className={`p-6 md:p-8 rounded-3xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] text-xs md:text-sm leading-relaxed font-sans ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
             <h3 className="font-bold text-sm mb-3 uppercase tracking-wide">Official Game Rules</h3>
@@ -8746,11 +8746,11 @@ useEffect(() => {
 
           {/* PANE 2: ACTIVE GAMEPLAY ARENA */}
           {currentScreen === "game" && (
-            <div className={`h-[100dvh] max-h-[100dvh] w-full overflow-hidden flex flex-col justify-start select-none overscroll-none p-1 sm:p-3 md:p-6 lg:overflow-y-auto pb-[clamp(24px,4vh,48px)] pt-[calc(70px+env(safe-area-inset-top,0px)+clamp(20px,3.5vh,36px))] md:pt-[76px] lg:pt-[85px] selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto`}>
+            <div className={`h-[100dvh] max-h-[100dvh] w-full overflow-hidden flex flex-col justify-start select-none overscroll-none p-1 sm:p-3 md:p-6 lg:overflow-y-auto pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] pb-[clamp(24px,7vh,60px)] lg:pb-16 selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto`}>
               
               {/* Main responsive outer layout container - Centers automatically as a unified cohesive block */}
               <div 
-                className="w-full lg:w-fit flex flex-col lg:flex-row gap-4 sm:gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto my-auto shrink-0"
+                className="w-full lg:w-fit flex flex-col lg:flex-row gap-4 sm:gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto mt-[clamp(8px,4.5vh,40px)] mb-auto lg:my-auto shrink-0"
                 id="main-responsive-game-container"
               >
                 

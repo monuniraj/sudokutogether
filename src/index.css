@@ -288,4 +288,24 @@ html.theme-snapshotting *::after {
     transform-origin: top center;
   }
 }
+
+/* Ensure the section header container is centered */
+.how-to-play-header,
+.rules-heading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Ensure the heading and subtitle text align centrally */
+.how-to-play-header h2,
+.how-to-play-header p {
+  text-align: center;
+  width: 100%;
+}
+
 
