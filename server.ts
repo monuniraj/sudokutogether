@@ -374,7 +374,10 @@ async function startServer() {
     const vite = await createViteServer({
       server: { 
         middlewareMode: true,
-        hmr: { server }
+        hmr: { server },
+        watch: {
+          ignored: ['**/android/**', '**/scratch/**'],
+        },
       },
       appType: "spa",
     });

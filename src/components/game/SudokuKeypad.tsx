@@ -28,6 +28,7 @@ export interface SudokuKeypadProps {
   visualizingBacktrack?: boolean;
   darkMode: boolean;
   playClickSound: () => void;
+  playEraseSound?: () => void;
   vibrations?: boolean;
 }
 
@@ -50,7 +51,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   visualizingBacktrack,
   darkMode,
   playClickSound,
-  vibrations
+  playEraseSound,
+  vibrations = true
 }) => {
   const isGameOver = boardState?.isGameOver ?? false;
 
@@ -116,7 +118,11 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
           {/* ERASE BUTTON */}
           <button
             onClick={() => {
-              playClickSound();
+              if (playEraseSound) {
+                playEraseSound();
+              } else {
+                playClickSound();
+              }
               triggerHapticTap(vibrations);
               onErase();
             }}

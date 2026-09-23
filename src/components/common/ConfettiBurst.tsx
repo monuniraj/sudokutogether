@@ -4,6 +4,7 @@ interface ConfettiBurstProps {
   darkMode?: boolean;
   onComplete?: () => void;
   onBurst?: (burstIndex: number) => void;
+  mode?: "all" | "top-only" | "cannon-only";
 }
 
 interface Particle {
@@ -15,14 +16,14 @@ interface Particle {
   color: string;
   rotation: number;
   vRotation: number;
-  shape: "rect" | "circle" | "spark";
+  shape: "rect" | "circle" | "spark" | "streamer";
   tiltAngle: number;
   tiltAngleInc: number;
   bornAt: number;
   lifespan: number;
 }
 
-export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, onComplete, onBurst }) => {
+export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, onComplete, onBurst, mode = "all" }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   
   // Stable refs for callbacks to prevent re-triggering useEffect on parent re-renders
@@ -76,14 +77,18 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     // Existing particles are never wiped out or truncated.
     const particles: Particle[] = [];
 
-    // 5 distinct burst waves scheduled across the first 2.0s so all particles have time to finish naturally
-    const burstSchedule = [
-      { delay: 0, count: 40, waveIndex: 0 },
-      { delay: 480, count: 36, waveIndex: 1 },
-      { delay: 960, count: 36, waveIndex: 2 },
-      { delay: 1440, count: 32, waveIndex: 3 },
-      { delay: 1920, count: 32, waveIndex: 4 }
-    ];
+    // 5 distinct burst waves scheduled across the first 2.0s for 'all', or a single burst for specific modes
+    const burstSchedule = mode === "top-only"
+      ? [{ delay: 0, count: 28, waveIndex: 0 }]
+      : mode === "cannon-only"
+      ? [{ delay: 0, count: 42, waveIndex: 0 }]
+      : [
+          { delay: 0, count: 40, waveIndex: 0 },
+          { delay: 480, count: 36, waveIndex: 1 },
+          { delay: 960, count: 36, waveIndex: 2 },
+          { delay: 1440, count: 32, waveIndex: 3 },
+          { delay: 1920, count: 32, waveIndex: 4 }
+        ];
 
     const firedBursts = new Set<number>();
 
@@ -125,6 +130,35 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
       }
     };
 
+    // Spawn celebratory streamers and particles cascading gracefully from the top viewport edge
+    const spawnTopCascade = (count: number, currentTime: number) => {
+      for (let i = 0; i < count; i++) {
+        const originX = Math.random() * width;
+        const originY = -12 - Math.random() * 28;
+        const isStreamer = Math.random() < 0.45;
+
+        // Gentle downward velocity with gentle horizontal sway
+        const vx = (Math.random() - 0.5) * 2.2;
+        const vy = isStreamer ? 1.6 + Math.random() * 1.8 : 2.2 + Math.random() * 2.6;
+
+        particles.push({
+          x: originX,
+          y: originY,
+          vx,
+          vy,
+          size: isStreamer ? 7 + Math.random() * 6 : 5 + Math.random() * 6,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rotation: Math.random() * 360,
+          vRotation: (Math.random() - 0.5) * 8,
+          shape: isStreamer ? "streamer" : Math.random() > 0.4 ? "rect" : "circle",
+          tiltAngle: Math.random() * Math.PI,
+          tiltAngleInc: (Math.random() * 0.06) + 0.03,
+          bornAt: currentTime,
+          lifespan: 2600 + Math.random() * 900 // Float gracefully across the screen
+        });
+      }
+    };
+
     const dispose = () => {
       if (isDisposed) return;
       isDisposed = true;
@@ -136,10 +170,11 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
       onCompleteRef.current?.();
     };
 
-    // Global safety timer: 4.2 seconds ensures all 5 bursts and their descending particles finish cleanly
+    // Safety timer adjusted for mode
+    const safetyDuration = mode === "cannon-only" ? 2400 : mode === "top-only" ? 3800 : 5200;
     const safetyTimer = setTimeout(() => {
       dispose();
-    }, 4200);
+    }, safetyDuration);
 
     // Cancel immediately if tab is backgrounded
     const handleVisibilityChange = () => {
@@ -154,12 +189,17 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
 
       const elapsed = now - startTime;
 
-      // Check for scheduled dual-corner bursts and push into the continuous pool
+      // Check for scheduled dual-corner bursts and top streamers and push into the continuous pool
       burstSchedule.forEach((burst) => {
         if (elapsed >= burst.delay && !firedBursts.has(burst.waveIndex)) {
           firedBursts.add(burst.waveIndex);
-          spawnCornerCannons(burst.count, now);
-          onBurstRef.current?.(burst.waveIndex);
+          if (mode !== "top-only") {
+            spawnCornerCannons(burst.count, now);
+            onBurstRef.current?.(burst.waveIndex);
+          }
+          if (mode !== "cannon-only") {
+            spawnTopCascade(mode === "top-only" ? 36 : 24, now);
+          }
         }
       });
 
@@ -184,9 +224,14 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
         // Physics: individual trajectory integration
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.26; // Gravity
-        p.vx *= 0.984; // Air drag
-        p.vy *= 0.984;
+        if (p.shape === "streamer") {
+          p.vy = Math.min(p.vy + 0.05, 3.6); // Gentle terminal fall speed for streamers
+          p.vx *= 0.99;
+        } else {
+          p.vy += 0.24; // Gravity
+          p.vx *= 0.984; // Air drag
+          p.vy *= 0.984;
+        }
         p.rotation += p.vRotation;
         p.tiltAngle += p.tiltAngleInc;
 
@@ -211,6 +256,10 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
           ctx.lineTo(-s * 0.3, 0);
           ctx.closePath();
           ctx.fill();
+        } else if (p.shape === "streamer") {
+          const tiltScale = Math.cos(p.tiltAngle);
+          ctx.scale(tiltScale, 1);
+          ctx.fillRect(-p.size * 0.35, -p.size * 1.5, p.size * 0.7, p.size * 3.0);
         } else {
           const tiltScale = Math.cos(p.tiltAngle);
           ctx.scale(1, tiltScale);
@@ -239,7 +288,7 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
         ctx.clearRect(0, 0, width, height);
       }
     };
-  }, [darkMode]);
+  }, [darkMode, mode]);
 
   return (
     <canvas

@@ -274,4 +274,18 @@ html.theme-snapshotting *::after {
     max-width: 100% !important;
     width: 100% !important;
   }
-}
+}
+
+/* =========================================================================
+   SHORT SCREEN ADAPTIVE FALLBACK (<= 660px height on mobile viewports)
+   Proportionally scales the entire game arena (#main-responsive-game-container)
+   to guarantee zero element clipping and absolute clearance below the 70px header.
+   ========================================================================= */
+@media (max-height: 660px) and (max-width: 768px) {
+  #main-responsive-game-container {
+    transform: scale(0.93);
+    transform: scale(calc((100dvh - 82px) / 604px));
+    transform-origin: top center;
+  }
+}
+
