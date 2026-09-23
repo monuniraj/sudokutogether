@@ -103,14 +103,14 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onUndo();
             }}
             disabled={!boardState || isGameOver || historyLength === 0}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? "bg-zinc-900 border border-sky-950 hover:bg-zinc-850 text-[#38BDF8] active:bg-zinc-800" 
                 : "bg-[#E0F2FE] hover:bg-[#bae6fd] active:bg-[#C0E8FF] text-[#0369A1] shadow-[0_8px_16px_rgba(3,105,161,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
             }`}
           >
             <RotateCcw className={`w-[16px] h-[16px] lg:w-[18px] lg:h-[18px] xl:w-[20px] xl:h-[20px] stroke-[2.5] ${darkMode ? "text-[#38BDF8]" : "text-[#0369A1]"}`} />
-            <span className="text-[9px] lg:text-[11px] xl:text-xs font-sans font-extrabold tracking-wider uppercase leading-none mt-1 lg:mt-0">
+            <span className="text-[10px] sm:text-[11px] font-sans font-semibold tracking-wider uppercase leading-none">
               Undo
             </span>
           </button>
@@ -127,14 +127,14 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onErase();
             }}
             disabled={!boardState || isGameOver}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? "bg-zinc-900 border border-pink-950 hover:bg-zinc-850 text-[#F472B6] active:bg-zinc-800" 
                 : "bg-[#FCE7F3] hover:bg-[#FBCFE8] active:bg-[#F9A8D4] text-[#9D174D] shadow-[0_8px_16px_rgba(157,23,77,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
             }`}
           >
             <Trash2 className={`w-[16px] h-[16px] lg:w-[18px] lg:h-[18px] xl:w-[20px] xl:h-[20px] ${darkMode ? "text-[#F472B6]" : "text-[#9D174D]"}`} />
-            <span className="text-[9px] lg:text-[11px] xl:text-xs font-sans font-extrabold tracking-wider uppercase leading-none mt-1 lg:mt-0">
+            <span className="text-[10px] sm:text-[11px] font-sans font-semibold tracking-wider uppercase leading-none">
               Erase
             </span>
           </button>
@@ -147,7 +147,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onTogglePencilMode();
             }}
             disabled={!boardState || isGameOver}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? (pencilMode 
                     ? "bg-[#713f12] hover:bg-[#854d0e] active:bg-[#854d0e] text-[#facc15] font-black border border-yellow-950" 
@@ -158,7 +158,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
             }`}
           >
             <Pencil className="w-[16px] h-[16px] lg:w-[18px] lg:h-[18px] xl:w-[20px] xl:h-[20px]" />
-            <span className="text-[9px] lg:text-[11px] xl:text-xs font-sans font-extrabold tracking-wider uppercase leading-none mt-1 lg:mt-0">
+            <span className="text-[10px] sm:text-[11px] font-sans font-semibold tracking-wider uppercase leading-none">
               Notes {pencilMode ? "ON" : "OFF"}
             </span>
           </button>
@@ -171,7 +171,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onHint();
             }}
             disabled={!boardState || isGameOver}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-0.5 lg:gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:min-h-[52px] xl:min-h-[56px] w-full p-2 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? "bg-zinc-900 border border-emerald-950 hover:bg-zinc-850 text-[#34D399] active:bg-[#135236]" 
                 : "bg-[#E6F4EA] hover:bg-[#D1FAE5] text-[#135236] shadow-[0_8px_16px_rgba(19,82,54,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
@@ -185,7 +185,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                 {effectiveHintCount}
               </span>
             </div>
-            <span className="text-[9px] lg:text-[11px] xl:text-xs font-sans font-extrabold tracking-wider uppercase leading-none mt-1 lg:mt-0">
+            <span className="text-[10px] sm:text-[11px] font-sans font-semibold tracking-wider uppercase leading-none">
               Hint
             </span>
           </button>
@@ -226,12 +226,14 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                     {num}
                   </span>
                   {showRemainingNumbers && (
-                    <span className={`text-[11px] sm:text-xs lg:text-[14px] xl:text-[15px] font-mono leading-none mt-0.5 sm:mt-1 lg:mt-1.5 font-bold flex items-center justify-center ${
-                      isSelected && darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
-                        ? "text-white/85"
-                        : isSelected && !darkMode && currentDiff === "MEDIUM"
-                          ? "text-[#78350F]/85"
-                          : "text-slate-500 dark:text-slate-400"
+                    <span className={`text-[10px] font-mono leading-none mt-1 flex items-center justify-center ${
+                      isSelected 
+                        ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
+                            ? "text-white/85 font-semibold"
+                            : !darkMode && currentDiff === "MEDIUM"
+                              ? "text-[#78350F]/85 font-semibold"
+                              : "text-stone-700 dark:text-zinc-200 font-semibold")
+                        : "text-stone-400 dark:text-zinc-500"
                     } ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
                       {remainingCount > 0 ? remainingCount : <Check className="w-3 h-3 lg:w-3.5 lg:h-3.5 stroke-[2.5]" />}
                     </span>

@@ -79,11 +79,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                 : "bg-[#E0F2FE]/60 border-none shadow-[0_4px_20px_rgba(3,105,161,0.06)]"
             }`}
           >
-            <span
-              className={`text-xs md:text-sm font-semibold uppercase tracking-widest mb-3 ${
-                darkMode ? "text-sky-300" : "text-[#0369A1]"
-              }`}
-            >
+            <span className="text-xs font-semibold tracking-wider text-stone-600 dark:text-zinc-300 uppercase mb-3">
               Win Rate
             </span>
             <div className="relative w-16 h-16 flex items-center justify-center">
@@ -134,11 +130,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
             }`}
           >
             <div>
-              <span
-                className={`text-xs md:text-sm font-semibold uppercase tracking-widest block mb-4 ${
-                  darkMode ? "text-purple-300" : "text-[#6B21A8]"
-                }`}
-              >
+              <span className="text-xs font-semibold tracking-wider text-stone-600 dark:text-zinc-300 uppercase block mb-4">
                 Personal Bests
               </span>
 
@@ -334,7 +326,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       <div className="flex flex-col text-left">
                         <div className="flex items-center gap-1.5 mb-1 bg-transparent">
                           <span
-                            className={`text-xs font-sans font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md ${
+                            className={`text-[10px] font-sans font-medium tracking-wider uppercase px-2 py-0.5 rounded-md ${
                               game.isChallenge
                                 ? darkMode
                                   ? "bg-[#2e1065] text-[#e9d5ff] border border-[#3b0764] shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
@@ -348,7 +340,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                           </span>
                         </div>
                         <span
-                          className={`font-sans font-black text-sm uppercase leading-none ${
+                          className={`font-sans font-semibold text-sm uppercase leading-none ${
                             darkMode ? "text-stone-200" : "text-stone-850"
                           }`}
                         >
@@ -378,7 +370,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                     <div className="grid grid-cols-3 gap-1.5 mt-1.5 pt-2 border-t border-dashed border-stone-250 dark:border-zinc-800">
                       <button
                         onClick={() => handleReplayGame(game)}
-                        className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
+                        className={`py-1.5 px-2 font-sans text-[10px] font-semibold tracking-wider uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
                           darkMode
                             ? "bg-emerald-950/40 text-emerald-300 hover:bg-emerald-950/60"
                             : "bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#166534]"
@@ -388,7 +380,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       </button>
                       <button
                         onClick={() => handleSaveGame(game)}
-                        className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
+                        className={`py-1.5 px-2 font-sans text-[10px] font-semibold tracking-wider uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
                           savedGames.some((r) => r.id === game.id)
                             ? darkMode
                               ? "bg-yellow-950/50 text-yellow-300 font-black border border-yellow-800/40"
@@ -402,7 +394,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       </button>
                       <button
                         onClick={() => handleOpenRankings(game)}
-                        className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
+                        className={`py-1.5 px-2 font-sans text-[10px] font-semibold tracking-wider uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
                           darkMode
                             ? "bg-rose-950/40 hover:bg-rose-950/60 text-rose-300"
                             : "bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9F1239]"
@@ -463,7 +455,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       <div className="flex flex-col text-left">
                         <div className="flex items-center gap-1.5 mb-1 bg-transparent">
                           <span
-                            className={`text-xs font-sans font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md ${
+                            className={`text-[10px] font-sans font-medium tracking-wider uppercase px-2 py-0.5 rounded-md ${
                               game.isChallenge
                                 ? darkMode
                                   ? "bg-[#2e1065] text-[#e9d5ff] border border-[#3b0764] shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
@@ -477,7 +469,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                           </span>
                         </div>
                         <span
-                          className={`font-sans font-black text-sm uppercase leading-none ${
+                          className={`font-sans font-semibold text-sm uppercase leading-none ${
                             darkMode ? "text-stone-200" : "text-stone-850"
                           }`}
                         >
@@ -507,7 +499,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                     <div className="grid grid-cols-3 gap-1.5 mt-1.5 pt-2 border-t border-dashed border-stone-250 dark:border-zinc-800">
                       <button
                         onClick={() => handleReplayGame(game)}
-                        className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
+                        className={`py-1.5 px-2 font-sans text-[10px] font-semibold tracking-wider uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
                           darkMode
                             ? "bg-emerald-950/40 text-emerald-300 hover:bg-emerald-950/60"
                             : "bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#166534]"
@@ -517,7 +509,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       </button>
                       <button
                         onClick={() => handleSaveGame(game)}
-                        className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
+                        className={`py-1.5 px-2 font-sans text-[10px] font-semibold tracking-wider uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
                           darkMode
                             ? "bg-yellow-950/30 text-yellow-400 hover:bg-yellow-950/50"
                             : "bg-[#FEFCE8] hover:bg-[#FEF9C3] text-[#854D0E]"
@@ -527,7 +519,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       </button>
                       <button
                         onClick={() => handleOpenRankings(game)}
-                        className={`py-1.5 px-2 font-sans text-[10px] sm:text-xs font-black uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
+                        className={`py-1.5 px-2 font-sans text-[10px] font-semibold tracking-wider uppercase rounded-lg border-none cursor-pointer transition-all active:scale-95 text-center flex items-center justify-center gap-1 ${
                           darkMode
                             ? "bg-rose-950/40 hover:bg-rose-950/60 text-rose-300"
                             : "bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9F1239]"

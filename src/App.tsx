@@ -8465,7 +8465,7 @@ useEffect(() => {
               <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
               <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
             </h1>
-            <span className={`text-[clamp(8.5px,2.2vw,11.5px)] uppercase font-sans font-bold tracking-[0.14em] sm:tracking-[0.25em] leading-none opacity-75 select-none mt-1.5 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#d1fae5]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#fef08a]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#065F46]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#854D0E]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
+            <span className="text-[11px] tracking-widest uppercase font-medium text-stone-500 dark:text-zinc-400 leading-none select-none mt-1 text-center truncate max-w-full block">
               {currentScreen === "together" ? "Together Mode" : currentScreen === "settings" ? "Settings" : currentScreen === "login" ? "Authorization" : currentScreen === "status" ? "Player Insights" : (boardState?.difficulty || difficulty)}
             </span>
           </div>
@@ -8794,9 +8794,9 @@ useEffect(() => {
                   </div>
 
                   {/* ROW 2: HUD GROUP DIRECTLY ABOVE 9x9 BOARD */}
-                  <div className="w-full relative flex items-center justify-between px-1 mb-1 select-none shrink-0" id="unified-bridge-container">
+                  <div className="w-full relative flex items-center justify-between px-1 mb-1 select-none shrink-0 h-8 sm:h-9" id="unified-bridge-container">
                     {/* Left: Mistakes status metric */}
-                    <span className={`font-sans font-black text-xs sm:text-sm tracking-wider leading-none select-none ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
+                    <span className={`font-mono font-semibold text-xs sm:text-sm tracking-tight leading-none select-none flex items-center ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
                       ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
                     </span>
 
@@ -8932,7 +8932,7 @@ useEffect(() => {
 
                     {/* Right: Running Timer and Pause Button */}
                     {timerEnabled ? (
-                      <div className="flex items-center gap-1.5 justify-end select-none shrink-0">
+                      <div className="flex items-center gap-1.5 justify-end select-none shrink-0 h-full">
                         <button
                           onClick={() => {
                             playClickSound();
@@ -8953,7 +8953,7 @@ useEffect(() => {
                           )}
                         </button>
                         <span 
-                          className={`font-mono tabular-nums font-bold text-xs sm:text-sm tracking-wider leading-none text-right shrink-0 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
+                          className={`font-mono tabular-nums font-semibold text-xs sm:text-sm tracking-tight leading-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
                           style={{ fontVariantNumeric: "tabular-nums" }}
                         >
                           {isTimerPaused ? "PAUSED" : formatTimer(sessionSeconds)}
@@ -8961,7 +8961,7 @@ useEffect(() => {
                       </div>
                     ) : (
                       <span 
-                        className={`font-mono tabular-nums font-bold text-xs sm:text-sm tracking-wider leading-none select-none text-right shrink-0 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
+                        className={`font-mono tabular-nums font-semibold text-xs sm:text-sm tracking-tight leading-none select-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
                         style={{ fontVariantNumeric: "tabular-nums" }}
                       >
                         --:--
