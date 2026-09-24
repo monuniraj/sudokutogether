@@ -8397,7 +8397,7 @@ useEffect(() => {
             paddingTop: "env(safe-area-inset-top, 0px)",
             zIndex: 9999,
           }}
-          className={`select-none grid grid-cols-[auto_minmax(0,1fr)_auto] items-center px-2.5 sm:px-4 gap-1 sm:gap-2 transition-colors duration-200 ${
+          className={`select-none grid grid-cols-[auto_minmax(0,1fr)_auto] items-center px-2.5 sm:px-4 gap-1 sm:gap-2 transition-colors duration-200 touch-none overscroll-none ${
             darkMode
               ? "bg-[#121212] shadow-[0_2px_12px_rgba(0,0,0,0.3)]"
               : "bg-[#FDFBF7] shadow-[0_2px_12px_rgba(0,0,0,0.03)]"
@@ -8746,11 +8746,11 @@ useEffect(() => {
 
           {/* PANE 2: ACTIVE GAMEPLAY ARENA */}
           {currentScreen === "game" && (
-            <div className={`h-[100dvh] max-h-[100dvh] w-full overflow-hidden flex flex-col justify-start select-none overscroll-none p-1 sm:p-3 md:p-6 lg:overflow-y-auto pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] pb-[clamp(24px,7vh,60px)] lg:pb-16 selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto`}>
+            <div className={`h-[100dvh] max-h-[100dvh] w-full overflow-y-auto overscroll-contain flex flex-col justify-start select-none p-1 sm:p-3 md:p-6 pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] pb-[clamp(30px,7.5vh,70px)] lg:pb-16 selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto`}>
               
               {/* Main responsive outer layout container - Centers automatically as a unified cohesive block */}
               <div 
-                className="w-full lg:w-fit flex flex-col lg:flex-row gap-4 sm:gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto mt-[clamp(8px,4.5vh,40px)] mb-auto lg:my-auto shrink-0"
+                className="w-full lg:w-fit flex flex-col lg:flex-row gap-4 sm:gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto mt-[clamp(15px,4.5vh,40px)] mb-auto lg:my-auto shrink-0"
                 id="main-responsive-game-container"
               >
                 
@@ -8946,35 +8946,38 @@ useEffect(() => {
                       );
                     })()}
 
-                    {/* Right: Running Timer and Pause Button */}
+                    {/* Right: Running Timer and Pause Button (Unified Interactive Hitbox) */}
                     {timerEnabled ? (
-                      <div className="flex items-center gap-1.5 justify-end select-none shrink-0 h-full">
-                        <button
-                          onClick={() => {
-                            playClickSound();
-                            setIsTimerPaused(!isTimerPaused);
-                            addLog(isTimerPaused ? "⏱️ Session timer resumed!" : "⏸️ Session timer paused.");
-                          }}
-                          className="bg-transparent border-none p-0 cursor-pointer outline-none hover:opacity-80 transition-all flex items-center justify-center active:scale-90 duration-150 shrink-0 w-3.5 h-3.5"
-                          title={isTimerPaused ? "Resume Game" : "Pause Game"}
-                        >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playClickSound();
+                          setIsTimerPaused(!isTimerPaused);
+                          addLog(isTimerPaused ? "⏱️ Session timer resumed!" : "⏸️ Session timer paused.");
+                        }}
+                        className="flex items-center gap-1.5 justify-end select-none shrink-0 h-full bg-transparent border-none p-1 -mr-1 cursor-pointer outline-none hover:opacity-80 active:scale-95 transition-all duration-150 group touch-manipulation"
+                        title={isTimerPaused ? "Resume Game" : "Pause Game"}
+                        aria-label={isTimerPaused ? "Resume Game" : "Pause Game"}
+                        id="hud-timer-pause-button"
+                      >
+                        <span className={`flex items-center justify-center shrink-0 w-3.5 h-3.5 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"} transition-transform duration-150 group-active:scale-90`}>
                           {isTimerPaused ? (
-                            <svg className={`w-3.5 h-3.5 fill-current ${darkMode ? "text-sky-450 text-sky-400" : "text-[#2B6CB0]"}`} viewBox="0 0 24 24">
+                            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
                               <path d="M8 5v14l11-7z" />
                             </svg>
                           ) : (
-                            <svg className={`w-3.5 h-3.5 fill-current ${darkMode ? "text-sky-450 text-sky-400" : "text-[#2B6CB0]"}`} viewBox="0 0 24 24">
+                            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
                               <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                             </svg>
                           )}
-                        </button>
+                        </span>
                         <span 
                           className={`font-mono tabular-nums font-medium text-sm sm:text-base tracking-wider leading-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}
                           style={{ fontVariantNumeric: "tabular-nums" }}
                         >
                           {isTimerPaused ? "PAUSED" : formatTimer(sessionSeconds)}
                         </span>
-                      </div>
+                      </button>
                     ) : (
                       <span 
                         className={`font-mono tabular-nums font-medium text-sm sm:text-base tracking-wider leading-none select-none text-right shrink-0 flex items-center ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`}

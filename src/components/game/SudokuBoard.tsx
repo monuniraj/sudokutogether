@@ -120,9 +120,21 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   const isPaintModeActiveWithNumber = isNumberFirstInputMode && lockedNum !== null;
   const allowCrosshairs = highlightAreas;
 
+  const pauseButtonTheme = darkMode ? (
+    currentDiff === "EASY" ? "text-emerald-400" :
+    currentDiff === "MEDIUM" ? "text-amber-400" :
+    currentDiff === "HARD" ? "text-purple-400" :
+    "text-rose-400"
+  ) : (
+    currentDiff === "EASY" ? "text-[#065F46]" :
+    currentDiff === "MEDIUM" ? "text-[#854D0E]" :
+    currentDiff === "HARD" ? "text-[#6B21A8]" :
+    "text-[#9D174D]"
+  );
+
   return (
     <div 
-      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-none sudoku-board transition-colors duration-200 ${darkMode ? "bg-zinc-900 border-[3px]" : "bg-white border-[3px]"} ${darkMode ? (currentDiff === "EASY" ? "border-[#0b6b52]" : currentDiff === "MEDIUM" ? "border-[#7c3207]" : currentDiff === "HARD" ? "border-[#4c1d95]" : "border-[#881337]") : (currentDiff === "EASY" ? "border-[#065f46]/55" : currentDiff === "MEDIUM" ? "border-[#854d0e]/55" : currentDiff === "HARD" ? "border-[#6b21a8]/55" : "border-[#9d174d]/55")}`}
+      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-none sudoku-board transition-colors duration-200 ${darkMode ? "bg-zinc-900 border-[2.4px]" : "bg-white border-[2.4px]"} ${darkMode ? (currentDiff === "EASY" ? "border-[#0b6b52]" : currentDiff === "MEDIUM" ? "border-[#7c3207]" : currentDiff === "HARD" ? "border-[#4c1d95]" : "border-[#881337]") : (currentDiff === "EASY" ? "border-[#065f46]/55" : currentDiff === "MEDIUM" ? "border-[#854d0e]/55" : currentDiff === "HARD" ? "border-[#6b21a8]/55" : "border-[#9d174d]/55")}`}
       style={{ 
         boxShadow: darkMode ? "0 4px 20px rgba(0,0,0,0.6)" : "0 4px 20px rgba(43,108,176,0.03)",
         width: "100%",
@@ -146,8 +158,8 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           <div
             className={`w-20 h-20 sm:w-22 sm:h-22 rounded-full flex items-center justify-center transition-all duration-200 border-none cursor-pointer active:scale-95 group hover:scale-105 ${
               darkMode 
-                ? "bg-zinc-900/90 text-emerald-400 hover:bg-zinc-800" 
-                : "bg-white/90 text-emerald-700 hover:bg-white"
+                ? `bg-zinc-900/90 ${pauseButtonTheme} hover:bg-zinc-800` 
+                : `bg-white/90 ${pauseButtonTheme} hover:bg-white`
             }`}
             style={{ 
               boxShadow: darkMode ? "0 4px 16px rgba(0, 0, 0, 0.4)" : "0 4px 12px rgba(0, 0, 0, 0.06)",
@@ -244,7 +256,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
 
           let borderClasses = "";
           if (c === 2 || c === 5) {
-            borderClasses += ` border-r-[3px] ${heavyBorderR}`;
+            borderClasses += ` border-r-[2.4px] ${heavyBorderR}`;
           } else if (c === 8) {
             borderClasses += " border-r-0";
           } else {
@@ -252,7 +264,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           }
 
           if (r === 2 || r === 5) {
-            borderClasses += ` border-b-[3px] ${heavyBorderB}`;
+            borderClasses += ` border-b-[2.4px] ${heavyBorderB}`;
           } else if (r === 8) {
             borderClasses += " border-b-0";
           } else {
