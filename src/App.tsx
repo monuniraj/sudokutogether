@@ -4714,6 +4714,13 @@ useEffect(() => {
   const [lockedNum, setLockedNum] = useState<number | null>(null);
   // Active selected number for single-number highlighting / keypad toggle
   const [activeKeypadNum, setActiveKeypadNum] = useState<number | null>(null);
+  const setSelectedCell = useCallback((cell: { row: number; col: number } | null) => {
+    setBoardState(prev => prev ? { ...prev, selectedRow: cell ? cell.row : null, selectedCol: cell ? cell.col : null } : null);
+  }, []);
+  const setSelectedNumber = useCallback((num: number | null) => {
+    setActiveKeypadNum(num);
+    setLockedNum(num);
+  }, []);
   // Standard solo victory celebration state: transitions clapping hands to thumbs-up without flicker
   const [soloVictoryClappingComplete, setSoloVictoryClappingComplete] = useState<boolean>(false);
 
@@ -7485,11 +7492,13 @@ useEffect(() => {
         if (lockedNum === val) {
           setLockedNum(null);
           setActiveKeypadNum(null);
+          setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
           triggerHapticTap(vibrations);
           addLog(`🔓 Unlocked digit ${val}.`);
         } else {
           setLockedNum(val);
           setActiveKeypadNum(val);
+          setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
           triggerHapticTap(vibrations);
           addLog(`🎨 Selected paint digit ${val}. Tap empty cells to fast fill!`);
         }
@@ -9222,6 +9231,11 @@ useEffect(() => {
                     onHint={triggerSmartHint}
                     hintInventory={hintInventory}
                     onNumberSelect={(num) => {
+                      if (isNumberFirstInputMode) {
+                        setSelectedCell(null);
+                        setSelectedNumber(num);
+                        return;
+                      }
                       if (boardState?.isGameOver) {
                         playClickSound();
                         triggerHapticTap(vibrations);
@@ -9256,37 +9270,21 @@ useEffect(() => {
                           return;
                         }
 
-                        const selRow = boardState?.selectedRow;
-                        const selCol = boardState?.selectedCol;
-                        const hasEmptyCellSelected = selRow !== null && selRow !== undefined &&
-                                                     selCol !== null && selCol !== undefined &&
-                                                     boardState?.grid[selRow]?.[selCol]?.value === 0 &&
-                                                     !boardState?.grid[selRow]?.[selCol]?.isOriginalClue;
-
-                        // Requirement 1: If an empty cell is selected while no paintbrush digit is actively held:
-                        // a) Fill that focused empty cell with the selected digit
-                        // b) Set that digit as active so the existing paintbrush logic continues painting on subsequent cell taps as normal
-                        if (lockedNum === null && hasEmptyCellSelected) {
-                          handleValueInput(num, selRow, selCol);
-                          setLockedNum(num);
-                          setActiveKeypadNum(num);
-                          addLog(`🎨 Filled cell [${selRow + 1}, ${selCol + 1}] with ${num} and set ${num} as active paintbrush.`);
-                          return;
-                        }
-
+                        // Fast Fill / Paintbrush Mode (Digit-First):
+                        // 1. Tapping a digit strictly selects/toggles that brush number.
+                        // 2. Clear any selected cell focus without placing a value into it.
                         if (lockedNum === num) {
-                          // Requirement 2: Tapping an already selected number deselects it completely
                           setLockedNum(null);
                           setActiveKeypadNum(null);
                           setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
                           addLog(`🔓 Deselected paint digit ${num}.`);
                         } else {
-                          // Requirement 3: Unified single-number highlighting (clears previous highlights)
                           setLockedNum(num);
                           setActiveKeypadNum(num);
                           setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
                           addLog(`🎨 Selected paint digit ${num}. Tap empty cells to fast fill!`);
                         }
+                        return;
                       } else {
                         // Cell-First Mode
                         const selRow = boardState?.selectedRow;
