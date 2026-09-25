@@ -3686,6 +3686,9 @@ useEffect(() => {
     setShowDeleteAccountModal(false);
     setShowResetSettingsModal(false);
     setShowDisplayNameModal(false);
+    setShowInviteJoinNamePopup(false);
+    setShowHistoryChallengeModal(false);
+    setViewingRankingsGame(null);
     setShowAuthModal(false);
     setShowLoginRequiredModal(false);
     setShowTargetLoginRequiredModal(false);
@@ -9233,7 +9236,11 @@ useEffect(() => {
                     onNumberSelect={(num) => {
                       if (isNumberFirstInputMode) {
                         setSelectedCell(null);
-                        setSelectedNumber(num);
+                        if (activeKeypadNum === num || lockedNum === num) {
+                          setSelectedNumber(null);
+                        } else {
+                          setSelectedNumber(num);
+                        }
                         return;
                       }
                       if (boardState?.isGameOver) {
@@ -9293,10 +9300,11 @@ useEffect(() => {
                         const selectedCell = hasCellSelected ? boardState?.grid[selRow][selCol] : null;
 
                         // Requirement 2: Tapping an already selected/highlighted number a second time deselects it completely
-                        const isCurrentlyActiveNum = (activeKeypadNum === num) || (selectedCell && selectedCell.value === num);
+                        const isCurrentlyActiveNum = (activeKeypadNum === num) || (lockedNum === num) || (selectedCell && selectedCell.value === num);
 
                         if (isCurrentlyActiveNum && (!selectedCell || selectedCell.value !== 0)) {
                           setActiveKeypadNum(null);
+                          setLockedNum(null);
                           setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
                           addLog(`⚪ Deselected number ${num}. Returned board to neutral state.`);
                           return;
