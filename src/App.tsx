@@ -8700,7 +8700,7 @@ useEffect(() => {
                           <>
                             <RotateCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0 animate-pulse" />
                             <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
-                              Resume
+                              {t("resumeBtn")}
                             </span>
                           </>
                         ) : (
@@ -9202,24 +9202,27 @@ useEffect(() => {
                           <Sudoku3DWatermark difficulty={activeDiff} />
 
                           <div className="text-center w-full relative z-10 flex flex-col items-center gap-1">
-                            <span className="text-[10px] uppercase font-mono tracking-widest block font-medium opacity-75">
-                              {t("personalBestsTitle")}
+                            {/* Tier 1: Top Mini Header */}
+                            <span className="text-[10px] uppercase font-mono tracking-widest block font-bold opacity-80">
+                              {t("currentRecordHeader")}
                             </span>
                             
+                            {/* Tier 2: Center Hero Metric */}
                             <div className="flex items-center justify-center gap-2 my-0.5">
-                              <Timer className="w-4 h-4 stroke-[2] opacity-90 shrink-0" />
-                              <span className="font-sans font-medium text-xs uppercase tracking-wider opacity-85">
-                                {t("timeLabel")}:
+                              <Timer className="w-4 h-4 stroke-[2.5] opacity-90 shrink-0" />
+                              <span className="font-sans font-black text-xs uppercase tracking-wider opacity-90">
+                                {t("bestTimeHeader")}:
                               </span>
-                              <span className="font-mono font-semibold text-base sm:text-lg tabular-nums tracking-wide">
+                              <span className="font-mono font-bold text-base sm:text-lg tabular-nums tracking-wide">
                                 {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
                               </span>
                             </div>
 
+                            {/* Tier 3: Bottom Subtitle Prompt */}
                             <p className="text-[11px] sm:text-xs select-none handwriting opacity-90 font-medium leading-normal tracking-wide">
                               {bestSecs > 0 
                                 ? t("beatRecordPrompt") 
-                                : "No record yet... Can you set the first one?"}
+                                : t("noRecordPrompt")}
                             </p>
                           </div>
                         </div>
