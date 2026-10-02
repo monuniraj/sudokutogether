@@ -1,6 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Check, Lock, XCircle, RefreshCw } from "lucide-react";
+import { useTranslation } from "../../i18n/useTranslation";
 
 export interface IncomingInviteModalProps {
   isOpen: boolean;
@@ -37,6 +38,8 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
   darkMode,
   playClickSound
 }) => {
+  const { t } = useTranslation();
+
   return (
     <AnimatePresence>
       {isOpen && incomingChallengeDetails && (
@@ -61,26 +64,26 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
           >
             <div className="flex flex-col items-center gap-1">
               <span className={`text-[12px] font-sans font-bold uppercase tracking-widest ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
-                Game Invitation
+                {t("gameInvitationTitle")}
               </span>
               <h3 className={`text-2xl font-sans font-medium tracking-tight mt-1 ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
-                {incomingChallengeDetails.senderName || "Fellow Player"}
+                {incomingChallengeDetails.senderName || t("fellowPlayer")}
               </h3>
               <p className={`text-sm font-sans mt-0.5 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
-                invited you to clear a board.
+                {t("invitedYouMessage")}
               </p>
             </div>
 
             {/* 📊 SUMMARY */}
             <div className="flex items-center justify-center gap-6 py-2">
               <div className="flex flex-col items-center">
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>Level</span>
+                <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>{t("levelLabel")}</span>
                 <span className="text-lg font-mono font-medium">{incomingChallengeDetails.difficulty}</span>
               </div>
               <div className={`w-[1px] h-8 ${darkMode ? "bg-[#4B5563]" : "bg-[#E5E7EB]"}`} />
               <div className="flex flex-col items-center">
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>Mistakes</span>
-                <span className="text-lg font-mono font-medium">{incomingChallengeDetails.maxMistakes} limit</span>
+                <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>{t("mistakesLabel")}</span>
+                <span className="text-lg font-mono font-medium">{t("mistakesLimitText", { count: incomingChallengeDetails.maxMistakes ?? 3 })}</span>
               </div>
             </div>
 
@@ -91,13 +94,13 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
               }`}>
                 <div className="flex items-center justify-center gap-1.5 font-sans font-bold uppercase tracking-wider text-[10px]">
                   <Lock className="w-3.5 h-3.5 stroke-[2.5] text-red-500 shrink-0" />
-                  <span>Enter Password</span>
+                  <span>{t("enterPasswordTitle")}</span>
                 </div>
                 <input
                   type="text"
                   maxLength={16}
                   disabled={isJoiningRoomLoading}
-                  placeholder="Passcode..."
+                  placeholder={t("passcodePlaceholder")}
                   value={enteredInvitePassword}
                   onChange={(e) => {
                     setEnteredInvitePassword(e.target.value.replace(/[^a-zA-Z0-9]/g, ''));
@@ -154,7 +157,7 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
               </div>
               {isJoiningRoomLoading && (
                 <span className="text-xs font-sans font-bold text-emerald-600 dark:text-emerald-400 animate-pulse mt-0.5">
-                  Connecting to match arena...
+                  {t("connectingToArena")}
                 </span>
               )}
             </div>

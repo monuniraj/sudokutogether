@@ -6,7 +6,7 @@
  * - Older than 24h: Date + local hour and minute (e.g., "Sep 9, 12:06 PM")
  * Converts automatically to the user's local device timezone.
  */
-export const formatMatchTimestamp = (dateStrOrTimestamp?: any, fallback = "Saved Config"): string => {
+export const formatMatchTimestamp = (dateStrOrTimestamp?: any, fallback = "Saved Config", locale?: string): string => {
   if (!dateStrOrTimestamp) return fallback;
 
   let d: Date;
@@ -72,7 +72,8 @@ export const formatMatchTimestamp = (dateStrOrTimestamp?: any, fallback = "Saved
 
   // Older than 48 hours: Clean localized date (e.g. "Sep 16" or "Sep 16, 2025" if different year)
   const isCurrentYear = d.getFullYear() === new Date(now).getFullYear();
-  return d.toLocaleDateString("en-US", {
+  const targetLocale = locale || (typeof navigator !== "undefined" ? navigator.language : "en-US");
+  return d.toLocaleDateString(targetLocale, {
     month: "short",
     day: "numeric",
     ...(isCurrentYear ? {} : { year: "numeric" })
@@ -82,6 +83,6 @@ export const formatMatchTimestamp = (dateStrOrTimestamp?: any, fallback = "Saved
 /**
  * Standardized invite timestamp formatter for Bell notifications and invites.
  */
-export const formatInviteTimestamp = (timestamp?: any): string => {
-  return formatMatchTimestamp(timestamp, "Just now");
+export const formatInviteTimestamp = (timestamp?: any, locale?: string): string => {
+  return formatMatchTimestamp(timestamp, "Just now", locale);
 };

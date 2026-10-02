@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "motion/react";
 import { X, Users, ChevronRight, Grid3X3, WifiOff } from "lucide-react";
+import { useTranslation } from "../../i18n/useTranslation";
 
 export interface MultiplayerForkModalProps {
   isOpen: boolean;
@@ -21,6 +22,8 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
   darkMode,
   playClickSound
 }) => {
+  const { t } = useTranslation();
+
   if (!isOpen) return null;
 
   return (
@@ -43,8 +46,8 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
           <span className={`text-[10px] font-sans font-black tracking-widest uppercase ${darkMode ? "text-purple-400" : "text-[#6B21A8]"}`}>
             SudokuSync
           </span>
-          <h3 className="text-xl font-sans font-black tracking-tight leading-none text-stone-850 dark:text-stone-100 mt-0.5">
-            {isOnline ? "Multiplayer Lobby" : "Multiplayer Unavailable"}
+          <h3 className="text-xl font-sans font-black tracking-tight leading-normal overflow-visible text-stone-850 dark:text-stone-100 mt-0.5">
+            {isOnline ? t("multiplayerLobbyTitle") : t("multiplayerUnavailable")}
           </h3>
         </div>
         <button
@@ -68,11 +71,11 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
             <WifiOff className="w-14 h-14 stroke-[2]" />
           </div>
 
-          <h4 className="text-lg font-sans font-black tracking-tight text-stone-900 dark:text-stone-100 mb-1.5">
-            You're Offline
+          <h4 className="text-lg font-sans font-black tracking-tight leading-normal overflow-visible text-stone-900 dark:text-stone-100 mb-1.5">
+            {t("youAreOffline")}
           </h4>
           <p className="text-xs sm:text-sm font-sans font-medium text-stone-500 dark:text-stone-400 max-w-[280px] leading-relaxed mb-5">
-            Please connect to the internet to play multiplayer.
+            {t("offlineNoticeSub")}
           </p>
 
           <button
@@ -80,13 +83,13 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
               playClickSound();
               onClose();
             }}
-            className={`w-full py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider transition-all duration-150 border-none cursor-pointer shadow-sm active:scale-[0.98] ${
+            className={`w-full py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider transition-all duration-150 border-none cursor-pointer shadow-sm active:scale-[0.98] truncate leading-normal overflow-visible ${
               darkMode
                 ? "bg-zinc-800 hover:bg-zinc-700 text-stone-200"
                 : "bg-stone-200 hover:bg-stone-300 text-stone-800"
             }`}
           >
-            Got it
+            {t("gotItAction")}
           </button>
         </div>
       ) : (
@@ -108,11 +111,11 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
               <div className={`p-2 rounded-xl flex items-center justify-center ${darkMode ? "bg-purple-900/60 text-purple-300" : "bg-white/80 text-[#6B21A8] shadow-xs"}`}>
                 <Users className="w-5 h-5 stroke-[2.5]" />
               </div>
-              <span className="font-sans font-black text-sm uppercase tracking-wider leading-none">
-                Create Room
+              <span className="font-sans font-black text-sm uppercase tracking-wider leading-normal overflow-visible truncate py-0.5">
+                {t("createRoomTitle")}
               </span>
             </div>
-            <ChevronRight className="w-5 h-5 stroke-[2.5] opacity-60" />
+            <ChevronRight className="w-5 h-5 stroke-[2.5] opacity-60 shrink-0" />
           </button>
 
           {/* Route 2: Join Room */}
@@ -131,11 +134,11 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
               <div className={`p-2 rounded-xl flex items-center justify-center ${darkMode ? "bg-sky-900/60 text-sky-300" : "bg-white/80 text-[#0369a1] shadow-xs"}`}>
                 <Grid3X3 className="w-5 h-5 stroke-[2.5]" />
               </div>
-              <span className="font-sans font-black text-sm uppercase tracking-wider leading-none">
-                Join Room
+              <span className="font-sans font-black text-sm uppercase tracking-wider leading-normal overflow-visible truncate py-0.5">
+                {t("joinRoomTitle")}
               </span>
             </div>
-            <ChevronRight className="w-5 h-5 stroke-[2.5] opacity-60" />
+            <ChevronRight className="w-5 h-5 stroke-[2.5] opacity-60 shrink-0" />
           </button>
         </div>
       )}

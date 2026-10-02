@@ -1,5 +1,6 @@
 import React from "react";
 import { RefreshCw, Play } from "lucide-react";
+import { useTranslation } from "../../i18n/useTranslation";
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 
@@ -84,15 +85,17 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   playClickSound,
   onCellClick
 }) => {
+  const { t } = useTranslation();
+
   if (!boardState) {
     return (
       <div className="w-full max-w-[420px] aspect-square flex flex-col items-center justify-center bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-2xl shadow-xl border border-stone-200/50 dark:border-zinc-800 p-8 my-auto select-none">
         <RefreshCw className="w-10 h-10 animate-spin text-sky-500 mb-3" />
         <span className="font-mono text-sm font-black tracking-widest text-stone-800 dark:text-stone-100 uppercase">
-          ENTERING MATCH...
+          {t("enteringMatch")}
         </span>
         <span className="text-xs text-stone-400 dark:text-zinc-500 font-mono mt-1">
-          Synchronizing Sudoku arena
+          {t("synchronizingArena")}
         </span>
       </div>
     );
@@ -153,7 +156,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
             darkMode ? "bg-zinc-950/75 text-zinc-100" : "bg-[#FDFBF7]/75 text-stone-900"
           } backdrop-blur-[8px] z-45 flex items-center justify-center cursor-pointer select-none transition-all duration-200 overflow-hidden rounded-[inherit]`}
           style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
-          title="Resume Game"
+          title={t("resumeGameTitle")}
         >
           <div
             className={`w-20 h-20 sm:w-22 sm:h-22 rounded-full flex items-center justify-center transition-all duration-200 border-none cursor-pointer active:scale-95 group hover:scale-105 ${

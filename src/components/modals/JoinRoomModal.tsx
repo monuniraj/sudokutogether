@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "motion/react";
 import { X, RefreshCw, Play, XCircle } from "lucide-react";
+import { useTranslation } from "../../i18n/useTranslation";
 
 export interface JoinRoomModalProps {
   isOpen: boolean;
@@ -33,6 +34,8 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
   darkMode,
   playClickSound
 }) => {
+  const { t } = useTranslation();
+
   if (!isOpen) return null;
 
   return (
@@ -56,7 +59,7 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
             SudokuSync
           </span>
           <h3 className="text-xl font-sans font-black tracking-tight leading-none text-stone-850 dark:text-stone-100">
-            Join Room
+            {t("joinRoomTitle")}
           </h3>
         </div>
         <button
@@ -71,13 +74,13 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
       </div>
 
       <p className="text-xs font-sans text-stone-500 dark:text-stone-400">
-        Ask your friend for their 6-digit room code to enter the match.
+        {t("enterRoomCodeSub")}
       </p>
 
       {/* 6-digit room code input */}
       <div className="flex flex-col gap-1.5 mt-1">
         <label className="font-sans font-bold text-2xs uppercase tracking-wider text-stone-400 dark:text-stone-500">
-          6-Digit Room Code
+          {t("roomCodeInputLabel")}
         </label>
         <input
           type="text"
@@ -100,7 +103,7 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
       {/* Optional Room PIN input */}
       <div className="flex flex-col gap-1.5">
         <label className="font-sans font-bold text-2xs uppercase tracking-wider text-stone-400 dark:text-stone-500">
-          4-Digit PIN (If Room Is Locked)
+          {t("pinInputLabel")}
         </label>
         <input
           type="password"
@@ -135,11 +138,11 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
             playClickSound();
             onBack();
           }}
-          className={`flex-1 py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer transition-all active:scale-98 ${
+          className={`flex-1 py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer transition-all active:scale-98 truncate ${
             darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-150 text-stone-700 hover:bg-stone-200"
           }`}
         >
-          Back
+          {t("backAction")}
         </button>
         <button
           disabled={roomCodeInput.trim().length !== 6 || isJoiningRoomLoading}
@@ -158,7 +161,7 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
           ) : (
             <Play className="w-4 h-4 fill-current" />
           )}
-          <span>{isJoiningRoomLoading ? "Joining..." : "Join Game"}</span>
+          <span className="truncate">{isJoiningRoomLoading ? t("joiningText") : t("joinGameAction")}</span>
         </button>
       </div>
     </motion.div>

@@ -9,6 +9,16 @@
 }
 
 @layer base {
+  * {
+    line-height: normal !important;
+  }
+  body {
+    line-height: 1.35;
+  }
+  button, span, p, h1, h2, h3, h4, div {
+    overflow-anchor: none;
+  }
+
   html, body {
     overscroll-behavior: none;
     overscroll-behavior-y: none;

@@ -1,6 +1,7 @@
 import React from "react";
 import { Check, X, Plus } from "lucide-react";
 import { formatMatchTimestamp } from "../../utils/formatTimestamp";
+import { useTranslation } from "../../i18n/useTranslation";
 
 export interface CompletedGameRecord {
   id: string;
@@ -18,6 +19,7 @@ export interface MultiplayerPlayerRecord {
   name: string;
   isFriend?: boolean;
   status?: string;
+  lastPlayedAt?: number;
 }
 
 export interface StatsModalProps {
@@ -57,6 +59,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
   handleAddRecentFriend,
   formatTimer
 }) => {
+  const { t } = useTranslation();
   const [activePlayersTab, setActivePlayersTab] = React.useState<"recent" | "friends">("recent");
   return (
     <div
@@ -80,7 +83,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
             }`}
           >
             <span className="text-xs font-semibold tracking-wider text-stone-600 dark:text-zinc-300 uppercase mb-3">
-              Win Rate
+              {t("winRateLabel")}
             </span>
             <div className="relative w-16 h-16 flex items-center justify-center">
               <svg className="w-full h-full transform -rotate-90">
@@ -117,7 +120,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                 darkMode ? "text-[#38BDF8]" : "text-[#0369A1]"
               }`}
             >
-              {winsCount} Wins / {gamesPlayed} Plays
+              {t("winsRatio", { wins: winsCount, total: gamesPlayed })}
             </span>
           </div>
 
@@ -131,34 +134,34 @@ export const StatsModal: React.FC<StatsModalProps> = ({
           >
             <div>
               <span className="text-xs font-semibold tracking-wider text-stone-600 dark:text-zinc-300 uppercase flex items-center justify-center text-center mb-4">
-                Personal Bests
+                {t("personalBestsTitle")}
               </span>
 
               <div className="flex flex-col gap-2.5">
                 {[
                   {
-                    label: "Easy",
+                    key: "EASY",
+                    label: t("easy"),
                     timeSec: bestTimes.EASY,
                     fallback: "--:--",
-                    colorClass: "text-[#065F46] dark:text-emerald-400"
                   },
                   {
-                    label: "Medium",
+                    key: "MEDIUM",
+                    label: t("medium"),
                     timeSec: bestTimes.MEDIUM,
                     fallback: "--:--",
-                    colorClass: "text-[#854D0E] dark:text-amber-400"
                   },
                   {
-                    label: "Hard",
+                    key: "HARD",
+                    label: t("hard"),
                     timeSec: bestTimes.HARD,
                     fallback: "--:--",
-                    colorClass: "text-[#6B21A8] dark:text-purple-400"
                   },
                   {
-                    label: "Expert",
+                    key: "EXPERT",
+                    label: t("expert"),
                     timeSec: bestTimes.EXPERT,
                     fallback: "--:--",
-                    colorClass: "text-[#0369A1] dark:text-sky-400"
                   }
                 ].map((tier) => {
                   let displayStr = tier.fallback;
@@ -168,11 +171,11 @@ export const StatsModal: React.FC<StatsModalProps> = ({
 
                   return (
                     <div
-                      key={tier.label}
+                      key={tier.key}
                       className="flex items-center justify-between text-[11px] font-sans"
                     >
                       <span
-                        className={`font-semibold uppercase tracking-wider text-xs ${
+                        className={`font-semibold uppercase tracking-wider text-xs truncate ${
                           darkMode ? "text-purple-300/80" : "text-purple-700/85"
                         }`}
                       >
@@ -210,7 +213,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
           >
             <button
               onClick={() => handleSelectHistoryTab("completed")}
-              className={`py-2 px-2.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center text-center gap-1.5 uppercase font-bold tracking-wider ${
+              className={`py-2 px-2.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center text-center gap-1.5 uppercase font-bold tracking-wider truncate ${
                 activeHistoryTab === "completed"
                   ? darkMode
                     ? "bg-[#9d174d]/55 text-[#fbcfe8]"
@@ -220,9 +223,9 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                   : "text-pink-600/75 hover:text-[#9D174D] bg-transparent"
               }`}
             >
-              <span>History</span>
+              <span className="truncate">{t("historyTabTitle")}</span>
               <span
-                className={`text-[9.5px] px-1.5 py-0.5 rounded-md leading-none flex items-center justify-center ${
+                className={`text-[9.5px] px-1.5 py-0.5 rounded-md leading-none flex items-center justify-center shrink-0 ${
                   darkMode ? "bg-[#9d174d]/45 text-[#fbcfe8]/80" : "bg-pink-100/50 text-[#9D174D]/80"
                 }`}
               >
@@ -232,7 +235,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
 
             <button
               onClick={() => handleSelectHistoryTab("saved")}
-              className={`py-2 px-2.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center text-center gap-1.5 uppercase font-bold tracking-wider ${
+              className={`py-2 px-2.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center text-center gap-1.5 uppercase font-bold tracking-wider truncate ${
                 activeHistoryTab === "saved"
                   ? darkMode
                     ? "bg-[#9d174d]/55 text-[#fbcfe8]"
@@ -242,9 +245,9 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                   : "text-pink-600/75 hover:text-[#9D174D] bg-transparent"
               }`}
             >
-              <span>Saved</span>
+              <span className="truncate">{t("savedTabTitle")}</span>
               <span
-                className={`text-[9.5px] px-1.5 py-0.5 rounded-md leading-none flex items-center justify-center ${
+                className={`text-[9.5px] px-1.5 py-0.5 rounded-md leading-none flex items-center justify-center shrink-0 ${
                   darkMode ? "bg-[#9d174d]/45 text-[#fbcfe8]/80" : "bg-pink-100/50 text-[#9D174D]/80"
                 }`}
               >
@@ -254,7 +257,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
 
             <button
               onClick={() => handleSelectHistoryTab("friends")}
-              className={`py-2 px-2.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center text-center gap-1.5 uppercase font-bold tracking-wider ${
+              className={`py-2 px-2.5 rounded-xl border-none cursor-pointer transition-all flex items-center justify-center text-center gap-1.5 uppercase font-bold tracking-wider truncate ${
                 activeHistoryTab === "friends"
                   ? darkMode
                     ? "bg-[#9d174d]/55 text-[#fbcfe8]"
@@ -264,9 +267,9 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                   : "text-pink-600/75 hover:text-[#9D174D] bg-transparent"
               }`}
             >
-              <span>Friends</span>
+              <span className="truncate">{t("friendsTabTitle")}</span>
               <span
-                className={`text-[9.5px] px-1.5 py-0.5 rounded-md leading-none flex items-center justify-center ${
+                className={`text-[9.5px] px-1.5 py-0.5 rounded-md leading-none flex items-center justify-center shrink-0 ${
                   darkMode ? "bg-[#9d174d]/45 text-[#fbcfe8]/80" : "bg-pink-100/50 text-[#9D174D]/80"
                 }`}
               >
@@ -280,7 +283,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
             {activeHistoryTab === "completed" ? (
               completedGames.length === 0 ? (
                 <div className="py-8 text-center text-stone-500 font-sans text-xs">
-                  No completed games yet.
+                  {t("noCompletedGames")}
                 </div>
               ) : (
                 completedGames.map((game) => (
@@ -307,12 +310,12 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                         {game.isWon ? (
                           <>
                             <Check className="w-3 h-3 stroke-[3]" />
-                            <span>Won</span>
+                            <span>{t("wonBadge")}</span>
                           </>
                         ) : (
                           <>
                             <X className="w-3 h-3 stroke-[3]" />
-                            <span>Failed</span>
+                            <span>{t("failedBadge")}</span>
                           </>
                         )}
                       </span>
@@ -351,13 +354,13 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       <div className="flex items-center gap-3.5 font-sans text-xs font-black">
                         <div className="flex flex-col items-end leading-tight">
                           <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
-                            Time
+                            {t("timeLabel")}
                           </span>
                           <span>{formatTimer(game.timeSec)}</span>
                         </div>
                         <div className="flex flex-col items-end leading-tight">
                           <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
-                            Errs
+                            {t("errsLabel")}
                           </span>
                           <span className="text-rose-500">
                             {game.mistakes}/{game.maxMistakes}
@@ -376,7 +379,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                             : "bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#166534]"
                         }`}
                       >
-                        Replay
+                        <span className="truncate">{t("replayAction")}</span>
                       </button>
                       <button
                         onClick={() => handleSaveGame(game)}
@@ -390,7 +393,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                             : "bg-[#FEFCE8] hover:bg-[#FEF9C3] text-[#854D0E]"
                         }`}
                       >
-                        {savedGames.some((r) => r.id === game.id) ? "Saved" : "Save"}
+                        <span className="truncate">{savedGames.some((r) => r.id === game.id) ? t("savedAction") : t("saveAction")}</span>
                       </button>
                       <button
                         onClick={() => handleOpenRankings(game)}
@@ -400,7 +403,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                             : "bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9F1239]"
                         }`}
                       >
-                        Rankings
+                        <span className="truncate">{t("rankingsAction")}</span>
                       </button>
                     </div>
                   </div>
@@ -409,7 +412,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
             ) : activeHistoryTab === "saved" ? (
               savedGames.length === 0 ? (
                 <div className="py-8 text-center text-stone-500 font-sans text-xs">
-                  No saved games yet. Click Save on a completed game item to save it!
+                  {t("noSavedGames")}
                 </div>
               ) : (
                 savedGames.map((game) => (
@@ -436,12 +439,12 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                         {game.isWon ? (
                           <>
                             <Check className="w-3 h-3 stroke-[3]" />
-                            <span>Won</span>
+                            <span>{t("wonBadge")}</span>
                           </>
                         ) : (
                           <>
                             <X className="w-3 h-3 stroke-[3]" />
-                            <span>Failed</span>
+                            <span>{t("failedBadge")}</span>
                           </>
                         )}
                       </span>
@@ -480,13 +483,13 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       <div className="flex items-center gap-3.5 font-sans text-xs font-black">
                         <div className="flex flex-col items-end leading-tight">
                           <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
-                            Time
+                            {t("timeLabel")}
                           </span>
                           <span>{formatTimer(game.timeSec)}</span>
                         </div>
                         <div className="flex flex-col items-end leading-tight">
                           <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
-                            Errs
+                            {t("errsLabel")}
                           </span>
                           <span className="text-rose-500">
                             {game.mistakes}/{game.maxMistakes}
@@ -505,7 +508,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                             : "bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#166534]"
                         }`}
                       >
-                        Replay
+                        <span className="truncate">{t("replayAction")}</span>
                       </button>
                       <button
                         onClick={() => handleSaveGame(game)}
@@ -515,7 +518,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                             : "bg-[#FEFCE8] hover:bg-[#FEF9C3] text-[#854D0E]"
                         }`}
                       >
-                        Unsave
+                        <span className="truncate">{t("unsaveAction")}</span>
                       </button>
                       <button
                         onClick={() => handleOpenRankings(game)}
@@ -525,7 +528,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                             : "bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9F1239]"
                         }`}
                       >
-                        Rankings
+                        <span className="truncate">{t("rankingsAction")}</span>
                       </button>
                     </div>
                   </div>
@@ -552,23 +555,23 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                         <div className={`flex w-full rounded-lg p-1 ${darkMode ? "bg-black/35" : "bg-stone-200/50"}`}>
                           <button
                             onClick={() => setActivePlayersTab('recent')}
-                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer truncate ${
                               activePlayersTab === 'recent'
                                 ? (darkMode ? "bg-[#2A0818] text-[#fbcfe8] shadow-sm" : "bg-white text-[#9D174D] shadow-sm")
                                 : (darkMode ? "bg-transparent text-pink-300/60 hover:text-[#fbcfe8]" : "bg-transparent text-stone-500 hover:text-stone-700")
                             }`}
                           >
-                            Recent ({recentPlayers.length})
+                            {t("recentTab", { count: recentPlayers.length })}
                           </button>
                           <button
                             onClick={() => setActivePlayersTab('friends')}
-                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer truncate ${
                               activePlayersTab === 'friends'
                                 ? (darkMode ? "bg-[#2A0818] text-[#fbcfe8] shadow-sm" : "bg-white text-[#9D174D] shadow-sm")
                                 : (darkMode ? "bg-transparent text-pink-300/60 hover:text-[#fbcfe8]" : "bg-transparent text-stone-500 hover:text-stone-700")
                             }`}
                           >
-                            Friends ({friends.length})
+                            {t("friendsTab", { count: friends.length })}
                           </button>
                         </div>
                       </div>
@@ -578,7 +581,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                         {activePlayersTab === 'friends' && (
                           friends.length === 0 ? (
                             <div className="py-6 text-center text-stone-500 font-sans text-xs italic">
-                              No friends added yet. Tap [+] next to recent players to add them!
+                              {t("noFriendsAdded")}
                             </div>
                           ) : (
                             friends.map((friend) => (
@@ -605,9 +608,9 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                                 </div>
                                 <button
                                   onClick={() => handleToggleFriend(friend.id, friend.name)}
-                                  className="shrink-0 text-[10.5px] font-sans font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 border-none bg-transparent cursor-pointer transition-all active:scale-95 px-2 py-1"
+                                  className="shrink-0 text-[10.5px] font-sans font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 border-none bg-transparent cursor-pointer transition-all active:scale-95 px-2 py-1 truncate"
                                 >
-                                  Remove
+                                  {t("removeAction")}
                                 </button>
                               </div>
                             ))
@@ -617,7 +620,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                         {activePlayersTab === 'recent' && (
                           recentPlayers.length === 0 ? (
                             <div className="py-6 text-center text-stone-500 font-sans text-xs italic">
-                              No recent opponents yet. Start a match to find players!
+                              {t("noRecentOpponents")}
                             </div>
                           ) : (
                             recentPlayers.map((player) => {
@@ -636,7 +639,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                                       <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
                                         darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
                                       }`}>
-                                        ✓ Friend
+                                        {t("friendBadge")}
                                       </span>
                                     ) : (
                                       <button
@@ -649,7 +652,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                                             ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300 hover:text-white"
                                             : "bg-stone-150 hover:bg-stone-200 text-stone-700 hover:text-stone-900"
                                         }`}
-                                        title={isRequested ? "Requested" : "Add Friend"}
+                                        title={isRequested ? "Requested" : t("addFriend")}
                                       >
                                         {isRequested ? (
                                           <Check className="w-4 h-4 stroke-[2.5]" />
@@ -665,7 +668,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                                           {formatMatchTimestamp(player.lastPlayedAt)}
                                         </span>
                                       ) : (
-                                        <span className="text-[9.5px] text-stone-400">Match Participant</span>
+                                        <span className="text-[9.5px] text-stone-400">{t("matchParticipant")}</span>
                                       )}
                                     </div>
                                   </div>

@@ -1,7 +1,9 @@
 import React, { useState } from "react";
-import { Pencil, Check, Lock, Zap } from "lucide-react";
+import { Pencil, Check, Lock, Zap, Globe } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
+import { useTranslation } from "../../i18n/useTranslation";
+import { Language } from "../../i18n/translations";
 
 export interface SettingsModalProps {
   fromGameplaySettings: boolean;
@@ -91,6 +93,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenDeleteAccountModal,
   onOpenResetSettingsModal
 }) => {
+  const { t, language, setLanguage, languages } = useTranslation();
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
 
   const toggleInfo = (id: string) => {
@@ -108,7 +111,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       } select-none selection:bg-[#E0F2FE]`}
       style={{ minHeight: 0 }}
     >
-      {/* Pink Back Tag Arrow Button - only visible if entered from gameplay options */}
+      {/* Back Tag Arrow Button */}
       {fromGameplaySettings && (
         <button
           onClick={() => {
@@ -117,35 +120,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           }}
           className="absolute top-4 left-4 bg-[#FCE7F3] hover:bg-[#FBCFE8] text-[#9D174D] border-none px-4 py-2.5 text-xs font-black uppercase rounded-xl cursor-pointer shadow-[0_4px_12px_rgba(157,23,77,0.06),_0_2px_4px_rgba(0,0,0,0.02)] transition-all active:scale-95 flex items-center justify-center gap-1.5 z-50 mb-6"
         >
-          ◀ BACK
+          ◀ {t("back")}
         </button>
       )}
 
-      {/* Directly sit on main background, wrapped in a max-w-sm utility shell for responsive centering and flex spacing */}
+      {/* Main container */}
       <div
         className={`w-full max-w-sm lg:max-w-4xl mx-auto flex flex-col lg:grid lg:grid-cols-2 lg:items-start gap-5 lg:gap-6 ${
           fromGameplaySettings ? "mt-3" : ""
         }`}
         id="settings-screen-inner-container"
       >
-        {/* 👤 PLAYER IDENTITY DISPLAY NAME CARD */}
+        {/* PLAYER IDENTITY CARD */}
         <div
           className={`p-5 rounded-2xl flex flex-col gap-4 text-left font-sans border-none shadow-md lg:col-span-2 ${
             darkMode
-              ? "bg-[#3b0764]/20 border border-[#f5f3ff]/15 text-[#d8b4fe]"
-              : "bg-[#f3e8ff]/60 lg:bg-[#FDFBF7] text-[#6b21a8] shadow-[0_8px_30px_rgba(107,33,168,0.04)]"
+              ? "bg-[#3b0764]/20 text-[#d8b4fe]"
+              : "bg-[#f3e8ff]/60 text-[#6b21a8] shadow-[0_8px_30px_rgba(107,33,168,0.04)]"
           }`}
         >
           <div
-            className={`flex items-center justify-between p-3 rounded-xl border ${
-              darkMode ? "bg-zinc-950/45 border-purple-900/20" : "bg-white/60 border-purple-200/40"
+            className={`flex items-center justify-between p-3 rounded-xl border-none ${
+              darkMode ? "bg-zinc-950/45" : "bg-white/60"
             }`}
           >
             <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
               <div
-                className="w-10 h-10 rounded-full border-none flex items-center justify-center text-md font-sans font-black text-white shrink-0 shadow-sm bg-purple-600"
+                className="w-10 h-10 rounded-full border-none flex items-center justify-center text-md font-sans font-black text-white shrink-0 shadow-sm bg-purple-600 select-none"
               >
-                {userProfile?.name ? userProfile.name.charAt(0).toUpperCase() : "V"}
+                {userProfile?.name ? String(Array.from(userProfile.name)[0]).toUpperCase() : "V"}
               </div>
               <div className="flex flex-col min-w-0 flex-1">
                 <span
@@ -153,7 +156,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     darkMode ? "text-purple-300" : "text-purple-700"
                   }`}
                 >
-                  Display Name
+                  {t("displayName")}
                 </span>
                 <span
                   className={`font-sans font-bold text-sm truncate ${
@@ -165,7 +168,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   userProfile.name !== "Guest Voyager" &&
                   userProfile.name !== "Guest Solver"
                     ? userProfile.name
-                    : "Anonymous Voyager"}
+                    : t("anonymousVoyager")}
                 </span>
               </div>
             </div>
@@ -175,27 +178,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 playClickSound();
                 onOpenDisplayNameModal();
               }}
-              className={`p-2 rounded-full border-none cursor-pointer transition-all hover:bg-purple-200/50 dark:hover:bg-purple-950/40 active:scale-95 text-purple-700 dark:text-purple-300 flex items-center justify-center shrink-0`}
-              title="Edit Display Name"
+              className="p-2 rounded-full border-none cursor-pointer transition-all hover:bg-purple-200/50 dark:hover:bg-purple-950/40 active:scale-95 text-purple-700 dark:text-purple-300 flex items-center justify-center shrink-0"
+              title={t("displayName")}
             >
               <Pencil className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Google Credentials Sync Section rendered directly inside the main card */}
+          {/* Sync status */}
           {userProfile?.isSynced ? (
             <div className="flex flex-col gap-2.5">
               <div
-                className={`p-3 rounded-xl border ${
+                className={`p-3 rounded-xl border-none ${
                   darkMode
-                    ? "bg-purple-950/40 border-purple-800/30 text-purple-100"
-                    : "bg-white border border-purple-200/60 text-purple-950"
+                    ? "bg-purple-950/40 text-purple-100"
+                    : "bg-white text-purple-950"
                 }`}
               >
                 <div className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block animate-pulse" />
                   <span className="text-xs font-sans font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                    <span>Synced Securely</span>
+                    <span>{t("syncedSecurely")}</span>
                     <Check className="w-3 h-3 stroke-[2.5]" />
                   </span>
                 </div>
@@ -223,11 +226,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 }}
                 className={`w-full font-sans text-[10px] lg:text-[12px] font-black uppercase tracking-wider py-2.5 lg:py-3 border-none rounded-xl active:scale-[0.98] transition-all text-center cursor-pointer ${
                   darkMode
-                    ? "bg-purple-950/50 hover:bg-purple-950/80 text-purple-200 border border-purple-800/30"
+                    ? "bg-purple-950/50 hover:bg-purple-950/80 text-purple-200"
                     : "bg-purple-100 hover:bg-purple-200 text-purple-950"
                 }`}
               >
-                Disconnect Sync
+                {t("disconnectSync")}
               </button>
             </div>
           ) : (
@@ -260,22 +263,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                   />
                 </svg>
-                <span>Connect Google Account</span>
+                <span>{t("connectGoogleAccount")}</span>
               </button>
               <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 mt-1.5 font-sans text-center">
-                Cloud synchronization across devices will be available in a future update.
+                {t("cloudSyncUpcoming")}
               </p>
             </div>
           )}
         </div>
 
         <div className="flex flex-col gap-5 lg:gap-6">
-          {/* CATEGORY 1: [GENERAL PREFERENCES] */}
+          {/* CATEGORY 1: GENERAL PREFERENCES */}
           <div
             className={`p-5 rounded-xl flex flex-col gap-4 text-left font-sans border-none shadow-md ${
               darkMode
-                ? "bg-[#0c4a6e]/20 border border-[#bae6fd]/15 text-[#bae6fd]"
-                : "bg-[#E0F2FE]/60 lg:bg-[#FDFBF7] text-[#0369A1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]"
+                ? "bg-[#0c4a6e]/20 text-[#bae6fd]"
+                : "bg-[#E0F2FE]/60 text-[#0369A1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]"
             }`}
           >
             <span
@@ -283,13 +286,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 darkMode ? "text-sky-300" : "text-[#0369A1]"
               }`}
             >
-              GENERAL PREFERENCES
+              {t("generalPreferences")}
             </span>
+
+            {/* Language Selector */}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                  <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
+                    {t("selectLanguage")}
+                  </span>
+                </div>
+                <select
+                  value={language}
+                  onChange={(e) => {
+                    playClickSound();
+                    setLanguage(e.target.value as Language);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border-none cursor-pointer outline-none transition-all ${
+                    darkMode
+                      ? "bg-sky-950/80 text-sky-100 hover:bg-sky-900/80"
+                      : "bg-white text-sky-950 hover:bg-sky-50 shadow-xs"
+                  }`}
+                  aria-label={t("selectLanguage")}
+                >
+                  {languages.map((langOpt) => (
+                    <option key={langOpt.code} value={langOpt.code}>
+                      {langOpt.nativeName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 font-sans m-0">
+                English • हिन्दी • 日本語 • 한국어 • Deutsch • Español • Français • Italiano • Português
+              </p>
+            </div>
 
             {/* Dark Mode Theme */}
             <div className="flex items-center justify-between">
               <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
-                Dark Mode Theme
+                {t("darkModeTheme")}
               </span>
               <button
                 onClick={() => {
@@ -312,7 +349,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Sound Effects */}
             <div className="flex items-center justify-between">
               <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
-                Sound Effects
+                {t("soundEffects")}
               </span>
               <button
                 onClick={() => {
@@ -339,7 +376,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Haptic Vibrations */}
             <div className="flex items-center justify-between">
               <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
-                Haptic Vibrations
+                {t("hapticVibrations")}
               </span>
               <button
                 onClick={() => {
@@ -373,11 +410,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
-                  Push Notifications
+                  {t("pushNotifications")}
                 </span>
                 <button
                   disabled
-                  title="Available in the upcoming mobile app release"
+                  title={t("pushNotificationsDesc")}
                   className={`w-11 h-6 flex items-center rounded-full p-0.5 border-none cursor-not-allowed opacity-50 ${
                     darkMode ? "bg-zinc-850" : "bg-[#BAE6FD]"
                   }`}
@@ -388,17 +425,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               </div>
               <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 font-sans m-0">
-                Available in the upcoming mobile app release.
+                {t("pushNotificationsDesc")}
               </p>
             </div>
           </div>
 
-          {/* CATEGORY 3: [SMART ASSISTANTS] */}
+          {/* CATEGORY 2: SMART ASSISTANTS */}
           <div
             className={`p-5 rounded-xl flex flex-col gap-4 text-left font-sans border-none shadow-md ${
               darkMode
-                ? "bg-[#4c0519]/25 border border-[#fecdd3]/15 text-[#fecdd3]"
-                : "bg-[#FCE7F3]/60 lg:bg-[#FDFBF7] text-stone-850 shadow-[0_8px_30px_rgba(157,23,77,0.03)]"
+                ? "bg-[#4c0519]/25 text-[#fecdd3]"
+                : "bg-[#FCE7F3]/60 text-stone-850 shadow-[0_8px_30px_rgba(157,23,77,0.03)]"
             }`}
           >
             <span
@@ -406,7 +443,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 darkMode ? "text-pink-300" : "text-[#9D174D]"
               }`}
             >
-              SMART ASSISTANTS
+              {t("smartAssistants")}
             </span>
 
             {/* Highlight Identical */}
@@ -414,7 +451,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
-                    Highlight Identical
+                    {t("highlightIdentical")}
                   </span>
                   <button
                     type="button"
@@ -423,10 +460,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       playClickSound();
                       toggleInfo("highlight-identical");
                     }}
-                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
-                      expandedInfo["highlight-identical"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    className={`w-4 h-4 text-[10px] rounded-full border-none flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["highlight-identical"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : "bg-black/5 dark:bg-white/5"
                     }`}
-                    aria-label="Info: Highlight Identical"
+                    aria-label={t("highlightIdentical")}
                     title="Toggle explanation"
                   >
                     <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
@@ -454,7 +491,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               {expandedInfo["highlight-identical"] && (
                 <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
-                  Highlights every matching digit across the board when a cell or number is selected.
+                  {t("highlightIdenticalInfo")}
                 </div>
               )}
             </div>
@@ -464,7 +501,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
-                    Remaining Numbers
+                    {t("remainingNumbers")}
                   </span>
                   <button
                     type="button"
@@ -473,10 +510,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       playClickSound();
                       toggleInfo("remaining-numbers");
                     }}
-                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
-                      expandedInfo["remaining-numbers"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    className={`w-4 h-4 text-[10px] rounded-full border-none flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["remaining-numbers"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : "bg-black/5 dark:bg-white/5"
                     }`}
-                    aria-label="Info: Remaining Numbers"
+                    aria-label={t("remainingNumbers")}
                     title="Toggle explanation"
                   >
                     <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
@@ -504,7 +541,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               {expandedInfo["remaining-numbers"] && (
                 <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
-                  Shows count badges on keypad buttons indicating how many of each digit are left to place.
+                  {t("remainingNumbersInfo")}
                 </div>
               )}
             </div>
@@ -514,7 +551,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
-                    Highlight Area
+                    {t("highlightArea")}
                   </span>
                   <button
                     type="button"
@@ -523,10 +560,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       playClickSound();
                       toggleInfo("highlight-area");
                     }}
-                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
-                      expandedInfo["highlight-area"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    className={`w-4 h-4 text-[10px] rounded-full border-none flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["highlight-area"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : "bg-black/5 dark:bg-white/5"
                     }`}
-                    aria-label="Info: Highlight Area"
+                    aria-label={t("highlightArea")}
                     title="Toggle explanation"
                   >
                     <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
@@ -554,7 +591,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               {expandedInfo["highlight-area"] && (
                 <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
-                  Shades the row, column, and 3×3 box of the selected cell for better focus.
+                  {t("highlightAreaInfo")}
                 </div>
               )}
             </div>
@@ -564,7 +601,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
-                    Auto-Remove Notes
+                    {t("autoRemoveNotes")}
                   </span>
                   <button
                     type="button"
@@ -573,10 +610,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       playClickSound();
                       toggleInfo("auto-remove-notes");
                     }}
-                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
-                      expandedInfo["auto-remove-notes"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    className={`w-4 h-4 text-[10px] rounded-full border-none flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["auto-remove-notes"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : "bg-black/5 dark:bg-white/5"
                     }`}
-                    aria-label="Info: Auto-Remove Notes"
+                    aria-label={t("autoRemoveNotes")}
                     title="Toggle explanation"
                   >
                     <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
@@ -604,7 +641,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               {expandedInfo["auto-remove-notes"] && (
                 <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
-                  When you place a solid number, matching pencil notes in neighboring cells across that row, column, and 3×3 box are automatically cleared.
+                  {t("autoRemoveNotesInfo")}
                 </div>
               )}
             </div>
@@ -615,7 +652,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex items-center gap-1.5">
                   <Zap className="w-4 h-4 text-pink-600 dark:text-pink-400 fill-current" />
                   <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
-                    Fast Fill (Paint Mode)
+                    {t("fastFill")}
                   </span>
                   <button
                     type="button"
@@ -624,10 +661,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       playClickSound();
                       toggleInfo("paint-mode");
                     }}
-                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
-                      expandedInfo["paint-mode"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    className={`w-4 h-4 text-[10px] rounded-full border-none flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["paint-mode"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : "bg-black/5 dark:bg-white/5"
                     }`}
-                    aria-label="Info: Fast Fill (Paint Mode)"
+                    aria-label={t("fastFill")}
                     title="Toggle explanation"
                   >
                     <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
@@ -656,7 +693,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               {expandedInfo["paint-mode"] && (
                 <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
-                  Locks a selected digit on the keypad so you can tap multiple empty cells to place it rapidly.
+                  {t("fastFillInfo")}
                 </div>
               )}
             </div>
@@ -666,7 +703,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
-                    Auto-Switch Completed Numbers
+                    {t("autoSwitchCompleted")}
                   </span>
                   <button
                     type="button"
@@ -675,10 +712,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       playClickSound();
                       toggleInfo("auto-switch-completed");
                     }}
-                    className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
-                      expandedInfo["auto-switch-completed"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                    className={`w-4 h-4 text-[10px] rounded-full border-none flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["auto-switch-completed"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : "bg-black/5 dark:bg-white/5"
                     }`}
-                    aria-label="Info: Auto-Switch Completed Numbers"
+                    aria-label={t("autoSwitchCompleted")}
                     title="Toggle explanation"
                   >
                     <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
@@ -706,7 +743,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               {expandedInfo["auto-switch-completed"] && (
                 <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
-                  Automatically switch to the next incomplete number when a digit is completed in Fast-Fill mode.
+                  {t("autoSwitchCompletedInfo")}
                 </div>
               )}
             </div>
@@ -714,12 +751,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         <div className="flex flex-col gap-5 lg:gap-6">
-          {/* CATEGORY 2: [GAMEPLAY RULES] */}
+          {/* CATEGORY 3: GAMEPLAY RULES */}
           <div
             className={`p-5 rounded-xl flex flex-col gap-4 text-left font-sans border-none shadow-md ${
               darkMode
-                ? "bg-[#064e3b]/25 border border-[#a7f3d0]/15 text-[#a7f3d0]"
-                : "bg-[#E6F4EA]/60 lg:bg-[#FDFBF7] text-stone-850 shadow-[0_8px_30px_rgba(3,105,161,0.02)]"
+                ? "bg-[#064e3b]/25 text-[#a7f3d0]"
+                : "bg-[#E6F4EA]/60 text-stone-850 shadow-[0_8px_30px_rgba(3,105,161,0.02)]"
             }`}
           >
             <span
@@ -727,7 +764,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 darkMode ? "text-emerald-300" : "text-[#135236]"
               }`}
             >
-              GAMEPLAY RULES
+              {t("gameplayRules")}
             </span>
 
             {/* Active Timer Clock */}
@@ -736,7 +773,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1.5">
                     <span className={`text-sm font-medium ${darkMode ? "text-emerald-100" : "text-emerald-950"}`}>
-                      Active Timer Clock
+                      {t("activeTimerClock")}
                     </span>
                     <button
                       type="button"
@@ -745,10 +782,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         playClickSound();
                         toggleInfo("active-timer-clock");
                       }}
-                      className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
-                        expandedInfo["active-timer-clock"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                      className={`w-4 h-4 text-[10px] rounded-full border-none flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                        expandedInfo["active-timer-clock"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : "bg-black/5 dark:bg-white/5"
                       }`}
-                      aria-label="Info: Active Timer Clock"
+                      aria-label={t("activeTimerClock")}
                       title="Toggle explanation"
                     >
                       <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
@@ -757,7 +794,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {challengeMode && (
                     <span className="text-[10px] text-red-500 font-black tracking-wide mt-0.5 flex items-center gap-1">
                       <Lock className="w-3 h-3 stroke-[2.5] shrink-0" />
-                      <span>LOCKED BY CHALLENGE</span>
+                      <span>{t("lockedByChallenge")}</span>
                     </span>
                   )}
                 </div>
@@ -787,7 +824,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               {expandedInfo["active-timer-clock"] && (
                 <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
-                  Tracks your game duration in real time. Turn off for a relaxed, untimed session.
+                  {t("activeTimerClockInfo")}
                 </div>
               )}
             </div>
@@ -798,7 +835,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1.5">
                     <span className={`text-sm font-medium ${darkMode ? "text-emerald-100" : "text-emerald-950"}`}>
-                      Strict Mistake Limit
+                      {t("strictMistakeLimit")}
                     </span>
                     <button
                       type="button"
@@ -807,10 +844,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         playClickSound();
                         toggleInfo("strict-mistake-limit");
                       }}
-                      className={`w-4 h-4 text-[10px] rounded-full border border-stone-300 dark:border-zinc-700 flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
-                        expandedInfo["strict-mistake-limit"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : ""
+                      className={`w-4 h-4 text-[10px] rounded-full border-none flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                        expandedInfo["strict-mistake-limit"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : "bg-black/5 dark:bg-white/5"
                       }`}
-                      aria-label="Info: Strict Mistake Limit"
+                      aria-label={t("strictMistakeLimit")}
                       title="Toggle explanation"
                     >
                       <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
@@ -819,7 +856,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {challengeMode && (
                     <span className="text-[10px] text-red-500 font-black tracking-wide mt-0.5 flex items-center gap-1">
                       <Lock className="w-3 h-3 stroke-[2.5] shrink-0" />
-                      <span>LOCKED TO {boardState?.maxMistakesLimit ?? challengeMistakeLimit} ERRORS</span>
+                      <span>{t("lockedByChallenge")}</span>
                     </span>
                   )}
                 </div>
@@ -849,12 +886,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               {expandedInfo["strict-mistake-limit"] && (
                 <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
-                  Enforces a 3-mistake limit before triggering game over.
+                  {t("strictMistakeLimitInfo")}
                 </div>
               )}
               {!mistakeLimitEnabled && (
                 <span className={`text-[11px] leading-tight font-sans ${darkMode ? "text-amber-300/90" : "text-amber-700/90"}`}>
-                  Personal best time record won't be recorded with unlimited mistakes.
+                  {t("unlimitedMistakesWarning")}
                 </span>
               )}
             </div>
@@ -864,16 +901,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div
             className={`p-5 rounded-2xl flex flex-col gap-4 text-left font-sans border-none shadow-md ${
               darkMode
-                ? "bg-[#78350f]/20 border border-[#fde68a]/15 text-[#fde68a]"
-                : "bg-[#FEF3C7]/60 lg:bg-[#FDFBF7] text-amber-950 shadow-[0_8px_30px_rgba(180,83,9,0.04)]"
+                ? "bg-[#78350f]/20 text-[#fde68a]"
+                : "bg-[#FEF3C7]/60 text-amber-950 shadow-[0_8px_30px_rgba(180,83,9,0.04)]"
             }`}
           >
             <span
-              className={`text-[11px] sm:text-xs font-semibold tracking-wider uppercase leading-none border-b pb-1.5 ${
-                darkMode ? "text-amber-300 border-[#fde68a]/20" : "text-amber-800 border-amber-200"
+              className={`text-[11px] sm:text-xs font-semibold tracking-wider uppercase leading-none border-b border-none pb-1.5 ${
+                darkMode ? "text-amber-300" : "text-amber-800"
               }`}
             >
-              SUPPORT & INFO
+              {t("supportAndInfo")}
             </span>
 
             <div className="flex flex-col gap-2 font-sans">
@@ -888,7 +925,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     : "bg-white hover:bg-amber-50 text-amber-950"
                 }`}
               >
-                <span>How to Play</span>
+                <span>{t("howToPlayTitle")}</span>
                 <svg
                   className="w-3.5 h-3.5 opacity-60"
                   viewBox="0 0 24 24"
@@ -911,7 +948,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     : "bg-white hover:bg-amber-50 text-amber-950"
                 }`}
               >
-                <span>Terms of Service</span>
+                <span>{t("termsOfService")}</span>
                 <svg
                   className="w-3.5 h-3.5 opacity-60"
                   viewBox="0 0 24 24"
@@ -934,7 +971,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     : "bg-white hover:bg-amber-50 text-amber-950"
                 }`}
               >
-                <span>Privacy Policy</span>
+                <span>{t("privacyPolicy")}</span>
                 <svg
                   className="w-3.5 h-3.5 opacity-60"
                   viewBox="0 0 24 24"
@@ -957,7 +994,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     : "bg-white hover:bg-amber-50 text-amber-950"
                 }`}
               >
-                <span>About Us</span>
+                <span>{t("aboutUs")}</span>
                 <svg
                   className="w-3.5 h-3.5 opacity-60"
                   viewBox="0 0 24 24"
@@ -980,7 +1017,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     : "bg-white hover:bg-amber-50 text-amber-950"
                 }`}
               >
-                <span>Contact Support</span>
+                <span>{t("contactSupport")}</span>
                 <svg
                   className="w-3.5 h-3.5 opacity-60"
                   viewBox="0 0 24 24"
@@ -996,9 +1033,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => {
                   playClickSound();
                   if (!userProfile?.isSynced) {
-                    alert(
-                      "No account data found. Since you are not logged in, there is no account or personal data to delete."
-                    );
+                    alert(t("noAccountDataNotice"));
                   } else {
                     onOpenDeleteAccountModal();
                   }
@@ -1009,7 +1044,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     : "bg-red-50 hover:bg-red-100 text-red-700"
                 }`}
               >
-                <span>Delete Account & Data</span>
+                <span>{t("deleteAccountAndData")}</span>
                 <svg
                   className="w-3.5 h-3.5 opacity-60"
                   viewBox="0 0 24 24"
@@ -1036,7 +1071,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     : "bg-stone-100 hover:bg-stone-200 text-amber-950"
                 }`}
               >
-                <span>Reset Settings</span>
+                <span>{t("resetSettings")}</span>
                 <svg
                   className="w-3.5 h-3.5 opacity-60"
                   viewBox="0 0 24 24"

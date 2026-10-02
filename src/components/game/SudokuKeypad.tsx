@@ -1,6 +1,7 @@
 import React from "react";
 import { RotateCcw, Trash2, Pencil, Lightbulb, Check, Zap } from "lucide-react";
 import { triggerHapticTap } from "../../utils/haptics";
+import { useTranslation } from "../../i18n/useTranslation";
 
 export interface SudokuKeypadProps {
   boardState: {
@@ -54,6 +55,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   playEraseSound,
   vibrations = true
 }) => {
+  const { t } = useTranslation();
   const isGameOver = boardState?.isGameOver ?? false;
 
   const currentDiff = (((difficulty || boardState?.difficulty) ?? "MEDIUM").toUpperCase());
@@ -110,8 +112,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
             }`}
           >
             <RotateCcw className={`w-[16px] h-[16px] lg:w-[18px] lg:h-[18px] xl:w-[20px] xl:h-[20px] stroke-[2.5] ${darkMode ? "text-[#38BDF8]" : "text-[#0369A1]"}`} />
-            <span className="text-[10px] sm:text-[11px] font-sans font-semibold tracking-wider uppercase leading-none">
-              Undo
+            <span className="truncate max-w-full text-[11px] font-sans font-semibold tracking-wider uppercase leading-normal overflow-visible py-0.5 select-none">
+              {t("undo")}
             </span>
           </button>
 
@@ -134,8 +136,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
             }`}
           >
             <Trash2 className={`w-[16px] h-[16px] lg:w-[18px] lg:h-[18px] xl:w-[20px] xl:h-[20px] ${darkMode ? "text-[#F472B6]" : "text-[#9D174D]"}`} />
-            <span className="text-[10px] sm:text-[11px] font-sans font-semibold tracking-wider uppercase leading-none">
-              Erase
+            <span className="truncate max-w-full text-[11px] font-sans font-semibold tracking-wider uppercase leading-normal overflow-visible py-0.5 select-none">
+              {t("erase")}
             </span>
           </button>
 
@@ -158,8 +160,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
             }`}
           >
             <Pencil className="w-[16px] h-[16px] lg:w-[18px] lg:h-[18px] xl:w-[20px] xl:h-[20px]" />
-            <span className="text-[10px] sm:text-[11px] font-sans font-semibold tracking-wider uppercase leading-none">
-              Notes {pencilMode ? "ON" : "OFF"}
+            <span className="truncate max-w-full text-[11px] font-sans font-semibold tracking-wider uppercase leading-normal overflow-visible py-0.5 select-none">
+              {pencilMode ? t("notesOn") : t("notesOff")}
             </span>
           </button>
 
@@ -185,8 +187,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                 {effectiveHintCount}
               </span>
             </div>
-            <span className="text-[10px] sm:text-[11px] font-sans font-semibold tracking-wider uppercase leading-none">
-              Hint
+            <span className="truncate max-w-full text-[11px] font-sans font-semibold tracking-wider uppercase leading-normal overflow-visible py-0.5 select-none">
+              {t("hint")}
             </span>
           </button>
         </div>
@@ -219,14 +221,14 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                         : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")
                 }`}
               >
-                <div className="flex flex-col items-center justify-center absolute inset-0 py-0.5 sm:py-1 lg:py-2 px-0.5 select-none">
+                <div className="flex flex-col items-center justify-center py-1.5 gap-0.5 absolute inset-0 px-0.5 select-none">
                   <span 
-                    className="handwriting font-normal leading-none flex items-center justify-center text-[clamp(35px,9vw,41px)] sm:text-[39px] lg:text-[46px] xl:text-[50px] select-none"
+                    className="handwriting font-normal leading-none flex items-center justify-center text-[clamp(28px,7vw,34px)] sm:text-[32px] lg:text-[40px] xl:text-[44px] select-none"
                   >
                     {num}
                   </span>
                   {showRemainingNumbers && (
-                    <span className={`text-[13px] sm:text-[14px] lg:text-[17px] xl:text-[18px] font-mono leading-none mt-0.5 lg:mt-1.5 flex items-center justify-center ${
+                    <span className={`text-[11px] sm:text-[12px] lg:text-[14px] xl:text-[15px] font-mono leading-none flex items-center justify-center ${
                       isSelected 
                         ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
                             ? "text-white/85 font-semibold"

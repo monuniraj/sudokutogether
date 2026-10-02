@@ -15,6 +15,7 @@ import {
   Plus
 } from "lucide-react";
 import { formatMatchTimestamp } from "../../utils/formatTimestamp";
+import { useTranslation } from "../../i18n/useTranslation";
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 
@@ -87,6 +88,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
   darkMode,
   playClickSound
 }) => {
+  const { t } = useTranslation();
   const [openDropdown, setOpenDropdown] = useState<"difficulty" | "mistakes" | "hints" | "timer" | null>(null);
   const [isLobbyLocked, setIsLobbyLocked] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"recent" | "friends">("recent");
@@ -122,9 +124,9 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           {/* Left: 6-digit room code — shows OFFLINE label when device has no internet */}
           <div className="flex items-center gap-1.5">
             <span className="text-xs sm:text-sm font-sans font-black tracking-wider text-stone-850 dark:text-stone-100 flex items-center gap-1.5">
-              <span className="text-stone-400 dark:text-stone-500 text-2xs uppercase font-bold">CODE:</span>
+              <span className="text-stone-400 dark:text-stone-500 text-2xs uppercase font-bold">{t("codeLabel")}</span>
               <span className={`font-mono tracking-widest text-sm sm:text-base ${isOnline ? "select-all" : "text-amber-600 dark:text-amber-400"}`}>
-                {isOnline ? activeRoomCode : "OFFLINE"}
+                {isOnline ? activeRoomCode : t("offline")}
               </span>
             </span>
             {isOnline && (
@@ -132,9 +134,9 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 onClick={() => {
                   playClickSound();
                   copyToClipboard(activeRoomCode);
-                  showCopiedToast("Room code copied!");
+                  showCopiedToast(t("roomCodeCopied"));
                 }}
-                title="Copy room code"
+                title={t("copyRoomCode")}
                 className="p-1 rounded-lg text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
               >
                 <Copy className="w-3.5 h-3.5" />
@@ -164,12 +166,12 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
               {isRoomLocked ? (
                 <>
                   <Lock className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>LOCKED</span>
+                  <span>{t("locked")}</span>
                 </>
               ) : (
                 <>
                   <Unlock className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>UNLOCKED</span>
+                  <span>{t("unlocked")}</span>
                 </>
               )}
             </button>
@@ -202,7 +204,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             >
               <div className="flex items-center justify-between gap-2 px-3 py-2 mt-1 rounded-xl bg-stone-100/80 dark:bg-zinc-900/60 border border-stone-200/80 dark:border-zinc-800/80">
                 <span className="font-sans font-bold text-[10px] sm:text-xs uppercase tracking-wider text-stone-700 dark:text-stone-300">
-                  SET 4-DIGIT PIN:
+                  {t("set4DigitPin")}
                 </span>
                 <input
                   type="text"
@@ -226,7 +228,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
         {!isOnline && (
           <div className="w-full py-2.5 px-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-2 select-none">
             <AlertTriangle className="w-4 h-4 stroke-[2.5] text-amber-500 shrink-0" />
-            <span>You are offline. Please connect to the internet to play multiplayer.</span>
+            <span>{t("offlineWarning")}</span>
           </div>
         )}
       </div>
@@ -260,7 +262,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
               }`}
             >
               <span className="truncate">
-                {challengeDifficulty === "EASY" ? "Easy" : challengeDifficulty === "MEDIUM" ? "Medium" : challengeDifficulty === "HARD" ? "Hard" : "Expert"} ▾
+                {challengeDifficulty === "EASY" ? t("easy") : challengeDifficulty === "MEDIUM" ? t("medium") : challengeDifficulty === "HARD" ? t("hard") : t("expert")} ▾
               </span>
             </button>
 
@@ -285,7 +287,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                         : (darkMode ? "hover:bg-[#4c0519] text-[#fecdd3]" : "hover:bg-[#FFE4E6] text-[#9D174D]")
                     } ${challengeDifficulty === lvl ? (darkMode ? "bg-zinc-800 font-black" : "bg-stone-100 font-black") : "bg-transparent"}`}
                   >
-                    {lvl.charAt(0) + lvl.slice(1).toLowerCase()}
+                    {lvl === "EASY" ? t("easy") : lvl === "MEDIUM" ? t("medium") : lvl === "HARD" ? t("hard") : t("expert")}
                   </button>
                 ))}
               </div>
@@ -306,20 +308,20 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
               }`}
             >
               <span className="truncate">
-                {challengeMistakeLimit === 0 ? "0 Mistakes" : challengeMistakeLimit === 999 ? "Unlimited" : `${challengeMistakeLimit} Mistakes`} ▾
+                {challengeMistakeLimit === 0 ? t("mistakes0") : challengeMistakeLimit === 999 ? t("mistakesUnlimited") : t("mistakesCount", { count: challengeMistakeLimit })} ▾
               </span>
             </button>
 
             {openDropdown === "mistakes" && (
               <div className="absolute top-full right-0 mt-1.5 w-full min-w-[200px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800">
                 {[
-                  { label: "0 Mistakes (Sudden Death)", val: 0 },
-                  { label: "3 Mistakes", val: 3 },
-                  { label: "5 Mistakes", val: 5 },
-                  { label: "Unlimited", val: 999 },
+                  { label: t("mistakes0"), val: 0 },
+                  { label: t("mistakes3"), val: 3 },
+                  { label: t("mistakes5"), val: 5 },
+                  { label: t("mistakesUnlimited"), val: 999 },
                 ].map(opt => (
                   <button
-                    key={opt.label}
+                    key={opt.val}
                     onClick={() => {
                       playClickSound();
                       setChallengeMistakeLimit(opt.val);
@@ -357,20 +359,20 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             >
               <Lightbulb className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
               <span className="truncate">
-                {challengeHintLimit === 0 ? "No Hints" : challengeHintLimit === 1 ? "1 Hint" : `${challengeHintLimit} Hints`} ▾
+                {challengeHintLimit === 0 ? t("hints0") : challengeHintLimit === 1 ? t("hints1") : t("hintsCount", { count: challengeHintLimit })} ▾
               </span>
             </button>
 
             {openDropdown === "hints" && (
               <div className="absolute top-full left-0 mt-1.5 w-full min-w-[150px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800">
                 {[
-                  { label: "No Hints", val: 0 },
-                  { label: "1 Hint", val: 1 },
-                  { label: "3 Hints", val: 3 },
-                  { label: "5 Hints", val: 5 },
+                  { label: t("hints0"), val: 0 },
+                  { label: t("hints1"), val: 1 },
+                  { label: t("hints3"), val: 3 },
+                  { label: t("hints5"), val: 5 },
                 ].map(opt => (
                   <button
-                    key={opt.label}
+                    key={opt.val}
                     onClick={() => {
                       playClickSound();
                       setChallengeHintLimit(opt.val);
@@ -409,18 +411,18 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             >
               <Timer className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
               <span className="truncate">
-                {challengeTimerEnabled ? "TIMER ON ▾" : "TIMER OFF ▾"}
+                {challengeTimerEnabled ? `${t("timerOn")} ▾` : `${t("timerOff")} ▾`}
               </span>
             </button>
 
             {openDropdown === "timer" && (
               <div className="absolute top-full right-0 mt-1.5 w-full min-w-[150px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800">
                 {[
-                  { label: "Timer On", val: true },
-                  { label: "Timer Off", val: false },
+                  { label: t("timerOn"), val: true },
+                  { label: t("timerOff"), val: false },
                 ].map(opt => (
                   <button
-                    key={opt.label}
+                    key={String(opt.val)}
                     onClick={() => {
                       playClickSound();
                       setChallengeTimerEnabled(opt.val);
@@ -457,7 +459,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
               }`}
             >
               <Lock className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-              <span>Settings locked — invitation active</span>
+              <span>{t("settingsLockedNotice")}</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -473,23 +475,23 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
               <div className={`flex w-full rounded-lg p-1 ${darkMode ? "bg-zinc-900/60" : "bg-stone-200/50"}`}>
                 <button
                   onClick={() => setActiveTab('recent')}
-                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer truncate ${
                     activeTab === 'recent'
                       ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
                       : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
                   }`}
                 >
-                  Recent ({rCount})
+                  {t("recentTab", { count: rCount })}
                 </button>
                 <button
                   onClick={() => setActiveTab('friends')}
-                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer truncate ${
                     activeTab === 'friends'
                       ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
                       : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
                   }`}
                 >
-                  Friends ({fCount})
+                  {t("friendsTab", { count: fCount })}
                 </button>
               </div>
             );
@@ -499,7 +501,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
         <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-4 no-scrollbar pb-2">
           {multiplayerPlayers.length === 0 ? (
             <span className="text-xs italic text-stone-500 py-6 text-center">
-              No past players yet. Share your room code or link below!
+              {t("noPastPlayers")}
             </span>
           ) : (
             <>
@@ -549,7 +551,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                           <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
                             darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
                           }`}>
-                            ✓ Friend
+                            {t("friendBadge")}
                           </span>
                         ) : (
                           <button
@@ -557,7 +559,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                             className={`w-7 h-7 rounded-lg border-none cursor-pointer shrink-0 transition-all active:scale-95 flex items-center justify-center ${
                               darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300 hover:text-white" : "bg-stone-150 hover:bg-stone-200 text-stone-700 hover:text-stone-900"
                             }`}
-                            title="Add Friend"
+                            title={t("addFriend")}
                           >
                             <Plus className="w-5 h-5 stroke-[2.5]" />
                           </button>
@@ -581,7 +583,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                             darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
                           }`}>
                             <Check className="w-3 h-3 stroke-[3]" />
-                            JOINED
+                            {t("joinedStatus")}
                           </span>
                         ) : isLeft ? (
                           <button
@@ -590,7 +592,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                               darkMode ? "bg-zinc-800 text-stone-400" : "bg-stone-200 text-stone-600"
                             }`}
                           >
-                            LEFT ({remainingSeconds}s)
+                            {t("leftStatus", { seconds: remainingSeconds })}
                           </button>
                         ) : isPendingSent ? (
                           <button
@@ -599,7 +601,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                               darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]"
                             }`}
                           >
-                            SENT ({remainingSeconds}s)...
+                            {t("sentStatus", { seconds: remainingSeconds })}
                           </button>
                         ) : isDeclined ? (
                           <button
@@ -608,7 +610,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                               darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
                             }`}
                           >
-                            DECLINED ({remainingSeconds}s)
+                            {t("declinedStatus", { seconds: remainingSeconds })}
                           </button>
                         ) : (
                           <button
@@ -629,7 +631,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                               darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
                             }`}
                           >
-                            INVITE
+                            {t("inviteAction")}
                           </button>
                         )}
                       </div>
@@ -646,7 +648,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                         </div>
                       ) : (
                         <span className="text-xs italic text-stone-500 py-6 text-center block">
-                          No friends added yet. Tap [+] next to recent players to add them!
+                          {t("noFriendsAdded")}
                         </span>
                       )
                     )}
@@ -657,7 +659,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                         </div>
                       ) : (
                         <span className="text-xs italic text-stone-500 py-6 text-center block">
-                          No recent opponents yet. Start a match to find players!
+                          {t("noRecentOpponents")}
                         </span>
                       )
                     )}
@@ -701,12 +703,12 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             {isInvitingAll ? (
               <>
                 <XCircle className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                <span>STOP</span>
+                <span className="truncate">{t("stopAction")}</span>
               </>
             ) : (
               <>
                 <Users className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                <span>RE-INVITE ALL</span>
+                <span className="truncate">{t("reinviteAllAction")}</span>
               </>
             )}
           </button>
@@ -733,7 +735,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             }`}
           >
             <Link2 className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-            <span>SHARE LINK</span>
+            <span className="truncate">{t("shareLinkAction")}</span>
           </button>
         </div>
 
@@ -753,7 +755,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
               : "cursor-pointer hover:scale-[1.01] active:scale-98 bg-[#D1FAE5] hover:bg-[#A7F3D0] active:bg-[#6EE7B7] text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.12)]"
           }`}
         >
-          <span>{isOnline ? "START GAME" : "OFFLINE"}</span>
+          <span className="truncate">{isOnline ? t("startGameAction") : t("offline")}</span>
         </button>
       </div>
     </motion.div>

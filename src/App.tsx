@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "./i18n/useTranslation";
 import { db } from "./firebase";
 import { RulesModal } from "./components/modals/RulesModal";
 import { SettingsModal } from "./components/modals/SettingsModal";
@@ -1438,6 +1439,7 @@ const shareOrCopyContent = async (
 };
 
 export default function App() {
+  const { t, language } = useTranslation();
   const [googleClientId, setGoogleClientId] = useState<string | null>(() => {
     return (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || null;
   });
@@ -8105,20 +8107,20 @@ useEffect(() => {
 
     const faqs = [
       {
-        q: "Is this Sudoku free to play?",
-        a: "Yes, our Sudoku is completely free to play with unlimited puzzles. You can generate and solve as many boards as you want without any restrictions or hidden costs. We rely on standard advertisements to keep the servers running, meaning you will never hit a paywall or be forced to buy premium currency to unlock higher difficulties."
+        q: t("webFaq1Q"),
+        a: t("webFaq1A")
       },
       {
-        q: "What difficulty should I start with?",
-        a: "Beginners should start with Easy or Medium difficulty levels. This allows you to get comfortable with the grid, rules, and basic scanning techniques before moving up to Hard or Expert. As you progress, you will naturally start recognizing patterns that make solving higher tiers much faster."
+        q: t("webFaq2Q"),
+        a: t("webFaq2A")
       },
       {
-        q: "Can I play on mobile?",
-        a: "Yes, our Sudoku is fully responsive for all devices. It is designed to scale beautifully and operate smoothly on desktop, tablet, and mobile browsers. It functions entirely as a Progressive Web App (PWA), meaning you can even install it to your home screen and play solo puzzles completely offline when you don't have internet access."
+        q: t("webFaq3Q"),
+        a: t("webFaq3A")
       },
       {
-        q: "How does the multiplayer matchmaking work?",
-        a: "We utilize a deterministic seeded matchmaking system. When you create a room, the game generates a specific cryptographic seed that dictates the puzzle layout. Anyone who joins your room using the challenge link or room code will receive the exact same board, ensuring a 100% fair and synchronized race against your friends."
+        q: t("webFaq4Q"),
+        a: t("webFaq4A")
       }
     ];
 
@@ -8131,8 +8133,8 @@ useEffect(() => {
               <Users className="w-6 h-6" />
             </div>
             <div>
-              <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight leading-none ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>Our Unique Features (USP)</h2>
-              <p className={`text-[10px] opacity-80 mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-indigo-300" : "text-[#333333]/80"}`}>A modern social multiplayer experience</p>
+              <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight leading-none ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>{t("webUspTitle")}</h2>
+              <p className={`text-[10px] opacity-80 mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-indigo-300" : "text-[#333333]/80"}`}>{t("webUspSub")}</p>
             </div>
           </div>
           
@@ -8140,32 +8142,32 @@ useEffect(() => {
             <div className="flex gap-4">
               <Link2 className={`w-5 h-5 mt-0.5 shrink-0 ${darkMode ? "text-indigo-300" : "text-[#4F46E5]"}`} />
               <div>
-                <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>Share the same puzzle with friends</h3>
-                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>Generate a game and send a link to play the exact same grid simultaneously with friends.</p>
+                <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>{t("webUsp1Title")}</h3>
+                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>{t("webUsp1Desc")}</p>
               </div>
             </div>
             
             <div className="flex gap-4">
               <KeyRound className={`w-5 h-5 mt-0.5 shrink-0 ${darkMode ? "text-indigo-300" : "text-[#4F46E5]"}`} />
               <div>
-                <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>Room Code Access & Leaderboard</h3>
-                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>Broadcast a simple Room ID for anyone nearby to join instantly on their device and track live finish times.</p>
+                <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>{t("webUsp2Title")}</h3>
+                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>{t("webUsp2Desc")}</p>
               </div>
             </div>
             
             <div className="flex gap-4">
               <BarChart2 className={`w-5 h-5 mt-0.5 shrink-0 ${darkMode ? "text-indigo-300" : "text-[#4F46E5]"}`} />
               <div>
-                <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>Performance Review</h3>
-                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>Analyze completed boards, error rates, and solving speed to track personal progress across all difficulty tiers.</p>
+                <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>{t("webUsp3Title")}</h3>
+                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>{t("webUsp3Desc")}</p>
               </div>
             </div>
             
             <div className="flex gap-4">
               <RotateCcw className={`w-5 h-5 mt-0.5 shrink-0 ${darkMode ? "text-indigo-300" : "text-[#4F46E5]"}`} />
               <div>
-                <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>Game History & Replayability</h3>
-                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>Review past match logs, revisit saved boards, and inspect full scoreboards to evaluate your puzzle growth.</p>
+                <h3 className={`font-bold text-sm md:text-base uppercase tracking-wide ${darkMode ? "text-indigo-100" : "text-[#333333]"}`}>{t("webUsp4Title")}</h3>
+                <p className={`text-xs md:text-sm opacity-80 mt-1 ${darkMode ? "text-indigo-200/90" : "text-[#333333]/90"}`}>{t("webUsp4Desc")}</p>
               </div>
             </div>
           </div>
@@ -8174,8 +8176,8 @@ useEffect(() => {
         {/* Why Play Our Sudoku? */}
         <div className="w-full mb-12">
           <div className="text-center mb-8">
-            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>Why Play Our Sudoku?</h2>
-            <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Engineered for absolute mental clarity</p>
+            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>{t("webWhyTitle")}</h2>
+            <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>{t("webWhySub")}</p>
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -8183,32 +8185,32 @@ useEffect(() => {
               darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
             }`}>
               <Brain className={`w-6 h-6 shrink-0 ${darkMode ? "text-[#d1fae5]" : "text-[#065F46]"}`} />
-              <h3 className="font-black text-sm uppercase tracking-wider">Boost Brain Power</h3>
-              <p className="text-xs opacity-90 leading-relaxed">Engage your brain, improve concentration, and stimulate logical processing cells with daily runs.</p>
+              <h3 className="font-black text-sm uppercase tracking-wider">{t("webWhy1Title")}</h3>
+              <p className="text-xs opacity-90 leading-relaxed">{t("webWhy1Desc")}</p>
             </div>
             
             <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col gap-3 transition-transform duration-200 hover:-translate-y-1 ${
               darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]"
             }`}>
               <Zap className={`w-6 h-6 shrink-0 ${darkMode ? "text-[#fef08a]" : "text-[#854D0E]"}`} />
-              <h3 className="font-black text-sm uppercase tracking-wider">4 Difficulty Levels</h3>
-              <p className="text-xs opacity-90 leading-relaxed">Easily switch between Easy, Medium, Hard, and Expert levels to fine-tune your solving challenges.</p>
+              <h3 className="font-black text-sm uppercase tracking-wider">{t("webWhy2Title")}</h3>
+              <p className="text-xs opacity-90 leading-relaxed">{t("webWhy2Desc")}</p>
             </div>
             
             <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col gap-3 transition-transform duration-200 hover:-translate-y-1 ${
               darkMode ? "bg-[#2e1065] text-[#e9d5ff]" : "bg-[#F3E8FF] text-[#6B21A8]"
             }`}>
               <Rocket className={`w-6 h-6 shrink-0 ${darkMode ? "text-[#e9d5ff]" : "text-[#6B21A8]"}`} />
-              <h3 className="font-black text-sm uppercase tracking-wider">Instant Play</h3>
-              <p className="text-xs opacity-90 leading-relaxed">Play instantly on the web in any browser without needing to download files or register accounts.</p>
+              <h3 className="font-black text-sm uppercase tracking-wider">{t("webWhy3Title")}</h3>
+              <p className="text-xs opacity-90 leading-relaxed">{t("webWhy3Desc")}</p>
             </div>
             
             <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col gap-3 transition-transform duration-200 hover:-translate-y-1 ${
               darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
             }`}>
               <TrendingUp className={`w-6 h-6 shrink-0 ${darkMode ? "text-[#fecdd3]" : "text-[#9D174D]"}`} />
-              <h3 className="font-black text-sm uppercase tracking-wider">Track Your Progress</h3>
-              <p className="text-xs opacity-90 leading-relaxed">Log your best completion times and success rates to visualize your continuous improvement journey.</p>
+              <h3 className="font-black text-sm uppercase tracking-wider">{t("webWhy4Title")}</h3>
+              <p className="text-xs opacity-90 leading-relaxed">{t("webWhy4Desc")}</p>
             </div>
           </div>
         </div>
@@ -8216,19 +8218,19 @@ useEffect(() => {
         {/* SECTION 1: HOW TO PLAY SUDOKU */}
         <div className="w-full max-w-4xl mx-auto mb-12 flex flex-col gap-4">
           <div className="how-to-play-header rules-heading-container text-center flex flex-col items-center w-full mx-auto">
-            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight text-center w-full ${darkMode ? "text-white" : "text-[#333333]"}`}>How to Play Sudoku</h2>
+            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight text-center w-full ${darkMode ? "text-white" : "text-[#333333]"}`}>{t("howToPlayTitle")}</h2>
             <p className={`text-xs mt-1 font-mono uppercase tracking-wider text-center w-full ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Fundamental rules & logic guidelines</p>
           </div>
           <div className={`p-6 md:p-8 rounded-3xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] text-xs md:text-sm leading-relaxed font-sans ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
-            <h3 className="font-bold text-sm mb-3 uppercase tracking-wide">Official Game Rules</h3>
+            <h3 className="font-bold text-sm mb-3 uppercase tracking-wide">{t("classicRulesTitle")}</h3>
             <p className="mb-4">
-              Sudoku is a logic-based, number-placement puzzle that has captivated minds worldwide. The classic game is played on a 9x9 grid, which is further divided into nine smaller 3x3 subgrids or 'regions'. The objective is simple yet mentally engaging: fill every empty cell with digits from 1 to 9. However, you must follow a strict core rule: each digit must appear exactly once in every horizontal row, once in every vertical column, and once in every 3x3 region without any duplicates or repetition. If you place a '5' in the top row, no other cell in that top row can contain a '5'.
+              {t("webRulesP1")}
             </p>
             <p className="mb-4">
-              You begin each game with a partially completed grid containing pre-filled clues. Solving a Sudoku puzzle requires absolutely no arithmetic calculations; instead, it relies entirely on systematic deduction and logical reasoning. By analyzing the numbers already present and identifying empty cells, you can step-by-step eliminate invalid candidates for each location until only one correct number remains. Every puzzle we generate has exactly one unique solution, meaning guessing is never required. To maintain the integrity of competitive play, our platform enforces a strict mistake limit. If you input an incorrect digit 3 times, you lose the match. This forces players to rely purely on logic rather than brute-force trial and error.
+              {t("webRulesP2")}
             </p>
             <p>
-              Starting with Easy puzzles helps beginners build core confidence and learn to recognize basic visual patterns. As you gradually advance to Medium, Hard, and Expert levels, you will encounter complex grid lock-ins that demand deeper deduction. Play patiently, think logically, and experience the mental clarity that comes from solving!
+              {t("webRulesP3")}
             </p>
           </div>
         </div>
@@ -8236,48 +8238,48 @@ useEffect(() => {
         {/* SECTION 2: SUDOKU STRATEGY GUIDES (DESKTOP CARD GRID) */}
         <div className="w-full max-w-5xl mx-auto mb-12 flex flex-col gap-6">
           <div className="text-center">
-            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>Sudoku Strategy Guides</h2>
+            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>{t("proTipsTitle")}</h2>
             <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Master advanced deduction and pattern recognition</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl mx-auto">
             {/* Card 1: Scanning Technique */}
             <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-start transition-transform duration-200 hover:-translate-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
-              <h3 className="font-black text-sm uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-2">Scanning Technique</h3>
+              <h3 className="font-black text-sm uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-2">{t("webScanningTitle")}</h3>
               <p className="text-xs leading-relaxed opacity-90">
-                A quick, visual scanning technique. Scan horizontal rows and vertical columns within a specific 3x3 grid to identify where a missing number must go. By tracking which rows and columns already contain that digit in neighboring grids, you can cross-eliminate cells and find the only available spot for it. This is the most fundamental speed-solving technique, often referred to as crosshatching, and is essential for clearing the board quickly in early stages.
+                {t("webScanningDesc")}
               </p>
             </div>
 
             {/* Card 2: Elimination Method */}
             <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-start transition-transform duration-200 hover:-translate-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
-              <h3 className="font-black text-sm uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-2">Elimination Method</h3>
+              <h3 className="font-black text-sm uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-2">{t("webEliminationTitle")}</h3>
               <p className="text-xs leading-relaxed opacity-90">
-                A deeper logic technique. For any given empty cell, list all candidate numbers that do not violate the row, column, or 3x3 region rules. If a cell has only one possible candidate remaining (a 'naked single'), that must be its value. If a candidate can only fit in one specific cell, it goes there. Advanced players rely heavily on our built-in pencil notes feature to track these candidates and expose hidden singles.
+                {t("webEliminationDesc")}
               </p>
             </div>
 
             {/* Card 3: Naked Singles */}
             <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-start transition-transform duration-200 hover:-translate-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
-              <h3 className="font-black text-sm uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-2">Naked Singles Strategy</h3>
+              <h3 className="font-black text-sm uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-2">{t("webNakedSinglesTitle")}</h3>
               <p className="text-xs leading-relaxed opacity-90">
-                A foundational solving concept. A "Naked Single" occurs when a specific cell has only one viable candidate value remaining after row, column, and box cross-elimination. Filling these values immediately is critical to unlock advanced solving stages. Because no other number can logically occupy that square without violating the primary rules of the game, it becomes an absolute certainty.
+                {t("webNakedSinglesDesc")}
               </p>
             </div>
 
             {/* Card 4: Hidden Pairs & Triples */}
             <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-start transition-transform duration-200 hover:-translate-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
-              <h3 className="font-black text-sm uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2">Hidden Pairs & Triples</h3>
+              <h3 className="font-black text-sm uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2">{t("webHiddenPairsTitle")}</h3>
               <p className="text-xs leading-relaxed opacity-90">
-                When you progress to Hard or Expert puzzles, simple crosshatching will often leave you stuck. You must look for groups of two or three numbers that are restricted to exactly two or three cells within a specific row, column, or block. Even if those cells have other pencil mark candidates, the "Hidden Pair" dictates that those specific numbers cannot appear anywhere else in that region, allowing you to safely eliminate the other candidates in those cells. Recognizing these patterns requires deep focus and systematic notation.
+                {t("webHiddenPairsDesc")}
               </p>
             </div>
 
             {/* Card 5: X-Wing Pattern */}
             <div className={`p-6 rounded-2xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] flex flex-col justify-start transition-transform duration-200 hover:-translate-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
-              <h3 className="font-black text-sm uppercase tracking-wider text-rose-600 dark:text-rose-400 mb-2">X-Wing Pattern Recognition</h3>
+              <h3 className="font-black text-sm uppercase tracking-wider text-rose-600 dark:text-rose-400 mb-2">{t("webXWingTitle")}</h3>
               <p className="text-xs leading-relaxed opacity-90">
-                The X-Wing is an advanced logical deduction method used when a specific candidate number appears in exactly two cells within two different rows, and those cells align perfectly in the same two columns. Because the true value must exist exactly once in each row, it forces a diagonal relationship. This mathematically proves that the candidate cannot exist in any other cells within those two intersecting columns. Mastering the X-Wing pattern is the gateway to solving the most extremely difficult puzzles where standard deductive logic completely stalls.
+                {t("webXWingDesc")}
               </p>
             </div>
           </div>
@@ -8286,8 +8288,8 @@ useEffect(() => {
         {/* SECTION 3: FREQUENTLY ASKED QUESTIONS */}
         <div className="w-full max-w-4xl mx-auto mb-8 flex flex-col gap-4">
           <div className="text-center mb-2">
-            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>Frequently Asked Questions</h2>
-            <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Quick answers to common questions</p>
+            <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>{t("webFaqTitle")}</h2>
+            <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>{t("webFaqSub")}</p>
           </div>
           
           <div className={`p-6 md:p-8 rounded-3xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] ${darkMode ? "bg-zinc-900/40 text-stone-300" : "bg-stone-50 text-[#333333]"} flex flex-col gap-2`}>
@@ -8349,7 +8351,7 @@ useEffect(() => {
                   : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"
               }`}
             >
-              Start Playing
+              {t("startPlaying")}
             </button>
           </div>
 
@@ -8357,8 +8359,8 @@ useEffect(() => {
           {!Capacitor.isNativePlatform() && (
             <footer className="w-full max-w-4xl mx-auto px-4 py-6 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 text-center text-sm font-sans text-stone-600 select-text">
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 max-w-xs sm:max-w-none mx-auto text-center sm:flex sm:flex-row sm:justify-center sm:gap-x-6">
-                <a href="/about.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">About Us</a>
-                <a href="/contact.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">Contact Us</a>
+                <a href="/about.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">{t("aboutUs")}</a>
+                <a href="/contact.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">{t("contactUs")}</a>
                 <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">Privacy Policy</a>
                 <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">Terms of Service</a>
               </div>
@@ -8494,7 +8496,7 @@ useEffect(() => {
               <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
             </h1>
             <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#d1fae5]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#fef08a]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#065F46]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#854D0E]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
-              {currentScreen === "together" ? "Together Mode" : currentScreen === "settings" ? "Settings" : currentScreen === "login" ? "Authorization" : currentScreen === "status" ? "Player Insights" : (boardState?.difficulty || difficulty)}
+              {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : ((boardState?.difficulty || difficulty) === "EASY" ? t("easy") : (boardState?.difficulty || difficulty) === "MEDIUM" ? t("medium") : (boardState?.difficulty || difficulty) === "HARD" ? t("hard") : t("expert"))}
             </span>
           </div>
 
@@ -8601,7 +8603,7 @@ useEffect(() => {
                 {/* Difficulty level selecting buttons - SOLID LOCKED FIXED POSITION CONTAINER */}
                 <div className="w-full shrink-0 select-none pb-1" id="difficulty-level-container">
                   <span className={`block text-center text-[11px] font-black uppercase tracking-wider mb-3 font-mono ${darkMode ? "text-zinc-400" : "text-stone-650"}`}>
-                    CHOOSE GAMEBOARD DIFFICULTY:
+                    {t("selectDifficulty")}
                   </span>
                   <div className="h-[38px] flex flex-row justify-between items-stretch gap-2 min-w-full font-mono text-2xs md:text-xs">
                     {(["EASY", "MEDIUM", "HARD", "EXPERT"] as Difficulty[]).map((lvl) => {
@@ -8632,7 +8634,7 @@ useEffect(() => {
                           }}
                           className={`flex-1 h-full flex items-center justify-center text-xs uppercase tracking-wider transition-all duration-150 cursor-pointer select-none rounded-xl border-none outline-none ${btnClass}`}
                         >
-                          {lvl}
+                          {t(lvl.toLowerCase() as any)}
                         </button>
                       );
                     })}
@@ -8725,7 +8727,7 @@ useEffect(() => {
                   >
                     <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0" />
                     <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
-                      Multiplayer
+                      {t("multiplayerBtn")}
                     </span>
                   </button>
                 </div>
@@ -8746,7 +8748,7 @@ useEffect(() => {
                 >
                   <span className="flex items-center justify-center gap-2.5 sm:gap-3 leading-none">
                     <span className="text-sm sm:text-base md:text-lg animate-pulse select-none leading-none">▶</span>
-                    <span>PLAY NEW GAME</span>
+                    <span>{t("newGame").toUpperCase()}</span>
                   </span>
                 </button>
 
@@ -8780,7 +8782,7 @@ useEffect(() => {
                      <div className="w-full shrink-0 select-none pb-1" id="difficulty-level-container">
                       <div className="flex items-center justify-between gap-4 mb-2">
                         <span className={`block text-xs font-black uppercase tracking-wider font-mono ${darkMode ? "text-zinc-400" : "text-[#1E1E1E]"}`}>
-                          CHOOSE GAMEBOARD DIFFICULTY:
+                          {t("selectDifficulty")}
                         </span>
                       </div>
                       <div className="h-[38px] flex flex-row justify-between items-stretch gap-2 min-w-full font-mono text-xs">
@@ -8813,7 +8815,7 @@ useEffect(() => {
                               }}
                               className={`flex-1 h-full flex items-center justify-center text-xs uppercase tracking-wider transition-all duration-150 cursor-pointer select-none rounded-xl outline-none ${btnClass}`}
                             >
-                              {lvl}
+                              {t(lvl.toLowerCase() as any)}
                             </button>
                           );
                         })}
@@ -8825,7 +8827,7 @@ useEffect(() => {
                   <div className="w-full relative flex items-center justify-between px-1 mb-1 select-none shrink-0" id="unified-bridge-container">
                     {/* Left: Mistakes status metric */}
                     <span className={`font-mono font-medium text-sm sm:text-base tracking-wider uppercase leading-none select-none flex items-center ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
-                      ERR: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
+                      {t("errHeader")} {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
                     </span>
 
                     {/* Center: Balanced 4-Icon Micro-Bar [Zap, Users, HelpCircle, Volume] */}
@@ -8972,13 +8974,13 @@ useEffect(() => {
                         aria-label={isTimerPaused ? "Resume Game" : "Pause Game"}
                         id="hud-timer-pause-button"
                       >
-                        <span className={`flex items-center justify-center shrink-0 w-3.5 h-3.5 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"} transition-transform duration-150 group-active:scale-90`}>
+                        <span className={`flex items-center justify-center shrink-0 w-4 h-4 sm:w-[18px] sm:h-[18px] ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"} transition-transform duration-150 group-active:scale-90`}>
                           {isTimerPaused ? (
-                            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 sm:w-[18px] sm:h-[18px] fill-current" viewBox="0 0 24 24">
                               <path d="M8 5v14l11-7z" />
                             </svg>
                           ) : (
-                            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 sm:w-[18px] sm:h-[18px] fill-current" viewBox="0 0 24 24">
                               <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                             </svg>
                           )}
@@ -9166,7 +9168,7 @@ useEffect(() => {
                         }`}
                       >
                         <Users className="w-4 h-4 stroke-[2.5] shrink-0" />
-                        <span>Multiplayer</span>
+                        <span>{t("multiplayerBtn")}</span>
                       </button>
                     </div>
                   </div>
@@ -9202,18 +9204,18 @@ useEffect(() => {
 
                           <div className="text-center w-full relative z-10">
                             <span className="text-[9.5px] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80">
-                              CURRENT RECORD
+                              {t("personalBestsTitle")}
                             </span>
                             <h2 className="text-base uppercase tracking-tight flex items-center justify-center gap-1.5 font-sans font-black leading-tight">
                               <Timer className="w-4 h-4 stroke-[3] shrink-0" />
-                              <span>BEST TIME:</span>
+                              <span>{t("timeLabel")}:</span>
                               <span className="font-mono font-black text-base tabular-nums">
                                 {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
                               </span>
                             </h2>
                             <p className="text-[11px] mt-0.5 select-none handwriting opacity-95 font-semibold leading-tight">
                               {bestSecs > 0 
-                                ? "Can you break your own record?" 
+                                ? t("beatRecordPrompt") 
                                 : "No record yet... Can you set the first one?"}
                             </p>
                           </div>
@@ -9367,7 +9369,7 @@ useEffect(() => {
                   >
                     <span className="flex items-center justify-center gap-2.5 leading-none">
                       <RefreshCw className="w-4 h-4 xl:w-5 xl:h-5 animate-spin-slow stroke-[2.5]" />
-                      <span>New Game</span>
+                      <span>{t("newGame")}</span>
                     </span>
                   </button>
 
@@ -9404,11 +9406,11 @@ useEffect(() => {
                         {/* Header Strip for Step 1: MATCH RESULTS + X button */}
                         <div className="flex items-center justify-between shrink-0 select-none">
                           <div className="flex items-center gap-2">
-                            <h3 className={`text-lg sm:text-xl font-sans font-black tracking-tight uppercase ${darkMode ? "text-white" : "text-[#1C1917]"}`}>
-                              MATCH RESULTS
+                            <h3 className={`text-lg sm:text-xl font-sans font-black tracking-tight uppercase leading-normal overflow-visible ${darkMode ? "text-white" : "text-[#1C1917]"}`}>
+                              {t("multiplayerLobbyTitle")}
                             </h3>
-                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${darkMode ? "bg-purple-900/40 text-purple-300" : "bg-[#F3E8FF] text-[#6B21A8]"}`}>
-                              {difficulty}
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider leading-normal overflow-visible ${darkMode ? "bg-purple-900/40 text-purple-300" : "bg-[#F3E8FF] text-[#6B21A8]"}`}>
+                              {t(difficulty.toLowerCase() as any)}
                             </span>
                           </div>
                           <button
@@ -9490,7 +9492,7 @@ useEffect(() => {
                               const isPodium2 = isMultiplayerCompetitive && idx === 1 && !player.failed && !player.isAbandoned;
                               const isPodium3 = isMultiplayerCompetitive && idx === 2 && !player.failed && !player.isAbandoned;
                               const isSoloComplete = !isMultiplayerCompetitive && idx === 0 && !player.failed && !player.isAbandoned;
-                              const positionStr = isMultiplayerCompetitive ? (idx === 0 ? "1st" : idx === 1 ? "2nd" : idx === 2 ? "3rd" : `${idx + 1}th`) : "—";
+                              const positionStr = isMultiplayerCompetitive ? (idx === 0 ? t("podium1st") : idx === 1 ? t("podium2nd") : idx === 2 ? t("podium3rd") : `${idx + 1}th`) : "—";
                               
                               return (
                                 <div 
@@ -9537,7 +9539,7 @@ useEffect(() => {
                                     </span>
 
                                     <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                                      <span className={`font-sans font-bold text-sm leading-none truncate ${
+                                      <span className={`font-sans font-bold text-sm leading-normal overflow-visible truncate ${
                                         isPodium1 ? (darkMode ? "text-[#fecdd3]" : "text-[#9D174D]") :
                                         isPodium2 ? (darkMode ? "text-[#e9d5ff]" : "text-[#6B21A8]") :
                                         isPodium3 ? (darkMode ? "text-[#fef08a]" : "text-[#854D0E]") :
@@ -9548,8 +9550,8 @@ useEffect(() => {
                                       </span>
 
                                       {player.isMe && (
-                                        <span className="text-[9px] bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 px-1.5 py-0.5 rounded font-sans font-semibold uppercase tracking-wider shrink-0">
-                                          You
+                                        <span className="text-[9px] bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 px-1.5 py-0.5 rounded font-sans font-semibold uppercase tracking-wider shrink-0 leading-normal overflow-visible">
+                                          {t("youBadge")}
                                         </span>
                                       )}
 
@@ -9630,7 +9632,7 @@ useEffect(() => {
                                 }`}
                               >
                                 <span className="truncate">
-                                  {challengeDifficulty === "EASY" ? "Easy" : challengeDifficulty === "MEDIUM" ? "Medium" : challengeDifficulty === "HARD" ? "Hard" : "Expert"} ▾
+                                  {t(challengeDifficulty.toLowerCase() as any)} ▾
                                 </span>
                               </button>
                             </div>
@@ -9932,7 +9934,7 @@ useEffect(() => {
                             className={`flex-1 py-3 px-2 rounded-2xl flex items-center justify-center gap-1.5 text-xs font-mono font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#2e1065] hover:bg-[#2e1065]/80 text-[#e9d5ff]" : "bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8]"}`}
                           >
                              <Sparkles className="w-4 h-4 stroke-[2.5]" />
-                             <span>NEW GAME</span>
+                             <span>{t("newGame")}</span>
                           </button>
                         </div>
                       </>
@@ -9950,16 +9952,16 @@ useEffect(() => {
                                   {/* Left: 6-digit room code */}
                                   <div className="flex items-center gap-1.5">
                                     <span className="text-xs sm:text-sm font-sans font-black tracking-wider text-stone-850 dark:text-stone-100 flex items-center gap-1.5">
-                                      <span className="text-stone-400 dark:text-stone-500 text-2xs uppercase font-bold">CODE:</span>
+                                      <span className="text-stone-400 dark:text-stone-500 text-2xs uppercase font-bold">{t("codeLabel")}</span>
                                       <span className="font-mono tracking-widest text-sm sm:text-base select-all">{activeRematchRoomCode}</span>
                                     </span>
                                     <button
                                       onClick={() => {
                                         playClickSound();
                                         copyToClipboard(activeRematchRoomCode);
-                                        showCopiedToast("Room code copied!");
+                                        showCopiedToast(t("roomCodeCopied"));
                                       }}
-                                      title="Copy room code"
+                                      title={t("copyRoomCode")}
                                       className="p-1 rounded-lg text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
                                     >
                                       <Copy className="w-3.5 h-3.5" />
@@ -10143,11 +10145,11 @@ useEffect(() => {
                                                     playClickSound();
                                                     handleInviteFriend(player.id);
                                                   }}
-                                                  className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none cursor-pointer transition-all active:scale-95 shadow-xs ${
+                                                  className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none cursor-pointer transition-all active:scale-95 shadow-xs leading-normal overflow-visible ${
                                                     darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
                                                   }`}
                                                 >
-                                                  INVITE
+                                                  <span className="leading-normal overflow-visible">{t("inviteBtn")}</span>
                                                 </button>
                                               )}
                                             </div>
@@ -10159,16 +10161,16 @@ useEffect(() => {
                                         <>
                                           {friends.length > 0 && (
                                             <div className="flex flex-col gap-2">
-                                              <span className={`font-sans font-bold text-[10px] uppercase tracking-wider pl-1 ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
-                                                Friends ({friends.length})
+                                              <span className={`font-sans font-bold text-[10px] uppercase tracking-wider pl-1 leading-normal overflow-visible ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
+                                                <span className="leading-normal overflow-visible">{t("friendsTab")} ({friends.length})</span>
                                               </span>
                                               {friends.map(renderRow)}
                                             </div>
                                           )}
                                           {recentPlayers.length > 0 && (
                                             <div className="flex flex-col gap-2">
-                                              <span className={`font-sans font-bold text-[10px] uppercase tracking-wider pl-1 mt-2 ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
-                                                Recent Players ({recentPlayers.length})
+                                              <span className={`font-sans font-bold text-[10px] uppercase tracking-wider pl-1 mt-2 leading-normal overflow-visible ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
+                                                <span className="leading-normal overflow-visible">{t("recentTab")} ({recentPlayers.length})</span>
                                               </span>
                                               {recentPlayers.map(renderRow)}
                                             </div>
@@ -10186,7 +10188,7 @@ useEffect(() => {
                                 <button
                                   onClick={() => handleReinviteAll()}
                                   disabled={!isInvitingAll && multiplayerPlayers.length === 0}
-                                  className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
+                                  className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs leading-normal overflow-visible ${
                                     isInvitingAll
                                       ? "bg-rose-500 hover:bg-rose-600 text-white animate-pulse"
                                       : darkMode
@@ -10197,12 +10199,12 @@ useEffect(() => {
                                   {isInvitingAll ? (
                                     <>
                                       <XCircle className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                                      <span>STOP</span>
+                                      <span className="leading-normal overflow-visible">STOP</span>
                                     </>
                                   ) : (
                                     <>
                                       <Users className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                                      <span>RE-INVITE ALL</span>
+                                      <span className="leading-normal overflow-visible">{t("reinviteAll")}</span>
                                     </>
                                   )}
                                 </button>
@@ -10213,14 +10215,14 @@ useEffect(() => {
                                     playClickSound();
                                     await shareChallengeLink(activeRematchRoomCode, "Play Sudoku with me! Let's see who finishes first:");
                                   }}
-                                  className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
+                                  className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs leading-normal overflow-visible ${
                                     darkMode
                                       ? "bg-[#0c4a6e]/50 hover:bg-[#0c4a6e]/80 text-[#bae6fd]"
                                       : "bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1]"
                                   }`}
                                 >
                                   <Share2 className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                                  <span>SHARE LINK</span>
+                                  <span className="leading-normal overflow-visible">{t("shareLink")}</span>
                                 </button>
                               </div>
 
@@ -10329,20 +10331,20 @@ useEffect(() => {
                       return (
                         <>
                           <div className="flex flex-col items-center gap-1">
-                            <span className={`text-[10px] font-sans font-bold uppercase tracking-widest ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
-                              {difficulty} Difficulty
+                            <span className={`text-[10px] font-sans font-bold uppercase tracking-widest leading-normal overflow-visible ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
+                              {t(difficulty.toLowerCase() as any)} {t("difficultyLabel")}
                             </span>
                             {isFailed ? (
                               <motion.h3 
                                 animate={{ x: [0, -5, 5, -4, 4, -2, 2, 0] }}
                                 transition={{ duration: 0.5, ease: "easeInOut" }}
-                                className={`text-3xl font-sans font-black tracking-tight mt-2 ${darkMode ? "text-rose-200" : "text-stone-850"}`}
+                                className={`text-3xl font-sans font-black tracking-tight mt-2 leading-normal overflow-visible ${darkMode ? "text-rose-200" : "text-stone-850"}`}
                               >
-                                Game Over
+                                {t("gameOverTitle")}
                               </motion.h3>
                             ) : (
-                              <h3 className={`text-3xl font-sans font-medium tracking-tight mt-2 ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
-                                Solved!
+                              <h3 className={`text-3xl font-sans font-medium tracking-tight mt-2 leading-normal overflow-visible ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
+                                {t("victoryTitle")}
                               </h3>
                             )}
 
@@ -10351,13 +10353,13 @@ useEffect(() => {
                                 initial={{ opacity: 0, y: 4, scale: 0.95 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 transition={{ duration: 0.35, delay: 0.15 }}
-                                className={`inline-flex items-center gap-1.5 py-1 px-3 mt-1.5 rounded-full font-sans font-bold text-xs uppercase tracking-wider ${
+                                className={`inline-flex items-center gap-1.5 py-1 px-3 mt-1.5 rounded-full font-sans font-bold text-xs uppercase tracking-wider leading-normal overflow-visible ${
                                   darkMode 
                                     ? "bg-rose-950/40 text-rose-300 border border-rose-800/40" 
                                     : "bg-rose-50 text-rose-700 border border-rose-200"
                                 }`}
                               >
-                                <span>Better Luck Next Time</span>
+                                <span className="leading-normal overflow-visible">{t("betterLuckNextTime")}</span>
                               </motion.div>
                             ) : isNewRecordAchieved ? (
                               <div className="min-h-[38px] mt-1.5 flex items-center justify-center">
@@ -10387,14 +10389,14 @@ useEffect(() => {
                                             ease: "easeInOut"
                                           }
                                     }}
-                                    className={`relative flex items-center justify-center gap-1.5 py-1 px-3.5 rounded-full font-sans font-bold text-[11px] uppercase tracking-wider select-none border-none transition-colors duration-300 ${
+                                    className={`relative flex items-center justify-center gap-1.5 py-1 px-3.5 rounded-full font-sans font-bold text-[11px] uppercase tracking-wider select-none border-none transition-colors duration-300 leading-normal overflow-visible ${
                                       darkMode
                                         ? "bg-[#292218] text-[#F3DFB0]"
                                         : "bg-[#FDF6E9] text-[#9B7020]"
                                     }`}
                                   >
                                     <Trophy className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300 shrink-0" />
-                                    <span className="text-amber-600 dark:text-amber-300">NEW PERSONAL BEST</span>
+                                    <span className="text-amber-600 dark:text-amber-300 leading-normal overflow-visible">{t("personalBestAchieved")}</span>
                                     <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-300 shrink-0" />
                                   </motion.div>
                                 )}
@@ -10422,10 +10424,10 @@ useEffect(() => {
                               </div>
                             )}
 
-                            <p className={`text-sm font-sans mt-1 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
+                            <p className={`text-sm font-sans mt-1 leading-normal overflow-visible ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
                               {isFailed 
-                                ? `You reached ${boardState.maxMistakesLimit} mistakes.`
-                                : `Great job completing the board.`}
+                                ? t("mistakesLimitReached")
+                                : t("victoryTitle")}
                             </p>
                           </div>
 
@@ -10457,12 +10459,12 @@ useEffect(() => {
                                   : ""
                               }`}
                             >
-                              <span className={`text-[10px] uppercase font-bold tracking-widest ${
+                              <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${
                                 isNewRecordAchieved && !isFailed && pbStage !== "initial"
                                   ? (darkMode ? "text-[#E3CF9E]" : "text-[#9B7020]")
                                   : (darkMode ? "text-zinc-400" : "text-stone-500")
                               }`}>
-                                Time
+                                {t("timeLabel")}
                               </span>
                               <span className={`text-base sm:text-lg font-mono font-bold tracking-tight ${
                                 isNewRecordAchieved && !isFailed && pbStage !== "initial"
@@ -10479,7 +10481,7 @@ useEffect(() => {
                                 ? "p-1.5 rounded-xl bg-rose-500/10 dark:bg-rose-950/30 ring-2 ring-rose-400/60 shadow-[0_0_14px_rgba(244,63,94,0.18)] animate-pulse"
                                 : ""
                             }`}>
-                              <span className={`text-[10px] uppercase font-bold tracking-widest ${isFailed ? "text-rose-500 font-black" : (darkMode ? "text-zinc-400" : "text-stone-500")}`}>Errors</span>
+                              <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${isFailed ? "text-rose-500 font-black" : (darkMode ? "text-zinc-400" : "text-stone-500")}`}>{t("mistakesLabel")}</span>
                               <span className={`text-base sm:text-lg font-mono font-bold text-rose-500`}>
                                 {boardState.currentMistakesCount}/{boardState.maxMistakesLimit}
                               </span>
@@ -10506,12 +10508,12 @@ useEffect(() => {
                                     : ""
                                 }`}
                               >
-                                <span className={`text-[10px] uppercase font-bold tracking-widest ${
+                                <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${
                                   pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
                                     ? (darkMode ? "text-[#E3CF9E]" : "text-[#9B7020]")
                                     : (darkMode ? "text-zinc-400" : "text-stone-500")
                                 }`}>
-                                  Best
+                                  {t("bestLabel")}
                                 </span>
                                 <span className={`text-base sm:text-lg font-mono font-bold tracking-tight ${
                                   pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
@@ -10527,8 +10529,8 @@ useEffect(() => {
                               </motion.div>
                             ) : (
                               <div className="flex flex-col items-center p-1.5">
-                                <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-zinc-400" : "text-stone-500"}`}>
-                                  Best
+                                <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${darkMode ? "text-zinc-400" : "text-stone-500"}`}>
+                                  {t("bestLabel")}
                                 </span>
                                 <span className="text-base sm:text-lg font-mono font-bold text-amber-500">
                                   {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
@@ -10547,10 +10549,10 @@ useEffect(() => {
                         setShowGameOverModal(false);
                         openCreateRoomModal(difficulty, timerEnabled);
                       }}
-                      className="w-full py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 font-sans font-black text-xs tracking-wider uppercase transition-all shadow-md active:scale-98 border-none cursor-pointer text-white bg-purple-700 hover:bg-purple-800 dark:bg-purple-800 dark:hover:bg-purple-700"
+                      className="w-full py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 font-sans font-black text-xs tracking-wider uppercase transition-all shadow-md active:scale-98 border-none cursor-pointer text-white bg-purple-700 hover:bg-purple-800 dark:bg-purple-800 dark:hover:bg-purple-700 leading-normal overflow-visible"
                     >
                       <Users className="w-4 h-4" />
-                      <span>Invite Friends</span>
+                      <span className="leading-normal overflow-visible">{t("inviteFriends")}</span>
                     </button>
 
                     {/* Action buttons row */}
@@ -12871,9 +12873,9 @@ useEffect(() => {
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               className={`relative w-full max-w-sm rounded-[16px] shadow-2xl overflow-hidden flex flex-col p-6 ${darkMode ? "bg-[#1E1E1E] border border-zinc-800" : "bg-[#FDFBF7]"}`}
             >
-              <h3 className={`font-sans font-black text-lg mb-3 ${darkMode ? "text-red-400" : "text-red-600"}`}>Delete Account</h3>
+              <h3 className={`font-sans font-black text-lg mb-3 ${darkMode ? "text-red-400" : "text-red-600"}`}>{t("deleteAccountTitle")}</h3>
               <p className={`font-sans text-sm leading-relaxed mb-6 ${darkMode ? "text-stone-300" : "text-stone-700"}`}>
-                Warning: This action is permanent and will delete all your account data, game progress, and profile information. Are you sure you want to proceed?
+                {t("deleteAccountDesc")}
               </p>
               <div className="flex flex-col gap-3">
                 <button 
@@ -12906,13 +12908,13 @@ useEffect(() => {
                   }} 
                   className={`py-3 px-4 rounded-xl font-sans font-black text-xs uppercase tracking-wider text-white border-none cursor-pointer ${darkMode ? "bg-red-600 hover:bg-red-500" : "bg-red-600 hover:bg-red-700"}`}
                 >
-                  Yes, Delete My Account
+                  {t("deleteAccountConfirm")}
                 </button>
                 <button 
                   onClick={() => { playClickSound(); setShowDeleteAccountModal(false); }} 
                   className={`py-3 px-4 rounded-xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer ${darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-200 text-stone-700 hover:bg-stone-300"}`}
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
               </div>
             </motion.div>
@@ -12931,7 +12933,7 @@ useEffect(() => {
             >
               <div className="flex flex-col items-center gap-1">
                 <h3 className={`text-2xl font-sans font-medium tracking-tight mt-2 ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
-                  Reset Settings
+                  {t("resetSettingsTitle")}
                 </h3>
               </div>
 
@@ -12961,7 +12963,7 @@ useEffect(() => {
                     darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-100 text-stone-700 hover:bg-stone-200"
                   }`}
                 >
-                  Reset Preferences Only
+                  {t("resetPreferencesOnly")}
                 </button>
                 <button 
                   onClick={() => {
@@ -13002,13 +13004,13 @@ useEffect(() => {
                     darkMode ? "bg-[#7f1d1d] text-[#fecaca] hover:bg-[#991b1b]" : "bg-[#FEE2E2] text-[#DC2626] hover:bg-[#FECACA]"
                   }`}
                 >
-                  Factory Reset
+                  {t("factoryReset")}
                 </button>
               </div>
               <button 
                 onClick={() => { playClickSound(); setShowResetSettingsModal(false); }}
                 className={`absolute top-4 right-4 p-2 rounded-full border-none cursor-pointer transition-colors ${darkMode ? "bg-transparent text-stone-400 hover:text-stone-200" : "bg-transparent text-stone-400 hover:text-stone-600"}`}
-                title="Close"
+                title={t("close")}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -13054,17 +13056,17 @@ useEffect(() => {
                     {/* Left: CODE: [ActiveRoomCode] + Copy Button */}
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs sm:text-sm font-sans font-black tracking-wider text-stone-850 dark:text-stone-100 flex items-center gap-1.5">
-                        <span className="text-stone-400 dark:text-stone-500 text-2xs uppercase font-bold">CODE:</span>
-                        <span className="font-mono tracking-widest text-sm sm:text-base select-all">{isOnline ? liveRoomCode : "OFFLINE"}</span>
+                        <span className="text-stone-400 dark:text-stone-500 text-2xs uppercase font-bold">{t("codeLabel")}</span>
+                        <span className="font-mono tracking-widest text-sm sm:text-base select-all">{isOnline ? liveRoomCode : t("offline")}</span>
                       </span>
                       {isOnline && (
                         <button
                           onClick={() => {
                             playClickSound();
                             copyToClipboard(liveRoomCode);
-                            showCopiedToast("Room code copied!");
+                            showCopiedToast(t("roomCodeCopied"));
                           }}
-                          title="Copy room code"
+                          title={t("copyRoomCode")}
                           className={`p-1 rounded-lg border-none cursor-pointer transition-all active:scale-90 ${
                             darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
                           }`}
@@ -13078,26 +13080,26 @@ useEffect(() => {
                     <div className="flex items-center gap-2">
                       {isRoomLocked ? (
                         isHost && roomPin ? (
-                          <span className={`px-2.5 py-1 rounded-lg font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 ${
+                          <span className={`px-2.5 py-1 rounded-lg font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 leading-normal overflow-visible ${
                             darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
                           }`}>
                             <Lock className="w-3 h-3 stroke-[2.5]" />
-                            <span>PIN: {roomPin}</span>
+                            <span className="leading-normal overflow-visible">PIN: {roomPin}</span>
                           </span>
                         ) : (
-                          <span className={`px-2.5 py-1 rounded-lg font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 ${
+                          <span className={`px-2.5 py-1 rounded-lg font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 leading-normal overflow-visible ${
                             darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]"
                           }`}>
                             <Lock className="w-3 h-3 stroke-[2.5]" />
-                            <span>LOCKED</span>
+                            <span className="leading-normal overflow-visible">LOCKED</span>
                           </span>
                         )
                       ) : (
-                        <span className={`px-2.5 py-1 rounded-lg font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 ${
+                        <span className={`px-2.5 py-1 rounded-lg font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 leading-normal overflow-visible ${
                           darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
                         }`}>
                           <Unlock className="w-3 h-3 stroke-[2.5]" />
-                          <span>OPEN</span>
+                          <span className="leading-normal overflow-visible">{t("roomOpenBadge")}</span>
                         </span>
                       )}
 
@@ -13135,23 +13137,23 @@ useEffect(() => {
                         <div className={`flex w-full rounded-lg p-1 ${darkMode ? "bg-zinc-900/60" : "bg-stone-200/50"}`}>
                           <button
                             onClick={() => setActiveAppInviteTab('recent')}
-                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer leading-normal overflow-visible ${
                               activeAppInviteTab === 'recent'
                                 ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
                                 : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
                             }`}
                           >
-                            Recent ({rCount})
+                            <span className="leading-normal overflow-visible">{t("recentTab")} ({rCount})</span>
                           </button>
                           <button
                             onClick={() => setActiveAppInviteTab('friends')}
-                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer ${
+                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border-none cursor-pointer leading-normal overflow-visible ${
                               activeAppInviteTab === 'friends'
                                 ? (darkMode ? "bg-zinc-800 text-stone-100 shadow-sm" : "bg-white text-stone-800 shadow-sm")
                                 : (darkMode ? "bg-transparent text-stone-500 hover:text-stone-300" : "bg-transparent text-stone-500 hover:text-stone-700")
                             }`}
                           >
-                            Friends ({fCount})
+                            <span className="leading-normal overflow-visible">{t("friendsTab")} ({fCount})</span>
                           </button>
                         </div>
                       );
@@ -13230,7 +13232,7 @@ useEffect(() => {
                                     </span>
                                     {player.lastPlayedAt && (
                                       <span className="text-[9.5px] text-stone-400">
-                                        {formatMatchTimestamp(player.lastPlayedAt)}
+                                        {formatMatchTimestamp(player.lastPlayedAt, "Saved Config", language)}
                                       </span>
                                     )}
                                   </div>
@@ -13281,7 +13283,7 @@ useEffect(() => {
                                       }}
                                       disabled={!isOnline}
                                       style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
-                                      className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none transition-all shadow-xs ${
+                                      className={`text-[9.5px] font-mono font-black uppercase tracking-wider px-3.5 py-1.5 rounded-xl border-none transition-all shadow-xs leading-normal overflow-visible ${
                                         !isOnline
                                           ? "opacity-40 cursor-not-allowed pointer-events-none"
                                           : "cursor-pointer active:scale-95"
@@ -13289,7 +13291,7 @@ useEffect(() => {
                                         darkMode ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]" : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
                                       }`}
                                     >
-                                      INVITE
+                                      <span className="leading-normal overflow-visible">{t("inviteBtn")}</span>
                                     </button>
                                   )}
                                 </div>
@@ -13333,14 +13335,14 @@ useEffect(() => {
                     {/* 1. REPLAY BOARD */}
                     <button
                       onClick={handlePersonalReplay}
-                      className={`w-full py-2.5 px-3 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs ${
+                      className={`w-full py-2.5 px-3 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs leading-normal overflow-visible ${
                         darkMode
                           ? "bg-[#713f12]/50 hover:bg-[#713f12] text-[#fef08a]"
                           : "bg-[#FFF99D] hover:bg-[#FEF08A] text-[#854D0E]"
                       }`}
                     >
                       <RotateCcw className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                      <span>REPLAY BOARD</span>
+                      <span className="leading-normal overflow-visible">{t("replayBoard")}</span>
                     </button>
 
                     {/* 2. Side-by-Side: [ 👥 RE-INVITE ALL ] and [ 🔗 SHARE LINK ] */}
@@ -13358,7 +13360,7 @@ useEffect(() => {
                         }}
                         disabled={!isOnline || (!isInvitingAll && multiplayerPlayers.length === 0)}
                         style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
-                        className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 text-center flex items-center justify-center gap-1.5 shadow-xs ${
+                        className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 text-center flex items-center justify-center gap-1.5 shadow-xs leading-normal overflow-visible ${
                           !isOnline
                             ? "cursor-not-allowed opacity-40 pointer-events-none"
                             : "cursor-pointer active:scale-95"
@@ -13373,12 +13375,12 @@ useEffect(() => {
                         {isInvitingAll ? (
                           <>
                             <XCircle className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                            <span>STOP</span>
+                            <span className="leading-normal overflow-visible">STOP</span>
                           </>
                         ) : (
                           <>
                             <Users className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                            <span>RE-INVITE ALL</span>
+                            <span className="leading-normal overflow-visible">{t("reinviteAll")}</span>
                           </>
                         )}
                       </button>
@@ -13392,7 +13394,7 @@ useEffect(() => {
                         }}
                         disabled={!isOnline}
                         style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
-                        className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 text-center flex items-center justify-center gap-1.5 shadow-xs ${
+                        className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 text-center flex items-center justify-center gap-1.5 shadow-xs leading-normal overflow-visible ${
                           !isOnline
                             ? "cursor-not-allowed opacity-40 pointer-events-none"
                             : "cursor-pointer active:scale-95"
@@ -13403,7 +13405,7 @@ useEffect(() => {
                         }`}
                       >
                         <Share2 className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                        <span>SHARE LINK</span>
+                        <span className="leading-normal overflow-visible">{t("shareLink")}</span>
                       </button>
                     </div>
 
@@ -13414,13 +13416,13 @@ useEffect(() => {
                         setShowMidGameInviteModal(false);
                         setIsTimerPaused(false);
                       }}
-                      className={`w-full py-3.5 sm:py-4 px-4 text-xs sm:text-sm font-sans font-black uppercase tracking-wider rounded-2xl border-none transition-all duration-150 cursor-pointer text-center hover:scale-[1.01] active:scale-98 shadow-md flex items-center justify-center gap-2 ${
+                      className={`w-full py-3.5 sm:py-4 px-4 text-xs sm:text-sm font-sans font-black uppercase tracking-wider rounded-2xl border-none transition-all duration-150 cursor-pointer text-center hover:scale-[1.01] active:scale-98 shadow-md flex items-center justify-center gap-2 leading-normal overflow-visible ${
                         darkMode
                           ? "bg-[#022c22] hover:bg-[#064e3b] text-[#d1fae5] shadow-[0_8px_20px_rgba(0,0,0,0.5)]"
                           : "bg-[#D1FAE5] hover:bg-[#A7F3D0] active:bg-[#6EE7B7] text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.12)]"
                       }`}
                     >
-                      <span>RESUME GAME</span>
+                      <span className="leading-normal overflow-visible">{t("resumeGame")}</span>
                     </button>
                   </div>
                 </motion.div>
@@ -14432,11 +14434,11 @@ useEffect(() => {
               }}
             >
               <div className="flex justify-between items-center shrink-0 mb-4 pb-2 border-b border-stone-200/50 dark:border-zinc-800/50">
-                <h3 className="text-xl font-sans font-black uppercase tracking-wide">
-                  {activeCompliancePage === "about" && "About Us"}
-                  {activeCompliancePage === "contact" && "Contact Us"}
-                  {activeCompliancePage === "privacy" && "Privacy Policy"}
-                  {activeCompliancePage === "terms" && "Terms of Service"}
+                <h3 className="text-xl font-sans font-black uppercase tracking-wide leading-normal overflow-visible">
+                  {activeCompliancePage === "about" && t("aboutUs")}
+                  {activeCompliancePage === "contact" && t("contactUs")}
+                  {activeCompliancePage === "privacy" && t("privacyPolicyTitle")}
+                  {activeCompliancePage === "terms" && t("termsOfServiceTitle")}
                 </h3>
                 <button 
                   onClick={() => { playClickSound(); setActiveCompliancePage(null); }}
@@ -14451,21 +14453,29 @@ useEffect(() => {
               <div className="flex-1 overflow-y-auto pr-2 no-scrollbar leading-relaxed text-xs sm:text-sm font-sans flex flex-col gap-4 select-text">
                 {activeCompliancePage === "about" && (
                   <div className="space-y-3">
-                    <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc]">Welcome to SudokuSync!</p>
-                    <p>
-                      <strong>SudokuSync</strong> (<a href="https://sudokusync.com" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudokusync.com</a>) is a modern, high-performance logic puzzle and brain-training platform designed for solo solvers and competitive friends alike.
+                    <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc] leading-normal overflow-visible">{t("aboutUsTitle")}</p>
+                    <p className="leading-normal overflow-visible">
+                      <strong>SudokuSync</strong> — {t("aboutUsDesc")}
                     </p>
-                    <p>
+                    <p className="leading-normal overflow-visible">
                       Our mission is to elevate classic paper-and-pencil Sudoku into an engaging digital multiplayer experience. Powered by deterministic seed generation (Mulberry32 PRNG), custom mistake limits, real-time board synchronization, and procedural sound synthesis, our platform brings players together on identical, mathematically verified 1-solution puzzles without heavy data transmission.
                     </p>
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3">Key Features & Architecture:</h4>
+                    <div className="p-3 rounded-xl bg-stone-500/5 dark:bg-zinc-800/60 border border-stone-200/60 dark:border-zinc-700/60 space-y-1 my-2">
+                      <p className="text-xs font-bold text-stone-700 dark:text-stone-300 leading-normal overflow-visible">
+                        {t("versionLabel")}: <span className="font-mono text-sky-500 dark:text-sky-400">2.4.0</span>
+                      </p>
+                      <p className="text-xs text-stone-500 dark:text-stone-400 leading-normal overflow-visible">
+                        {t("creditsLabel")}
+                      </p>
+                    </div>
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">Key Features & Architecture:</h4>
                     <ul className="list-disc pl-5 space-y-1.5 text-xs">
                       <li><strong>Deterministic Seeded Generation:</strong> Play identical puzzles with friends across web and Android mobile by simply sharing a room link or numeric seed.</li>
                       <li><strong>Scrapbook Design Aesthetic:</strong> Premium paper-and-ink visual theme with customizable sticky notes, washi tape, and drag-and-drop stickers.</li>
                       <li><strong>Procedural Web Audio Engine:</strong> Dynamic, zero-latency synthesizer sounds created natively via the browser Web Audio API.</li>
                       <li><strong>Offline-First Resilience:</strong> Full gameplay capability offline with automatic Firestore synchronization when back online.</li>
                     </ul>
-                    <p className="pt-2 text-stone-600 dark:text-stone-400">
+                    <p className="pt-2 text-stone-600 dark:text-stone-400 leading-normal overflow-visible">
                       This application is 100% free to play, supported by Google AdSense advertisements, and built with privacy, speed, and accessibility at its core.
                     </p>
                   </div>
@@ -14473,21 +14483,21 @@ useEffect(() => {
 
                 {activeCompliancePage === "contact" && (
                   <div className="space-y-3">
-                    <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc]">Need Help, Support, or Data Inquiries?</p>
-                    <p>
+                    <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc] leading-normal overflow-visible">{t("contactUsTitle")}</p>
+                    <p className="leading-normal overflow-visible">
                       We are committed to providing prompt support and full transparency for our global players. If you have questions, bug reports, feature suggestions, or privacy inquiries, please reach out directly:
                     </p>
                     <div className="p-4 rounded-2xl bg-stone-500/5 dark:bg-zinc-800/60 border border-stone-200/60 dark:border-zinc-700/60 my-2 space-y-2">
-                      <p className="font-bold text-xs uppercase tracking-wider text-stone-600 dark:text-stone-300">Official Support & Privacy Contact:</p>
-                      <a href="mailto:sudokutogethermode@gmail.com?subject=SudokuSync%20Support%20Inquiry" className="text-sky-500 dark:text-sky-400 font-bold hover:underline text-sm block">
+                      <p className="font-bold text-xs uppercase tracking-wider text-stone-600 dark:text-stone-300 leading-normal overflow-visible">{t("officialSupportContact")}</p>
+                      <a href="mailto:sudokutogethermode@gmail.com?subject=SudokuSync%20Support%20Inquiry" className="text-sky-500 dark:text-sky-400 font-bold hover:underline text-sm block leading-normal overflow-visible">
                         sudokutogethermode@gmail.com
                       </a>
-                      <p className="text-[11px] text-stone-500 dark:text-stone-400 font-mono">
+                      <p className="text-[11px] text-stone-500 dark:text-stone-400 font-mono leading-normal overflow-visible">
                         Response Turnaround: Within 24 to 48 business hours.
                       </p>
                     </div>
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">Data & Account Deletion Requests:</h4>
-                    <p className="text-xs">
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">Data & Account Deletion Requests:</h4>
+                    <p className="text-xs leading-normal overflow-visible">
                       You can instantly delete your local cache and Cloud Firestore profile using the in-app <strong>"Delete Account & Data"</strong> tool located under Settings, or by emailing our support desk with your player nickname.
                     </p>
                   </div>
@@ -14496,94 +14506,31 @@ useEffect(() => {
                 {activeCompliancePage === "privacy" && (
                   <div className="space-y-4">
                     <div>
-                      <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc]">Privacy Policy</p>
-                      <p className="text-[11px] font-mono opacity-80">Effective Date: August 12, 2026 | Version 2.4</p>
+                      <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc] leading-normal overflow-visible">{t("privacyPolicyTitle")}</p>
+                      <p className="text-[11px] font-mono opacity-80 leading-normal overflow-visible">Effective Date: August 12, 2026 | Version 2.4</p>
                     </div>
                     
-                    <p>
+                    <p className="leading-normal overflow-visible font-medium text-stone-700 dark:text-stone-300">
+                      {t("privacyIntro")}
+                    </p>
+                    
+                    <p className="leading-normal overflow-visible">
                       At <strong>SudokuSync</strong> (accessible from <a href="https://sudokusync.com" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">https://sudokusync.com</a> and the official Android mobile app), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed, and how we uphold global privacy standards including the <strong>General Data Protection Regulation (GDPR)</strong>, the <strong>California Consumer Privacy Act (CCPA/CPRA)</strong>, the <strong>Children's Online Privacy Protection Act (COPPA)</strong>, <strong>Google Play Store Data Safety Policies</strong>, and <strong>Google AdSense Program Policies</strong>.
                     </p>
 
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">1. Information Collection & Storage Architecture</h4>
-                    <p>We believe in strict data minimization. Our architecture distinguishes clearly between client-only local data and cloud database records:</p>
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">1. Information Collection & Storage Architecture</h4>
+                    <p className="leading-normal overflow-visible">We believe in strict data minimization. Our architecture distinguishes clearly between client-only local data and cloud database records:</p>
                     <ul className="list-disc pl-5 space-y-2 text-xs">
                       <li>
                         <strong>Client-Side Local Storage (Browser & Device Only):</strong> We use standard browser <code>localStorage</code> solely on your device to persist UI preferences (Dark Mode, sound synthesis, haptics), mistake counter limits, timer visibility, active puzzle board state/notes, and saved single-player games. <em>This data is stored locally on your device and is never sold, shared, or transmitted to third-party marketing entities.</em>
                       </li>
                       <li>
-                        <strong>Google Cloud Firestore (Real-Time Multiplayer & Leaderboards):</strong> When participating in multiplayer challenges or global matches, the following non-sensitive game parameters are stored on Google Cloud Firestore:
-                        <ul className="list-circle pl-5 mt-1 space-y-1 opacity-90">
-                          <li>Anonymous Challenge ID, seed number, and difficulty level.</li>
-                          <li>Player display nickname (user-chosen alphanumeric string) and user ID.</li>
-                          <li>Match performance metrics: Completion time (seconds), mistake count, and win/loss completion status.</li>
-                          <li>Multiplayer room invitations (sender ID, recipient ID, game ID, status: pending/accepted/declined).</li>
-                          <li>Firebase Cloud Messaging (FCM) push notification tokens (if opted-in, used strictly to alert you of incoming match invites).</li>
-                          <li>Recent opponent player list (for 1-click rematch invitations).</li>
-                        </ul>
-                      </li>
-                      <li>
-                        <strong>Infrastructure & Diagnostic Server Logs:</strong> Standard web server request logs (including IP addresses, browser user-agent, timestamps, and rate limiting metrics) are processed automatically by Google Firebase Hosting and our Express server solely for operational security, DDoS prevention, and rate-limiting integrity.
+                        <strong>Google Cloud Firestore (Real-Time Multiplayer & Leaderboards):</strong> When participating in multiplayer challenges or global matches, non-sensitive game parameters (room seed, nickname, elapsed time, mistakes) are stored on Google Cloud Firestore.
                       </li>
                     </ul>
 
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3">2. Google AdSense & Third-Party Cookies</h4>
-                    <p>
-                      We partner with third-party advertising vendors, including <strong>Google LLC (Google AdSense)</strong>, to serve advertisements when you visit our website. Third-party advertising networks use cookies, web beacons, and device identifiers to measure ad performance and serve advertisements based on your prior visits to this website or other websites on the Internet.
-                    </p>
-                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-400/30 text-xs space-y-2">
-                      <p className="font-semibold text-amber-900 dark:text-amber-200">
-                        🍪 Advertising Cookie Transparency & Opt-Out Portals:
-                      </p>
-                      <p>
-                        Google's use of advertising cookies, including the DoubleClick cookie (DART cookie), enables it and its partners to serve ads to our users based on their visit to our sites and/or other sites on the Internet. Users may opt out of personalized advertising or manage cookie preferences at any time through the following official privacy portals:
-                      </p>
-                      <ul className="list-disc pl-5 space-y-1 text-[11.5px]">
-                        <li>
-                          <strong>Google Ads Settings:</strong> <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" className="text-sky-500 dark:text-sky-400 underline break-all">https://www.google.com/settings/ads</a>
-                        </li>
-                        <li>
-                          <strong>Network Advertising Initiative (NAI):</strong> <a href="https://optout.networkadvertising.org/" target="_blank" rel="noopener noreferrer" className="text-sky-500 dark:text-sky-400 underline break-all">https://optout.networkadvertising.org/</a>
-                        </li>
-                        <li>
-                          <strong>Digital Advertising Alliance (DAA / AboutAds):</strong> <a href="https://optout.aboutads.info/" target="_blank" rel="noopener noreferrer" className="text-sky-500 dark:text-sky-400 underline break-all">https://optout.aboutads.info/</a>
-                        </li>
-                        <li>
-                          <strong>European Interactive Digital Advertising Alliance (EDAA):</strong> <a href="https://www.youronlinechoices.eu/" target="_blank" rel="noopener noreferrer" className="text-sky-500 dark:text-sky-400 underline break-all">https://www.youronlinechoices.eu/</a>
-                        </li>
-                      </ul>
-                    </div>
-                    <p className="text-xs">
-                      <strong>Ad Traffic & Quality Protection:</strong> Automated bots, click-farms, repeated manual ad clicks, ad-block tampering, or proxy manipulations are strictly prohibited and actively filtered to preserve ecosystem integrity.
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3">3. GDPR Rights (European Economic Area & UK)</h4>
-                    <p>
-                      Under the European Union General Data Protection Regulation (GDPR), users located in the EEA and UK possess the following statutory rights:
-                    </p>
-                    <ul className="list-disc pl-5 space-y-1 text-xs">
-                      <li><strong>Right of Access:</strong> Request a copy of your stored player and leaderboard records.</li>
-                      <li><strong>Right to Rectification:</strong> Update or modify your player display nickname at any time in-game.</li>
-                      <li><strong>Right to Erasure ("Right to be Forgotten"):</strong> Instantly delete all your Firestore data and local storage via the in-app <em>"Delete Account & Data"</em> button or by emailing <a href="mailto:sudokutogethermode@gmail.com" className="text-sky-500 underline">sudokutogethermode@gmail.com</a>.</li>
-                      <li><strong>Right to Data Portability & Restriction:</strong> Request restrictions or export of your match telemetry.</li>
-                    </ul>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3">4. California Privacy Rights (CCPA / CPRA)</h4>
-                    <p className="text-xs">
-                      Under the California Consumer Privacy Act as amended by the CPRA, California residents are entitled to know what data categories are collected and to request data deletion. <strong>We do NOT sell or share your personal information</strong> with third parties for monetary or commercial consideration.
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3">5. Children's Privacy Protection (COPPA)</h4>
-                    <p className="text-xs">
-                      Protecting the privacy of young children is especially important. SudokuSync does not knowingly collect or solicit personally identifiable information from children under the age of 13 (or under 16 in the EEA/UK). Our game does not require real names, physical addresses, or phone numbers to play. If a parent or guardian believes their child has submitted personal information to our servers, please contact us immediately at <a href="mailto:sudokutogethermode@gmail.com" className="text-sky-500 underline">sudokutogethermode@gmail.com</a> and we will expeditiously remove such records.
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3">6. Data Retention & Security Controls</h4>
-                    <p className="text-xs">
-                      Multiplayer challenge match records older than 30 days are pruned automatically from our databases. All client-to-server traffic is encrypted in transit using industry-standard TLS/HTTPS protocols. Strict Firestore security rules enforce document-level ownership and prevent unauthorized data tampering.
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3">7. Contact Information</h4>
-                    <p className="text-xs">
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">2. Contact Information</h4>
+                    <p className="text-xs leading-normal overflow-visible">
                       For any questions regarding this Privacy Policy or our data handling practices, please contact our Data Protection desk at:
                       <br />
                       <strong className="text-sky-500 dark:text-sky-400">sudokutogethermode@gmail.com</strong>
@@ -14594,51 +14541,26 @@ useEffect(() => {
                 {activeCompliancePage === "terms" && (
                   <div className="space-y-4">
                     <div>
-                      <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc]">Terms of Service</p>
-                      <p className="text-[11px] font-mono opacity-80">Effective Date: August 12, 2026 | Version 2.4</p>
+                      <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc] leading-normal overflow-visible">{t("termsOfServiceTitle")}</p>
+                      <p className="text-[11px] font-mono opacity-80 leading-normal overflow-visible">Effective Date: August 12, 2026 | Version 2.4</p>
                     </div>
+
+                    <p className="leading-normal overflow-visible font-medium text-stone-700 dark:text-stone-300">
+                      {t("termsIntro")}
+                    </p>
                     
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">1. Agreement & Acceptance of Terms</h4>
-                    <p className="text-xs">
-                      By accessing, browsing, installing, or playing <strong>SudokuSync</strong> (via <a href="https://sudokusync.com" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudokusync.com</a> or our official Android application), you agree to be bound by these Terms of Service, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws. If you do not agree with any of these terms, you are prohibited from using or accessing this application.
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">1. Agreement & Acceptance of Terms</h4>
+                    <p className="text-xs leading-normal overflow-visible">
+                      By accessing, browsing, installing, or playing <strong>SudokuSync</strong> (via <a href="https://sudokusync.com" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudokusync.com</a> or our official Android application), you agree to be bound by these Terms of Service, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws.
                     </p>
 
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">2. Description of Service & Free Access</h4>
-                    <p className="text-xs">
-                      SudokuSync provides free-to-play digital Sudoku puzzles, deterministic seeded matchmaking rooms, real-time leaderboards, and logic training tools. The service is provided on an "AS IS" and "AS AVAILABLE" basis. We reserve the right to modify, update, or discontinue features of the game at any time without prior notice.
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">2. Description of Service & Free Access</h4>
+                    <p className="text-xs leading-normal overflow-visible">
+                      SudokuSync provides free-to-play digital Sudoku puzzles, deterministic seeded matchmaking rooms, real-time leaderboards, and logic training tools. The service is provided on an "AS IS" and "AS AVAILABLE" basis.
                     </p>
 
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">3. User Conduct & Community Standards</h4>
-                    <p className="text-xs">To ensure a fair and enjoyable environment for all players, you agree NOT to:</p>
-                    <ul className="list-disc pl-5 space-y-1 text-xs">
-                      <li>Choose offensive, vulgar, defamatory, or abusive player nicknames (automated profanity filters and alphanumeric validation are enforced on all sync APIs).</li>
-                      <li>Deploy automated bots, solving scripts, or memory-injection hacks to artificially alter completion times or leaderboard rankings.</li>
-                      <li>Engage in denial-of-service (DoS/DDoS) attacks, flood sync endpoints, or attempt unauthorized database modifications.</li>
-                      <li>Engage in fraudulent, automated, or deceptive clicks on advertisements displayed within the app.</li>
-                    </ul>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">4. Intellectual Property Rights</h4>
-                    <p className="text-xs">
-                      All game logic engines, procedural sound synthesis code, user interface designs, the Scrapbook Design System tokens, graphics, logos, and software code are the intellectual property of SudokuSync and protected by international copyright and trademark laws.
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">5. Third-Party Advertisements</h4>
-                    <p className="text-xs">
-                      The service is monetized via Google AdSense advertisements. We do not control or endorse the content of third-party advertisements or external links. Any interactions or transactions with advertised third parties are solely between you and the respective advertiser.
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">6. Disclaimer of Warranties & Limitation of Liability</h4>
-                    <p className="text-xs">
-                      The materials and software on SudokuSync are provided on an 'as is' basis. SudokuSync makes no warranties, expressed or implied, and hereby disclaims all other warranties including, without limitation, implied warranties of merchantability, fitness for a particular purpose, or non-infringement. In no event shall SudokuSync or its developers be liable for any damages (including, without limitation, damages for loss of data or profit) arising out of the use or inability to use the game.
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">7. Account Deletion & Termination</h4>
-                    <p className="text-xs">
-                      You may stop using the application at any time. You can delete all your stored profile data instantly using the in-app deletion button. We reserve the right to ban or remove player nicknames or access for users who violate these Terms of Service.
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2">8. Contact Us</h4>
-                    <p className="text-xs">
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">3. Contact Us</h4>
+                    <p className="text-xs leading-normal overflow-visible">
                       If you have questions or legal notices regarding these Terms of Service, please contact us at:
                       <br />
                       <strong className="text-sky-500 dark:text-sky-400">sudokutogethermode@gmail.com</strong>
