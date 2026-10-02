@@ -9181,20 +9181,19 @@ useEffect(() => {
 
                       return (
                         <div 
-                          className={`card w-full py-3 px-4 relative overflow-hidden rounded-2xl transition-all duration-200 select-none flex flex-col justify-center items-center gap-1.5 rotate-0 ${
+                          className={`card w-full py-3.5 px-4 relative overflow-hidden rounded-2xl transition-all duration-200 select-none flex flex-col justify-center items-center gap-2 ${
                             darkMode ? (
-                              activeDiff === "EASY" ? "bg-[#022c22] text-[#d1fae5] shadow-[0_8px_20px_rgba(0,0,0,0.4)]" :
-                              activeDiff === "MEDIUM" ? "bg-[#451a03] text-[#fef08a] shadow-[0_8px_20px_rgba(0,0,0,0.4)]" :
-                              activeDiff === "HARD" ? "bg-[#2e1065] text-[#e9d5ff] shadow-[0_8px_20px_rgba(0,0,0,0.4)]" :
-                              "bg-[#4c0519] text-[#fecdd3] shadow-[0_8px_20px_rgba(0,0,0,0.4)]"
+                              activeDiff === "EASY" ? "bg-[#022c22]/90 text-[#d1fae5] shadow-lg border border-emerald-900/40" :
+                              activeDiff === "MEDIUM" ? "bg-[#451a03]/90 text-[#fef08a] shadow-lg border border-amber-900/40" :
+                              activeDiff === "HARD" ? "bg-[#2e1065]/90 text-[#e9d5ff] shadow-lg border border-purple-900/40" :
+                              "bg-[#4c0519]/90 text-[#fecdd3] shadow-lg border border-rose-900/40"
                             ) : (
-                              activeDiff === "EASY" ? "bg-[#D1FAE5] shadow-[0_8px_20px_rgba(6,95,70,0.06)] text-[#065F46]" :
-                              activeDiff === "MEDIUM" ? "bg-[#FFF99D] shadow-[0_8px_20px_rgba(133,77,14,0.06)] text-[#854D0E]" :
-                              activeDiff === "HARD" ? "bg-[#F3E8FF] shadow-[0_8px_20px_rgba(107,33,168,0.06)] text-[#6B21A8]" :
-                              "bg-[#FFE4E6] shadow-[0_8px_20px_rgba(157,23,77,0.06)] text-[#9D174D]"
+                              activeDiff === "EASY" ? "bg-[#D1FAE5]/80 text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.06)] border border-emerald-200/60" :
+                              activeDiff === "MEDIUM" ? "bg-[#FFF99D]/80 text-[#854D0E] shadow-[0_8px_20px_rgba(133,77,14,0.06)] border border-amber-200/60" :
+                              activeDiff === "HARD" ? "bg-[#F3E8FF]/80 text-[#6B21A8] shadow-[0_8px_20px_rgba(107,33,168,0.06)] border border-purple-200/60" :
+                              "bg-[#FFE4E6]/80 text-[#9D174D] shadow-[0_8px_20px_rgba(157,23,77,0.06)] border border-rose-200/60"
                             )
                           }`}
-                          style={{ border: 'none' }}
                         >
                           {/* Subtle top tape aesthetic */}
                           <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1.5 w-14 h-3 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none transition-colors duration-200 rounded-xs z-10`} />
@@ -9202,18 +9201,22 @@ useEffect(() => {
                           {/* 3D Isometric Sudoku Perspective Watermark */}
                           <Sudoku3DWatermark difficulty={activeDiff} />
 
-                          <div className="text-center w-full relative z-10">
-                            <span className="text-[9.5px] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80">
+                          <div className="text-center w-full relative z-10 flex flex-col items-center gap-1">
+                            <span className="text-[10px] uppercase font-mono tracking-widest block font-medium opacity-75">
                               {t("personalBestsTitle")}
                             </span>
-                            <h2 className="text-base uppercase tracking-tight flex items-center justify-center gap-1.5 font-sans font-black leading-tight">
-                              <Timer className="w-4 h-4 stroke-[3] shrink-0" />
-                              <span>{t("timeLabel")}:</span>
-                              <span className="font-mono font-black text-base tabular-nums">
+                            
+                            <div className="flex items-center justify-center gap-2 my-0.5">
+                              <Timer className="w-4 h-4 stroke-[2] opacity-90 shrink-0" />
+                              <span className="font-sans font-medium text-xs uppercase tracking-wider opacity-85">
+                                {t("timeLabel")}:
+                              </span>
+                              <span className="font-mono font-semibold text-base sm:text-lg tabular-nums tracking-wide">
                                 {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
                               </span>
-                            </h2>
-                            <p className="text-[11px] mt-0.5 select-none handwriting opacity-95 font-semibold leading-tight">
+                            </div>
+
+                            <p className="text-[11px] sm:text-xs select-none handwriting opacity-90 font-medium leading-normal tracking-wide">
                               {bestSecs > 0 
                                 ? t("beatRecordPrompt") 
                                 : "No record yet... Can you set the first one?"}
