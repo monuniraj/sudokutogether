@@ -1896,6 +1896,7 @@ useEffect(() => {
   const [showHowToPlayModal, setShowHowToPlayModal] = useState<boolean>(false);
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState<boolean>(false);
   const [showResetSettingsModal, setShowResetSettingsModal] = useState<boolean>(false);
+  const [isConfirmingFactoryReset, setIsConfirmingFactoryReset] = useState<boolean>(false);
 
   // Issue 7: Friend System Identity states
   const [showLoginRequiredModal, setShowLoginRequiredModal] = useState<boolean>(false);
@@ -3195,7 +3196,14 @@ useEffect(() => {
     if (playerToUnfriend) { setPlayerToUnfriend(null); return true; }
     if (viewingRankingsGame) { setViewingRankingsGame(null); return true; }
     if (showDeleteAccountModal) { setShowDeleteAccountModal(false); return true; }
-    if (showResetSettingsModal) { setShowResetSettingsModal(false); return true; }
+    if (showResetSettingsModal) { 
+      if (isConfirmingFactoryReset) {
+        setIsConfirmingFactoryReset(false);
+      } else {
+        setShowResetSettingsModal(false);
+      }
+      return true; 
+    }
     if (activeCompliancePage) { setActiveCompliancePage(null); return true; }
     if (showDisplayNameModal) { setShowDisplayNameModal(false); return true; }
     if (showInviteJoinNamePopup) { setShowInviteJoinNamePopup(false); return true; }
@@ -12894,19 +12902,33 @@ useEffect(() => {
 
       <AnimatePresence>
         {showDeleteAccountModal && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div 
+            className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 sm:p-6"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
             <div className="absolute inset-0 cursor-pointer" onClick={() => { playClickSound(); setShowDeleteAccountModal(false); }} />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className={`relative w-full max-w-sm rounded-[16px] shadow-2xl overflow-hidden flex flex-col p-6 ${darkMode ? "bg-[#1E1E1E] border border-zinc-800" : "bg-[#FDFBF7]"}`}
+              className={`border-0 p-6 sm:p-8 max-w-sm w-full relative text-center rounded-2xl sm:rounded-3xl shadow-2xl shadow-black/20 flex flex-col items-center gap-5 z-[10001] select-none ${
+                darkMode ? "bg-zinc-900 text-stone-100" : "bg-[#FDFBF7] text-stone-900"
+              }`}
             >
-              <h3 className={`font-sans font-black text-lg mb-3 ${darkMode ? "text-red-400" : "text-red-600"}`}>{t("deleteAccountTitle")}</h3>
-              <p className={`font-sans text-sm leading-relaxed mb-6 ${darkMode ? "text-stone-300" : "text-stone-700"}`}>
-                {t("deleteAccountDesc")}
-              </p>
-              <div className="flex flex-col gap-3">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                darkMode ? "bg-rose-950/40 text-rose-300" : "bg-rose-100 text-[#DC2626]"
+              }`}>
+                <Trash2 className="w-6 h-6 stroke-[2.2]" />
+              </div>
+              <div className="flex flex-col items-center gap-1.5 w-full">
+                <h3 className={`text-xl sm:text-2xl font-sans font-black tracking-tight ${darkMode ? "text-stone-100" : "text-stone-900"}`}>
+                  {t("deleteAccountTitle")}
+                </h3>
+                <p className={`text-xs sm:text-sm font-sans leading-relaxed ${darkMode ? "text-stone-400" : "text-stone-600"}`}>
+                  {t("deleteAccountDesc")}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2.5 w-full mt-1">
                 <button 
                   onClick={() => { 
                     playClickSound(); 
@@ -12933,19 +12955,32 @@ useEffect(() => {
                     
                     addLog("🗑️ Account and all local data permanently deleted.");
                     setShowDeleteAccountModal(false);
-                    alert("Your account and all associated data have been permanently deleted.");
+                    showToast("Account and data deleted");
                   }} 
-                  className={`py-3 px-4 rounded-xl font-sans font-black text-xs uppercase tracking-wider text-white border-none cursor-pointer ${darkMode ? "bg-red-600 hover:bg-red-500" : "bg-red-600 hover:bg-red-700"}`}
+                  className={`w-full py-3.5 px-4 rounded-xl border-0 cursor-pointer font-sans text-xs font-black uppercase tracking-wider transition-all active:translate-y-px ${
+                    darkMode ? "bg-[#7f1d1d] text-[#fecaca] hover:bg-[#991b1b]" : "bg-[#FEE2E2] text-[#DC2626] hover:bg-[#FECACA]"
+                  }`}
                 >
                   {t("deleteAccountConfirm")}
                 </button>
                 <button 
                   onClick={() => { playClickSound(); setShowDeleteAccountModal(false); }} 
-                  className={`py-3 px-4 rounded-xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer ${darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-200 text-stone-700 hover:bg-stone-300"}`}
+                  className={`w-full py-3.5 px-4 rounded-xl border-0 cursor-pointer font-sans text-xs font-black uppercase tracking-wider transition-all active:translate-y-px ${
+                    darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-200 text-stone-700 hover:bg-stone-300"
+                  }`}
                 >
                   {t("cancel")}
                 </button>
               </div>
+              <button 
+                onClick={() => { playClickSound(); setShowDeleteAccountModal(false); }}
+                className={`absolute top-4 right-4 p-2 rounded-full border-0 cursor-pointer transition-colors ${
+                  darkMode ? "bg-transparent text-stone-400 hover:text-stone-200" : "bg-transparent text-stone-400 hover:text-stone-600"
+                }`}
+                title={t("close")}
+              >
+                <X className="w-5 h-5" />
+              </button>
             </motion.div>
           </div>
         )}
@@ -12953,92 +12988,166 @@ useEffect(() => {
 
       <AnimatePresence>
         {showResetSettingsModal && (
-          <div className="fixed inset-0 z-[10000] bg-[#FDFBF7]/80 backdrop-blur-sm flex items-center justify-center p-6">
+          <div 
+            className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 sm:p-6"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <div 
+              className="absolute inset-0 cursor-pointer" 
+              onClick={() => { 
+                playClickSound(); 
+                setIsConfirmingFactoryReset(false); 
+                setShowResetSettingsModal(false); 
+              }} 
+            />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className={`border-none p-8 max-w-sm w-full relative text-center rounded-[32px] shadow-[0_12px_40px_rgba(0,0,0,0.08)] flex flex-col gap-6 ${darkMode ? "bg-[#2A2D24]" : "bg-[#FDFBF7]"}`}
+              className={`border-0 p-6 sm:p-8 max-w-sm w-full relative text-center rounded-2xl sm:rounded-3xl shadow-2xl shadow-black/20 flex flex-col items-center gap-5 z-[10001] select-none ${
+                darkMode ? "bg-zinc-900 text-stone-100" : "bg-[#FDFBF7] text-stone-900"
+              }`}
             >
-              <div className="flex flex-col items-center gap-1">
-                <h3 className={`text-2xl font-sans font-medium tracking-tight mt-2 ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
-                  {t("resetSettingsTitle")}
-                </h3>
-              </div>
+              {!isConfirmingFactoryReset ? (
+                <>
+                  <div className="flex flex-col items-center gap-1.5 w-full">
+                    <h3 className={`text-xl sm:text-2xl font-sans font-black tracking-tight ${darkMode ? "text-stone-100" : "text-stone-900"}`}>
+                      {t("resetSettingsTitle")}
+                    </h3>
+                    <p className={`text-xs sm:text-sm font-sans leading-relaxed ${darkMode ? "text-stone-400" : "text-stone-600"}`}>
+                      Choose whether to restore default preferences or completely reset all local game data.
+                    </p>
+                  </div>
 
-              <div className="flex flex-col gap-3 mt-2">
-                <button 
-                  onClick={() => { 
-                    playClickSound();
-                    
-                    setDarkMode(false);
-                    setSoundEffects(true);
-                    setVibrations(true);
-                    setTimerEnabled(true);
-                    setMistakeLimitEnabled(true);
-                    setHighlightIdentical(true);
-                    setHighlightAreas(true);
-                    setShowRemainingNumbers(true);
-                    setAutoComplete(false);
-                    setLightningMode(false);
-                    setMagicNote(false);
-                    setHideUsedNumber(false);
-                    setNotificationsEnabled(true);
-                    
-                    setShowResetSettingsModal(false);
-                    showToast("Preferences reset to defaults");
-                  }}
-                  className={`w-full py-3.5 px-4 rounded-xl border-none cursor-pointer font-sans text-xs font-black uppercase tracking-wider transition-all active:translate-y-px ${
-                    darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-                  }`}
-                >
-                  {t("resetPreferencesOnly")}
-                </button>
-                <button 
-                  onClick={() => {
-                    playClickSound();
-                    
-                    setDarkMode(false);
-                    setSoundEffects(true);
-                    setVibrations(true);
-                    setTimerEnabled(true);
-                    setMistakeLimitEnabled(true);
-                    setHighlightIdentical(true);
-                    setHighlightAreas(true);
-                    setShowRemainingNumbers(true);
-                    setAutoComplete(false);
-                    setLightningMode(false);
-                    setMagicNote(false);
-                    setHideUsedNumber(false);
-                    setNotificationsEnabled(true);
+                  <div className="flex flex-col gap-2.5 w-full mt-1">
+                    <button 
+                      onClick={() => { 
+                        playClickSound();
+                        
+                        setDarkMode(false);
+                        setSoundEffects(true);
+                        setVibrations(true);
+                        setTimerEnabled(true);
+                        setMistakeLimitEnabled(true);
+                        setHighlightIdentical(true);
+                        setHighlightAreas(true);
+                        setShowRemainingNumbers(true);
+                        setAutoComplete(false);
+                        setLightningMode(false);
+                        setMagicNote(false);
+                        setHideUsedNumber(false);
+                        setNotificationsEnabled(true);
+                        
+                        setShowResetSettingsModal(false);
+                        showToast("Preferences reset to defaults");
+                      }}
+                      className={`w-full py-3.5 px-4 rounded-xl border-0 cursor-pointer font-sans text-xs font-black uppercase tracking-wider transition-all active:translate-y-px ${
+                        darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-200 text-stone-700 hover:bg-stone-300"
+                      }`}
+                    >
+                      {t("resetPreferencesOnly")}
+                    </button>
+                    <button 
+                      onClick={() => {
+                        playClickSound();
+                        setIsConfirmingFactoryReset(true);
+                      }}
+                      className={`w-full py-3.5 px-4 rounded-xl border-0 cursor-pointer font-sans text-xs font-black uppercase tracking-wider transition-all active:translate-y-px ${
+                        darkMode ? "bg-[#7f1d1d] text-[#fecaca] hover:bg-[#991b1b]" : "bg-[#FEE2E2] text-[#DC2626] hover:bg-[#FECACA]"
+                      }`}
+                    >
+                      {t("factoryReset")}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    darkMode ? "bg-rose-950/40 text-rose-300" : "bg-rose-100 text-[#DC2626]"
+                  }`}>
+                    <RotateCcw className="w-6 h-6 stroke-[2.2]" />
+                  </div>
 
-                    const keysToRemove = [];
-                    for (let i = 0; i < localStorage.length; i++) {
-                      const key = localStorage.key(i);
-                      if (key && key.startsWith("sudoku_") && key !== "sudoku_userProfile") {
-                        keysToRemove.push(key);
-                      }
-                    }
-                    keysToRemove.forEach(k => localStorage.removeItem(k));
-                    
-                    setSavedGames([]);
-                    setCompletedGames([]);
-                    setHistory([]);
-                    setBoardState(null);
+                  <div className="flex flex-col items-center gap-1.5 w-full">
+                    <h3 className={`text-xl sm:text-2xl font-sans font-black tracking-tight ${
+                      darkMode ? "text-stone-100" : "text-stone-900"
+                    }`}>
+                      Confirm Factory Reset
+                    </h3>
+                    <p className={`text-xs sm:text-sm font-sans leading-relaxed ${
+                      darkMode ? "text-stone-400" : "text-stone-600"
+                    }`}>
+                      Are you sure you want to perform a factory reset? All saved games, puzzle history, statistics, and local preferences will be permanently purged. This action cannot be undone.
+                    </p>
+                  </div>
 
-                    setShowResetSettingsModal(false);
-                    showToast("Factory reset complete");
-                  }}
-                  className={`w-full py-3.5 px-4 rounded-xl border-none cursor-pointer font-sans text-xs font-black uppercase tracking-wider transition-all active:translate-y-px ${
-                    darkMode ? "bg-[#7f1d1d] text-[#fecaca] hover:bg-[#991b1b]" : "bg-[#FEE2E2] text-[#DC2626] hover:bg-[#FECACA]"
-                  }`}
-                >
-                  {t("factoryReset")}
-                </button>
-              </div>
+                  <div className="flex flex-col gap-2.5 w-full mt-1">
+                    <button 
+                      onClick={() => {
+                        playClickSound();
+                        
+                        setDarkMode(false);
+                        setSoundEffects(true);
+                        setVibrations(true);
+                        setTimerEnabled(true);
+                        setMistakeLimitEnabled(true);
+                        setHighlightIdentical(true);
+                        setHighlightAreas(true);
+                        setShowRemainingNumbers(true);
+                        setAutoComplete(false);
+                        setLightningMode(false);
+                        setMagicNote(false);
+                        setHideUsedNumber(false);
+                        setNotificationsEnabled(true);
+
+                        const keysToRemove = [];
+                        for (let i = 0; i < localStorage.length; i++) {
+                          const key = localStorage.key(i);
+                          if (key && key.startsWith("sudoku_") && key !== "sudoku_userProfile") {
+                            keysToRemove.push(key);
+                          }
+                        }
+                        keysToRemove.forEach(k => localStorage.removeItem(k));
+                        
+                        setSavedGames([]);
+                        setCompletedGames([]);
+                        setHistory([]);
+                        setBoardState(null);
+
+                        setIsConfirmingFactoryReset(false);
+                        setShowResetSettingsModal(false);
+                        showToast("Factory reset complete");
+                      }}
+                      className={`w-full py-3.5 px-4 rounded-xl border-0 cursor-pointer font-sans text-xs font-black uppercase tracking-wider transition-all active:translate-y-px ${
+                        darkMode ? "bg-[#7f1d1d] text-[#fecaca] hover:bg-[#991b1b]" : "bg-[#FEE2E2] text-[#DC2626] hover:bg-[#FECACA]"
+                      }`}
+                    >
+                      Confirm Purge
+                    </button>
+                    <button 
+                      onClick={() => {
+                        playClickSound();
+                        setIsConfirmingFactoryReset(false);
+                      }}
+                      className={`w-full py-3.5 px-4 rounded-xl border-0 cursor-pointer font-sans text-xs font-black uppercase tracking-wider transition-all active:translate-y-px ${
+                        darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-200 text-stone-700 hover:bg-stone-300"
+                      }`}
+                    >
+                      {t("cancel")}
+                    </button>
+                  </div>
+                </>
+              )}
+
               <button 
-                onClick={() => { playClickSound(); setShowResetSettingsModal(false); }}
-                className={`absolute top-4 right-4 p-2 rounded-full border-none cursor-pointer transition-colors ${darkMode ? "bg-transparent text-stone-400 hover:text-stone-200" : "bg-transparent text-stone-400 hover:text-stone-600"}`}
+                onClick={() => { 
+                  playClickSound(); 
+                  setIsConfirmingFactoryReset(false); 
+                  setShowResetSettingsModal(false); 
+                }}
+                className={`absolute top-4 right-4 p-2 rounded-full border-0 cursor-pointer transition-colors ${
+                  darkMode ? "bg-transparent text-stone-400 hover:text-stone-200" : "bg-transparent text-stone-400 hover:text-stone-600"
+                }`}
                 title={t("close")}
               >
                 <X className="w-5 h-5" />
