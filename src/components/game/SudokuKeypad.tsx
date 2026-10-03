@@ -213,7 +213,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                   onNumberSelect(num);
                 }}
                 disabled={!boardState || visualizingBacktrack || (!isGameOver && remainingCount <= 0)}
-                className={`aspect-square w-full relative flex flex-col items-center justify-center p-0 select-none font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
+                className={`aspect-square w-full relative flex flex-col items-center justify-center p-0.5 select-none font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
                   isSelected 
                     ? activeKeypadTheme
                     : (darkMode 
@@ -221,14 +221,14 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                         : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")
                 }`}
               >
-                <div className="flex flex-col items-center justify-center my-auto">
+                <div className="flex flex-col items-center justify-center my-auto select-none gap-0">
                   <span 
-                    className="handwriting font-normal leading-none flex items-center justify-center text-[36px] lg:text-[50px] select-none"
+                    className="handwriting font-normal leading-none flex items-center justify-center text-[clamp(28px,6vw,36px)] sm:text-[32px] lg:text-[36px] xl:text-[38px] select-none"
                   >
                     {num}
                   </span>
                   {showRemainingNumbers && (
-                    <span className={`text-[12px] lg:text-[20px] font-mono leading-none mt-[2px] select-none flex items-center justify-center opacity-75 ${
+                    <span className={`text-[10px] sm:text-[11px] lg:text-[12px] font-mono leading-none mt-0.5 select-none flex items-center justify-center opacity-70 ${
                       isSelected 
                         ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
                             ? "text-white/85 font-semibold"
@@ -237,7 +237,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                               : "text-stone-700 dark:text-zinc-200 font-semibold")
                         : "text-stone-400 dark:text-zinc-500"
                     } ${remainingCount <= 0 ? "opacity-35" : ""}`}>
-                      {remainingCount > 0 ? remainingCount : <Check className="w-3.5 h-3.5 lg:w-4 lg:h-4 stroke-[2.5]" />}
+                      {remainingCount > 0 ? remainingCount : <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" />}
                     </span>
                   )}
                 </div>
