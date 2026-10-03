@@ -213,7 +213,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                   onNumberSelect(num);
                 }}
                 disabled={!boardState || visualizingBacktrack || (!isGameOver && remainingCount <= 0)}
-                className={`aspect-square w-full relative flex flex-col items-center justify-center p-0.5 select-none font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
+                className={`aspect-[1/1.55] lg:aspect-square w-full relative flex flex-col items-center justify-center p-0.5 sm:p-1 lg:p-0.5 select-none font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
                   isSelected 
                     ? activeKeypadTheme
                     : (darkMode 
@@ -221,14 +221,14 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                         : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")
                 }`}
               >
-                <div className="flex flex-col items-center justify-center my-auto h-full w-full select-none leading-none">
+                <div className="flex flex-col items-center justify-center my-auto h-full w-full py-1 sm:py-1.5 lg:py-0 select-none leading-none">
                   <span 
-                    className="handwriting font-normal leading-none flex items-center justify-center text-[clamp(32px,7.5vw,42px)] sm:text-[36px] lg:text-[42px] xl:text-[46px] select-none -mb-1"
+                    className="handwriting font-normal leading-none flex items-center justify-center text-[28px] sm:text-[32px] lg:text-[42px] xl:text-[46px] select-none lg:-mb-1"
                   >
                     {num}
                   </span>
                   {showRemainingNumbers && (
-                    <span className={`text-[11px] sm:text-[12px] lg:text-[13px] xl:text-[14px] font-mono leading-none mt-[0.5px] select-none flex items-center justify-center opacity-75 ${
+                    <span className={`text-[10px] sm:text-[11px] lg:text-[13px] xl:text-[14px] font-mono leading-none mt-0.5 sm:mt-1 lg:mt-[0.5px] select-none flex items-center justify-center opacity-75 ${
                       isSelected 
                         ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
                             ? "text-white/85 font-semibold"
