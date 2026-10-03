@@ -4,7 +4,7 @@ interface ConfettiBurstProps {
   darkMode?: boolean;
   onComplete?: () => void;
   onBurst?: (burstIndex: number) => void;
-  mode?: "all" | "top-only" | "cannon-only";
+  mode?: "all" | "top-only" | "cannon-only" | "top-two-waves";
 }
 
 interface Particle {
@@ -77,9 +77,15 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     // Existing particles are never wiped out or truncated.
     const particles: Particle[] = [];
 
-    // 5 distinct burst waves scheduled across the first 2.0s for 'all', or 5 rhythmic cannon bursts for 'cannon-only', or a single burst for 'top-only'
+    // Distinct burst waves scheduled across timeline:
+    // 'top-two-waves': 2 sequential cascading top waves separated by 2.8s
     const burstSchedule = mode === "top-only"
       ? [{ delay: 0, count: 28, waveIndex: 0 }]
+      : mode === "top-two-waves"
+      ? [
+          { delay: 0, count: 34, waveIndex: 0 },
+          { delay: 2800, count: 34, waveIndex: 1 }
+        ]
       : mode === "cannon-only"
       ? [
           { delay: 0, count: 42, waveIndex: 0 },
@@ -177,7 +183,13 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     };
 
     // Safety timer adjusted for mode
-    const safetyDuration = mode === "cannon-only" ? 4200 : mode === "top-only" ? 3800 : 5200;
+    const safetyDuration = mode === "cannon-only" 
+      ? 4200 
+      : mode === "top-two-waves"
+      ? 6800
+      : mode === "top-only" 
+      ? 3800 
+      : 5200;
     const safetyTimer = setTimeout(() => {
       dispose();
     }, safetyDuration);
@@ -199,12 +211,12 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
       burstSchedule.forEach((burst) => {
         if (elapsed >= burst.delay && !firedBursts.has(burst.waveIndex)) {
           firedBursts.add(burst.waveIndex);
-          if (mode !== "top-only") {
+          if (mode !== "top-only" && mode !== "top-two-waves") {
             spawnCornerCannons(burst.count, now);
             onBurstRef.current?.(burst.waveIndex);
           }
           if (mode !== "cannon-only") {
-            spawnTopCascade(mode === "top-only" ? 36 : 24, now);
+            spawnTopCascade(mode === "top-only" || mode === "top-two-waves" ? 36 : 24, now);
           }
         }
       });

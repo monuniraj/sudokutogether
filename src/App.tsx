@@ -2564,7 +2564,7 @@ useEffect(() => {
   const [previousRecordTime, setPreviousRecordTime] = useState<number | null>(null);
   const [pbStage, setPbStage] = useState<"initial" | "elevating" | "rolling" | "docked" | "salute" | "completed">("initial");
   const [rollingBestTime, setRollingBestTime] = useState<number | null>(null);
-  const [confettiMode, setConfettiMode] = useState<"all" | "top-only" | "cannon-only">("all");
+  const [confettiMode, setConfettiMode] = useState<"all" | "top-only" | "cannon-only" | "top-two-waves">("all");
   const [confettiBurstKey, setConfettiBurstKey] = useState<number>(0);
   const [showCelebrationConfetti, setShowCelebrationConfetti] = useState<boolean>(false);
 
@@ -2640,7 +2640,10 @@ useEffect(() => {
     return false;
   };
 
-  // Synchronized Extended Personal Best (~3.2s Relaxed Sequence)
+  // Re-sequenced Solo Personal Best Choreographed Celebration:
+  // Phase 1 (0ms - 1500ms): Card Rise & Side Cannons Only (Zero top-falling confetti)
+  // Phase 2 (1500ms - 1850ms): Cards Settle Down, Dock into Card Slots & Badge Reveals
+  // Phase 3 (1900ms+): Grand Finale Top-Falling Confetti (2 Cascading Waves: Wave 1 @ 0ms, Wave 2 @ +2.8s)
   useEffect(() => {
     if (!showGameOverModal) {
       setPbStage("initial");
@@ -2652,19 +2655,16 @@ useEffect(() => {
       return;
     }
 
-    // Phase 1 (0.0s - 1.2s: Uninterrupted Confetti Shower):
-    // Top streamer shower falls smoothly; TIME & BEST static; badge hidden; bottom cannons silent
+    // Phase 1: Card Rise & Side Cannons Only
     setPbStage("initial");
     setRollingBestTime(null);
 
-    // Phase 2 (1.2s - 1.8s: Elevation & Bounce):
-    // TIME lifts vertically out of slot and scale-bounces into warm champagne-gold accent
+    // TIME card rises out of slot and scale-bounces into warm champagne-gold accent
     const timerElevate = setTimeout(() => {
       setPbStage("elevating");
-    }, 1200);
+    }, 350);
 
-    // Phase 3 (1.8s - 2.5s: Dual Match & Odometer Sync):
-    // BEST lifts and matches elevated scale; digits roll down rapidly to match TIME exactly
+    // BEST card lifts and matches scale; odometer rolls down to match TIME
     let rollInterval: any = null;
     const timerRoll = setTimeout(() => {
       setPbStage("rolling");
@@ -2689,39 +2689,37 @@ useEffect(() => {
           setRollingBestTime(currentVal);
         }
       }, 50);
-    }, 1800);
+    }, 850);
 
-    // Phase 4a (2.5s: Descent & Badge Reveal):
+    // Phase 2: Cards Settle Down
     // Both numbers smoothly descend and dock back into card slots; 'NEW PERSONAL BEST' badge drops in
     const timerDock = setTimeout(() => {
       setPbStage("docked");
       setRollingBestTime(sessionSeconds);
-    }, 2500);
+    }, 1500);
 
-    // Phase 4b (2.8s: Salute & Victory Claps):
-    // Celebratory corner cannon blast fires in a rhythmic 5-burst cadence + 5 synchronized victory claps
-    const saluteBursts: ReturnType<typeof setTimeout>[] = [];
-    const timerSalute = setTimeout(() => {
-      setPbStage("salute");
-      setConfettiMode("cannon-only");
+    // Cards firmly settle and complete resting
+    const timerComplete = setTimeout(() => {
+      setPbStage("completed");
+    }, 1850);
+
+    // Phase 3: Top-Falling Confetti / Streamers (Grand Finale)
+    // EXACT TRIGGER MOMENT: Trigger immediately upon completion of Phase 2 (cards firmly docked & settled)
+    // Fires 2 cascading waves of falling streamers/confetti (Wave 1 @ 0ms, Wave 2 @ +2.8s)
+    const timerGrandFinale = setTimeout(() => {
+      setConfettiMode("top-two-waves");
       setConfettiBurstKey(prev => prev + 1);
       setShowCelebrationConfetti(true);
       playApplauseSound(true);
-    }, 2800);
-
-    // Phase 4c (3.2s: Completed state):
-    const timerComplete = setTimeout(() => {
-      setPbStage("completed");
-    }, 3200);
+    }, 1900);
 
     return () => {
       clearTimeout(timerElevate);
       clearTimeout(timerRoll);
       if (rollInterval) clearInterval(rollInterval);
       clearTimeout(timerDock);
-      clearTimeout(timerSalute);
       clearTimeout(timerComplete);
-      saluteBursts.forEach(clearTimeout);
+      clearTimeout(timerGrandFinale);
     };
   }, [showGameOverModal, isNewRecordAchieved, challengeMode, previousRecordTime, sessionSeconds]);
 
@@ -5825,9 +5823,11 @@ useEffect(() => {
           playApplauseSound(false);
         }
       } else if (isRecordBroken) {
-        // Solo New Personal Best: Single gentle top streamer shower at t = 0ms (cannon salute & claps fire in Phase 4 at t ≈ 2.8s)
+        // Solo New Personal Best: Phase 1 (Card Rise & Side Cannons Only)
+        // Top-falling confetti is strictly reserved for Phase 3 (Grand Finale after cards settle)
         playRecordBreakSound();
-        setConfettiMode("top-only");
+        setConfettiMode("cannon-only");
+        setConfettiBurstKey(prev => prev + 1);
         setShowCelebrationConfetti(true);
       } else {
         // Standard solo win: Single gentle top shower; clean, static stats without roll animation or badges
