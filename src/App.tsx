@@ -13223,9 +13223,18 @@ useEffect(() => {
                       avatarColor: "#6B7280",
                       isSynced: false
                     });
+                    const emptyBestTimes: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
+                    setPersonalBestTimes(emptyBestTimes);
+                    personalBestTimesRef.current = emptyBestTimes;
+                    setPreviousRecordTime(null);
+                    setIsNewRecordAchieved(false);
+                    setPbStage("idle");
+                    setTotalGamesPlayed(0);
+                    setTotalWinsCount(0);
                     setCompletedGames([]);
                     setSavedGames([]);
                     setBoardState(null);
+                    setCurrentScreen("home");
                     
                     addLog("🗑️ Account and all local data permanently deleted.");
                     setShowDeleteAccountModal(false);
@@ -13360,6 +13369,27 @@ useEffect(() => {
                       onClick={() => {
                         playClickSound();
                         
+                        // 1. Wipe all local and session storage completely
+                        localStorage.clear();
+                        sessionStorage.clear();
+
+                        // 2. Immediately purge all best scores & record states from in-memory React state
+                        const emptyBestTimes: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
+                        setPersonalBestTimes(emptyBestTimes);
+                        personalBestTimesRef.current = emptyBestTimes;
+                        setPreviousRecordTime(null);
+                        setIsNewRecordAchieved(false);
+                        setPbStage("idle");
+
+                        // 3. Reset all stats & match counters
+                        setTotalGamesPlayed(0);
+                        setTotalWinsCount(0);
+                        setSavedGames([]);
+                        setCompletedGames([]);
+                        setHistory([]);
+                        setBoardState(null);
+
+                        // 4. Reset preferences & gameplay settings to factory defaults
                         setDarkMode(false);
                         setSoundEffects(true);
                         setVibrations(true);
@@ -13373,21 +13403,21 @@ useEffect(() => {
                         setMagicNote(false);
                         setHideUsedNumber(false);
                         setNotificationsEnabled(true);
+                        setIsAutoRemoveNotesEnabled(true);
+                        setIsNumberFirstInputMode(false);
+                        setAutoSwitchCompletedNumber(false);
+                        setDifficulty("EASY");
 
-                        const keysToRemove = [];
-                        for (let i = 0; i < localStorage.length; i++) {
-                          const key = localStorage.key(i);
-                          if (key && key.startsWith("sudoku_") && key !== "sudoku_userProfile") {
-                            keysToRemove.push(key);
-                          }
-                        }
-                        keysToRemove.forEach(k => localStorage.removeItem(k));
-                        
-                        setSavedGames([]);
-                        setCompletedGames([]);
-                        setHistory([]);
-                        setBoardState(null);
+                        // 5. Generate fresh guest profile
+                        setUserProfile({
+                          id: "GUEST_" + Math.floor(10000 + Math.random() * 90000),
+                          name: "Guest Voyager",
+                          avatarColor: "#6B7280",
+                          isSynced: false
+                        });
 
+                        // 6. Cleanly navigate back to home screen and close modals without manual page refresh
+                        setCurrentScreen("home");
                         setIsConfirmingFactoryReset(false);
                         setShowResetSettingsModal(false);
                         showToast("Factory reset complete");
