@@ -223,7 +223,11 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               >
                 <div className="flex flex-col items-center justify-center my-auto h-full w-full py-1 sm:py-1.5 lg:py-0 select-none leading-none">
                   <span 
-                    className="handwriting font-normal leading-none flex items-center justify-center text-[28px] sm:text-[32px] lg:text-[42px] xl:text-[46px] select-none lg:-mb-1"
+                    className={`handwriting font-normal leading-none flex items-center justify-center select-none ${
+                      showRemainingNumbers 
+                        ? "text-[28px] sm:text-[32px] lg:text-[42px] xl:text-[46px] lg:-mb-1" 
+                        : "text-[38px] sm:text-[42px] lg:text-[56px] xl:text-[60px] my-auto"
+                    }`}
                   >
                     {num}
                   </span>
