@@ -94,7 +94,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   return (
     <>
       {/* 1. UTILITY BUTTONS: Undo, Erase, Notes, Hint */}
-      <div className="shrink-0 w-full flex flex-col px-0.5 mb-0 overflow-visible" id="game-utility-buttons-deck">
+      <div className="shrink-0 w-full flex flex-col px-0.5 overflow-visible" id="game-utility-buttons-deck">
         <div className="grid grid-cols-4 gap-2 w-full relative z-10 overflow-visible">
           
           {/* UNDO BUTTON */}
@@ -195,7 +195,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
       </div>
 
       {/* 2. NUMBER PAD: 1-9 */}
-      <div className="shrink-0 w-full mt-2.5 sm:mt-3 mb-0 pb-0 lg:mt-3 lg:mb-0 lg:pb-0 overflow-visible px-1 sm:px-0" id="game-number-pad-deck">
+      <div className="shrink-0 w-full my-2.5 lg:my-3 pb-0.5 overflow-visible px-1 sm:px-0" id="game-number-pad-deck">
         <div className="grid grid-cols-9 lg:grid-cols-3 gap-1.5 sm:gap-2 lg:gap-3 w-full select-none overflow-visible">
           {Array.from({ length: 9 }).map((_, i) => {
             const num = i + 1;
