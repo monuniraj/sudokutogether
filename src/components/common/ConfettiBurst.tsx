@@ -78,13 +78,13 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     const particles: Particle[] = [];
 
     // Distinct burst waves scheduled across timeline:
-    // 'top-two-waves': 2 sequential cascading top waves separated by ~1.4s-1.5s
+    // 'top-two-waves': Wave 1 fires corner cannons + top streamers; Wave 2 triggers at exact 1300ms halfway mark
     const burstSchedule = mode === "top-only"
       ? [{ delay: 0, count: 28, waveIndex: 0 }]
       : mode === "top-two-waves"
       ? [
-          { delay: 0, count: 36, waveIndex: 0 },
-          { delay: 1400, count: 38, waveIndex: 1 }
+          { delay: 0, count: 42, waveIndex: 0 },
+          { delay: 1300, count: 38, waveIndex: 1 }
         ]
       : mode === "cannon-only"
       ? [
@@ -210,12 +210,13 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
       burstSchedule.forEach((burst) => {
         if (elapsed >= burst.delay && !firedBursts.has(burst.waveIndex)) {
           firedBursts.add(burst.waveIndex);
-          if (mode !== "top-only" && mode !== "top-two-waves") {
+          // Corner cannons fire for 'all', 'cannon-only', and on Wave 1 of 'top-two-waves'
+          if (mode !== "top-only" && (mode !== "top-two-waves" || burst.waveIndex === 0)) {
             spawnCornerCannons(burst.count, now);
             onBurstRef.current?.(burst.waveIndex);
           }
           if (mode !== "cannon-only") {
-            spawnTopCascade(mode === "top-only" || mode === "top-two-waves" ? 36 : 24, now);
+            spawnTopCascade(mode === "top-only" || mode === "top-two-waves" ? 38 : 24, now);
           }
         }
       });

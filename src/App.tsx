@@ -2697,35 +2697,30 @@ useEffect(() => {
       }, 50);
     }, 2100);
 
-    // PHASE 3 (3200ms - 4800ms): CARDS DESCENT & WAVE 1 TOP RAIN
-    // At T = 3200ms: Cards start descending back into their slots; 'NEW PERSONAL BEST' badge drops in
+    // PHASE 3 (3200ms - 4800ms): CARD DOCKING & WAVE 1 WATERFALL LAUNCH (T = 0s in Finale Phase)
+    // At T = 3200ms: Both cards dock into place; 'NEW PERSONAL BEST' badge drops in;
+    // Bottom corner cannons fire upward and Wave 1 top falling ribbons/confetti cascade downward!
     const timerDock = setTimeout(() => {
       setPbStage("docked");
       setRollingBestTime(sessionSeconds);
-    }, 3200);
-
-    // At T = 3400ms (just before cards fully rest):
-    // TRIGGER TOP FALLING CONFETTI WAVE 1 + victory applause sound
-    const timerTopWave1 = setTimeout(() => {
       setConfettiMode("top-two-waves");
       setConfettiBurstKey(prev => prev + 1);
       setShowCelebrationConfetti(true);
       playApplauseSound(true);
-    }, 3400);
+    }, 3200);
 
     // At T = 3600ms: Cards complete settling firmly in place
     const timerComplete = setTimeout(() => {
       setPbStage("completed");
     }, 3600);
 
-    // PHASE 4 (4800ms - 6500ms): Handled seamlessly inside ConfettiBurst top-two-waves (Wave 2 delay: 1400ms)
+    // PHASE 4: WAVE 2 HALFWAY HANDOFF (Exact 1300ms halfway drift mark handled inside ConfettiBurst)
 
     return () => {
       clearTimeout(timerElevate);
       clearTimeout(timerRoll);
       if (rollInterval) clearInterval(rollInterval);
       clearTimeout(timerDock);
-      clearTimeout(timerTopWave1);
       clearTimeout(timerComplete);
     };
   }, [showGameOverModal, isNewRecordAchieved, challengeMode, previousRecordTime, sessionSeconds]);
