@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pencil, Check, Lock, Zap, Globe } from "lucide-react";
+import { Pencil, Check, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -325,9 +325,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* Dark Mode Theme */}
             <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
-                {t("darkModeTheme")}
-              </span>
+              <div className="flex items-center gap-2">
+                <Moon className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
+                  {t("darkModeTheme")}
+                </span>
+              </div>
               <button
                 onClick={() => {
                   applyThemeToggle(!darkMode, setDarkMode, soundEffects, vibrations);
@@ -348,9 +351,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* Sound Effects */}
             <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
-                {t("soundEffects")}
-              </span>
+              <div className="flex items-center gap-2">
+                <Volume2 className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
+                  {t("soundEffects")}
+                </span>
+              </div>
               <button
                 onClick={() => {
                   setSoundEffects(!soundEffects);
@@ -375,9 +381,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* Haptic Vibrations */}
             <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
-                {t("hapticVibrations")}
-              </span>
+              <div className="flex items-center gap-2">
+                <Vibrate className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
+                  {t("hapticVibrations")}
+                </span>
+              </div>
               <button
                 onClick={() => {
                   playClickSound();
@@ -409,9 +418,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Push Notifications */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
-                <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
-                  {t("pushNotifications")}
-                </span>
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                  <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
+                    {t("pushNotifications")}
+                  </span>
+                </div>
                 <button
                   disabled
                   title={t("pushNotificationsDesc")}
