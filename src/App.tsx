@@ -2640,14 +2640,16 @@ useEffect(() => {
     return false;
   };
 
-  // Re-sequenced Solo Personal Best Choreographed Celebration:
-  // Phase 1 (0ms - 1500ms): Card Rise & Side Cannons Only (Zero top-falling confetti)
-  // Phase 2 (1500ms - 1850ms): Cards Settle Down, Dock into Card Slots & Badge Reveals
-  // Phase 3 (1900ms+): Grand Finale Top-Falling Confetti (2 Cascading Waves: Wave 1 @ 0ms, Wave 2 @ +2.8s)
+  // Majestic 4-Phase Solo Personal Best Choreographed Celebration (~6.5s Total Duration):
+  // Phase 1 (0ms - 1600ms): Glow & Bottom-Up Side Cannons Only (Cards rest in slots with soft pulse)
+  // Phase 2 (1600ms - 3200ms): Cards Elevation & Odometer Match (Elevate @ 1600ms, Roll @ 2100ms, Lock @ 3000ms)
+  // Phase 3 (3200ms - 4800ms): Cards Descent & Wave 1 Top Rain (Dock @ 3200ms, Wave 1 @ 3400ms, Settle @ 3600ms)
+  // Phase 4 (4800ms - 6500ms): Wave 2 Confetti Finale (Fires ~1.4s after Wave 1 via ConfettiBurst top-two-waves)
   useEffect(() => {
     if (!showGameOverModal) {
       setPbStage("initial");
       setRollingBestTime(null);
+      setShowCelebrationConfetti(false);
       return;
     }
     if (!isNewRecordAchieved || challengeMode) {
@@ -2655,16 +2657,19 @@ useEffect(() => {
       return;
     }
 
-    // Phase 1: Card Rise & Side Cannons Only
+    // PHASE 1 (0ms - 1600ms): GLOW & BOTTOM-UP SIDE CANNONS ONLY
+    // At T = 0ms: Open modal. Cards stay resting in base slots with soft glowing highlight pulse.
     setPbStage("initial");
     setRollingBestTime(null);
 
-    // TIME card rises out of slot and scale-bounces into warm champagne-gold accent
+    // PHASE 2 (1600ms - 3200ms): CARDS ELEVATION & ODOMETER MATCH
+    // At T = 1600ms (just as Phase 1 crackers drop away):
+    // Old and New Record cards elevate smoothly and independently above the board.
     const timerElevate = setTimeout(() => {
       setPbStage("elevating");
-    }, 350);
+    }, 1600);
 
-    // BEST card lifts and matches scale; odometer rolls down to match TIME
+    // At T = 2100ms: Run odometer roll / time matching sequence (from 2100ms to 3000ms = 900ms)
     let rollInterval: any = null;
     const timerRoll = setTimeout(() => {
       setPbStage("rolling");
@@ -2674,7 +2679,7 @@ useEffect(() => {
       const targetTime = sessionSeconds;
       const totalDiff = startBest - targetTime;
       let step = 0;
-      const totalSteps = 12; // 12 steps over 600ms = 50ms per step
+      const totalSteps = 18; // 18 steps * 50ms = 900ms duration (locks precisely at T = 3000ms)
       setRollingBestTime(startBest);
       rollInterval = setInterval(() => {
         step++;
@@ -2682,6 +2687,7 @@ useEffect(() => {
           clearInterval(rollInterval);
           rollInterval = null;
           setRollingBestTime(targetTime);
+          // At T = 3000ms: Odometer locks on final time, victory chime / badge sound triggers
           playRecordOverwriteSound();
         } else {
           const progress = step / totalSteps;
@@ -2689,37 +2695,38 @@ useEffect(() => {
           setRollingBestTime(currentVal);
         }
       }, 50);
-    }, 850);
+    }, 2100);
 
-    // Phase 2: Cards Settle Down
-    // Both numbers smoothly descend and dock back into card slots; 'NEW PERSONAL BEST' badge drops in
+    // PHASE 3 (3200ms - 4800ms): CARDS DESCENT & WAVE 1 TOP RAIN
+    // At T = 3200ms: Cards start descending back into their slots; 'NEW PERSONAL BEST' badge drops in
     const timerDock = setTimeout(() => {
       setPbStage("docked");
       setRollingBestTime(sessionSeconds);
-    }, 1500);
+    }, 3200);
 
-    // Cards firmly settle and complete resting
-    const timerComplete = setTimeout(() => {
-      setPbStage("completed");
-    }, 1850);
-
-    // Phase 3: Top-Falling Confetti / Streamers (Grand Finale)
-    // EXACT TRIGGER MOMENT: Trigger immediately upon completion of Phase 2 (cards firmly docked & settled)
-    // Fires 2 cascading waves of falling streamers/confetti (Wave 1 @ 0ms, Wave 2 @ +2.8s)
-    const timerGrandFinale = setTimeout(() => {
+    // At T = 3400ms (just before cards fully rest):
+    // TRIGGER TOP FALLING CONFETTI WAVE 1 + victory applause sound
+    const timerTopWave1 = setTimeout(() => {
       setConfettiMode("top-two-waves");
       setConfettiBurstKey(prev => prev + 1);
       setShowCelebrationConfetti(true);
       playApplauseSound(true);
-    }, 1900);
+    }, 3400);
+
+    // At T = 3600ms: Cards complete settling firmly in place
+    const timerComplete = setTimeout(() => {
+      setPbStage("completed");
+    }, 3600);
+
+    // PHASE 4 (4800ms - 6500ms): Handled seamlessly inside ConfettiBurst top-two-waves (Wave 2 delay: 1400ms)
 
     return () => {
       clearTimeout(timerElevate);
       clearTimeout(timerRoll);
       if (rollInterval) clearInterval(rollInterval);
       clearTimeout(timerDock);
+      clearTimeout(timerTopWave1);
       clearTimeout(timerComplete);
-      clearTimeout(timerGrandFinale);
     };
   }, [showGameOverModal, isNewRecordAchieved, challengeMode, previousRecordTime, sessionSeconds]);
 
@@ -10465,22 +10472,26 @@ useEffect(() => {
                                   : { duration: 0.4, ease: "easeOut" }
                               }
                               className={`flex flex-col items-center p-1.5 rounded-xl transition-all duration-300 ${
-                                isNewRecordAchieved && !isFailed && pbStage !== "initial"
-                                  ? pbStage === "completed"
+                                isNewRecordAchieved && !isFailed
+                                  ? pbStage === "initial"
+                                    ? (darkMode 
+                                        ? "bg-amber-400/10 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#F3DFB0]" 
+                                        : "bg-amber-50/80 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#9B7020]")
+                                    : pbStage === "completed"
                                     ? (darkMode ? "bg-amber-400/10 text-[#F3DFB0]" : "bg-[#FDF6E9] text-[#9B7020]")
                                     : (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
                                   : ""
                               }`}
                             >
                               <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${
-                                isNewRecordAchieved && !isFailed && pbStage !== "initial"
+                                isNewRecordAchieved && !isFailed
                                   ? (darkMode ? "text-[#E3CF9E]" : "text-[#9B7020]")
                                   : (darkMode ? "text-zinc-400" : "text-stone-500")
                               }`}>
                                 {t("timeLabel")}
                               </span>
                               <span className={`text-base sm:text-lg font-mono font-bold tracking-tight ${
-                                isNewRecordAchieved && !isFailed && pbStage !== "initial"
+                                isNewRecordAchieved && !isFailed
                                   ? (darkMode ? "text-[#F3DFB0]" : "text-[#9B7020]")
                                   : (darkMode ? "text-white" : "text-stone-900")
                               }`}>
@@ -10504,32 +10515,42 @@ useEffect(() => {
                             {isNewRecordAchieved && !isFailed ? (
                               <motion.div 
                                 animate={
-                                  pbStage === "rolling"
+                                  pbStage === "elevating"
+                                    ? { y: [0, -10, -8], scale: [1.0, 1.2, 1.08] }
+                                    : pbStage === "rolling"
                                     ? { y: -8, scale: 1.08 }
                                     : { y: 0, scale: 1.0 }
                                 }
                                 transition={
-                                  pbStage === "rolling"
-                                    ? { duration: 0.35, ease: "easeOut" }
+                                  pbStage === "elevating"
+                                    ? { duration: 0.65, ease: "easeOut", delay: 0.05 }
+                                    : pbStage === "rolling"
+                                    ? { duration: 0.25 }
                                     : { duration: 0.4, ease: "easeOut" }
                                 }
                                 className={`flex flex-col items-center p-1.5 rounded-xl transition-all duration-300 ${
-                                  pbStage === "completed"
-                                    ? (darkMode ? "bg-amber-400/10 text-[#F3DFB0]" : "bg-[#FDF6E9] text-[#9B7020]")
-                                    : (pbStage === "rolling" || pbStage === "docked" || pbStage === "salute")
-                                    ? (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
+                                  isNewRecordAchieved && !isFailed
+                                    ? pbStage === "initial"
+                                      ? (darkMode 
+                                          ? "bg-amber-400/10 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#F3DFB0]" 
+                                          : "bg-amber-50/80 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#9B7020]")
+                                      : pbStage === "completed"
+                                      ? (darkMode ? "bg-amber-400/10 text-[#F3DFB0]" : "bg-[#FDF6E9] text-[#9B7020]")
+                                      : (pbStage === "elevating" || pbStage === "rolling" || pbStage === "docked" || pbStage === "salute")
+                                      ? (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
+                                      : ""
                                     : ""
                                 }`}
                               >
                                 <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${
-                                  pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
+                                  pbStage === "initial" || pbStage === "elevating" || pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
                                     ? (darkMode ? "text-[#E3CF9E]" : "text-[#9B7020]")
                                     : (darkMode ? "text-zinc-400" : "text-stone-500")
                                 }`}>
                                   {t("bestLabel")}
                                 </span>
                                 <span className={`text-base sm:text-lg font-mono font-bold tracking-tight ${
-                                  pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
+                                  pbStage === "initial" || pbStage === "elevating" || pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
                                     ? (darkMode ? "text-[#F3DFB0]" : "text-[#9B7020]")
                                     : (darkMode ? "text-zinc-400" : "text-stone-500")
                                 }`}>

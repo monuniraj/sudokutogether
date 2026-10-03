@@ -78,21 +78,20 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     const particles: Particle[] = [];
 
     // Distinct burst waves scheduled across timeline:
-    // 'top-two-waves': 2 sequential cascading top waves separated by 2.8s
+    // 'top-two-waves': 2 sequential cascading top waves separated by ~1.4s-1.5s
     const burstSchedule = mode === "top-only"
       ? [{ delay: 0, count: 28, waveIndex: 0 }]
       : mode === "top-two-waves"
       ? [
-          { delay: 0, count: 34, waveIndex: 0 },
-          { delay: 2800, count: 34, waveIndex: 1 }
+          { delay: 0, count: 36, waveIndex: 0 },
+          { delay: 1400, count: 38, waveIndex: 1 }
         ]
       : mode === "cannon-only"
       ? [
           { delay: 0, count: 42, waveIndex: 0 },
-          { delay: 440, count: 38, waveIndex: 1 },
-          { delay: 880, count: 38, waveIndex: 2 },
-          { delay: 1320, count: 34, waveIndex: 3 },
-          { delay: 1760, count: 34, waveIndex: 4 }
+          { delay: 360, count: 38, waveIndex: 1 },
+          { delay: 720, count: 36, waveIndex: 2 },
+          { delay: 1080, count: 32, waveIndex: 3 }
         ]
       : [
           { delay: 0, count: 40, waveIndex: 0 },
@@ -182,14 +181,14 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
       onCompleteRef.current?.();
     };
 
-    // Safety timer adjusted for mode
+    // Safety timer adjusted for mode (extended to 7500ms for full cinematic celebration lifecycle)
     const safetyDuration = mode === "cannon-only" 
       ? 4200 
       : mode === "top-two-waves"
-      ? 6800
+      ? 7500
       : mode === "top-only" 
       ? 3800 
-      : 5200;
+      : 7500;
     const safetyTimer = setTimeout(() => {
       dispose();
     }, safetyDuration);
