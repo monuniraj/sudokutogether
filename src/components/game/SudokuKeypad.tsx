@@ -105,16 +105,33 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onUndo();
             }}
             disabled={!boardState || isGameOver || historyLength === 0}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:h-[52px] w-full p-1 sm:p-1.5 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:h-[52px] w-full relative transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? "bg-zinc-900 border border-sky-950 hover:bg-zinc-850 text-[#38BDF8] active:bg-zinc-800" 
                 : "bg-[#E0F2FE] hover:bg-[#bae6fd] active:bg-[#C0E8FF] text-[#0369A1] shadow-[0_8px_16px_rgba(3,105,161,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
             }`}
+            style={{ containerType: 'size' }}
           >
-            <RotateCcw className={`w-5 h-5 sm:w-6 sm:h-6 lg:w-5 lg:h-5 shrink-0 stroke-[2] select-none ${darkMode ? "text-[#38BDF8]" : "text-[#0369A1]"}`} />
-            <span className="text-[10px] sm:text-xs lg:text-[11px] font-medium tracking-tight leading-tight select-none mt-1 truncate w-full text-center px-0.5">
-              {t("undo")}
-            </span>
+            {/* Outer 10% Symmetrical Safe-Zone */}
+            <div className="absolute inset-0 p-[10%] flex flex-col items-center justify-between select-none pointer-events-none">
+              {/* Core 80% Area */}
+              <div className="w-full h-full flex flex-col items-center justify-between overflow-visible leading-none">
+                {/* Icon Track: ~58% of Core Height */}
+                <div className="h-[58%] w-full flex items-center justify-center overflow-visible shrink-0">
+                  <RotateCcw className="h-full w-auto max-h-[34cqmin] max-w-[34cqmin] aspect-square stroke-[2] select-none text-inherit shrink-0" />
+                </div>
+
+                {/* Micro-Gap: ~8% */}
+                <div className="h-[8%] shrink-0" aria-hidden="true" />
+
+                {/* Label Track: ~34% of Core Height */}
+                <div className="h-[34%] w-full flex items-center justify-center overflow-visible shrink-0">
+                  <span className="text-[clamp(9px,17cqmin,12px)] font-medium tracking-tight leading-none text-center truncate max-w-full select-none px-0.5">
+                    {t("undo")}
+                  </span>
+                </div>
+              </div>
+            </div>
           </button>
 
           {/* ERASE BUTTON */}
@@ -129,16 +146,33 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onErase();
             }}
             disabled={!boardState || isGameOver}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:h-[52px] w-full p-1 sm:p-1.5 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:h-[52px] w-full relative transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? "bg-zinc-900 border border-pink-950 hover:bg-zinc-850 text-[#F472B6] active:bg-zinc-800" 
                 : "bg-[#FCE7F3] hover:bg-[#FBCFE8] active:bg-[#F9A8D4] text-[#9D174D] shadow-[0_8px_16px_rgba(157,23,77,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
             }`}
+            style={{ containerType: 'size' }}
           >
-            <Trash2 className={`w-5 h-5 sm:w-6 sm:h-6 lg:w-5 lg:h-5 shrink-0 stroke-[2] select-none ${darkMode ? "text-[#F472B6]" : "text-[#9D174D]"}`} />
-            <span className="text-[10px] sm:text-xs lg:text-[11px] font-medium tracking-tight leading-tight select-none mt-1 truncate w-full text-center px-0.5">
-              {t("erase")}
-            </span>
+            {/* Outer 10% Symmetrical Safe-Zone */}
+            <div className="absolute inset-0 p-[10%] flex flex-col items-center justify-between select-none pointer-events-none">
+              {/* Core 80% Area */}
+              <div className="w-full h-full flex flex-col items-center justify-between overflow-visible leading-none">
+                {/* Icon Track: ~58% of Core Height */}
+                <div className="h-[58%] w-full flex items-center justify-center overflow-visible shrink-0">
+                  <Trash2 className="h-full w-auto max-h-[34cqmin] max-w-[34cqmin] aspect-square stroke-[2] select-none text-inherit shrink-0" />
+                </div>
+
+                {/* Micro-Gap: ~8% */}
+                <div className="h-[8%] shrink-0" aria-hidden="true" />
+
+                {/* Label Track: ~34% of Core Height */}
+                <div className="h-[34%] w-full flex items-center justify-center overflow-visible shrink-0">
+                  <span className="text-[clamp(9px,17cqmin,12px)] font-medium tracking-tight leading-none text-center truncate max-w-full select-none px-0.5">
+                    {t("erase")}
+                  </span>
+                </div>
+              </div>
+            </div>
           </button>
 
           {/* NOTES ON/OFF BUTTON */}
@@ -149,7 +183,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onTogglePencilMode();
             }}
             disabled={!boardState || isGameOver}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:h-[52px] w-full p-1 sm:p-1.5 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:h-[52px] w-full relative transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? (pencilMode 
                     ? "bg-[#713f12] hover:bg-[#854d0e] active:bg-[#854d0e] text-[#facc15] font-black border border-yellow-950" 
@@ -158,11 +192,28 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                     ? "bg-[#FFF99D] hover:bg-[#FEF08A] active:bg-[#FDE047] text-[#854D0E] font-black shadow-[0_8px_16px_rgba(133,77,14,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" 
                     : "bg-[#F3E8FF] hover:bg-[#E9D5FF] active:bg-[#D8B4FE] text-[#6B21A8] shadow-[0_8px_16px_rgba(107,33,168,0.06),_0_2px_4px_rgba(0,0,0,0.02)]")
             }`}
+            style={{ containerType: 'size' }}
           >
-            <Pencil className="w-5 h-5 sm:w-6 sm:h-6 lg:w-5 lg:h-5 shrink-0 stroke-[2] select-none" />
-            <span className="text-[10px] sm:text-xs lg:text-[11px] font-medium tracking-tight leading-tight select-none mt-1 truncate w-full text-center px-0.5">
-              {pencilMode ? t("notesOn") : t("notesOff")}
-            </span>
+            {/* Outer 10% Symmetrical Safe-Zone */}
+            <div className="absolute inset-0 p-[10%] flex flex-col items-center justify-between select-none pointer-events-none">
+              {/* Core 80% Area */}
+              <div className="w-full h-full flex flex-col items-center justify-between overflow-visible leading-none">
+                {/* Icon Track: ~58% of Core Height */}
+                <div className="h-[58%] w-full flex items-center justify-center overflow-visible shrink-0">
+                  <Pencil className="h-full w-auto max-h-[34cqmin] max-w-[34cqmin] aspect-square stroke-[2] select-none text-inherit shrink-0" />
+                </div>
+
+                {/* Micro-Gap: ~8% */}
+                <div className="h-[8%] shrink-0" aria-hidden="true" />
+
+                {/* Label Track: ~34% of Core Height */}
+                <div className="h-[34%] w-full flex items-center justify-center overflow-visible shrink-0">
+                  <span className="text-[clamp(9px,17cqmin,12px)] font-medium tracking-tight leading-none text-center truncate max-w-full select-none px-0.5">
+                    {pencilMode ? t("notesOn") : t("notesOff")}
+                  </span>
+                </div>
+              </div>
+            </div>
           </button>
 
           {/* HINT BUTTON */}
@@ -173,23 +224,40 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               onHint();
             }}
             disabled={!boardState || isGameOver}
-            className={`aspect-[1.12/1] lg:aspect-auto lg:h-[52px] w-full p-1 sm:p-1.5 transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl flex flex-col items-center justify-center active:scale-95 active:shadow-none border-none shadow-md ${
+            className={`aspect-[1.12/1] lg:aspect-auto lg:h-[52px] w-full relative transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? "bg-zinc-900 border border-emerald-950 hover:bg-zinc-850 text-[#34D399] active:bg-[#135236]" 
                 : "bg-[#E6F4EA] hover:bg-[#D1FAE5] text-[#135236] shadow-[0_8px_16px_rgba(19,82,54,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
             }`}
+            style={{ containerType: 'size' }}
           >
-            <div className="relative pointer-events-none flex items-center justify-center">
-              <Lightbulb className={`w-5 h-5 sm:w-6 sm:h-6 lg:w-5 lg:h-5 shrink-0 stroke-[2] select-none ${darkMode ? "text-[#34D399]" : "text-[#135236]"}`} />
-              <span className={`absolute -top-1.5 -right-2 text-[7px] lg:text-[8px] font-mono font-black rounded-full h-3.5 w-3.5 lg:h-4 lg:w-4 border flex items-center justify-center shadow-sm ${
-                darkMode ? "bg-[#FBCFE8] text-[#831843] border-[#FBCFE8]" : "bg-[#FCE7F3] text-[#9D174D] border-white"
-              }`}>
-                {effectiveHintCount}
-              </span>
+            {/* Outer 10% Symmetrical Safe-Zone */}
+            <div className="absolute inset-0 p-[10%] flex flex-col items-center justify-between select-none pointer-events-none">
+              {/* Core 80% Area */}
+              <div className="w-full h-full flex flex-col items-center justify-between overflow-visible leading-none">
+                {/* Icon Track: ~58% of Core Height with Hint Badge */}
+                <div className="h-[58%] w-full flex items-center justify-center overflow-visible shrink-0">
+                  <div className="relative flex items-center justify-center h-full aspect-square max-h-[34cqmin] max-w-[34cqmin] shrink-0">
+                    <Lightbulb className="h-full w-auto aspect-square stroke-[2] select-none text-inherit shrink-0" />
+                    <span className={`absolute -top-1 -right-1.5 text-[8px] sm:text-[9px] font-mono font-black rounded-full h-3.5 w-3.5 sm:h-4 sm:w-4 border flex items-center justify-center shadow-sm select-none ${
+                      darkMode ? "bg-[#FBCFE8] text-[#831843] border-[#FBCFE8]" : "bg-[#FCE7F3] text-[#9D174D] border-white"
+                    }`}>
+                      {effectiveHintCount}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Micro-Gap: ~8% */}
+                <div className="h-[8%] shrink-0" aria-hidden="true" />
+
+                {/* Label Track: ~34% of Core Height */}
+                <div className="h-[34%] w-full flex items-center justify-center overflow-visible shrink-0">
+                  <span className="text-[clamp(9px,17cqmin,12px)] font-medium tracking-tight leading-none text-center truncate max-w-full select-none px-0.5">
+                    {t("hint")}
+                  </span>
+                </div>
+              </div>
             </div>
-            <span className="text-[10px] sm:text-xs lg:text-[11px] font-medium tracking-tight leading-tight select-none mt-1 truncate w-full text-center px-0.5">
-              {t("hint")}
-            </span>
           </button>
         </div>
       </div>
