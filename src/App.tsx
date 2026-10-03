@@ -8983,9 +8983,9 @@ useEffect(() => {
                               viewBox="0 0 24 24" 
                               fill="currentColor"
                             >
-                              {/* Two vertical bars: identical original height (y=4 to y=20), but width cut by 50% from 4px down to 2px */}
-                              <rect x="7" y="4" width="2" height="16" rx="1" />
-                              <rect x="15" y="4" width="2" height="16" rx="1" />
+                              {/* Two vertical bars: height y=4 to y=20, bar width set to 3px for optimal weight balance */}
+                              <rect x="6.5" y="4" width="3" height="16" rx="1" />
+                              <rect x="14.5" y="4" width="3" height="16" rx="1" />
                             </svg>
                           )}
                         </span>
