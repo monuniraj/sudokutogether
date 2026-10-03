@@ -8740,14 +8740,14 @@ useEffect(() => {
                     setIsTimerPaused(false);
                     navigateToScreen("game");
                   }}
-                  className={`w-full border-none p-6 md:p-8 mt-4 sm:mt-6 text-center font-black text-lg md:text-2xl tracking-wider uppercase transition-all duration-150 select-none rounded-[20px] active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md ${
+                  className={`w-full border-none py-3 px-4 mt-3 sm:mt-4 text-center font-bold text-sm sm:text-base tracking-wider uppercase transition-all duration-150 select-none rounded-xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md leading-none ${
                     darkMode 
                       ? "bg-[#4c0519] hover:bg-[#4c0519]/80 text-[#fecdd3]" 
                       : "bg-[#FFE4E6] hover:bg-[#FFE4E6]/80 active:bg-[#FBCFE8] text-[#9D174D]"
                   }`}
                 >
-                  <span className="flex items-center justify-center gap-2.5 sm:gap-3 leading-none">
-                    <span className="text-sm sm:text-base md:text-lg animate-pulse select-none leading-none">▶</span>
+                  <span className="flex items-center justify-center gap-2 sm:gap-2.5 leading-none">
+                    <span className="text-xs sm:text-sm animate-pulse select-none leading-none">▶</span>
                     <span>{t("newGame").toUpperCase()}</span>
                   </span>
                 </button>
@@ -8974,15 +8974,11 @@ useEffect(() => {
                         aria-label={isTimerPaused ? "Resume Game" : "Pause Game"}
                         id="hud-timer-pause-button"
                       >
-                        <span className={`flex items-center justify-center shrink-0 w-4 h-4 sm:w-[18px] sm:h-[18px] ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"} transition-transform duration-150 group-active:scale-90`}>
+                        <span className={`flex items-center justify-center shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"} transition-transform duration-150 group-active:scale-90`}>
                           {isTimerPaused ? (
-                            <svg className="w-4 h-4 sm:w-[18px] sm:h-[18px] fill-current" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
+                            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current stroke-[1.75]" />
                           ) : (
-                            <svg className="w-4 h-4 sm:w-[18px] sm:h-[18px] fill-current" viewBox="0 0 24 24">
-                              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                            </svg>
+                            <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current stroke-[1.75]" />
                           )}
                         </span>
                         <span 
