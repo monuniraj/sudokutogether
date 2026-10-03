@@ -78,13 +78,13 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     const particles: Particle[] = [];
 
     // Distinct burst waves scheduled across timeline:
-    // 'top-two-waves': Wave 1 fires corner cannons + top streamers; Wave 2 triggers at exact 1300ms halfway mark
+    // 'top-two-waves': Wave 1 fires corner cannons + top streamers; Wave 2 triggers at exact 1400ms halfway mark
     const burstSchedule = mode === "top-only"
       ? [{ delay: 0, count: 28, waveIndex: 0 }]
       : mode === "top-two-waves"
       ? [
           { delay: 0, count: 42, waveIndex: 0 },
-          { delay: 1300, count: 38, waveIndex: 1 }
+          { delay: 1400, count: 38, waveIndex: 1 }
         ]
       : mode === "cannon-only"
       ? [
@@ -103,12 +103,11 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
 
     const firedBursts = new Set<number>();
 
-    // Spawn corner cannons positioned at bottom-left and bottom-right of the modal card
+    // Spawn corner cannons shooting upward from { x: 0.15, y: 0.95 } and { x: 0.85, y: 0.95 }
     const spawnCornerCannons = (count: number, currentTime: number) => {
-      const cardHalfWidth = Math.min(width * 0.44, 250);
-      const leftOriginX = Math.max(16, width * 0.5 - cardHalfWidth - 16);
-      const rightOriginX = Math.min(width - 16, width * 0.5 + cardHalfWidth + 16);
-      const cannonY = Math.min(height * 0.88, height * 0.5 + 230);
+      const leftOriginX = width * 0.15;
+      const rightOriginX = width * 0.85;
+      const cannonY = height * 0.95;
 
       for (let i = 0; i < count; i++) {
         const fromLeft = i % 2 === 0;
@@ -120,7 +119,7 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
         const baseAngle = fromLeft ? -Math.PI * 0.36 : -Math.PI * 0.64;
         const angleSpread = (Math.random() - 0.5) * 0.36;
         const angle = baseAngle + angleSpread;
-        const speed = 11 + Math.random() * 7;
+        const speed = 13 + Math.random() * 8;
 
         const shapeRand = Math.random();
         particles.push({

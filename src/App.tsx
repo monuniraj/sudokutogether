@@ -2562,11 +2562,66 @@ useEffect(() => {
 
   const [isNewRecordAchieved, setIsNewRecordAchieved] = useState<boolean>(false);
   const [previousRecordTime, setPreviousRecordTime] = useState<number | null>(null);
-  const [pbStage, setPbStage] = useState<"initial" | "elevating" | "rolling" | "docked" | "salute" | "completed">("initial");
+  const [pbStage, setPbStage] = useState<"idle" | "resting" | "initial" | "elevating" | "rolling" | "docked" | "salute" | "completed">("idle");
   const [rollingBestTime, setRollingBestTime] = useState<number | null>(null);
   const [confettiMode, setConfettiMode] = useState<"all" | "top-only" | "cannon-only" | "top-two-waves">("all");
   const [confettiBurstKey, setConfettiBurstKey] = useState<number>(0);
   const [showCelebrationConfetti, setShowCelebrationConfetti] = useState<boolean>(false);
+
+  // Dedicated refs to cleanly manage all 4-beat celebration timeouts and odometer animation interval
+  const pbTimers = useRef<{
+    elevate?: ReturnType<typeof setTimeout>;
+    roll?: ReturnType<typeof setTimeout>;
+    lock?: ReturnType<typeof setTimeout>;
+    dock?: ReturnType<typeof setTimeout>;
+    dualBlast?: ReturnType<typeof setTimeout>;
+    cleanup?: ReturnType<typeof setTimeout>;
+  }>({});
+  const odometerInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearPbCelebrationTimers = () => {
+    if (pbTimers.current.elevate) clearTimeout(pbTimers.current.elevate);
+    if (pbTimers.current.roll) clearTimeout(pbTimers.current.roll);
+    if (pbTimers.current.lock) clearTimeout(pbTimers.current.lock);
+    if (pbTimers.current.dock) clearTimeout(pbTimers.current.dock);
+    if (pbTimers.current.dualBlast) clearTimeout(pbTimers.current.dualBlast);
+    if (pbTimers.current.cleanup) clearTimeout(pbTimers.current.cleanup);
+    pbTimers.current = {};
+    if (odometerInterval.current) {
+      clearInterval(odometerInterval.current);
+      odometerInterval.current = null;
+    }
+  };
+
+  // Odometer roll sequence: smoothly steps through times with rapid slot ticking from T = 2200ms to 3300ms
+  const runOdometerRollSequence = () => {
+    setPbStage("rolling");
+    const startBest = previousRecordTime && previousRecordTime > 0 
+      ? previousRecordTime 
+      : (sessionSeconds + Math.max(14, Math.floor(sessionSeconds * 0.18)));
+    const targetTime = sessionSeconds;
+    const totalDiff = startBest - targetTime;
+    let step = 0;
+    const totalSteps = 22; // 22 steps * 50ms = 1100ms
+    setRollingBestTime(startBest);
+
+    if (odometerInterval.current) clearInterval(odometerInterval.current);
+    odometerInterval.current = setInterval(() => {
+      step++;
+      playSlotTickSound();
+      if (step >= totalSteps) {
+        if (odometerInterval.current) {
+          clearInterval(odometerInterval.current);
+          odometerInterval.current = null;
+        }
+        setRollingBestTime(targetTime);
+      } else {
+        const progress = step / totalSteps;
+        const currentVal = Math.max(targetTime, Math.round(startBest - totalDiff * progress));
+        setRollingBestTime(currentVal);
+      }
+    }, 50);
+  };
 
   // Strict Particle Canvas Lifecycle Guard: immediately unmount & dispose confetti whenever end-game is dismissed, any secondary modal is opened, or screen changes
   useEffect(() => {
@@ -2640,88 +2695,74 @@ useEffect(() => {
     return false;
   };
 
-  // Majestic 4-Phase Solo Personal Best Choreographed Celebration (~6.5s Total Duration):
-  // Phase 1 (0ms - 1600ms): Glow & Bottom-Up Side Cannons Only (Cards rest in slots with soft pulse)
-  // Phase 2 (1600ms - 3200ms): Cards Elevation & Odometer Match (Elevate @ 1600ms, Roll @ 2100ms, Lock @ 3000ms)
-  // Phase 3 (3200ms - 4800ms): Cards Descent & Wave 1 Top Rain (Dock @ 3200ms, Wave 1 @ 3400ms, Settle @ 3600ms)
-  // Phase 4 (4800ms - 6500ms): Wave 2 Confetti Finale (Fires ~1.4s after Wave 1 via ConfettiBurst top-two-waves)
+  // STRICT 4-BEAT PSYCHOLOGY & AUDIO TIMELINE (~8.0s Total Lifecycle):
+  // Beat 1 (0ms - 1600ms): The Impact & Initial Burst (Cards idle at base slots, pulsing with soft accent glow)
+  // Beat 2 (1600ms - 3600ms): The Ascension & Time Lock (Elevate @ 1600ms, Odometer Roll @ 2200ms, Lock @ 3300ms)
+  // Beat 3 (3600ms - 5200ms): The Docking & Dual-Fire Cannon (Dock @ 3600ms, Dual Blast @ 3800ms)
+  // Beat 4 (5200ms - 8000ms): The Continuous Waterfall Finale (Wave 2 triggers @ 5200ms, conclude @ 8000ms)
   useEffect(() => {
     if (!showGameOverModal) {
-      setPbStage("initial");
+      clearPbCelebrationTimers();
+      setPbStage("idle");
       setRollingBestTime(null);
       setShowCelebrationConfetti(false);
       return;
     }
     if (!isNewRecordAchieved || challengeMode) {
+      clearPbCelebrationTimers();
       setPbStage("completed");
       return;
     }
 
-    // PHASE 1 (0ms - 1600ms): GLOW & BOTTOM-UP SIDE CANNONS ONLY
-    // At T = 0ms: Open modal. Cards stay resting in base slots with soft glowing highlight pulse.
-    setPbStage("initial");
-    setRollingBestTime(null);
+    // Clear any previous timers
+    clearPbCelebrationTimers();
 
-    // PHASE 2 (1600ms - 3200ms): CARDS ELEVATION & ODOMETER MATCH
-    // At T = 1600ms (just as Phase 1 crackers drop away):
-    // Old and New Record cards elevate smoothly and independently above the board.
-    const timerElevate = setTimeout(() => {
+    // Beat 1: Modal Open, Cards Idle, Initial Radial Crackers
+    setPbStage("idle");
+    setRollingBestTime(null);
+    setShowCelebrationConfetti(true);
+    setConfettiMode("cannon-only");
+    setConfettiBurstKey(prev => prev + 1);
+    playRecordBreakSound();
+
+    // Beat 2: Ascension (Only after initial burst dissipates)
+    pbTimers.current.elevate = setTimeout(() => {
       setPbStage("elevating");
+      playWhooshSound?.();
     }, 1600);
 
-    // At T = 2100ms: Run odometer roll / time matching sequence (from 2100ms to 3000ms = 900ms)
-    let rollInterval: any = null;
-    const timerRoll = setTimeout(() => {
-      setPbStage("rolling");
-      const startBest = previousRecordTime && previousRecordTime > 0 
-        ? previousRecordTime 
-        : (sessionSeconds + Math.max(14, Math.floor(sessionSeconds * 0.18)));
-      const targetTime = sessionSeconds;
-      const totalDiff = startBest - targetTime;
-      let step = 0;
-      const totalSteps = 18; // 18 steps * 50ms = 900ms duration (locks precisely at T = 3000ms)
-      setRollingBestTime(startBest);
-      rollInterval = setInterval(() => {
-        step++;
-        if (step >= totalSteps) {
-          clearInterval(rollInterval);
-          rollInterval = null;
-          setRollingBestTime(targetTime);
-          // At T = 3000ms: Odometer locks on final time, victory chime / badge sound triggers
-          playRecordOverwriteSound();
-        } else {
-          const progress = step / totalSteps;
-          const currentVal = Math.max(targetTime, Math.round(startBest - totalDiff * progress));
-          setRollingBestTime(currentVal);
-        }
-      }, 50);
-    }, 2100);
+    // Beat 2b: Odometer Roll
+    pbTimers.current.roll = setTimeout(() => {
+      runOdometerRollSequence();
+    }, 2200);
 
-    // PHASE 3 (3200ms - 4800ms): CARD DOCKING & WAVE 1 WATERFALL LAUNCH (T = 0s in Finale Phase)
-    // At T = 3200ms: Both cards dock into place; 'NEW PERSONAL BEST' badge drops in;
-    // Bottom corner cannons fire upward and Wave 1 top falling ribbons/confetti cascade downward!
-    const timerDock = setTimeout(() => {
+    // Beat 2c: Time Snap
+    pbTimers.current.lock = setTimeout(() => {
+      playVictoryChimeSound?.();
+    }, 3300);
+
+    // Beat 3: Docking
+    pbTimers.current.dock = setTimeout(() => {
       setPbStage("docked");
-      setRollingBestTime(sessionSeconds);
-      setConfettiMode("top-two-waves");
+    }, 3600);
+
+    // Beat 3b: Dual Blast (Docking Impact)
+    pbTimers.current.dualBlast = setTimeout(() => {
+      setPbStage("completed");
+      playDockingSnapSound?.();
+      setConfettiMode("top-two-waves"); // Fires bottom cannons + Wave 1 top rain
       setConfettiBurstKey(prev => prev + 1);
       setShowCelebrationConfetti(true);
       playApplauseSound(true);
-    }, 3200);
+    }, 3800);
 
-    // At T = 3600ms: Cards complete settling firmly in place
-    const timerComplete = setTimeout(() => {
-      setPbStage("completed");
-    }, 3600);
-
-    // PHASE 4: WAVE 2 HALFWAY HANDOFF (Exact 1300ms halfway drift mark handled inside ConfettiBurst)
+    // Total lifecycle cleanup timer
+    pbTimers.current.cleanup = setTimeout(() => {
+      // Graceful resting state
+    }, 8000);
 
     return () => {
-      clearTimeout(timerElevate);
-      clearTimeout(timerRoll);
-      if (rollInterval) clearInterval(rollInterval);
-      clearTimeout(timerDock);
-      clearTimeout(timerComplete);
+      clearPbCelebrationTimers();
     };
   }, [showGameOverModal, isNewRecordAchieved, challengeMode, previousRecordTime, sessionSeconds]);
 
@@ -4342,6 +4383,7 @@ useEffect(() => {
   };
 
   // Overwrite sound at t ≈ 600ms: playEraseSound() combined with a bright acoustic accent/ding
+  // Overwrite sound at t ≈ 600ms: playEraseSound() combined with a bright acoustic accent/ding
   const playRecordOverwriteSound = () => {
     if (!soundEffects) return;
     // 1. Erase sound (clear punchy acoustic feedback)
@@ -4392,45 +4434,308 @@ useEffect(() => {
     }
   };
 
-  // Record Broken celebration sound (high-sparkle energetic arpeggio chime)
+  // Crisp victory chime / bell ding sound when odometer snaps to final broken time at T = 3300ms
+  const playVictoryChimeSound = () => {
+    if (!soundEffects) return;
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const scheduleChime = (ctx: AudioContext) => {
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const overtone = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const overtoneGain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(1760, now); // A6 bright bell ding
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.18, now + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.85);
+
+        overtone.type = "sine";
+        overtone.frequency.setValueAtTime(3520, now); // A7 harmonic chime
+        overtoneGain.gain.setValueAtTime(0.001, now);
+        overtoneGain.gain.linearRampToValueAtTime(0.09, now + 0.005);
+        overtoneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.50);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        overtone.connect(overtoneGain);
+        overtoneGain.connect(ctx.destination);
+
+        osc.start(now);
+        overtone.start(now);
+        osc.stop(now + 0.86);
+        overtone.stop(now + 0.52);
+        osc.onended = () => {
+          try { osc.disconnect(); gain.disconnect(); } catch {}
+        };
+        overtone.onended = () => {
+          try { overtone.disconnect(); overtoneGain.disconnect(); } catch {}
+        };
+      };
+
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().then(() => scheduleChime(audioCtx)).catch(() => {});
+      } else {
+        scheduleChime(audioCtx);
+      }
+    } catch (e) {
+      console.error("Audio Victory Chime Error:", e);
+    }
+  };
+
+  // Explosive record-break celebration sound (sub-bass punch + celebration impact snap + energetic ascending arpeggio shimmer)
   const playRecordBreakSound = () => {
     if (!soundEffects) return;
     try {
       const audioCtx = getAudioCtx();
       if (!audioCtx) return;
 
-      const playSparkle = (freq: number, start: number, duration: number, vol: number = 0.11) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
+      const scheduleBreak = (ctx: AudioContext) => {
+        const now = ctx.currentTime;
 
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(freq, start);
+        // 1. Explosive Sub-Bass Punch (160Hz -> 38Hz rapid drop)
+        const subOsc = ctx.createOscillator();
+        const subGain = ctx.createGain();
+        subOsc.type = "sine";
+        subOsc.frequency.setValueAtTime(160, now);
+        subOsc.frequency.exponentialRampToValueAtTime(38, now + 0.35);
 
-        gain.gain.setValueAtTime(0.001, start);
-        gain.gain.linearRampToValueAtTime(vol, start + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        subGain.gain.setValueAtTime(0.001, now);
+        subGain.gain.linearRampToValueAtTime(0.28, now + 0.005);
+        subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
 
-        osc.start(start);
-        osc.stop(start + duration);
+        subOsc.connect(subGain);
+        subGain.connect(ctx.destination);
+        subOsc.start(now);
+        subOsc.stop(now + 0.40);
+        subOsc.onended = () => {
+          try { subOsc.disconnect(); subGain.disconnect(); } catch {}
+        };
+
+        // 2. Celebration Impact Noise Snap
+        const snapBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.08), ctx.sampleRate);
+        const snapData = snapBuf.getChannelData(0);
+        for (let i = 0; i < snapBuf.length; i++) {
+          snapData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.015));
+        }
+        const snapSrc = ctx.createBufferSource();
+        snapSrc.buffer = snapBuf;
+        const snapFilter = ctx.createBiquadFilter();
+        snapFilter.type = "bandpass";
+        snapFilter.frequency.setValueAtTime(950, now);
+        snapFilter.Q.setValueAtTime(2.0, now);
+        const snapGain = ctx.createGain();
+        snapGain.gain.setValueAtTime(0.001, now);
+        snapGain.gain.linearRampToValueAtTime(0.18, now + 0.003);
+        snapGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+
+        snapSrc.connect(snapFilter);
+        snapFilter.connect(snapGain);
+        snapGain.connect(ctx.destination);
+        snapSrc.start(now);
+        snapSrc.stop(now + 0.09);
+        snapSrc.onended = () => {
+          try { snapSrc.disconnect(); snapFilter.disconnect(); snapGain.disconnect(); } catch {}
+        };
+
+        // 3. Ascending shimmer arpeggio
+        const playSparkle = (freq: number, start: number, duration: number, vol: number = 0.11) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, start);
+
+          gain.gain.setValueAtTime(0.001, start);
+          gain.gain.linearRampToValueAtTime(vol, start + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+          osc.start(start);
+          osc.stop(start + duration);
+          osc.onended = () => {
+            try { osc.disconnect(); gain.disconnect(); } catch {}
+          };
+        };
+
+        playSparkle(523.25, now, 0.20, 0.10); // C5
+        playSparkle(659.25, now + 0.07, 0.20, 0.11); // E5
+        playSparkle(783.99, now + 0.14, 0.22, 0.12); // G5
+        playSparkle(987.77, now + 0.21, 0.24, 0.12); // B5
+        playSparkle(1046.50, now + 0.28, 0.35, 0.14); // C6
+        playSparkle(1318.51, now + 0.36, 0.40, 0.13); // E6
+        playSparkle(1567.98, now + 0.44, 0.50, 0.12); // G6
+        playSparkle(2093.00, now + 0.52, 1.20, 0.11); // High sparkle C7
+        playSparkle(1046.50, now + 0.52, 1.20, 0.12); // C6 swell
+        playSparkle(2637.02, now + 0.55, 0.80, 0.06); // E7 delicate twinkle
       };
 
-      const now = audioCtx.currentTime;
-      // Rapid ascending shimmer arpeggio
-      playSparkle(523.25, now, 0.20, 0.10); // C5
-      playSparkle(659.25, now + 0.07, 0.20, 0.11); // E5
-      playSparkle(783.99, now + 0.14, 0.22, 0.12); // G5
-      playSparkle(987.77, now + 0.21, 0.24, 0.12); // B5
-      playSparkle(1046.50, now + 0.28, 0.35, 0.14); // C6
-      playSparkle(1318.51, now + 0.36, 0.40, 0.13); // E6
-      playSparkle(1567.98, now + 0.44, 0.50, 0.12); // G6
-      playSparkle(2093.00, now + 0.52, 1.20, 0.11); // High sparkle C7
-      // Harmonic octave overtones on the finale
-      playSparkle(1046.50, now + 0.52, 1.20, 0.12); // C6 swell
-      playSparkle(2637.02, now + 0.55, 0.80, 0.06); // E7 delicate twinkle
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().then(() => scheduleBreak(audioCtx)).catch(() => {});
+      } else {
+        scheduleBreak(audioCtx);
+      }
     } catch (e) {
       console.error("Audio Record Break Error:", e);
+    }
+  };
+
+  // Smooth riser / whoosh audio effect for card ascension at T = 1600ms
+  const playWhooshSound = () => {
+    if (!soundEffects) return;
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const scheduleWhoosh = (ctx: AudioContext) => {
+        const now = ctx.currentTime;
+
+        // 1. Resonant noise sweep
+        const bufSize = Math.floor(ctx.sampleRate * 0.55);
+        const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+        const out = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) {
+          out[i] = Math.random() * 2 - 1;
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        const filter = ctx.createBiquadFilter();
+        filter.type = "bandpass";
+        filter.frequency.setValueAtTime(220, now);
+        filter.frequency.exponentialRampToValueAtTime(1400, now + 0.50);
+        filter.Q.setValueAtTime(2.8, now);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.12, now + 0.25);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.52);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        noise.start(now);
+        noise.stop(now + 0.55);
+        noise.onended = () => {
+          try { noise.disconnect(); filter.disconnect(); gain.disconnect(); } catch {}
+        };
+
+        // 2. Soft sine riser harmonic
+        const riserOsc = ctx.createOscillator();
+        const riserGain = ctx.createGain();
+        riserOsc.type = "sine";
+        riserOsc.frequency.setValueAtTime(220, now);
+        riserOsc.frequency.exponentialRampToValueAtTime(587.33, now + 0.48); // D5
+        riserGain.gain.setValueAtTime(0.0001, now);
+        riserGain.gain.linearRampToValueAtTime(0.07, now + 0.22);
+        riserGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.50);
+
+        riserOsc.connect(riserGain);
+        riserGain.connect(ctx.destination);
+        riserOsc.start(now);
+        riserOsc.stop(now + 0.52);
+        riserOsc.onended = () => {
+          try { riserOsc.disconnect(); riserGain.disconnect(); } catch {}
+        };
+      };
+
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().then(() => scheduleWhoosh(audioCtx)).catch(() => {});
+      } else {
+        scheduleWhoosh(audioCtx);
+      }
+    } catch (e) {
+      console.error("Audio Whoosh Error:", e);
+    }
+  };
+
+  // Rapid slot-machine ticking audio during odometer roll (T = 2200ms - 3300ms)
+  const playSlotTickSound = () => {
+    if (!soundEffects) return;
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(880 + Math.random() * 120, now);
+
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(0.05, now + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.022);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.025);
+      osc.onended = () => {
+        try { osc.disconnect(); gain.disconnect(); } catch {}
+      };
+    } catch (e) {
+      console.error("Audio Slot Tick Error:", e);
+    }
+  };
+
+  // Solid docking snap sound at exact docking impact at T = 3800ms
+  const playDockingSnapSound = () => {
+    if (!soundEffects) return;
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const scheduleSnap = (ctx: AudioContext) => {
+        const now = ctx.currentTime;
+
+        // 1. Tactile click
+        const clickOsc = ctx.createOscillator();
+        const clickGain = ctx.createGain();
+        clickOsc.type = "triangle";
+        clickOsc.frequency.setValueAtTime(460, now);
+        clickOsc.frequency.exponentialRampToValueAtTime(180, now + 0.035);
+        clickGain.gain.setValueAtTime(0.001, now);
+        clickGain.gain.linearRampToValueAtTime(0.16, now + 0.003);
+        clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+
+        clickOsc.connect(clickGain);
+        clickGain.connect(ctx.destination);
+        clickOsc.start(now);
+        clickOsc.stop(now + 0.045);
+        clickOsc.onended = () => {
+          try { clickOsc.disconnect(); clickGain.disconnect(); } catch {}
+        };
+
+        // 2. Micro-thud
+        const thudOsc = ctx.createOscillator();
+        const thudGain = ctx.createGain();
+        thudOsc.type = "sine";
+        thudOsc.frequency.setValueAtTime(120, now);
+        thudOsc.frequency.exponentialRampToValueAtTime(45, now + 0.06);
+        thudGain.gain.setValueAtTime(0.001, now);
+        thudGain.gain.linearRampToValueAtTime(0.14, now + 0.004);
+        thudGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.065);
+
+        thudOsc.connect(thudGain);
+        thudGain.connect(ctx.destination);
+        thudOsc.start(now);
+        thudOsc.stop(now + 0.07);
+        thudOsc.onended = () => {
+          try { thudOsc.disconnect(); thudGain.disconnect(); } catch {}
+        };
+      };
+
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().then(() => scheduleSnap(audioCtx)).catch(() => {});
+      } else {
+        scheduleSnap(audioCtx);
+      }
+    } catch (e) {
+      console.error("Audio Docking Snap Error:", e);
     }
   };
 
@@ -10324,8 +10629,12 @@ useEffect(() => {
                     }}
                   />
                   <motion.div 
-                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    initial={isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) ? { opacity: 0, scale: 0.8, y: 0 } : { opacity: 0, scale: 0.95, y: 10 }}
+                    animate={isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit) ? { opacity: 1, scale: [0.8, 1.15, 0.98, 1.0], y: 0 } : { opacity: 1, scale: 1, y: 0 }}
+                    transition={isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit)
+                      ? { scale: { duration: 0.45, times: [0, 0.55, 0.8, 1], ease: "easeOut" }, opacity: { duration: 0.2 } }
+                      : { duration: 0.25 }
+                    }
                     className={`modal card border-none p-8 max-w-sm w-full relative text-center rounded-[32px] shadow-[0_12px_40px_rgba(0,0,0,0.08)] flex flex-col gap-6 ${darkMode ? "bg-[#2A2D24]" : "bg-[#FDFBF7]"}`}
                   >
                     {/* Top-right X dismiss button — closes modal without leaving the board */}
@@ -10380,43 +10689,43 @@ useEffect(() => {
                               </motion.div>
                             ) : isNewRecordAchieved ? (
                               <div className="min-h-[38px] mt-1.5 flex items-center justify-center">
-                                {(pbStage === "docked" || pbStage === "salute" || pbStage === "completed") && (
-                                  <motion.div 
-                                    key="pb-badge"
-                                    initial={{ y: -16, opacity: 0 }}
-                                    animate={{ 
-                                      y: 0, 
-                                      opacity: 1,
-                                      boxShadow: pbStage === "completed"
-                                        ? "0 0px 0px rgba(0,0,0,0)"
-                                        : [
-                                            "0 2px 8px rgba(217, 170, 80, 0.18)",
-                                            "0 2px 18px rgba(217, 170, 80, 0.38)",
-                                            "0 2px 8px rgba(217, 170, 80, 0.18)"
-                                          ]
-                                    }}
-                                    transition={{ 
-                                      y: { duration: 0.35, ease: "easeOut" },
-                                      opacity: { duration: 0.2 },
-                                      boxShadow: pbStage === "completed"
-                                        ? { duration: 0.4, ease: "easeOut" }
-                                        : {
-                                            duration: 2.8,
-                                            repeat: Infinity,
-                                            ease: "easeInOut"
-                                          }
-                                    }}
-                                    className={`relative flex items-center justify-center gap-1.5 py-1 px-3.5 rounded-full font-sans font-bold text-[11px] uppercase tracking-wider select-none border-none transition-colors duration-300 leading-normal overflow-visible ${
-                                      darkMode
-                                        ? "bg-[#292218] text-[#F3DFB0]"
-                                        : "bg-[#FDF6E9] text-[#9B7020]"
-                                    }`}
-                                  >
-                                    <Trophy className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300 shrink-0" />
-                                    <span className="text-amber-600 dark:text-amber-300 leading-normal overflow-visible">{t("personalBestAchieved")}</span>
-                                    <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-300 shrink-0" />
-                                  </motion.div>
-                                )}
+                                <motion.div 
+                                  key="pb-badge"
+                                  initial={{ y: -12, opacity: 0 }}
+                                  animate={{ 
+                                    y: 0, 
+                                    opacity: 1,
+                                    rotate: [0, -4, 4, -3, 3, -1, 1, 0],
+                                    boxShadow: pbStage === "completed"
+                                      ? "0 0px 0px rgba(0,0,0,0)"
+                                      : [
+                                          "0 2px 8px rgba(217, 170, 80, 0.18)",
+                                          "0 2px 18px rgba(217, 170, 80, 0.38)",
+                                          "0 2px 8px rgba(217, 170, 80, 0.18)"
+                                        ]
+                                  }}
+                                  transition={{ 
+                                    y: { duration: 0.35, ease: "easeOut" },
+                                    opacity: { duration: 0.2 },
+                                    rotate: { duration: 0.6, delay: 0.1, ease: "easeInOut" },
+                                    boxShadow: pbStage === "completed"
+                                      ? { duration: 0.4, ease: "easeOut" }
+                                      : {
+                                          duration: 2.8,
+                                          repeat: Infinity,
+                                          ease: "easeInOut"
+                                        }
+                                  }}
+                                  className={`relative flex items-center justify-center gap-1.5 py-1 px-3.5 rounded-full font-sans font-bold text-[11px] uppercase tracking-wider select-none border-none transition-colors duration-300 leading-normal overflow-visible ${
+                                    darkMode
+                                      ? "bg-[#292218] text-[#F3DFB0]"
+                                      : "bg-[#FDF6E9] text-[#9B7020]"
+                                  }`}
+                                >
+                                  <Trophy className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300 shrink-0" />
+                                  <span className="text-amber-600 dark:text-amber-300 leading-normal overflow-visible">{t("personalBestAchieved")}</span>
+                                  <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-300 shrink-0" />
+                                </motion.div>
                               </div>
                             ) : (
                               <div className="h-8 min-h-[32px] mt-1.5 flex items-center justify-center">
@@ -10454,23 +10763,21 @@ useEffect(() => {
                             <motion.div 
                               animate={
                                 isNewRecordAchieved && !isFailed
-                                  ? pbStage === "elevating"
-                                    ? { y: [0, -10, -8], scale: [1.0, 1.2, 1.08] }
-                                    : pbStage === "rolling"
-                                    ? { y: -8, scale: 1.08 }
+                                  ? (pbStage === "elevating" || pbStage === "rolling")
+                                    ? { y: -10, scale: 1.08 }
                                     : { y: 0, scale: 1.0 }
                                   : { y: 0, scale: 1.0 }
                               }
                               transition={
                                 pbStage === "elevating"
                                   ? { duration: 0.6, ease: "easeOut" }
-                                  : pbStage === "rolling"
-                                  ? { duration: 0.25 }
-                                  : { duration: 0.4, ease: "easeOut" }
+                                  : pbStage === "docked"
+                                  ? { duration: 0.2, ease: "easeIn" }
+                                  : { duration: 0.3, ease: "easeOut" }
                               }
                               className={`flex flex-col items-center p-1.5 rounded-xl transition-all duration-300 ${
                                 isNewRecordAchieved && !isFailed
-                                  ? pbStage === "initial"
+                                  ? (pbStage === "idle" || pbStage === "resting" || pbStage === "initial")
                                     ? (darkMode 
                                         ? "bg-amber-400/10 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#F3DFB0]" 
                                         : "bg-amber-50/80 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#9B7020]")
@@ -10512,46 +10819,36 @@ useEffect(() => {
                             {isNewRecordAchieved && !isFailed ? (
                               <motion.div 
                                 animate={
-                                  pbStage === "elevating"
-                                    ? { y: [0, -10, -8], scale: [1.0, 1.2, 1.08] }
-                                    : pbStage === "rolling"
-                                    ? { y: -8, scale: 1.08 }
+                                  (pbStage === "elevating" || pbStage === "rolling")
+                                    ? { y: -10, scale: 1.08 }
                                     : { y: 0, scale: 1.0 }
                                 }
                                 transition={
                                   pbStage === "elevating"
-                                    ? { duration: 0.65, ease: "easeOut", delay: 0.05 }
-                                    : pbStage === "rolling"
-                                    ? { duration: 0.25 }
-                                    : { duration: 0.4, ease: "easeOut" }
+                                    ? { duration: 0.6, ease: "easeOut" }
+                                    : pbStage === "docked"
+                                    ? { duration: 0.2, ease: "easeIn" }
+                                    : { duration: 0.3, ease: "easeOut" }
                                 }
                                 className={`flex flex-col items-center p-1.5 rounded-xl transition-all duration-300 ${
-                                  isNewRecordAchieved && !isFailed
-                                    ? pbStage === "initial"
-                                      ? (darkMode 
-                                          ? "bg-amber-400/10 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#F3DFB0]" 
-                                          : "bg-amber-50/80 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#9B7020]")
-                                      : pbStage === "completed"
-                                      ? (darkMode ? "bg-amber-400/10 text-[#F3DFB0]" : "bg-[#FDF6E9] text-[#9B7020]")
-                                      : (pbStage === "elevating" || pbStage === "rolling" || pbStage === "docked" || pbStage === "salute")
-                                      ? (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
-                                      : ""
-                                    : ""
+                                  (pbStage === "idle" || pbStage === "resting" || pbStage === "initial")
+                                    ? (darkMode 
+                                        ? "bg-amber-400/10 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#F3DFB0]" 
+                                        : "bg-amber-50/80 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#9B7020]")
+                                    : pbStage === "completed"
+                                    ? (darkMode ? "bg-amber-400/10 text-[#F3DFB0]" : "bg-[#FDF6E9] text-[#9B7020]")
+                                    : (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
                                 }`}
                               >
                                 <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${
-                                  pbStage === "initial" || pbStage === "elevating" || pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
-                                    ? (darkMode ? "text-[#E3CF9E]" : "text-[#9B7020]")
-                                    : (darkMode ? "text-zinc-400" : "text-stone-500")
+                                  darkMode ? "text-[#E3CF9E]" : "text-[#9B7020]"
                                 }`}>
                                   {t("bestLabel")}
                                 </span>
                                 <span className={`text-base sm:text-lg font-mono font-bold tracking-tight ${
-                                  pbStage === "initial" || pbStage === "elevating" || pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed"
-                                    ? (darkMode ? "text-[#F3DFB0]" : "text-[#9B7020]")
-                                    : (darkMode ? "text-zinc-400" : "text-stone-500")
+                                  darkMode ? "text-[#F3DFB0]" : "text-[#9B7020]"
                                 }`}>
-                                  {pbStage === "initial" || pbStage === "elevating"
+                                  {(pbStage === "idle" || pbStage === "resting" || pbStage === "initial" || pbStage === "elevating")
                                     ? (previousRecordTime && previousRecordTime > 0 ? formatTimer(previousRecordTime) : "--:--")
                                     : pbStage === "rolling"
                                     ? formatTimer(rollingBestTime ?? sessionSeconds)
