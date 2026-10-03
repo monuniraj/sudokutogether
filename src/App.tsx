@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "./i18n/useTranslation";
+import type { TranslationKey } from "./i18n/translations";
 import { db } from "./firebase";
 import { RulesModal } from "./components/modals/RulesModal";
 import { SettingsModal } from "./components/modals/SettingsModal";
@@ -9893,7 +9894,7 @@ useEffect(() => {
                             className={`flex-1 py-3 px-2 rounded-2xl flex items-center justify-center gap-1.5 text-xs font-mono font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#022c22] hover:bg-[#022c22]/80 text-[#d1fae5]" : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"}`}
                           >
                              <RotateCcw className="w-4 h-4 stroke-[2.5]" />
-                             <span>SAME GAME</span>
+                             <span>{t("sameGame")}</span>
                           </button>
 
                           {/* [ NEW GAME ] — Fresh board seed and parameters */}
@@ -10209,7 +10210,7 @@ useEffect(() => {
                                   {isInvitingAll ? (
                                     <>
                                       <XCircle className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
-                                      <span className="leading-normal overflow-visible">STOP</span>
+                                      <span className="leading-normal overflow-visible">{t("stopAction")}</span>
                                     </>
                                   ) : (
                                     <>
@@ -10289,7 +10290,7 @@ useEffect(() => {
                                   }`}
                                 >
                                   <Play className="w-4 h-4 fill-current" />
-                                  <span>START GAME</span>
+                                  <span>{t("startGameAction")}</span>
                                 </button>
                               </div>
                             </div>
@@ -14116,7 +14117,7 @@ useEffect(() => {
                 <div className="flex items-center gap-2">
                   <Bell className="w-5 h-5 text-indigo-500" />
                   <h3 className="font-sans font-black text-base uppercase tracking-wider">
-                    Challenge Invites
+                    {t("challenge_invites_title")}
                   </h3>
                 </div>
                 <button
@@ -14136,7 +14137,7 @@ useEffect(() => {
               <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-3.5 max-h-[50vh] pr-0.5">
                 {sortedBellInvites.length === 0 ? (
                   <div className="py-12 text-center text-stone-500 font-sans text-sm italic">
-                    No pending challenge invites.
+                    {t("no_pending_invites")}
                   </div>
                 ) : (
                   sortedBellInvites.map((challenge) => {
@@ -14158,11 +14159,24 @@ useEffect(() => {
                               challengeDifficulty === "MEDIUM" ? "text-amber-500" :
                               challengeDifficulty === "HARD" ? "text-purple-500" : "text-rose-500"
                             }`}>
-                              {challengeDifficulty} Duel
+                              {t("duel_difficulty", { difficulty: t(challengeDifficulty.toLowerCase() as TranslationKey) || challengeDifficulty })}
                             </span>
-                            <span className="font-sans text-xs font-bold mt-0.5">
-                              Invited by <strong className="font-extrabold">{senderDisplayName}</strong>
-                            </span>
+                            {(() => {
+                              const text = t("invited_by", { name: "___NAME___" });
+                              const parts = text.split("___NAME___");
+                              if (parts.length === 2) {
+                                return (
+                                  <span className="font-sans text-xs font-bold mt-0.5">
+                                    {parts[0]}<strong className="font-extrabold">{senderDisplayName}</strong>{parts[1]}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="font-sans text-xs font-bold mt-0.5">
+                                  {t("invited_by", { name: senderDisplayName })}
+                                </span>
+                              );
+                            })()}
                           </div>
                           <span className="text-[9px] font-mono opacity-70">
                             {formatInviteTimestamp(timestampVal)}
@@ -14171,18 +14185,18 @@ useEffect(() => {
 
                         <div className="grid grid-cols-3 gap-1.5 text-[9px] font-sans p-2 rounded-xl bg-stone-500/5 text-center">
                           <div>
-                            <span className="block opacity-65 uppercase font-bold text-[8px]">Mistakes</span>
+                            <span className="block opacity-65 uppercase font-bold text-[8px]">{t("card_mistakes_label")}</span>
                             <span className="font-black text-rose-500">
-                              {challenge.maxMistakes === 0 ? "0 (Sudden Death)" : (challenge.maxMistakes !== undefined && challenge.maxMistakes < 999) ? `${challenge.maxMistakes} Limit` : "None"}
+                              {challenge.maxMistakes === 0 ? t("sudden_death_mistakes") : (challenge.maxMistakes !== undefined && challenge.maxMistakes < 999) ? t("limit_count", { count: challenge.maxMistakes }) : t("no_limit")}
                             </span>
                           </div>
                           <div>
-                            <span className="block opacity-65 uppercase font-bold text-[8px]">Hints</span>
-                            <span className="font-black text-emerald-500">{challenge.hintLimit ?? 3} Limit</span>
+                            <span className="block opacity-65 uppercase font-bold text-[8px]">{t("card_hints_label")}</span>
+                            <span className="font-black text-emerald-500">{t("limit_count", { count: challenge.hintLimit ?? 3 })}</span>
                           </div>
                           <div>
-                            <span className="block opacity-65 uppercase font-bold text-[8px]">Timer</span>
-                            <span className="font-black">{challenge.timerEnabled ? "Visible" : "Hidden"}</span>
+                            <span className="block opacity-65 uppercase font-bold text-[8px]">{t("card_timer_label")}</span>
+                            <span className="font-black">{challenge.timerEnabled ? t("timer_visible") : t("timer_hidden")}</span>
                           </div>
                         </div>
 
@@ -14196,7 +14210,7 @@ useEffect(() => {
                               darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
                             }`}
                           >
-                            Decline
+                            {t("btn_decline")}
                           </button>
                           <button
                             disabled={isJoiningRoomLoading}
@@ -14208,10 +14222,10 @@ useEffect(() => {
                             {isJoiningRoomLoading ? (
                               <>
                                 <RefreshCw className="w-3.5 h-3.5 animate-spin stroke-[2]" />
-                                <span>Joining...</span>
+                                <span>{t("joining_status")}</span>
                               </>
                             ) : (
-                              <span>Accept & Play</span>
+                              <span>{t("btn_accept_play")}</span>
                             )}
                           </button>
                         </div>
@@ -14268,15 +14282,28 @@ useEffect(() => {
                   <div className="flex flex-col text-left">
                     <div className="flex items-center gap-1.5">
                       <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-purple-400" : "text-purple-700"}`}>
-                        Sudoku Invite
+                        {t("sudoku_invite_title")}
                       </span>
                       <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-purple-500/15 text-purple-500">
                         {inviteCountdown}s
                       </span>
                     </div>
-                    <span className="font-sans text-xs font-semibold mt-0.5">
-                      <strong>{activeInviteNotification.fromName}</strong> invited you to play!
-                    </span>
+                    {(() => {
+                      const text = t("user_invited_you", { name: "___NAME___" });
+                      const parts = text.split("___NAME___");
+                      if (parts.length === 2) {
+                        return (
+                          <span className="font-sans text-xs font-semibold mt-0.5">
+                            {parts[0]}<strong>{activeInviteNotification.fromName}</strong>{parts[1]}
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="font-sans text-xs font-semibold mt-0.5">
+                          {t("user_invited_you", { name: activeInviteNotification.fromName })}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -14296,7 +14323,7 @@ useEffect(() => {
                       darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
                     }`}
                   >
-                    Decline
+                    {t("btn_decline")}
                   </button>
                   <button
                     disabled={isJoiningRoomLoading}
@@ -14315,10 +14342,10 @@ useEffect(() => {
                     {isJoiningRoomLoading ? (
                       <>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin stroke-[2]" />
-                        <span>Joining...</span>
+                        <span>{t("joining_status")}</span>
                       </>
                     ) : (
-                      <span>Accept</span>
+                      <span>{t("btn_accept")}</span>
                     )}
                   </button>
                 </div>
