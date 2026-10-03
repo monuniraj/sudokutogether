@@ -76,7 +76,6 @@ import {
   Sliders,
   X,
   Clock,
-  Clock as ClockIcon,
   BellOff,
   Bell,
   Volume2,
@@ -8600,28 +8599,23 @@ useEffect(() => {
                   {/* 3D Isometric Sudoku Perspective Watermark */}
                   <Sudoku3DWatermark difficulty={difficulty} />
 
-                  {(() => {
-                    const formattedBestTime = bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--";
-                    return (
-                      <div className="text-center relative z-10">
-                        {/* Category Label */}
-                        <span className="text-[11px] sm:text-xs font-bold tracking-wider uppercase opacity-85 leading-tight select-none text-emerald-900 dark:text-emerald-200">
-                          {t('home_record_banner_title')}
-                        </span>
-
-                        {/* Bold Prominent Best Time */}
-                        <div className="flex items-center justify-center gap-2 text-xl sm:text-2xl font-black tracking-tight text-emerald-950 dark:text-emerald-50 select-none my-1">
-                          <ClockIcon className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 text-emerald-800 dark:text-emerald-300 stroke-[2.5]"/>
-                          <span>{t('home_record_banner_best_time')}: {formattedBestTime}</span>
-                        </div>
-
-                        {/* Subtitle Call to Action */}
-                        <span className="text-xs sm:text-sm font-medium italic opacity-90 leading-tight select-none text-emerald-900 dark:text-emerald-200">
-                          {t('break_your_record')}
-                        </span>
-                      </div>
-                    );
-                  })()}
+                  <div className="text-center relative z-10">
+                    <span className="text-[10px] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80">
+                      {t('home_record_banner_title')}
+                    </span>
+                    <h2 className="text-xl md:text-3xl uppercase tracking-tight flex items-center justify-center gap-2 font-sans font-black">
+                      <Timer className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3.5] shrink-0" />
+                      <span>{t('home_record_banner_best_time')}:</span>
+                      <span className="font-mono font-black text-2xl md:text-3xl">
+                        {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
+                      </span>
+                    </h2>
+                    <p className="text-xs mt-1 select-none handwriting opacity-95 text-sm font-semibold">
+                      {bestTime && bestTime > 0 
+                        ? t('break_your_record') 
+                        : t('noRecordPrompt')}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Difficulty level selecting buttons - SOLID LOCKED FIXED POSITION CONTAINER */}
