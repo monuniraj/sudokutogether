@@ -226,27 +226,29 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                   className="absolute inset-0 flex flex-col items-center justify-between select-none pointer-events-none px-[4%]"
                   style={{ containerType: 'size' }}
                 >
-                  {/* 1. Top Headroom: Exactly 10% */}
-                  <div className="h-[10%] shrink-0" aria-hidden="true" />
-
-                  {/* Active Digit Content Area: 75% Content Budget + 5% Middle Gap = 80% */}
                   {showRemainingNumbers ? (
-                    <div 
-                      className="h-[80%] w-full flex flex-col items-center justify-between overflow-visible leading-none"
-                      style={{ fontSize: 'clamp(32px, 50cqh, 52px)' }}
-                    >
-                      {/* Primary Digit Area: Exactly 53.6% of button height (67% of 80% block) */}
-                      <div className="h-[67%] w-full flex items-center justify-center overflow-visible">
+                    <>
+                      {/* 1. Top Headroom: Exactly 10% */}
+                      <div className="h-[10%] shrink-0" aria-hidden="true" />
+
+                      {/* 2. Primary Digit Track: Exactly 53.6% of button height */}
+                      <div 
+                        className="h-[53.6%] w-full flex items-center justify-center overflow-visible leading-none"
+                        style={{ fontSize: 'clamp(28px, 50cqh, 54px)' }}
+                      >
                         <span className="handwriting font-normal text-[1em] leading-none select-none flex items-center justify-center">
                           {num}
                         </span>
                       </div>
 
-                      {/* Inter-Digit Middle Gap: Exactly 5% of button height (6.25% of 80% block) */}
-                      <div className="h-[6.25%] shrink-0" aria-hidden="true" />
+                      {/* 3. Inter-Digit Middle Gap: Exactly 5% of button height */}
+                      <div className="h-[5%] shrink-0" aria-hidden="true" />
 
-                      {/* Sub-Count Area: Exactly 21.4% of button height (26.75% of 80% block), exactly 40% scale */}
-                      <div className="h-[26.75%] w-full flex items-center justify-center overflow-visible">
+                      {/* 4. Sub-Count Track: Exactly 21.4% of button height (Scale: Exactly 40% of Primary Digit) */}
+                      <div 
+                        className="h-[21.4%] w-full flex items-center justify-center overflow-visible leading-none"
+                        style={{ fontSize: 'clamp(28px, 50cqh, 54px)' }}
+                      >
                         <span className={`text-[0.40em] font-mono font-black leading-none select-none flex items-center justify-center ${
                           isSelected 
                             ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
@@ -259,21 +261,29 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                           {remainingCount > 0 ? remainingCount : <Check className="w-[0.45em] h-[0.45em] stroke-[2.8]" />}
                         </span>
                       </div>
-                    </div>
-                  ) : (
-                    /* When completed or remaining counts disabled: 80% area for centered single digit */
-                    <div 
-                      className="h-[80%] w-full flex items-center justify-center overflow-visible leading-none"
-                      style={{ fontSize: 'clamp(38px, 60cqh, 60px)' }}
-                    >
-                      <span className="handwriting font-normal text-[1em] leading-none select-none flex items-center justify-center">
-                        {num}
-                      </span>
-                    </div>
-                  )}
 
-                  {/* 2. Bottom Footroom: Exactly 10% */}
-                  <div className="h-[10%] shrink-0" aria-hidden="true" />
+                      {/* 5. Bottom Footroom: Exactly 10% */}
+                      <div className="h-[10%] shrink-0" aria-hidden="true" />
+                    </>
+                  ) : (
+                    <>
+                      {/* 1. Top Headroom: Exactly 10% */}
+                      <div className="h-[10%] shrink-0" aria-hidden="true" />
+
+                      {/* 2. Primary Digit Track: Exactly 80% (Dead-Centered Vertically) */}
+                      <div 
+                        className="h-[80%] w-full flex items-center justify-center overflow-visible leading-none"
+                        style={{ fontSize: 'clamp(36px, 68cqh, 68px)' }}
+                      >
+                        <span className="handwriting font-normal text-[1em] leading-none select-none flex items-center justify-center">
+                          {num}
+                        </span>
+                      </div>
+
+                      {/* 3. Bottom Footroom: Exactly 10% */}
+                      <div className="h-[10%] shrink-0" aria-hidden="true" />
+                    </>
+                  )}
                 </div>
               </button>
             );
