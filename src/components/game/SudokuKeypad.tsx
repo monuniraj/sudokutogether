@@ -221,14 +221,14 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                         : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")
                 }`}
               >
-                <div className="flex flex-col items-center justify-center gap-0.5 select-none my-auto">
+                <div className="flex flex-col items-center justify-center gap-0.5 mt-0.5 select-none my-auto">
                   <span 
-                    className="handwriting font-normal leading-none flex items-center justify-center text-[clamp(26px,6.5vw,36px)] sm:text-[32px] lg:text-[36px] xl:text-[40px] select-none"
+                    className="handwriting font-normal leading-none flex items-center justify-center text-[clamp(34px,8vw,46px)] sm:text-[38px] lg:text-[42px] xl:text-[46px] select-none"
                   >
                     {num}
                   </span>
                   {showRemainingNumbers && (
-                    <span className={`text-[10px] sm:text-[11px] lg:text-[12px] font-mono leading-none flex items-center justify-center ${
+                    <span className={`text-[12px] sm:text-[13px] font-mono leading-none flex items-center justify-center opacity-65 ${
                       isSelected 
                         ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
                             ? "text-white/85 font-semibold"
@@ -236,7 +236,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                               ? "text-[#78350F]/85 font-semibold"
                               : "text-stone-700 dark:text-zinc-200 font-semibold")
                         : "text-stone-400 dark:text-zinc-500"
-                    } ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
+                    } ${remainingCount <= 0 ? "opacity-35" : ""}`}>
                       {remainingCount > 0 ? remainingCount : <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" />}
                     </span>
                   )}

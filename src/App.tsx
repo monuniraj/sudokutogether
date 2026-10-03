@@ -8976,9 +8976,9 @@ useEffect(() => {
                       >
                         <span className={`flex items-center justify-center shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"} transition-transform duration-150 group-active:scale-90`}>
                           {isTimerPaused ? (
-                            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current stroke-[1.75]" />
+                            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current stroke-[1.25]" />
                           ) : (
-                            <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current stroke-[1.75]" />
+                            <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current stroke-[1.25]" />
                           )}
                         </span>
                         <span 
@@ -9177,7 +9177,7 @@ useEffect(() => {
 
                       return (
                         <div 
-                          className={`card w-full py-3.5 px-4 relative overflow-hidden rounded-2xl transition-all duration-200 select-none flex flex-col justify-center items-center gap-2 ${
+                          className={`card w-full py-2.5 px-4 relative overflow-hidden rounded-2xl transition-all duration-200 select-none flex flex-col justify-center items-center gap-1 ${
                             darkMode ? (
                               activeDiff === "EASY" ? "bg-[#022c22]/90 text-[#d1fae5] shadow-lg border border-emerald-900/40" :
                               activeDiff === "MEDIUM" ? "bg-[#451a03]/90 text-[#fef08a] shadow-lg border border-amber-900/40" :
@@ -9197,25 +9197,25 @@ useEffect(() => {
                           {/* 3D Isometric Sudoku Perspective Watermark */}
                           <Sudoku3DWatermark difficulty={activeDiff} />
 
-                          <div className="text-center w-full relative z-10 flex flex-col items-center gap-1">
+                          <div className="text-center w-full relative z-10 flex flex-col items-center gap-0.5">
                             {/* Tier 1: Top Mini Header */}
-                            <span className="text-[10px] uppercase font-mono tracking-widest block font-bold opacity-80">
+                            <span className="text-[10px] uppercase font-mono tracking-widest block font-normal opacity-70 leading-none">
                               {t("currentRecordHeader")}
                             </span>
                             
                             {/* Tier 2: Center Hero Metric */}
                             <div className="flex items-center justify-center gap-2 my-0.5">
-                              <Timer className="w-4 h-4 stroke-[2.5] opacity-90 shrink-0" />
-                              <span className="font-sans font-black text-xs uppercase tracking-wider opacity-90">
+                              <Timer className="w-4 h-4 stroke-[1.5] opacity-80 shrink-0" />
+                              <span className="font-sans font-normal text-xs uppercase tracking-wider opacity-80">
                                 {t("bestTimeHeader")}:
                               </span>
-                              <span className="font-mono font-bold text-base sm:text-lg tabular-nums tracking-wide">
+                              <span className="font-mono font-normal text-xl tabular-nums tracking-wide">
                                 {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
                               </span>
                             </div>
 
                             {/* Tier 3: Bottom Subtitle Prompt */}
-                            <p className="text-[11px] sm:text-xs select-none handwriting opacity-90 font-medium leading-normal tracking-wide">
+                            <p className="text-[10px] sm:text-[11px] select-none handwriting opacity-60 font-normal leading-none tracking-wide truncate max-w-full">
                               {bestSecs > 0 
                                 ? t("beatRecordPrompt") 
                                 : t("noRecordPrompt")}
@@ -9363,7 +9363,7 @@ useEffect(() => {
                       setIsTimerPaused(false);
                       addLog("🔄 Started a fresh new board!");
                     }}
-                    className={`hidden lg:block w-full border-none py-2.5 px-4 mt-2.5 lg:mt-3 text-center font-medium text-sm tracking-wider uppercase transition-all duration-150 select-none rounded-2xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 leading-none ${
+                    className={`hidden lg:block w-full border-none py-2.5 px-4 mt-3 lg:mt-3.5 text-center font-medium text-sm tracking-wider uppercase transition-all duration-150 select-none rounded-2xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 leading-none ${
                       darkMode 
                         ? "bg-[#4c0519] hover:bg-[#4c0519]/80 text-[#fecdd3]" 
                         : "bg-[#FFE4E6] hover:bg-[#FFE4E6]/85 active:bg-[#FBCFE8] text-[#9D174D]"
