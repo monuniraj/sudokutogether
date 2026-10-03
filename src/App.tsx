@@ -8827,7 +8827,7 @@ useEffect(() => {
                   <div className="w-full relative flex items-center justify-between px-1 mb-1 select-none shrink-0" id="unified-bridge-container">
                     {/* Left: Mistakes status metric */}
                     <span className={`font-mono font-medium text-sm sm:text-base tracking-wider uppercase leading-none select-none flex items-center ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
-                      {t("errHeader")} {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
+                      {t("errHeader")}: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
                     </span>
 
                     {/* Center: Balanced 4-Icon Micro-Bar [Zap, Users, HelpCircle, Volume] */}
@@ -8976,9 +8976,17 @@ useEffect(() => {
                       >
                         <span className={`flex items-center justify-center shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"} transition-transform duration-150 group-active:scale-90`}>
                           {isTimerPaused ? (
-                            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" strokeWidth={0.8} />
+                            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current"/>
                           ) : (
-                            <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" strokeWidth={0.8} />
+                            <svg 
+                              className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"}`} 
+                              viewBox="0 0 24 24" 
+                              fill="currentColor"
+                            >
+                              {/* Two vertical bars: identical original height (y=4 to y=20), but width cut by 50% from 4px down to 2px */}
+                              <rect x="7" y="4" width="2" height="16" rx="1" />
+                              <rect x="15" y="4" width="2" height="16" rx="1" />
+                            </svg>
                           )}
                         </span>
                         <span 
