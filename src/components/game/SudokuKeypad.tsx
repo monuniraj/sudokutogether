@@ -221,29 +221,36 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                         : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")
                 }`}
               >
-                <div className="flex flex-col items-center justify-center absolute inset-0 py-1 lg:py-1.5 px-0.5 select-none pointer-events-none">
-                  <span 
-                    className={`handwriting font-normal leading-none flex items-center justify-center select-none ${
-                      showRemainingNumbers 
-                        ? "text-[clamp(35px,9vw,41px)] sm:text-[39px] lg:text-[46px] xl:text-[50px] -mb-1 lg:-mb-1.5" 
-                        : "text-[42px] sm:text-[48px] lg:text-[56px] xl:text-[60px] my-auto"
-                    }`}
-                  >
-                    {num}
-                  </span>
-                  {showRemainingNumbers && (
-                    <span className={`text-[13px] sm:text-[14px] lg:text-[17px] xl:text-[18px] font-mono leading-none mt-0 lg:mt-0.5 select-none flex items-center justify-center ${
-                      isSelected 
-                        ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
-                            ? "text-white/85 font-semibold"
-                            : !darkMode && currentDiff === "MEDIUM"
-                              ? "text-[#78350F]/85 font-semibold"
-                              : "text-stone-700 dark:text-zinc-200 font-semibold")
-                        : "text-stone-400 dark:text-zinc-500"
-                    } ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
-                      {remainingCount > 0 ? remainingCount : <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4 stroke-[2.5]" />}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none p-1">
+                  {/* Single Unified Wrapper: Locks both numbers together into one rigid vertical unit */}
+                  <div className="flex flex-col items-center justify-center leading-none">
+                    
+                    {/* Primary Handwriting Digit */}
+                    <span 
+                      className={`handwriting font-normal leading-none select-none flex items-center justify-center ${
+                        showRemainingNumbers 
+                          ? "text-[clamp(32px,8vw,38px)] sm:text-[36px] lg:text-[44px] xl:text-[48px] -mb-1 lg:-mb-1.5" 
+                          : "text-[38px] sm:text-[44px] lg:text-[52px] xl:text-[56px]"
+                      }`}
+                    >
+                      {num}
                     </span>
-                  )}
+
+                    {/* Sub-Count Indicator: Anchored directly below the digit glyph with guaranteed bottom clearance */}
+                    {showRemainingNumbers && (
+                      <span className={`text-[12.5px] sm:text-[13.5px] lg:text-[15px] xl:text-[16px] font-mono leading-none select-none font-bold ${
+                        isSelected 
+                          ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
+                              ? "text-white/95"
+                              : !darkMode && currentDiff === "MEDIUM"
+                                ? "text-[#78350F]"
+                                : "text-stone-900 dark:text-white")
+                          : "text-stone-400 dark:text-zinc-500"
+                      } ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
+                        {remainingCount > 0 ? remainingCount : <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-4 lg:h-4 stroke-[2.5]" />}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </button>
             );

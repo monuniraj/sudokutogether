@@ -7568,6 +7568,13 @@ useEffect(() => {
     setHistory(prev => [...prev.slice(-45), gridClone]);
   };
 
+  const handleStartNewGame = () => {
+    playClickSound();
+    generateAndSetNewPuzzle(difficulty);
+    setIsTimerPaused(false);
+    navigateToScreen("game");
+  };
+
   const handleUndo = () => {
     if (!boardState || boardState.isGameOver) return;
     if (history.length === 0) {
@@ -8587,19 +8594,19 @@ useEffect(() => {
                     const formattedBestTime = bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--";
                     return (
                       <div className="text-center relative z-10">
-                        {/* Top subtle category label */}
-                        <span className="text-[10px] sm:text-[11px] font-semibold tracking-wider uppercase opacity-80 leading-tight select-none">
+                        {/* Category Label */}
+                        <span className="text-[11px] sm:text-xs font-bold tracking-wider uppercase opacity-85 leading-tight select-none text-emerald-900 dark:text-emerald-200">
                           {t('home_record_banner_title')}
                         </span>
 
-                        {/* Bold prominent Best Time */}
-                        <div className="flex items-center justify-center gap-1.5 text-base sm:text-lg font-bold tracking-tight text-white select-none my-0.5">
-                          <ClockIcon className="w-4 h-4 shrink-0"/>
+                        {/* Bold Prominent Best Time */}
+                        <div className="flex items-center justify-center gap-2 text-xl sm:text-2xl font-black tracking-tight text-emerald-950 dark:text-emerald-50 select-none my-1">
+                          <ClockIcon className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 text-emerald-800 dark:text-emerald-300 stroke-[2.5]"/>
                           <span>{t('home_record_banner_best_time')}: {formattedBestTime}</span>
                         </div>
 
-                        {/* Punchy desktop-aligned CTA */}
-                        <span className="text-[11px] sm:text-xs opacity-80 leading-tight select-none italic font-medium">
+                        {/* Subtitle Call to Action */}
+                        <span className="text-xs sm:text-sm font-medium italic opacity-90 leading-tight select-none text-emerald-900 dark:text-emerald-200">
                           {t('break_your_record')}
                         </span>
                       </div>
@@ -8741,22 +8748,15 @@ useEffect(() => {
 
                 {/* 🚀 Play New Game Button styled with Expert theme */}
                 <button
-                  onClick={() => {
-                    playClickSound();
-                    generateAndSetNewPuzzle(difficulty);
-                    setIsTimerPaused(false);
-                    navigateToScreen("game");
+                  onClick={handleStartNewGame}
+                  className="w-full border-none p-6 md:p-8 mt-4 sm:mt-6 text-center font-black text-lg md:text-2xl tracking-wider uppercase transition-all duration-200 active:scale-[0.98] select-none rounded-[20px] shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                  style={{
+                    backgroundColor: darkMode ? '#4c0519' : 'var(--theme-pastel-rose, #FFE4E6)',
+                    color: darkMode ? '#fecdd3' : 'var(--theme-accent-rose, #BE123C)',
                   }}
-                  className={`w-full border-none py-3 px-4 mt-3 sm:mt-4 text-center font-bold text-sm sm:text-base tracking-wider uppercase transition-all duration-150 select-none rounded-xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md leading-none ${
-                    darkMode 
-                      ? "bg-[#4c0519] hover:bg-[#4c0519]/80 text-[#fecdd3]" 
-                      : "bg-[#FFE4E6] hover:bg-[#FFE4E6]/80 active:bg-[#FBCFE8] text-[#9D174D]"
-                  }`}
                 >
-                  <span className="flex items-center justify-center gap-2 sm:gap-2.5 leading-none">
-                    <span className="text-xs sm:text-sm animate-pulse select-none leading-none">▶</span>
-                    <span>{t("newGame").toUpperCase()}</span>
-                  </span>
+                  <Play className="w-5 h-5 md:w-6 md:h-6 fill-current stroke-[2.5]"/>
+                  <span>{t("newGame").toUpperCase()}</span>
                 </button>
 
               </div>
