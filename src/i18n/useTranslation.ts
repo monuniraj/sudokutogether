@@ -23,6 +23,9 @@ const ALIAS_MAP: Record<string, TranslationKey> = {
   SAVEDACTION: 'savedAction',
   UNSAVEACTION: 'unsaveAction',
   RANKINGSACTION: 'rankingsAction',
+  HOME_RECORD_BANNER_TITLE: 'home_record_banner_title',
+  HOME_RECORD_BANNER_BEST_TIME: 'home_record_banner_best_time',
+  BREAK_YOUR_RECORD: 'break_your_record',
 };
 
 /**
@@ -52,6 +55,9 @@ function sanitizeFallbackKey(key: string, params?: Record<string, string | numbe
   if (upper === 'SAVEDACTION' || upper === 'SAVED_ACTION') return 'Saved';
   if (upper === 'UNSAVEACTION' || upper === 'UNSAVE_ACTION') return 'Unsave';
   if (upper === 'RANKINGSACTION' || upper === 'RANKINGS_ACTION') return 'Rankings';
+  if (upper === 'HOME_RECORD_BANNER_TITLE') return 'Current Record';
+  if (upper === 'HOME_RECORD_BANNER_BEST_TIME') return 'Best Time';
+  if (upper === 'BREAK_YOUR_RECORD') return 'Break your record!';
 
   // General fallback: convert camelCase or UPPER_CASE identifier to Title Case
   return key

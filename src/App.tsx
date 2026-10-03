@@ -76,6 +76,7 @@ import {
   Sliders,
   X,
   Clock,
+  Clock as ClockIcon,
   BellOff,
   Bell,
   Volume2,
@@ -8582,23 +8583,28 @@ useEffect(() => {
                   {/* 3D Isometric Sudoku Perspective Watermark */}
                   <Sudoku3DWatermark difficulty={difficulty} />
 
-                  <div className="text-center relative z-10">
-                    <span className="text-[10px] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80">
-                      CURRENT RECORD
-                    </span>
-                    <h2 className="text-xl md:text-3xl uppercase tracking-tight flex items-center justify-center gap-2 font-sans font-black">
-                      <Timer className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3.5] shrink-0" />
-                      <span>BEST TIME:</span>
-                      <span className="font-mono font-black text-2xl md:text-3xl">
-                        {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
-                      </span>
-                    </h2>
-                    <p className="text-xs mt-1 select-none handwriting opacity-95 text-sm font-semibold">
-                      {bestTime && bestTime > 0 
-                        ? "Can you break your own record?" 
-                        : "No record yet... Can you set the first one?"}
-                    </p>
-                  </div>
+                  {(() => {
+                    const formattedBestTime = bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--";
+                    return (
+                      <div className="text-center relative z-10">
+                        {/* Top subtle category label */}
+                        <span className="text-[10px] sm:text-[11px] font-semibold tracking-wider uppercase opacity-80 leading-tight select-none">
+                          {t('home_record_banner_title')}
+                        </span>
+
+                        {/* Bold prominent Best Time */}
+                        <div className="flex items-center justify-center gap-1.5 text-base sm:text-lg font-bold tracking-tight text-white select-none my-0.5">
+                          <ClockIcon className="w-4 h-4 shrink-0"/>
+                          <span>{t('home_record_banner_best_time')}: {formattedBestTime}</span>
+                        </div>
+
+                        {/* Punchy desktop-aligned CTA */}
+                        <span className="text-[11px] sm:text-xs opacity-80 leading-tight select-none italic font-medium">
+                          {t('break_your_record')}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Difficulty level selecting buttons - SOLID LOCKED FIXED POSITION CONTAINER */}
@@ -9209,14 +9215,14 @@ useEffect(() => {
                           <div className="text-center w-full relative z-10 flex flex-col items-center gap-0.5">
                             {/* Tier 1: Top Mini Header */}
                             <span className="text-[9px] uppercase font-mono tracking-widest block font-normal opacity-60 leading-none">
-                              {t("currentRecordHeader")}
+                              {t("home_record_banner_title")}
                             </span>
                             
                             {/* Tier 2: Center Hero Metric */}
                             <div className="flex items-center justify-center gap-1.5 my-0.5">
                               <Timer className="w-4 h-4 stroke-[2] opacity-90 shrink-0" />
                               <span className="font-sans font-bold text-sm sm:text-base uppercase tracking-wider opacity-90 leading-none">
-                                {t("bestTimeHeader")}:
+                                {t("home_record_banner_best_time")}:
                               </span>
                               <span className="font-mono font-bold text-lg sm:text-xl tabular-nums tracking-wide leading-none">
                                 {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
@@ -9226,7 +9232,7 @@ useEffect(() => {
                             {/* Tier 3: Bottom Subtitle Prompt */}
                             <p className="text-[10px] select-none handwriting opacity-60 font-normal leading-none tracking-wide truncate max-w-full">
                               {bestSecs > 0 
-                                ? t("beatRecordPrompt") 
+                                ? t("break_your_record") 
                                 : t("noRecordPrompt")}
                             </p>
                           </div>
