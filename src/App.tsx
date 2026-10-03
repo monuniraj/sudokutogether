@@ -10744,69 +10744,24 @@ useEffect(() => {
                           </div>
 
                           {/* Stats */}
-                          <div className="grid grid-cols-3 gap-2 py-3 px-3 rounded-2xl bg-stone-500/5 dark:bg-stone-500/10 text-center items-center">
-                            {/* TIME Display (Left) */}
-                            <motion.div 
-                              animate={
-                                isNewRecordAchieved && !isFailed
-                                  ? (pbStage === "elevating" || pbStage === "rolling")
-                                    ? { y: -10, scale: 1.08 }
-                                    : { y: 0, scale: 1.0 }
-                                  : { y: 0, scale: 1.0 }
-                              }
-                              transition={
-                                pbStage === "elevating"
-                                  ? { duration: 0.6, ease: "easeOut" }
-                                  : pbStage === "docked"
-                                  ? { duration: 0.2, ease: "easeIn" }
-                                  : { duration: 0.3, ease: "easeOut" }
-                              }
-                              className={`flex flex-col items-center p-1.5 rounded-xl transition-all duration-300 ${
-                                isNewRecordAchieved && !isFailed
-                                  ? (pbStage === "idle" || pbStage === "resting" || pbStage === "initial")
-                                    ? (darkMode 
-                                        ? "bg-amber-400/10 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#F3DFB0]" 
-                                        : "bg-amber-50/80 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#9B7020]")
-                                    : pbStage === "completed"
-                                    ? (darkMode ? "bg-amber-400/10 text-[#F3DFB0]" : "bg-[#FDF6E9] text-[#9B7020]")
-                                    : (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
-                                  : ""
-                              }`}
-                            >
-                              <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${
-                                isNewRecordAchieved && !isFailed
-                                  ? (darkMode ? "text-[#E3CF9E]" : "text-[#9B7020]")
-                                  : (darkMode ? "text-zinc-400" : "text-stone-500")
-                              }`}>
-                                {t("timeLabel")}
-                              </span>
-                              <span className={`text-base sm:text-lg font-mono font-bold tracking-tight ${
-                                isNewRecordAchieved && !isFailed
-                                  ? (darkMode ? "text-[#F3DFB0]" : "text-[#9B7020]")
-                                  : (darkMode ? "text-white" : "text-stone-900")
-                              }`}>
-                                {formatTimer(sessionSeconds)}
-                              </span>
-                            </motion.div>
-
-                            {/* Errors Display (Center) */}
-                            <div className={`flex flex-col items-center border-x border-stone-200 dark:border-zinc-700 transition-all ${
-                              isFailed
-                                ? "p-1.5 rounded-xl bg-rose-500/10 dark:bg-rose-950/30 ring-2 ring-rose-400/60 shadow-[0_0_14px_rgba(244,63,94,0.18)] animate-pulse"
-                                : ""
-                            }`}>
-                              <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${isFailed ? "text-rose-500 font-black" : (darkMode ? "text-zinc-400" : "text-stone-500")}`}>{t("mistakesLabel")}</span>
-                              <span className={`text-base sm:text-lg font-mono font-bold text-rose-500`}>
-                                {boardState.currentMistakesCount}/{boardState.maxMistakesLimit}
-                              </span>
-                            </div>
-
-                            {/* BEST Display (Right) */}
-                            {isNewRecordAchieved && !isFailed ? (
+                          <div className="relative">
+                            {isNewRecordAchieved && !isFailed && (
+                              <div 
+                                className={`absolute -inset-3 pointer-events-none rounded-3xl transition-all duration-700 ease-out ${
+                                  (pbStage === "elevating" || pbStage === "rolling" || pbStage === "docked" || pbStage === "salute" || pbStage === "completed")
+                                    ? "opacity-100 scale-100"
+                                    : "opacity-40 scale-95"
+                                } bg-[radial-gradient(circle,rgba(245,158,11,0.07)_0%,rgba(217,119,6,0.02)_50%,transparent_75%)] dark:bg-[radial-gradient(circle,rgba(251,191,36,0.18)_0%,rgba(217,119,6,0.06)_55%,transparent_70%)]`}
+                              />
+                            )}
+                            <div className="relative grid grid-cols-3 gap-2 py-3 px-3 rounded-2xl bg-stone-500/5 dark:bg-stone-500/10 text-center items-center">
+                              {/* TIME Display (Left) */}
                               <motion.div 
                                 animate={
-                                  (pbStage === "elevating" || pbStage === "rolling")
-                                    ? { y: -10, scale: 1.08 }
+                                  isNewRecordAchieved && !isFailed
+                                    ? (pbStage === "elevating" || pbStage === "rolling")
+                                      ? { y: -10, scale: 1.08 }
+                                      : { y: 0, scale: 1.0 }
                                     : { y: 0, scale: 1.0 }
                                 }
                                 transition={
@@ -10817,40 +10772,82 @@ useEffect(() => {
                                     : { duration: 0.3, ease: "easeOut" }
                                 }
                                 className={`flex flex-col items-center p-1.5 rounded-xl transition-all duration-300 ${
-                                  (pbStage === "idle" || pbStage === "resting" || pbStage === "initial")
-                                    ? (darkMode 
-                                        ? "bg-amber-400/10 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#F3DFB0]" 
-                                        : "bg-amber-50/80 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)] animate-pulse text-[#9B7020]")
-                                    : pbStage === "completed"
-                                    ? (darkMode ? "bg-amber-400/10 text-[#F3DFB0]" : "bg-[#FDF6E9] text-[#9B7020]")
-                                    : (darkMode ? "bg-[#292218] text-[#F3DFB0] shadow-[0_4px_16px_rgba(243,223,176,0.18)]" : "bg-[#FDF6E9] text-[#9B7020] shadow-[0_4px_16px_rgba(217,170,80,0.22)]")
+                                  isNewRecordAchieved && !isFailed
+                                    ? `bg-amber-500/[0.08] border border-amber-900/10 shadow-sm shadow-amber-950/5 dark:bg-amber-400/[0.08] dark:border-amber-400/20 dark:shadow-[0_4px_16px_rgba(245,158,11,0.14)] backdrop-blur-sm ${
+                                        (pbStage === "idle" || pbStage === "resting" || pbStage === "initial") ? "ring-1 ring-amber-400/40 animate-pulse" : ""
+                                      }`
+                                    : ""
                                 }`}
                               >
-                                <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${
-                                  darkMode ? "text-[#E3CF9E]" : "text-[#9B7020]"
+                                <span className={`leading-normal overflow-visible ${
+                                  isNewRecordAchieved && !isFailed
+                                    ? "text-[11px] font-bold uppercase tracking-wider text-amber-900/60 dark:text-amber-300/70"
+                                    : `text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-zinc-400" : "text-stone-500"}`
                                 }`}>
-                                  {t("bestLabel")}
+                                  {t("timeLabel")}
                                 </span>
-                                <span className={`text-base sm:text-lg font-mono font-bold tracking-tight ${
-                                  darkMode ? "text-[#F3DFB0]" : "text-[#9B7020]"
+                                <span className={`text-base sm:text-lg font-mono tracking-tight ${
+                                  isNewRecordAchieved && !isFailed
+                                    ? "font-black text-amber-950 dark:text-amber-300 dark:drop-shadow-[0_2px_8px_rgba(251,191,36,0.35)]"
+                                    : `font-bold ${darkMode ? "text-white" : "text-stone-900"}`
                                 }`}>
-                                  {(pbStage === "idle" || pbStage === "resting" || pbStage === "initial" || pbStage === "elevating")
-                                    ? (previousRecordTime && previousRecordTime > 0 ? formatTimer(previousRecordTime) : "--:--")
-                                    : pbStage === "rolling"
-                                    ? formatTimer(rollingBestTime ?? sessionSeconds)
-                                    : formatTimer(sessionSeconds)}
+                                  {formatTimer(sessionSeconds)}
                                 </span>
                               </motion.div>
-                            ) : (
-                              <div className="flex flex-col items-center p-1.5">
-                                <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${darkMode ? "text-zinc-400" : "text-stone-500"}`}>
-                                  {t("bestLabel")}
-                                </span>
-                                <span className="text-base sm:text-lg font-mono font-bold text-amber-500">
-                                  {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
+
+                              {/* Errors Display (Center) */}
+                              <div className={`flex flex-col items-center border-x border-stone-200 dark:border-zinc-700 transition-all ${
+                                isFailed
+                                  ? "p-1.5 rounded-xl bg-rose-500/10 dark:bg-rose-950/30 ring-2 ring-rose-400/60 shadow-[0_0_14px_rgba(244,63,94,0.18)] animate-pulse"
+                                  : ""
+                              }`}>
+                                <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${isFailed ? "text-rose-500 font-black" : (darkMode ? "text-zinc-400" : "text-stone-500")}`}>{t("mistakesLabel")}</span>
+                                <span className={`text-base sm:text-lg font-mono font-bold text-rose-500`}>
+                                  {boardState.currentMistakesCount}/{boardState.maxMistakesLimit}
                                 </span>
                               </div>
-                            )}
+
+                              {/* BEST Display (Right) */}
+                              {isNewRecordAchieved && !isFailed ? (
+                                <motion.div 
+                                  animate={
+                                    (pbStage === "elevating" || pbStage === "rolling")
+                                      ? { y: -10, scale: 1.08 }
+                                      : { y: 0, scale: 1.0 }
+                                  }
+                                  transition={
+                                    pbStage === "elevating"
+                                      ? { duration: 0.6, ease: "easeOut" }
+                                      : pbStage === "docked"
+                                      ? { duration: 0.2, ease: "easeIn" }
+                                      : { duration: 0.3, ease: "easeOut" }
+                                  }
+                                  className={`flex flex-col items-center p-1.5 rounded-xl transition-all duration-300 bg-amber-500/[0.08] border border-amber-900/10 shadow-sm shadow-amber-950/5 dark:bg-amber-400/[0.08] dark:border-amber-400/20 dark:shadow-[0_4px_16px_rgba(245,158,11,0.14)] backdrop-blur-sm ${
+                                    (pbStage === "idle" || pbStage === "resting" || pbStage === "initial") ? "ring-1 ring-amber-400/40 animate-pulse" : ""
+                                  }`}
+                                >
+                                  <span className={`leading-normal overflow-visible text-[11px] font-bold uppercase tracking-wider text-amber-900/60 dark:text-amber-300/70`}>
+                                    {t("bestLabel")}
+                                  </span>
+                                  <span className={`text-base sm:text-lg font-mono tracking-tight font-black text-amber-950 dark:text-amber-300 dark:drop-shadow-[0_2px_8px_rgba(251,191,36,0.35)]`}>
+                                    {(pbStage === "idle" || pbStage === "resting" || pbStage === "initial" || pbStage === "elevating")
+                                      ? (previousRecordTime && previousRecordTime > 0 ? formatTimer(previousRecordTime) : "--:--")
+                                      : pbStage === "rolling"
+                                      ? formatTimer(rollingBestTime ?? sessionSeconds)
+                                      : formatTimer(sessionSeconds)}
+                                  </span>
+                                </motion.div>
+                              ) : (
+                                <div className="flex flex-col items-center p-1.5">
+                                  <span className={`text-[10px] uppercase font-bold tracking-widest leading-normal overflow-visible ${darkMode ? "text-zinc-400" : "text-stone-500"}`}>
+                                    {t("bestLabel")}
+                                  </span>
+                                  <span className="text-base sm:text-lg font-mono font-bold text-amber-500">
+                                    {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </>
                       );
