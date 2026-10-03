@@ -223,12 +223,12 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               >
                 <div className="flex flex-col items-center justify-center my-auto select-none gap-0">
                   <span 
-                    className="handwriting font-normal leading-none flex items-center justify-center text-[clamp(28px,6vw,36px)] sm:text-[32px] lg:text-[36px] xl:text-[38px] select-none"
+                    className="handwriting font-normal leading-none flex items-center justify-center text-[clamp(32px,7.5vw,42px)] sm:text-[36px] lg:text-[42px] xl:text-[46px] select-none"
                   >
                     {num}
                   </span>
                   {showRemainingNumbers && (
-                    <span className={`text-[10px] sm:text-[11px] lg:text-[12px] font-mono leading-none mt-0.5 select-none flex items-center justify-center opacity-70 ${
+                    <span className={`text-[11px] sm:text-[12px] lg:text-[13px] xl:text-[14px] font-mono leading-none mt-0.5 select-none flex items-center justify-center opacity-75 ${
                       isSelected 
                         ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
                             ? "text-white/85 font-semibold"

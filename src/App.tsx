@@ -9157,7 +9157,7 @@ useEffect(() => {
                           playClickSound();
                           setShowMultiplayerForkModal(true);
                         }}
-                        className={`w-full h-full border-none px-4 text-center transition-all duration-150 select-none rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px font-mono text-xs uppercase tracking-wider shrink-0 ${
+                        className={`w-full h-full border-none px-4 text-center transition-all duration-150 select-none rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px font-mono text-xs sm:text-sm font-bold uppercase tracking-wider shrink-0 ${
                           darkMode 
                             ? "bg-[#2e1065] hover:bg-[#3b0764] text-[#e9d5ff] font-black border border-purple-950/60 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" 
                             : "bg-[#F3E8FF] hover:bg-[#E9D5FF] active:bg-[#D8B4FE] text-[#6B21A8] font-black shadow-[0_8px_16px_rgba(107,33,168,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
@@ -9363,7 +9363,7 @@ useEffect(() => {
                       setIsTimerPaused(false);
                       addLog("🔄 Started a fresh new board!");
                     }}
-                    className={`hidden lg:block w-full border-none py-2.5 px-4 mt-3 lg:mt-3.5 text-center font-medium text-sm tracking-wider uppercase transition-all duration-150 select-none rounded-2xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 leading-none ${
+                    className={`hidden lg:block w-full border-none py-3 px-4 mt-3 lg:mt-3.5 text-center font-bold text-sm sm:text-base tracking-wider uppercase transition-all duration-150 select-none rounded-2xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 leading-none ${
                       darkMode 
                         ? "bg-[#4c0519] hover:bg-[#4c0519]/80 text-[#fecdd3]" 
                         : "bg-[#FFE4E6] hover:bg-[#FFE4E6]/85 active:bg-[#FBCFE8] text-[#9D174D]"
