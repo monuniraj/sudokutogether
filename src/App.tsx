@@ -9145,19 +9145,19 @@ useEffect(() => {
                 >
                   
                   {/* ROW 1: MULTIPLAYER BUTTON (Desktop-only, matches Difficulty selector baseline, label spacing, and height) */}
-                  <div className="hidden lg:flex w-full flex-col mb-4 shrink-0" id="desktop-multiplayer-container">
-                    <div className="flex items-center justify-between gap-4 mb-2 select-none invisible pointer-events-none">
+                  <div className="hidden lg:flex w-full flex-col mb-3 lg:mb-3.5 shrink-0 select-none pb-1" id="desktop-multiplayer-container">
+                    <div className="flex items-center justify-between gap-4 mb-2 invisible pointer-events-none">
                       <span className="block text-xs font-black uppercase tracking-wider font-mono">
-                        MULTIPLAYER MATCH:
+                        {t("selectDifficulty")}
                       </span>
                     </div>
-                    <div className="h-[38px] flex flex-row items-stretch w-full pb-1">
+                    <div className="h-[38px] flex flex-row items-stretch w-full font-mono text-xs">
                       <button
                         onClick={() => {
                           playClickSound();
                           setShowMultiplayerForkModal(true);
                         }}
-                        className={`w-full h-[38px] border-none px-4 text-center transition-all duration-150 select-none rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px font-mono text-xs uppercase tracking-wider shrink-0 ${
+                        className={`w-full h-full border-none px-4 text-center transition-all duration-150 select-none rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px font-mono text-xs uppercase tracking-wider shrink-0 ${
                           darkMode 
                             ? "bg-[#2e1065] hover:bg-[#3b0764] text-[#e9d5ff] font-black border border-purple-950/60 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" 
                             : "bg-[#F3E8FF] hover:bg-[#E9D5FF] active:bg-[#D8B4FE] text-[#6B21A8] font-black shadow-[0_8px_16px_rgba(107,33,168,0.06),_0_2px_4px_rgba(0,0,0,0.02)]"
@@ -9170,7 +9170,7 @@ useEffect(() => {
                   </div>
 
                   {/* 📌 AUTHENTIC CURRENT RECORD / BEST TIME CARD (Desktop lg: ONLY) */}
-                  <div className="hidden lg:flex w-full mb-3 shrink-0 select-none" id="desktop-current-record-container">
+                  <div className="hidden lg:flex w-full mb-3 lg:mb-3.5 shrink-0 select-none" id="desktop-current-record-container">
                     {(() => {
                       const activeDiff = ((boardState?.difficulty || difficulty).toUpperCase()) as Difficulty;
                       const bestSecs = personalBestTimes[activeDiff] || 0;
