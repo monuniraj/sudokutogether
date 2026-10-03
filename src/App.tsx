@@ -9363,15 +9363,15 @@ useEffect(() => {
                       setIsTimerPaused(false);
                       addLog("🔄 Started a fresh new board!");
                     }}
-                    className={`hidden lg:block w-full border-none py-3.5 px-4 text-center font-black text-sm xl:text-base tracking-wider uppercase transition-all duration-150 select-none rounded-2xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 ${
+                    className={`hidden lg:block w-full border-none py-2.5 px-4 mt-2.5 lg:mt-3 text-center font-medium text-sm tracking-wider uppercase transition-all duration-150 select-none rounded-2xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 leading-none ${
                       darkMode 
                         ? "bg-[#4c0519] hover:bg-[#4c0519]/80 text-[#fecdd3]" 
                         : "bg-[#FFE4E6] hover:bg-[#FFE4E6]/85 active:bg-[#FBCFE8] text-[#9D174D]"
                     }`}
                   >
-                    <span className="flex items-center justify-center gap-2.5 leading-none">
-                      <RefreshCw className="w-4 h-4 xl:w-5 xl:h-5 animate-spin-slow stroke-[2.5]" />
-                      <span>{t("newGame")}</span>
+                    <span className="flex items-center justify-center gap-2 leading-none">
+                      <RefreshCw className="w-4 h-4 xl:w-4.5 xl:h-4.5 animate-spin-slow stroke-[2.5]" />
+                      <span className="truncate leading-none">{t("newGame")}</span>
                     </span>
                   </button>
 
