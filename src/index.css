@@ -317,4 +317,15 @@ html.theme-snapshotting *::after {
   width: 100%;
 }
 
+@keyframes luxurySway {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  25% { transform: translateY(-2px) rotate(-1.2deg); }
+  75% { transform: translateY(1.5px) rotate(1.2deg); }
+}
+
+.animate-luxury-sway {
+  animation: luxurySway 2.8s ease-in-out infinite;
+}
+
+
 

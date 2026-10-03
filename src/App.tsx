@@ -10668,7 +10668,7 @@ useEffect(() => {
                               >
                                 {t("gameOverTitle")}
                               </motion.h3>
-                            ) : (
+                            ) : isNewRecordAchieved ? null : (
                               <h3 className={`text-3xl font-sans font-medium tracking-tight mt-2 leading-normal overflow-visible ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
                                 {t("victoryTitle")}
                               </h3>
@@ -10688,43 +10688,25 @@ useEffect(() => {
                                 <span className="leading-normal overflow-visible">{t("betterLuckNextTime")}</span>
                               </motion.div>
                             ) : isNewRecordAchieved ? (
-                              <div className="min-h-[38px] mt-1.5 flex items-center justify-center">
+                              <div className="animate-luxury-sway mt-1.5 flex items-center justify-center">
                                 <motion.div 
                                   key="pb-badge"
                                   initial={{ y: -12, opacity: 0 }}
                                   animate={{ 
                                     y: 0, 
                                     opacity: 1,
-                                    rotate: [0, -4, 4, -3, 3, -1, 1, 0],
-                                    boxShadow: pbStage === "completed"
-                                      ? "0 0px 0px rgba(0,0,0,0)"
-                                      : [
-                                          "0 2px 8px rgba(217, 170, 80, 0.18)",
-                                          "0 2px 18px rgba(217, 170, 80, 0.38)",
-                                          "0 2px 8px rgba(217, 170, 80, 0.18)"
-                                        ]
+                                    rotate: [0, -4, 4, -3, 3, -1, 1, 0]
                                   }}
                                   transition={{ 
                                     y: { duration: 0.35, ease: "easeOut" },
                                     opacity: { duration: 0.2 },
-                                    rotate: { duration: 0.6, delay: 0.1, ease: "easeInOut" },
-                                    boxShadow: pbStage === "completed"
-                                      ? { duration: 0.4, ease: "easeOut" }
-                                      : {
-                                          duration: 2.8,
-                                          repeat: Infinity,
-                                          ease: "easeInOut"
-                                        }
+                                    rotate: { duration: 0.6, delay: 0.1, ease: "easeInOut" }
                                   }}
-                                  className={`relative flex items-center justify-center gap-1.5 py-1 px-3.5 rounded-full font-sans font-bold text-[11px] uppercase tracking-wider select-none border-none transition-colors duration-300 leading-normal overflow-visible ${
-                                    darkMode
-                                      ? "bg-[#292218] text-[#F3DFB0]"
-                                      : "bg-[#FDF6E9] text-[#9B7020]"
-                                  }`}
+                                  className="relative flex items-center justify-center gap-2 select-none border-none text-2xl sm:text-3xl font-black uppercase tracking-tight text-amber-950 dark:text-amber-300 dark:drop-shadow-[0_2px_12px_rgba(251,191,36,0.38)] leading-normal overflow-visible"
                                 >
-                                  <Trophy className="w-3.5 h-3.5 text-amber-600 dark:text-amber-300 shrink-0" />
-                                  <span className="text-amber-600 dark:text-amber-300 leading-normal overflow-visible">{t("personalBestAchieved")}</span>
-                                  <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-300 shrink-0" />
+                                  <Trophy className="w-6 h-6 sm:w-7 sm:h-7 text-amber-950 dark:text-amber-300 shrink-0" />
+                                  <span className="text-amber-950 dark:text-amber-300 leading-tight">NEW RECORD!</span>
+                                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-amber-950 dark:text-amber-300 shrink-0" />
                                 </motion.div>
                               </div>
                             ) : (
@@ -10750,11 +10732,15 @@ useEffect(() => {
                               </div>
                             )}
 
-                            <p className={`text-sm font-sans mt-1 leading-normal overflow-visible ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
-                              {isFailed 
-                                ? t("mistakesLimitReached")
-                                : t("victoryTitle")}
-                            </p>
+                            {isFailed ? (
+                              <p className={`text-sm font-sans mt-1 leading-normal overflow-visible ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
+                                {t("mistakesLimitReached")}
+                              </p>
+                            ) : !isNewRecordAchieved ? (
+                              <p className={`text-sm font-sans mt-1 leading-normal overflow-visible ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
+                                {t("victoryTitle")}
+                              </p>
+                            ) : null}
                           </div>
 
                           {/* Stats */}
