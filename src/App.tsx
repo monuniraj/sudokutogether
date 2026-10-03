@@ -9016,14 +9016,14 @@ useEffect(() => {
                           <>
                             <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5] shrink-0" />
                             <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
-                              Review
+                              {t("reviewGame")}
                             </span>
                           </>
                         ) : isGameInProgress ? (
                           <>
                             <RotateCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0 animate-pulse" />
                             <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
-                              {t("resumeBtn")}
+                              {t("resumeGame")}
                             </span>
                           </>
                         ) : (
@@ -9061,7 +9061,7 @@ useEffect(() => {
                   className="w-full border-none p-5 sm:p-6 md:p-8 mt-4 sm:mt-6 text-center font-black text-xl md:text-2xl tracking-wider uppercase transition-all duration-200 active:scale-[0.98] select-none rounded-[20px] shadow-sm flex items-center justify-center gap-2 cursor-pointer bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:hover:bg-rose-900/70 dark:text-rose-200"
                 >
                   <Play className="w-5 h-5 md:w-6 md:h-6 fill-current stroke-[2.5]"/>
-                  <span>PLAY NEW GAME</span>
+                  <span>{t("playNewGame")}</span>
                 </button>
 
               </div>

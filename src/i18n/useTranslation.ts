@@ -26,6 +26,9 @@ const ALIAS_MAP: Record<string, TranslationKey> = {
   HOME_RECORD_BANNER_TITLE: 'home_record_banner_title',
   HOME_RECORD_BANNER_BEST_TIME: 'home_record_banner_best_time',
   BREAK_YOUR_RECORD: 'break_your_record',
+  PLAYNEWGAME: 'playNewGame',
+  REVIEWGAME: 'reviewGame',
+  RESUMEGAME: 'resumeGame',
 };
 
 /**
@@ -35,6 +38,9 @@ const ALIAS_MAP: Record<string, TranslationKey> = {
 function sanitizeFallbackKey(key: string, params?: Record<string, string | number>): string {
   const upper = key.toUpperCase();
 
+  if (upper === 'PLAYNEWGAME' || upper === 'PLAY_NEW_GAME') return 'PLAY NEW GAME';
+  if (upper === 'REVIEWGAME' || upper === 'REVIEW_GAME') return 'REVIEW';
+  if (upper === 'RESUMEGAME' || upper === 'RESUME_GAME') return 'RESUME';
   if (upper === 'WINRATELABEL' || upper === 'WIN_RATE_LABEL') return 'Win Rate';
   if (upper === 'WINSRATIO' || upper === 'WINS_RATIO') {
     if (params && params.wins !== undefined && params.total !== undefined) {
