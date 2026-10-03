@@ -14464,7 +14464,10 @@ useEffect(() => {
                       <strong>SudokuSync</strong> — {t("aboutUsDesc")}
                     </p>
                     <p className="leading-normal overflow-visible">
-                      Our mission is to elevate classic paper-and-pencil Sudoku into an engaging digital multiplayer experience. Powered by deterministic seed generation (Mulberry32 PRNG), custom mistake limits, real-time board synchronization, and procedural sound synthesis, our platform brings players together on identical, mathematically verified 1-solution puzzles without heavy data transmission.
+                      {t("aboutMission")}
+                    </p>
+                    <p className="leading-normal overflow-visible text-xs text-stone-600 dark:text-stone-300">
+                      {t("aboutTechArchDesc")}
                     </p>
                     <div className="p-3 rounded-xl bg-stone-500/5 dark:bg-zinc-800/60 border border-stone-200/60 dark:border-zinc-700/60 space-y-1 my-2">
                       <p className="text-xs font-bold text-stone-700 dark:text-stone-300 leading-normal overflow-visible">
@@ -14474,15 +14477,15 @@ useEffect(() => {
                         {t("creditsLabel")}
                       </p>
                     </div>
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">Key Features & Architecture:</h4>
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">{t("aboutFeaturesHeader")}:</h4>
                     <ul className="list-disc pl-5 space-y-1.5 text-xs">
-                      <li><strong>Deterministic Seeded Generation:</strong> Play identical puzzles with friends across web and Android mobile by simply sharing a room link or numeric seed.</li>
-                      <li><strong>Scrapbook Design Aesthetic:</strong> Premium paper-and-ink visual theme with customizable sticky notes, washi tape, and drag-and-drop stickers.</li>
-                      <li><strong>Procedural Web Audio Engine:</strong> Dynamic, zero-latency synthesizer sounds created natively via the browser Web Audio API.</li>
-                      <li><strong>Offline-First Resilience:</strong> Full gameplay capability offline with automatic Firestore synchronization when back online.</li>
+                      <li><strong>{t("aboutFeat1Title")}:</strong> {t("aboutFeat1Desc")}</li>
+                      <li><strong>{t("aboutFeat2Title")}:</strong> {t("aboutFeat2Desc")}</li>
+                      <li><strong>{t("aboutFeat3Title")}:</strong> {t("aboutFeat3Desc")}</li>
+                      <li><strong>{t("aboutFeat4Title")}:</strong> {t("aboutFeat4Desc")}</li>
                     </ul>
-                    <p className="pt-2 text-stone-600 dark:text-stone-400 leading-normal overflow-visible">
-                      This application is 100% free to play, supported by Google AdSense advertisements, and built with privacy, speed, and accessibility at its core.
+                    <p className="pt-2 text-stone-600 dark:text-stone-400 leading-normal overflow-visible text-xs">
+                      {t("aboutAdNotice")}
                     </p>
                   </div>
                 )}
@@ -14491,7 +14494,7 @@ useEffect(() => {
                   <div className="space-y-3">
                     <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc] leading-normal overflow-visible">{t("contactUsTitle")}</p>
                     <p className="leading-normal overflow-visible">
-                      We are committed to providing prompt support and full transparency for our global players. If you have questions, bug reports, feature suggestions, or privacy inquiries, please reach out directly:
+                      {t("contactDesc")}
                     </p>
                     <div className="p-4 rounded-2xl bg-stone-500/5 dark:bg-zinc-800/60 border border-stone-200/60 dark:border-zinc-700/60 my-2 space-y-2">
                       <p className="font-bold text-xs uppercase tracking-wider text-stone-600 dark:text-stone-300 leading-normal overflow-visible">{t("officialSupportContact")}</p>
@@ -14499,12 +14502,12 @@ useEffect(() => {
                         sudokutogethermode@gmail.com
                       </a>
                       <p className="text-[11px] text-stone-500 dark:text-stone-400 font-mono leading-normal overflow-visible">
-                        Response Turnaround: Within 24 to 48 business hours.
+                        {t("contactTurnaround")}
                       </p>
                     </div>
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">Data & Account Deletion Requests:</h4>
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("contactDeletionHeader")}:</h4>
                     <p className="text-xs leading-normal overflow-visible">
-                      You can instantly delete your local cache and Cloud Firestore profile using the in-app <strong>"Delete Account & Data"</strong> tool located under Settings, or by emailing our support desk with your player nickname.
+                      {t("contactDeletionDesc")}
                     </p>
                   </div>
                 )}
@@ -14513,31 +14516,23 @@ useEffect(() => {
                   <div className="space-y-4">
                     <div>
                       <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc] leading-normal overflow-visible">{t("privacyPolicyTitle")}</p>
-                      <p className="text-[11px] font-mono opacity-80 leading-normal overflow-visible">Effective Date: August 12, 2026 | Version 2.4</p>
+                      <p className="text-[11px] font-mono opacity-80 leading-normal overflow-visible">{t("privacyEffectiveDate")}</p>
                     </div>
                     
                     <p className="leading-normal overflow-visible font-medium text-stone-700 dark:text-stone-300">
-                      {t("privacyIntro")}
-                    </p>
-                    
-                    <p className="leading-normal overflow-visible">
-                      At <strong>SudokuSync</strong> (accessible from <a href="https://sudokusync.com" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">https://sudokusync.com</a> and the official Android mobile app), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed, and how we uphold global privacy standards including the <strong>General Data Protection Regulation (GDPR)</strong>, the <strong>California Consumer Privacy Act (CCPA/CPRA)</strong>, the <strong>Children's Online Privacy Protection Act (COPPA)</strong>, <strong>Google Play Store Data Safety Policies</strong>, and <strong>Google AdSense Program Policies</strong>.
+                      {t("privacyScopeDesc")}
                     </p>
 
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">1. Information Collection & Storage Architecture</h4>
-                    <p className="leading-normal overflow-visible">We believe in strict data minimization. Our architecture distinguishes clearly between client-only local data and cloud database records:</p>
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("privacySection1Header")}</h4>
+                    <p className="leading-normal overflow-visible text-xs">{t("privacySection1Desc")}</p>
                     <ul className="list-disc pl-5 space-y-2 text-xs">
-                      <li>
-                        <strong>Client-Side Local Storage (Browser & Device Only):</strong> We use standard browser <code>localStorage</code> solely on your device to persist UI preferences (Dark Mode, sound synthesis, haptics), mistake counter limits, timer visibility, active puzzle board state/notes, and saved single-player games. <em>This data is stored locally on your device and is never sold, shared, or transmitted to third-party marketing entities.</em>
-                      </li>
-                      <li>
-                        <strong>Google Cloud Firestore (Real-Time Multiplayer & Leaderboards):</strong> When participating in multiplayer challenges or global matches, non-sensitive game parameters (room seed, nickname, elapsed time, mistakes) are stored on Google Cloud Firestore.
-                      </li>
+                      <li>{t("privacyLocalStorageItem")}</li>
+                      <li>{t("privacyCloudStorageItem")}</li>
                     </ul>
 
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">2. Contact Information</h4>
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">{t("privacySection2Header")}</h4>
                     <p className="text-xs leading-normal overflow-visible">
-                      For any questions regarding this Privacy Policy or our data handling practices, please contact our Data Protection desk at:
+                      {t("privacySection2Desc")}
                       <br />
                       <strong className="text-sky-500 dark:text-sky-400">sudokutogethermode@gmail.com</strong>
                     </p>
@@ -14548,26 +14543,22 @@ useEffect(() => {
                   <div className="space-y-4">
                     <div>
                       <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc] leading-normal overflow-visible">{t("termsOfServiceTitle")}</p>
-                      <p className="text-[11px] font-mono opacity-80 leading-normal overflow-visible">Effective Date: August 12, 2026 | Version 2.4</p>
+                      <p className="text-[11px] font-mono opacity-80 leading-normal overflow-visible">{t("termsEffectiveDate")}</p>
                     </div>
 
-                    <p className="leading-normal overflow-visible font-medium text-stone-700 dark:text-stone-300">
-                      {t("termsIntro")}
-                    </p>
-                    
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">1. Agreement & Acceptance of Terms</h4>
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsSection1Header")}</h4>
                     <p className="text-xs leading-normal overflow-visible">
-                      By accessing, browsing, installing, or playing <strong>SudokuSync</strong> (via <a href="https://sudokusync.com" target="_blank" rel="noopener noreferrer" className="text-sky-500 underline">sudokusync.com</a> or our official Android application), you agree to be bound by these Terms of Service, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws.
+                      {t("termsSection1Desc")}
                     </p>
 
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">2. Description of Service & Free Access</h4>
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsSection2Header")}</h4>
                     <p className="text-xs leading-normal overflow-visible">
-                      SudokuSync provides free-to-play digital Sudoku puzzles, deterministic seeded matchmaking rooms, real-time leaderboards, and logic training tools. The service is provided on an "AS IS" and "AS AVAILABLE" basis.
+                      {t("termsSection2Desc")}
                     </p>
 
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">3. Contact Us</h4>
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsSection3Header")}</h4>
                     <p className="text-xs leading-normal overflow-visible">
-                      If you have questions or legal notices regarding these Terms of Service, please contact us at:
+                      {t("termsSection3Desc")}
                       <br />
                       <strong className="text-sky-500 dark:text-sky-400">sudokutogethermode@gmail.com</strong>
                     </p>
