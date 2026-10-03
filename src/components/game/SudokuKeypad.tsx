@@ -195,8 +195,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
       </div>
 
       {/* 2. NUMBER PAD: 1-9 */}
-      <div className="shrink-0 w-full mt-2.5 sm:mt-3 mb-0 pb-0 lg:mt-3 lg:mb-0 lg:pb-0 overflow-visible px-1 sm:px-0" id="game-number-pad-deck">
-        <div className="grid grid-cols-9 lg:grid-cols-3 gap-1.5 sm:gap-2 lg:gap-3 w-full select-none overflow-visible">
+      <div className="shrink-0 w-full mt-1 lg:mt-0 pb-0.5 overflow-visible px-1 sm:px-0" id="game-number-pad-deck">
+        <div className="grid grid-cols-9 lg:grid-cols-3 gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5 w-full select-none overflow-visible">
           {Array.from({ length: 9 }).map((_, i) => {
             const num = i + 1;
             const isSelected = isGameOver 
@@ -213,7 +213,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                   onNumberSelect(num);
                 }}
                 disabled={!boardState || visualizingBacktrack || (!isGameOver && remainingCount <= 0)}
-                className={`aspect-[1/1.55] lg:aspect-square w-full relative flex items-center justify-center select-none font-sans font-normal cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
+                className={`aspect-[1/1.55] lg:aspect-[1/1.02] w-full relative flex items-center justify-center cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
                   isSelected 
                     ? activeKeypadTheme
                     : (darkMode 
@@ -221,36 +221,25 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                         : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")
                 }`}
               >
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none p-1">
-                  {/* Single Unified Wrapper: Locks both numbers together into one rigid vertical unit */}
-                  <div className="flex flex-col items-center justify-center leading-none">
-                    
-                    {/* Primary Handwriting Digit */}
-                    <span 
-                      className={`handwriting font-normal leading-none select-none flex items-center justify-center ${
-                        showRemainingNumbers 
-                          ? "text-[clamp(32px,8vw,38px)] sm:text-[36px] lg:text-[44px] xl:text-[48px] -mb-1 lg:-mb-1.5" 
-                          : "text-[38px] sm:text-[44px] lg:text-[52px] xl:text-[56px]"
-                      }`}
-                    >
-                      {num}
+                <div className="flex flex-col items-center justify-center absolute inset-0 py-1 px-0.5 select-none pointer-events-none">
+                  <span 
+                    className="handwriting font-normal leading-none flex items-center justify-center text-[clamp(42px,10vw,48px)] sm:text-[44px] lg:text-[48px] xl:text-[52px] select-none"
+                  >
+                    {num}
+                  </span>
+                  {showRemainingNumbers && (
+                    <span className={`text-[13px] sm:text-[14px] lg:text-[15px] xl:text-[16px] font-mono leading-none mt-0 select-none flex items-center justify-center font-bold ${
+                      isSelected 
+                        ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
+                            ? "text-white/95"
+                            : !darkMode && currentDiff === "MEDIUM"
+                              ? "text-[#78350F]"
+                              : "text-stone-900 dark:text-white")
+                        : "text-stone-400 dark:text-zinc-500"
+                    } ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
+                      {remainingCount > 0 ? remainingCount : <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4 stroke-[2.5]"/>}
                     </span>
-
-                    {/* Sub-Count Indicator: Anchored directly below the digit glyph with guaranteed bottom clearance */}
-                    {showRemainingNumbers && (
-                      <span className={`text-[12.5px] sm:text-[13.5px] lg:text-[15px] xl:text-[16px] font-mono leading-none select-none font-bold ${
-                        isSelected 
-                          ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
-                              ? "text-white/95"
-                              : !darkMode && currentDiff === "MEDIUM"
-                                ? "text-[#78350F]"
-                                : "text-stone-900 dark:text-white")
-                          : "text-stone-400 dark:text-zinc-500"
-                      } ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
-                        {remainingCount > 0 ? remainingCount : <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-4 lg:h-4 stroke-[2.5]" />}
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
               </button>
             );
