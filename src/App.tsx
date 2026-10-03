@@ -8976,9 +8976,9 @@ useEffect(() => {
                       >
                         <span className={`flex items-center justify-center shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4 ${darkMode ? "text-sky-400" : "text-[#2B6CB0]"} transition-transform duration-150 group-active:scale-90`}>
                           {isTimerPaused ? (
-                            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current stroke-[1.25]" />
+                            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" strokeWidth={0.8} />
                           ) : (
-                            <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current stroke-[1.25]" />
+                            <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" strokeWidth={0.8} />
                           )}
                         </span>
                         <span 
@@ -9363,7 +9363,7 @@ useEffect(() => {
                       setIsTimerPaused(false);
                       addLog("🔄 Started a fresh new board!");
                     }}
-                    className={`hidden lg:block w-full border-none py-3 px-4 mt-3 lg:mt-3.5 text-center font-bold text-sm sm:text-base tracking-wider uppercase transition-all duration-150 select-none rounded-2xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 leading-none ${
+                    className={`hidden lg:flex w-full h-[38px] border-none px-4 mt-3 lg:mt-3.5 items-center justify-center font-mono text-xs sm:text-sm font-bold tracking-wider uppercase transition-all duration-150 select-none rounded-xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 leading-none ${
                       darkMode 
                         ? "bg-[#4c0519] hover:bg-[#4c0519]/80 text-[#fecdd3]" 
                         : "bg-[#FFE4E6] hover:bg-[#FFE4E6]/85 active:bg-[#FBCFE8] text-[#9D174D]"
