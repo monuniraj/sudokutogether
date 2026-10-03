@@ -9007,7 +9007,7 @@ useEffect(() => {
                   </div>
 
                   {/* 2. CENTER CANVAS: Corner-to-Corner Sudoku grid with custom border hierarchy and height-aware sizing */}
-                  <div className="w-full flex items-center justify-center p-0.5 overflow-hidden relative rounded-none">
+                  <div className="w-full flex items-center justify-center p-0.5 overflow-hidden relative rounded-xl">
                     <SudokuBoard
                       boardState={boardState}
                       difficulty={difficulty}
