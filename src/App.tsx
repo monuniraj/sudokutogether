@@ -8827,7 +8827,7 @@ useEffect(() => {
                   <div className="w-full relative flex items-center justify-between px-1 mb-1 select-none shrink-0" id="unified-bridge-container">
                     {/* Left: Mistakes status metric */}
                     <span className={`font-mono font-medium text-sm sm:text-base tracking-wider uppercase leading-none select-none flex items-center ${darkMode ? "text-pink-400" : "text-[#9D174D]"}`}>
-                      {t("errHeader")}: {boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
+                      {t("errHeader")}:{boardState ? boardState.currentMistakesCount : 0}{mistakeLimitEnabled ? `/${boardState?.maxMistakesLimit ?? 3}` : ""}
                     </span>
 
                     {/* Center: Balanced 4-Icon Micro-Bar [Zap, Users, HelpCircle, Volume] */}
@@ -8969,7 +8969,7 @@ useEffect(() => {
                           setIsTimerPaused(!isTimerPaused);
                           addLog(isTimerPaused ? "⏱️ Session timer resumed!" : "⏸️ Session timer paused.");
                         }}
-                        className="flex items-center gap-1.5 justify-end select-none shrink-0 h-full bg-transparent border-none p-1 -mr-1 cursor-pointer outline-none hover:opacity-80 active:scale-95 transition-all duration-150 group touch-manipulation"
+                        className="flex items-center gap-1 justify-end select-none shrink-0 h-full bg-transparent border-none p-1 cursor-pointer outline-none hover:opacity-80 active:scale-95 transition-all duration-150 group touch-manipulation"
                         title={isTimerPaused ? "Resume Game" : "Pause Game"}
                         aria-label={isTimerPaused ? "Resume Game" : "Pause Game"}
                         id="hud-timer-pause-button"
@@ -9153,7 +9153,7 @@ useEffect(() => {
                 >
                   
                   {/* ROW 1: MULTIPLAYER BUTTON (Desktop-only, matches Difficulty selector baseline, label spacing, and height) */}
-                  <div className="hidden lg:flex w-full flex-col mb-3 lg:mb-3.5 shrink-0 select-none pb-1" id="desktop-multiplayer-container">
+                  <div className="hidden lg:flex w-full flex-col mb-3.5 lg:mb-3.5 shrink-0 select-none pb-1" id="desktop-multiplayer-container">
                     <div className="flex items-center justify-between gap-4 mb-2 invisible pointer-events-none">
                       <span className="block text-xs font-black uppercase tracking-wider font-mono">
                         {t("selectDifficulty")}
@@ -9178,7 +9178,7 @@ useEffect(() => {
                   </div>
 
                   {/* 📌 AUTHENTIC CURRENT RECORD / BEST TIME CARD (Desktop lg: ONLY) */}
-                  <div className="hidden lg:flex w-full mb-3 lg:mb-3.5 shrink-0 select-none" id="desktop-current-record-container">
+                  <div className="hidden lg:flex w-full mb-3 lg:mb-3 shrink-0 select-none" id="desktop-current-record-container">
                     {(() => {
                       const activeDiff = ((boardState?.difficulty || difficulty).toUpperCase()) as Difficulty;
                       const bestSecs = personalBestTimes[activeDiff] || 0;
@@ -9207,23 +9207,23 @@ useEffect(() => {
 
                           <div className="text-center w-full relative z-10 flex flex-col items-center gap-0.5">
                             {/* Tier 1: Top Mini Header */}
-                            <span className="text-[10px] uppercase font-mono tracking-widest block font-normal opacity-70 leading-none">
+                            <span className="text-[9px] uppercase font-mono tracking-widest block font-normal opacity-60 leading-none">
                               {t("currentRecordHeader")}
                             </span>
                             
                             {/* Tier 2: Center Hero Metric */}
-                            <div className="flex items-center justify-center gap-2 my-0.5">
-                              <Timer className="w-4 h-4 stroke-[1.5] opacity-80 shrink-0" />
-                              <span className="font-sans font-normal text-xs uppercase tracking-wider opacity-80">
+                            <div className="flex items-center justify-center gap-1.5 my-0.5">
+                              <Timer className="w-4 h-4 stroke-[2] opacity-90 shrink-0" />
+                              <span className="font-sans font-bold text-sm sm:text-base uppercase tracking-wider opacity-90 leading-none">
                                 {t("bestTimeHeader")}:
                               </span>
-                              <span className="font-mono font-normal text-xl tabular-nums tracking-wide">
+                              <span className="font-mono font-bold text-lg sm:text-xl tabular-nums tracking-wide leading-none">
                                 {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
                               </span>
                             </div>
 
                             {/* Tier 3: Bottom Subtitle Prompt */}
-                            <p className="text-[10px] sm:text-[11px] select-none handwriting opacity-60 font-normal leading-none tracking-wide truncate max-w-full">
+                            <p className="text-[10px] select-none handwriting opacity-60 font-normal leading-none tracking-wide truncate max-w-full">
                               {bestSecs > 0 
                                 ? t("beatRecordPrompt") 
                                 : t("noRecordPrompt")}
@@ -9371,7 +9371,7 @@ useEffect(() => {
                       setIsTimerPaused(false);
                       addLog("🔄 Started a fresh new board!");
                     }}
-                    className={`hidden lg:flex w-full h-[38px] border-none px-4 mt-3 lg:mt-3.5 items-center justify-center font-mono text-xs sm:text-sm font-bold tracking-wider uppercase transition-all duration-150 select-none rounded-xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 leading-none ${
+                    className={`hidden lg:flex w-full h-[38px] border-none px-4 mt-3.5 lg:mt-3.5 items-center justify-center font-mono text-xs sm:text-sm font-bold tracking-wider uppercase transition-all duration-150 select-none rounded-xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 leading-none ${
                       darkMode 
                         ? "bg-[#4c0519] hover:bg-[#4c0519]/80 text-[#fecdd3]" 
                         : "bg-[#FFE4E6] hover:bg-[#FFE4E6]/85 active:bg-[#FBCFE8] text-[#9D174D]"

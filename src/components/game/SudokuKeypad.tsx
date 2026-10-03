@@ -221,9 +221,9 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                         : "bg-white/95 text-[#2B6CB0] hover:bg-white active:bg-stone-250 shadow-[0_8px_16px_rgba(43,108,176,0.08),_0_2px_4px_rgba(0,0,0,0.02)]")
                 }`}
               >
-                <div className="flex flex-col items-center justify-center my-auto select-none leading-none">
+                <div className="flex flex-col items-center justify-center my-auto h-full w-full select-none leading-none">
                   <span 
-                    className="handwriting font-normal leading-none flex items-center justify-center text-[clamp(32px,7.5vw,42px)] sm:text-[36px] lg:text-[42px] xl:text-[46px] select-none"
+                    className="handwriting font-normal leading-none flex items-center justify-center text-[clamp(32px,7.5vw,42px)] sm:text-[36px] lg:text-[42px] xl:text-[46px] select-none -mb-1"
                   >
                     {num}
                   </span>
