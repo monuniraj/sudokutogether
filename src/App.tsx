@@ -9753,8 +9753,8 @@ useEffect(() => {
 
                         <div className={`w-full h-px shrink-0 ${darkMode ? "bg-zinc-800" : "bg-stone-200"}`} />
 
-                        {/* SCREEN 1: ONLY Middle Leaderboard Player List is Scrollable */}
-                        <div className="max-h-[38vh] sm:max-h-[42vh] overflow-y-auto overscroll-contain pr-1 custom-scrollbar flex flex-col gap-2">
+                        {/* SCREEN 1: Middle Leaderboard Player List cleanly spaced */}
+                        <div className="max-h-[48vh] sm:max-h-[52vh] overflow-y-auto overscroll-contain pr-1 custom-scrollbar flex flex-col gap-2">
                           {(() => {
                             const didCurrentPlayerFail = mistakeLimitEnabled && 
                               (boardState.maxMistakesLimit === 0 
@@ -9932,229 +9932,6 @@ useEffect(() => {
                             });
                           })()}
                         </div>
-
-                        {/* INTERACTIVE MATCH RULES CONFIG — 4 Sleek Compact Dropdown Tags */}
-                        <div className="relative select-none shrink-0">
-                          <div className="grid grid-cols-2 gap-2 w-full">
-                            {/* Top-Left: Difficulty */}
-                            <div className="relative w-full">
-                              <button
-                                onClick={(e) => {
-                                  playClickSound();
-                                  toggleDropdownPortal("difficulty", e.currentTarget);
-                                }}
-                                className={`w-full py-1.5 px-2.5 flex items-center justify-center gap-1 text-[11px] font-mono font-bold uppercase tracking-wider rounded-lg border-none outline-none cursor-pointer transition-all duration-150 active:scale-95 ${
-                                  challengeDifficulty === "EASY"
-                                    ? (darkMode ? "bg-[#022c22] text-[#d1fae5] shadow-xs" : "bg-[#D1FAE5] text-[#065F46] shadow-xs")
-                                    : challengeDifficulty === "MEDIUM"
-                                    ? (darkMode ? "bg-[#451a03] text-[#fef08a] shadow-xs" : "bg-[#FFF99D] text-[#854D0E] shadow-xs")
-                                    : challengeDifficulty === "HARD"
-                                    ? (darkMode ? "bg-[#2e1065] text-[#e9d5ff] shadow-xs" : "bg-[#F3E8FF] text-[#6B21A8] shadow-xs")
-                                    : (darkMode ? "bg-[#4c0519] text-[#fecdd3] shadow-xs" : "bg-[#FFE4E6] text-[#9D174D] shadow-xs")
-                                }`}
-                              >
-                                <span className="truncate">
-                                  {t(challengeDifficulty.toLowerCase() as any)} ▾
-                                </span>
-                              </button>
-                            </div>
-
-                            {/* Top-Right: Mistakes */}
-                            <div className="relative w-full">
-                              <button
-                                onClick={(e) => {
-                                  playClickSound();
-                                  toggleDropdownPortal("mistakes", e.currentTarget);
-                                }}
-                                className={`w-full py-1.5 px-2.5 flex items-center justify-center gap-1 text-[11px] font-mono font-bold uppercase tracking-wider rounded-lg border-none outline-none cursor-pointer transition-all duration-150 active:scale-95 ${
-                                  darkMode
-                                    ? "bg-[#451a03] text-[#fef08a] shadow-xs"
-                                    : "bg-[#FFF99D] text-[#854D0E] shadow-xs"
-                                }`}
-                              >
-                                <span className="truncate">
-                                  {challengeMistakeLimit === 0 ? "0 Mistakes" : challengeMistakeLimit === 999 ? "Unlimited" : `${challengeMistakeLimit} Mistakes`} ▾
-                                </span>
-                              </button>
-                            </div>
-
-                            {/* Bottom-Left: Hints */}
-                            <div className="relative w-full">
-                              <button
-                                onClick={(e) => {
-                                  playClickSound();
-                                  toggleDropdownPortal("hints", e.currentTarget);
-                                }}
-                                className={`w-full py-1.5 px-2.5 flex items-center justify-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider rounded-lg border-none outline-none cursor-pointer transition-all duration-150 active:scale-95 ${
-                                  darkMode
-                                    ? "bg-[#2e1065] text-[#e9d5ff] shadow-xs"
-                                    : "bg-[#F3E8FF] text-[#6B21A8] shadow-xs"
-                                }`}
-                              >
-                                <Lightbulb className="w-3 h-3 stroke-[2.5] shrink-0" />
-                                <span className="truncate">
-                                  {challengeHintLimit === 0 ? "No Hints" : challengeHintLimit === 1 ? "1 Hint" : `${challengeHintLimit} Hints`} ▾
-                                </span>
-                              </button>
-                            </div>
-
-                            {/* Bottom-Right: Timer */}
-                            <div className="relative w-full">
-                              <button
-                                onClick={(e) => {
-                                  playClickSound();
-                                  toggleDropdownPortal("timer", e.currentTarget);
-                                }}
-                                className={`w-full py-1.5 px-2.5 flex items-center justify-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider rounded-lg border-none outline-none cursor-pointer transition-all duration-150 active:scale-95 ${
-                                  challengeTimerEnabled
-                                    ? (darkMode ? "bg-[#0c4a6e]/50 text-[#bae6fd] shadow-xs" : "bg-[#E0F2FE] text-[#0369A1] shadow-xs")
-                                    : (darkMode ? "bg-zinc-800/80 text-stone-400" : "bg-stone-150 text-stone-600")
-                                }`}
-                              >
-                                <Timer className="w-3 h-3 stroke-[2.5] shrink-0" />
-                                <span className="truncate">
-                                  {challengeTimerEnabled ? "TIMER ON ▾" : "TIMER OFF ▾"}
-                                </span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* FLOATING PORTAL FOR SETTINGS DROPDOWN */}
-                        {openDropdown && dropdownCoords && typeof document !== "undefined" && createPortal(
-                          <div 
-                            className="fixed inset-0 z-[99998] bg-transparent cursor-default pointer-events-auto" 
-                            onClick={() => { setOpenDropdown(null); setDropdownCoords(null); }}
-                          >
-                            <div
-                              onClick={(e) => e.stopPropagation()}
-                              style={{
-                                position: "fixed",
-                                top: dropdownCoords.top,
-                                left: Math.max(8, Math.min(dropdownCoords.left, window.innerWidth - (openDropdown === "mistakes" ? 225 : 165))),
-                                minWidth: Math.max(dropdownCoords.width, openDropdown === "mistakes" ? 215 : 150),
-                                maxWidth: "calc(100vw - 16px)",
-                              }}
-                              className={`rounded-xl p-1.5 flex flex-col gap-1 z-[99999] shadow-2xl border transition-all ${
-                                darkMode ? "bg-zinc-900 border-zinc-700 text-stone-100" : "bg-white border-stone-200 text-stone-850"
-                              }`}
-                            >
-                              {openDropdown === "difficulty" && (
-                                (["EASY", "MEDIUM", "HARD", "EXPERT"] as Difficulty[]).map(lvl => (
-                                  <button
-                                    key={lvl}
-                                    onClick={() => {
-                                      playClickSound();
-                                      setChallengeDifficulty(lvl);
-                                      setOpenDropdown(null);
-                                      setDropdownCoords(null);
-                                      updateRoomSettingsInFirestore({ difficulty: lvl });
-                                    }}
-                                    className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all ${
-                                      lvl === "EASY"
-                                        ? (darkMode ? "hover:bg-[#022c22] text-[#d1fae5]" : "hover:bg-[#D1FAE5] text-[#065F46]")
-                                        : lvl === "MEDIUM"
-                                        ? (darkMode ? "hover:bg-[#451a03] text-[#fef08a]" : "hover:bg-[#FFF99D] text-[#854D0E]")
-                                        : lvl === "HARD"
-                                        ? (darkMode ? "hover:bg-[#2e1065] text-[#e9d5ff]" : "hover:bg-[#F3E8FF] text-[#6B21A8]")
-                                        : (darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]")
-                                    } ${challengeDifficulty === lvl ? (darkMode ? "bg-zinc-800 font-black" : "bg-stone-100 font-black") : "bg-transparent"}`}
-                                  >
-                                    {lvl.charAt(0) + lvl.slice(1).toLowerCase()}
-                                  </button>
-                                ))
-                              )}
-
-                              {openDropdown === "mistakes" && (
-                                [
-                                  { label: "0 Mistakes (Sudden Death)", val: 0 },
-                                  { label: "3 Mistakes", val: 3 },
-                                  { label: "5 Mistakes", val: 5 },
-                                  { label: "Unlimited", val: 999 },
-                                ].map(opt => (
-                                  <button
-                                    key={opt.label}
-                                    onClick={() => {
-                                      playClickSound();
-                                      setChallengeMistakeLimit(opt.val);
-                                      setOpenDropdown(null);
-                                      setDropdownCoords(null);
-                                      updateRoomSettingsInFirestore({ mistakesLimit: opt.val });
-                                      if (opt.val > 3) {
-                                        triggerMistakeLimitAlert();
-                                      }
-                                    }}
-                                    className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all ${
-                                      darkMode
-                                        ? "hover:bg-[#451a03] text-[#fef08a]"
-                                        : "hover:bg-[#FFF99D] text-[#854D0E]"
-                                    } ${challengeMistakeLimit === opt.val ? (darkMode ? "bg-zinc-800 font-black" : "bg-stone-100 font-black") : "bg-transparent"}`}
-                                  >
-                                    {opt.label}
-                                  </button>
-                                ))
-                              )}
-
-                              {openDropdown === "hints" && (
-                                [
-                                  { label: "No Hints", val: 0 },
-                                  { label: "1 Hint", val: 1 },
-                                  { label: "3 Hints", val: 3 },
-                                  { label: "5 Hints", val: 5 },
-                                ].map(opt => (
-                                  <button
-                                    key={opt.label}
-                                    onClick={() => {
-                                      playClickSound();
-                                      setChallengeHintLimit(opt.val);
-                                      setOpenDropdown(null);
-                                      setDropdownCoords(null);
-                                      updateRoomSettingsInFirestore({ hintsLimit: opt.val });
-                                       if (opt.val > 3) {
-                                         triggerHintLimitAlert();
-                                       }
-                                    }}
-                                    className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all flex items-center gap-1.5 ${
-                                      darkMode
-                                        ? "hover:bg-[#2e1065] text-[#e9d5ff]"
-                                        : "hover:bg-[#F3E8FF] text-[#6B21A8]"
-                                    } ${challengeHintLimit === opt.val ? (darkMode ? "bg-zinc-800 font-black" : "bg-stone-100 font-black") : "bg-transparent"}`}
-                                  >
-                                    <Lightbulb className="w-3 h-3 stroke-[2.5] shrink-0" />
-                                    <span>{opt.label}</span>
-                                  </button>
-                                ))
-                              )}
-
-                              {openDropdown === "timer" && (
-                                [
-                                  { label: "Timer On", val: true },
-                                  { label: "Timer Off", val: false },
-                                ].map(opt => (
-                                  <button
-                                    key={opt.label}
-                                    onClick={() => {
-                                      playClickSound();
-                                      setChallengeTimerEnabled(opt.val);
-                                      setOpenDropdown(null);
-                                      setDropdownCoords(null);
-                                      updateRoomSettingsInFirestore({ timerEnabled: opt.val });
-                                    }}
-                                    className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all flex items-center gap-1.5 ${
-                                      darkMode
-                                        ? "hover:bg-[#0c4a6e]/50 text-[#bae6fd]"
-                                        : "hover:bg-[#E0F2FE] text-[#0369A1]"
-                                    } ${challengeTimerEnabled === opt.val ? (darkMode ? "bg-zinc-800 font-black" : "bg-stone-100 font-black") : "bg-transparent"}`}
-                                  >
-                                    <Timer className="w-3 h-3 stroke-[2.5] shrink-0" />
-                                    <span>{opt.label}</span>
-                                  </button>
-                                ))
-                              )}
-                            </div>
-                          </div>,
-                          document.body
-                        )}
 
                         {/* SCREEN 1: Action buttons — SAME GAME | NEW GAME — Evenly Sharing Footer */}
                         <div className="flex gap-2.5 w-full pt-3 border-t border-stone-200/50 dark:border-zinc-800/50 shrink-0">
@@ -10657,8 +10434,8 @@ useEffect(() => {
                       return (
                         <>
                           <div className="flex flex-col items-center gap-1">
-                            <span className={`text-[10px] font-sans font-bold uppercase tracking-widest leading-normal overflow-visible ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
-                              {t(difficulty.toLowerCase() as any)} {t("difficultyLabel")}
+                            <span className={`text-[10px] font-sans font-bold tracking-widest leading-normal overflow-visible ${boardState?.currentMistakesCount === 0 ? "" : "uppercase"} ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
+                              {boardState?.currentMistakesCount === 0 ? "Flawless Run 🎯" : `${t(difficulty.toLowerCase() as any)} ${t("difficultyLabel")}`}
                             </span>
                             {isFailed ? (
                               <motion.h3 
@@ -10854,17 +10631,27 @@ useEffect(() => {
                     })()}
 
                     {/* Invite Friends / Play Together Action Button */}
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setShowGameOverModal(false);
-                        openCreateRoomModal(difficulty, timerEnabled);
-                      }}
-                      className="w-full py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 font-sans font-black text-xs tracking-wider uppercase transition-all shadow-md active:scale-98 border-none cursor-pointer text-white bg-purple-700 hover:bg-purple-800 dark:bg-purple-800 dark:hover:bg-purple-700 leading-normal overflow-visible"
-                    >
-                      <Users className="w-4 h-4" />
-                      <span className="leading-normal overflow-visible">{t("inviteFriends")}</span>
-                    </button>
+                    {(() => {
+                      const isFailed = Boolean(mistakeLimitEnabled && boardState && boardState.currentMistakesCount >= boardState.maxMistakesLimit);
+                      const ctaText = (isNewRecordAchieved && !isFailed)
+                        ? "Beat My Score 🏆"
+                        : isFailed
+                        ? "Solve with Friends 🧩"
+                        : "Challenge Friends ⚡";
+                      return (
+                        <button
+                          onClick={() => {
+                            playClickSound();
+                            setShowGameOverModal(false);
+                            openCreateRoomModal(difficulty, timerEnabled);
+                          }}
+                          className="w-full py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 font-sans font-black text-xs tracking-wider uppercase transition-all shadow-md active:scale-98 border-none cursor-pointer text-white bg-purple-700 hover:bg-purple-800 dark:bg-purple-800 dark:hover:bg-purple-700 leading-normal overflow-visible"
+                        >
+                          <Users className="w-4 h-4" />
+                          <span className="leading-normal overflow-visible">{ctaText}</span>
+                        </button>
+                      );
+                    })()}
 
                     {/* Action buttons row */}
                     <div className="flex w-full gap-3">
