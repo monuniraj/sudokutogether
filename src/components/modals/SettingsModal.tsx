@@ -189,11 +189,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* Incognito Master Toggle (Ghost Mode) */}
           <div
-            className={`p-3.5 rounded-xl border-none flex items-center justify-between ${
-              darkMode ? "bg-zinc-950/45" : "bg-white/70"
+            role="button"
+            tabIndex={0}
+            aria-pressed={isIncognito}
+            onClick={() => {
+              playClickSound();
+              toggleIncognito();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                playClickSound();
+                toggleIncognito();
+              }
+            }}
+            className={`p-3.5 rounded-xl border-none flex items-center justify-between cursor-pointer select-none transition-all active:scale-[0.99] ${
+              darkMode ? "bg-zinc-950/45 hover:bg-zinc-950/60" : "bg-white/70 hover:bg-white/90"
             }`}
           >
-            <div className="flex items-center gap-3 min-w-0 pr-2">
+            <div className="flex items-center gap-3 min-w-0 pr-2 pointer-events-none">
               <span className="text-xl select-none shrink-0" role="img" aria-label="Incognito">
                 🕶️
               </span>
@@ -215,25 +229,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                playClickSound();
-                toggleIncognito();
-              }}
-              className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer shrink-0 active:scale-95 ${
+            <div
+              className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none shrink-0 pointer-events-none ${
                 isIncognito
-                  ? (darkMode ? "bg-purple-500 shadow-none" : "bg-[#6b21a8] shadow-none")
-                  : (darkMode ? "bg-zinc-850" : "bg-[#BAE6FD] active:bg-[#90cdf4] shadow-sm")
+                  ? (darkMode
+                      ? "bg-purple-600 shadow-[0_0_12px_rgba(168,85,247,0.4)] ring-2 ring-purple-400/30"
+                      : "bg-purple-600 shadow-sm ring-2 ring-purple-500/20")
+                  : (darkMode
+                      ? "bg-zinc-800 ring-1 ring-zinc-700/50"
+                      : "bg-purple-200/70 ring-1 ring-purple-300/50 shadow-xs")
               }`}
-              aria-label="Toggle Incognito Mode"
             >
               <div
                 className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
                   isIncognito ? "translate-x-5" : "translate-x-0"
                 }`}
               />
-            </button>
+            </div>
           </div>
 
           {/* Sync status */}

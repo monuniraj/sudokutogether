@@ -2,6 +2,7 @@ import React from "react";
 import { Check, X, Plus } from "lucide-react";
 import { formatMatchTimestamp } from "../../utils/formatTimestamp";
 import { useTranslation } from "../../i18n/useTranslation";
+import { useFriendPresence } from "../../hooks/useFriendPresence";
 
 export interface CompletedGameRecord {
   id: string;
@@ -61,6 +62,8 @@ export const StatsModal: React.FC<StatsModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const [activePlayersTab, setActivePlayersTab] = React.useState<"recent" | "friends">("recent");
+  const playerIds = (multiplayerPlayers || []).map((p) => p.id);
+  const { getFriendStatus } = useFriendPresence(undefined, playerIds);
   return (
     <div
       className={`p-4 md:p-8 flex-1 w-full flex flex-col items-center justify-start overflow-y-auto pb-10 select-none pt-[calc(85px+env(safe-area-inset-top,0px))] lg:pt-[130px] transition-colors duration-300 ${
@@ -538,15 +541,20 @@ export const StatsModal: React.FC<StatsModalProps> = ({
               /* FRIENDS TAB PANEL */
               <div className="flex flex-col gap-4">
                 {(() => {
-                  const friends = multiplayerPlayers.filter(p => p.isFriend).sort((a, b) => {
-                    if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
-                    return a.name.localeCompare(b.name);
-                  });
-                  
-                  const recentPlayers = [...multiplayerPlayers].sort((a, b) => {
-                    if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
-                    return a.name.localeCompare(b.name);
-                  });
+                  const sortPlayers = (list: MultiplayerPlayerRecord[]) => {
+                    return [...list].sort((a, b) => {
+                      const statusA = getFriendStatus(a.id, a.status as any);
+                      const statusB = getFriendStatus(b.id, b.status as any);
+                      const isOnlineA = statusA === "online";
+                      const isOnlineB = statusB === "online";
+                      if (isOnlineA !== isOnlineB) return isOnlineA ? -1 : 1;
+                      if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
+                      return a.name.localeCompare(b.name);
+                    });
+                  };
+
+                  const friends = sortPlayers(multiplayerPlayers.filter((p) => p.isFriend));
+                  const recentPlayers = sortPlayers(multiplayerPlayers);
 
                   return (
                     <div className="flex flex-col h-full">
@@ -584,36 +592,59 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                               {t("noFriendsAdded")}
                             </div>
                           ) : (
-                            friends.map((friend) => (
-                              <div
-                                key={friend.id}
-                                className={`p-2.5 rounded-xl border flex items-center justify-between transition-all shrink-0 ${
-                                  darkMode
-                                    ? "bg-zinc-950/45 border-zinc-800 text-stone-200"
-                                    : "bg-stone-50/45 border-stone-200/50 text-stone-850"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
-                                    darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
-                                  }`}>
-                                    ✓
-                                  </span>
-                                  <div className="flex flex-col truncate">
-                                    <span className="font-sans font-bold text-xs truncate">{friend.name}</span>
-                                    <span className="text-[9.5px] text-stone-400 capitalize">
-                                      {friend.status || "online"}
-                                    </span>
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => handleToggleFriend(friend.id, friend.name)}
-                                  className="shrink-0 text-[10.5px] font-sans font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 border-none bg-transparent cursor-pointer transition-all active:scale-95 px-2 py-1 truncate"
+                            friends.map((friend, index) => {
+                              const effectiveStatus = getFriendStatus(friend.id, friend.status as any);
+                              const isAnimated = index < 5;
+                              const card = (
+                                <div
+                                  className={`p-2.5 rounded-xl border flex items-center justify-between transition-all shrink-0 w-full ${
+                                    darkMode
+                                      ? "bg-zinc-950/45 border-zinc-800 text-stone-200"
+                                      : "bg-stone-50/45 border-stone-200/50 text-stone-850"
+                                  }`}
                                 >
-                                  {t("removeAction")}
-                                </button>
-                              </div>
-                            ))
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    {effectiveStatus === "online" && (
+                                      <span className="w-2 h-2 rounded-full shrink-0 bg-emerald-400 animate-pulse-gentle" />
+                                    )}
+                                    <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
+                                      darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
+                                    }`}>
+                                      ✓
+                                    </span>
+                                    <div className="flex flex-col truncate">
+                                      <span className="font-sans font-bold text-xs truncate">{friend.name}</span>
+                                      <span className="text-[9.5px] text-stone-400 capitalize">
+                                        {effectiveStatus}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => handleToggleFriend(friend.id, friend.name)}
+                                    className="shrink-0 text-[10.5px] font-sans font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 border-none bg-transparent cursor-pointer transition-all active:scale-95 px-2 py-1 truncate"
+                                  >
+                                    {t("removeAction")}
+                                  </button>
+                                </div>
+                              );
+
+                              if (isAnimated) {
+                                return (
+                                  <div
+                                    key={friend.id}
+                                    className="w-full shrink-0 animate-cascade-drop"
+                                    style={{ animationDelay: `${index * 45}ms` }}
+                                  >
+                                    {card}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div key={friend.id} className="w-full shrink-0">
+                                  {card}
+                                </div>
+                              );
+                            })
                           )
                         )}
 
@@ -623,18 +654,22 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                               {t("noRecentOpponents")}
                             </div>
                           ) : (
-                            recentPlayers.map((player) => {
+                            recentPlayers.map((player, index) => {
+                              const effectiveStatus = getFriendStatus(player.id, player.status as any);
+                              const isAnimated = index < 5;
                               const isRequested = requestedFriendIds.includes(player.id);
-                              return (
+                              const card = (
                                 <div
-                                  key={player.id}
-                                  className={`p-2.5 rounded-xl border flex items-center justify-between transition-all shrink-0 ${
+                                  className={`p-2.5 rounded-xl border flex items-center justify-between transition-all shrink-0 w-full ${
                                     darkMode
                                       ? "bg-zinc-950/45 border-zinc-800 text-stone-200"
                                       : "bg-stone-50/45 border-stone-200/50 text-stone-850"
                                   }`}
                                 >
                                   <div className="flex items-center gap-2.5 min-w-0">
+                                    {effectiveStatus === "online" && (
+                                      <span className="w-2 h-2 rounded-full shrink-0 bg-emerald-400 animate-pulse-gentle" />
+                                    )}
                                     {player.isFriend ? (
                                       <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
                                         darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
@@ -672,6 +707,23 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                                       )}
                                     </div>
                                   </div>
+                                </div>
+                              );
+
+                              if (isAnimated) {
+                                return (
+                                  <div
+                                    key={player.id}
+                                    className="w-full shrink-0 animate-cascade-drop"
+                                    style={{ animationDelay: `${index * 45}ms` }}
+                                  >
+                                    {card}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div key={player.id} className="w-full shrink-0">
+                                  {card}
                                 </div>
                               );
                             })

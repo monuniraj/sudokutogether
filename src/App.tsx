@@ -10735,37 +10735,66 @@ useEffect(() => {
                               No friends added yet.
                             </div>
                           ) : (
-                            multiplayerPlayers.filter(p => p.isFriend).map(friend => (
-                              <div 
-                                key={friend.id} 
-                                className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
-                                  darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-200" : "bg-stone-50/45 border-stone-200/50 text-stone-850"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5">
-                                  <div className="relative">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                                      darkMode ? "bg-purple-950/60 text-purple-300 border border-purple-800/40" : "bg-purple-100 text-purple-800 border border-purple-200"
-                                    }`}>
-                                      {getPlayerInitials(friend.name)}
+                            [...multiplayerPlayers.filter(p => p.isFriend)]
+                              .sort((a, b) => {
+                                const isOnlineA = a.status === "online";
+                                const isOnlineB = b.status === "online";
+                                if (isOnlineA !== isOnlineB) return isOnlineA ? -1 : 1;
+                                return (a.name || "").localeCompare(b.name || "");
+                              })
+                              .map((friend, index) => {
+                                const isAnimated = index < 5;
+                                const card = (
+                                  <div 
+                                    className={`p-2.5 rounded-xl border flex items-center justify-between transition-all w-full shrink-0 ${
+                                      darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-200" : "bg-stone-50/45 border-stone-200/50 text-stone-850"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="relative">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                                          darkMode ? "bg-purple-950/60 text-purple-300 border border-purple-800/40" : "bg-purple-100 text-purple-800 border border-purple-200"
+                                        }`}>
+                                          {getPlayerInitials(friend.name)}
+                                        </div>
+                                        {friend.status === "online" && (
+                                          <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 bg-emerald-400 animate-pulse-gentle ${
+                                            darkMode ? "border-zinc-900" : "border-white"
+                                          }`} />
+                                        )}
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <span className="font-sans font-bold text-xs">{friend.name}</span>
+                                        <span className="text-[9.5px] text-stone-400 capitalize">{friend.status || "offline"}</span>
+                                      </div>
                                     </div>
-                                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 ${
-                                      darkMode ? "border-zinc-900" : "border-white"
-                                    } ${friend.status === "online" ? "bg-emerald-500" : "bg-stone-400"}`} />
+                                    <button
+                                      onClick={() => handleToggleFriend(friend.id, friend.name)}
+                                      className="text-[10.5px] font-sans font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 border-none bg-transparent cursor-pointer transition-all active:scale-95 px-2 py-1"
+                                    >
+                                      Remove
+                                    </button>
                                   </div>
-                                  <div className="flex flex-col">
-                                    <span className="font-sans font-bold text-xs">{friend.name}</span>
-                                    <span className="text-[9.5px] text-stone-400 capitalize">{friend.status || "online"}</span>
+                                );
+
+                                if (isAnimated) {
+                                  return (
+                                    <div
+                                      key={friend.id}
+                                      className="w-full shrink-0 animate-cascade-drop"
+                                      style={{ animationDelay: `${index * 45}ms` }}
+                                    >
+                                      {card}
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div key={friend.id} className="w-full shrink-0">
+                                    {card}
                                   </div>
-                                </div>
-                                <button
-                                  onClick={() => handleToggleFriend(friend.id, friend.name)}
-                                  className="text-[10.5px] font-sans font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 border-none bg-transparent cursor-pointer transition-all active:scale-95 px-2 py-1"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ))
+                                );
+                              })
+
                           )}
                         </div>
 
@@ -10781,40 +10810,72 @@ useEffect(() => {
                               No recent players.
                             </div>
                           ) : (
-                            multiplayerPlayers.filter(p => !p.isFriend).map(player => {
-                              const isRequested = requestedFriendIds.includes(player.id);
-                              return (
-                                <div 
-                                  key={player.id} 
-                                  className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
-                                    darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-200" : "bg-stone-50/45 border-stone-200/50 text-stone-850"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2.5">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                                      darkMode ? "bg-zinc-800 text-stone-300" : "bg-stone-150 text-stone-700"
-                                    }`}>
-                                      {getPlayerInitials(player.name)}
-                                    </div>
-                                    <div className="flex flex-col">
-                                      <span className="font-sans font-bold text-xs">{player.name}</span>
-                                      <span className="text-[9.5px] text-stone-400">Match Participant</span>
-                                    </div>
-                                  </div>
-                                  <button
-                                    disabled={isRequested}
-                                    onClick={() => handleAddRecentFriend(player)}
-                                    className={`py-1 px-2.5 rounded-lg border-none cursor-pointer transition-all active:scale-95 text-[10.5px] font-sans font-bold uppercase tracking-wider ${
-                                      isRequested
-                                        ? "bg-stone-200/50 text-stone-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed"
-                                        : (darkMode ? "bg-purple-950/60 text-purple-300 hover:bg-purple-900/80" : "bg-purple-100 text-purple-800 hover:bg-purple-200")
+                            [...multiplayerPlayers.filter(p => !p.isFriend)]
+                              .sort((a, b) => {
+                                const isOnlineA = a.status === "online";
+                                const isOnlineB = b.status === "online";
+                                if (isOnlineA !== isOnlineB) return isOnlineA ? -1 : 1;
+                                return (a.name || "").localeCompare(b.name || "");
+                              })
+                              .map((player, index) => {
+                                const isRequested = requestedFriendIds.includes(player.id);
+                                const isAnimated = index < 5;
+                                const card = (
+                                  <div 
+                                    className={`p-2.5 rounded-xl border flex items-center justify-between transition-all w-full shrink-0 ${
+                                      darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-200" : "bg-stone-50/45 border-stone-200/50 text-stone-850"
                                     }`}
                                   >
-                                    {isRequested ? "Requested" : "+ Add"}
-                                  </button>
-                                </div>
-                              );
-                            })
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="relative">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                                          darkMode ? "bg-zinc-800 text-stone-300" : "bg-stone-150 text-stone-700"
+                                        }`}>
+                                          {getPlayerInitials(player.name)}
+                                        </div>
+                                        {player.status === "online" && (
+                                          <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 bg-emerald-400 animate-pulse-gentle ${
+                                            darkMode ? "border-zinc-900" : "border-white"
+                                          }`} />
+                                        )}
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <span className="font-sans font-bold text-xs">{player.name}</span>
+                                        <span className="text-[9.5px] text-stone-400 capitalize">{player.status || "offline"}</span>
+                                      </div>
+                                    </div>
+                                    <button
+                                      disabled={isRequested}
+                                      onClick={() => handleAddRecentFriend(player)}
+                                      className={`py-1 px-2.5 rounded-lg border-none cursor-pointer transition-all active:scale-95 text-[10.5px] font-sans font-bold uppercase tracking-wider ${
+                                        isRequested
+                                          ? "bg-stone-200/50 text-stone-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-not-allowed"
+                                          : (darkMode ? "bg-purple-950/60 text-purple-300 hover:bg-purple-900/80" : "bg-purple-100 text-purple-800 hover:bg-purple-200")
+                                      }`}
+                                    >
+                                      {isRequested ? "Requested" : "+ Add"}
+                                    </button>
+                                  </div>
+                                );
+
+                                if (isAnimated) {
+                                  return (
+                                    <div
+                                      key={player.id}
+                                      className="w-full shrink-0 animate-cascade-drop"
+                                      style={{ animationDelay: `${index * 45}ms` }}
+                                    >
+                                      {card}
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div key={player.id} className="w-full shrink-0">
+                                    {card}
+                                  </div>
+                                );
+                              })
+
                           )}
                         </div>
                       </div>
@@ -11713,22 +11774,21 @@ useEffect(() => {
                         if (a.status !== 'online' && b.status === 'online') return 1;
                         return 0;
                       })
-                      .map(player => {
+                      .map((player, idx) => {
                         const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
-                        
+                        const isAnimated = idx < 5;
                         const rowBgClass = isJoined
                           ? (darkMode ? "bg-[#064e3b]/30 text-[#a7f3d0]" : "bg-[#E8F5E9] text-[#1B5E20]")
                           : (darkMode ? "bg-zinc-900/40 text-stone-300" : "bg-white/60 text-stone-800");
 
-                        return (
+                        const card = (
                           <div 
-                            key={player.id}
-                            className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-300 ${rowBgClass}`}
+                            className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-300 w-full shrink-0 ${rowBgClass}`}
                           >
                             <div className="flex items-center gap-2">
-                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                player.status === 'online' ? "bg-emerald-400" : "bg-stone-300 dark:bg-zinc-700"
-                              }`} />
+                              {player.status === 'online' && (
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-400 animate-pulse-gentle" />
+                              )}
                               <div className="flex flex-col">
                                 <span className="font-medium text-[11px] font-sans leading-tight">
                                   {player.name}
@@ -11796,7 +11856,25 @@ useEffect(() => {
                             </div>
                           </div>
                         );
+
+                        if (isAnimated) {
+                          return (
+                            <div
+                              key={player.id}
+                              className="w-full shrink-0 animate-cascade-drop"
+                              style={{ animationDelay: `${idx * 45}ms` }}
+                            >
+                              {card}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={player.id} className="w-full shrink-0">
+                            {card}
+                          </div>
+                        );
                       })}
+
                   </div>
                 )}
               </div>
@@ -12960,6 +13038,11 @@ useEffect(() => {
                                 if (timeA !== timeB) return timeB - timeA;
                               }
 
+                              // Online players first
+                              const isOnlineA = a.status === 'online';
+                              const isOnlineB = b.status === 'online';
+                              if (isOnlineA !== isOnlineB) return isOnlineA ? -1 : 1;
+
                               if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
                               return (a.name || "").localeCompare(b.name || "");
                             });
@@ -12968,22 +13051,22 @@ useEffect(() => {
                           const friends = sortPlayers(multiplayerPlayers.filter(p => p.isFriend));
                           const recentPlayers = sortPlayers(multiplayerPlayers);
 
-                          const renderRow = (player: any) => {
+                          const renderRow = (player: any, index: number) => {
                             const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
-                            return (
+                            const isAnimated = index < 5;
+                            const cardContent = (
                               <div
-                                key={player.id}
-                                className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-200 ${
+                                className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-200 shrink-0 w-full ${
                                   darkMode 
                                     ? "bg-zinc-900/60 border border-zinc-800/60 text-stone-200" 
                                     : "bg-white border border-stone-200/60 text-stone-850 shadow-xs"
                                 }`}
                               >
-                                {/* Left: Status Dot, Add Friend Icon, Username */}
+                                {/* Left: Status Dot (omitted if offline/incognito), Add Friend Icon, Username */}
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <span className={`w-2 h-2 rounded-full shrink-0 ${
-                                    player.status === 'online' ? "bg-emerald-400 animate-pulse" : "bg-stone-300 dark:bg-zinc-700"
-                                  }`} />
+                                  {player.status === 'online' && (
+                                    <span className="w-2 h-2 rounded-full shrink-0 bg-emerald-400 animate-pulse-gentle" />
+                                  )}
                                   {player.isFriend ? (
                                     <span className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
                                       darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]"
@@ -13072,6 +13155,23 @@ useEffect(() => {
                                 </div>
                               </div>
                             );
+
+                            if (isAnimated) {
+                              return (
+                                <div
+                                  key={player.id}
+                                  className="w-full shrink-0 animate-cascade-drop"
+                                  style={{ animationDelay: `${index * 45}ms` }}
+                                >
+                                  {cardContent}
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={player.id} className="w-full shrink-0">
+                                {cardContent}
+                              </div>
+                            );
                           };
 
                           return (
@@ -13079,7 +13179,7 @@ useEffect(() => {
                               {activeAppInviteTab === 'friends' && (
                                 friends.length > 0 ? (
                                   <div className="flex flex-col gap-2">
-                                    {friends.map(renderRow)}
+                                    {friends.map((player, idx) => renderRow(player, idx))}
                                   </div>
                                 ) : (
                                   <span className="text-xs italic text-stone-500 py-6 text-center block">
@@ -13090,7 +13190,7 @@ useEffect(() => {
                               {activeAppInviteTab === 'recent' && (
                                 recentPlayers.length > 0 ? (
                                   <div className="flex flex-col gap-2">
-                                    {recentPlayers.map(renderRow)}
+                                    {recentPlayers.map((player, idx) => renderRow(player, idx))}
                                   </div>
                                 ) : (
                                   <span className="text-xs italic text-stone-500 py-6 text-center block">
@@ -13100,6 +13200,7 @@ useEffect(() => {
                               )}
                             </>
                           );
+
                         })()}
                       </>
                     )}
