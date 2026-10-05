@@ -17,7 +17,7 @@ import { ConfettiBurst } from "./components/common/ConfettiBurst";
 import { ClappingHands } from "./components/common/ClappingHands";
 import { Sudoku3DWatermark } from "./components/common/Sudoku3DWatermark";
 import { playPartyPopperSound as synthesizePartyPopper } from "./utils/soundEffects";
-import { formatMatchTimestamp, formatInviteTimestamp } from "./utils/formatTimestamp";
+import { formatMatchTimestamp, formatInviteTimestamp, formatActiveStatus } from "./utils/formatTimestamp";
 import {
   doc,
   setDoc,
@@ -10765,7 +10765,7 @@ useEffect(() => {
                                       </div>
                                       <div className="flex flex-col">
                                         <span className="font-sans font-bold text-xs">{friend.name}</span>
-                                        <span className="text-[9.5px] text-stone-400 capitalize">{friend.status || "offline"}</span>
+                                        <span className="text-[9.5px] text-stone-400 capitalize">{formatActiveStatus(friend.status, (friend as any).lastActive || friend.lastPlayedAt, language)}</span>
                                       </div>
                                     </div>
                                     <button
@@ -10841,7 +10841,7 @@ useEffect(() => {
                                       </div>
                                       <div className="flex flex-col">
                                         <span className="font-sans font-bold text-xs">{player.name}</span>
-                                        <span className="text-[9.5px] text-stone-400 capitalize">{player.status || "offline"}</span>
+                                        <span className="text-[9.5px] text-stone-400 capitalize">{formatActiveStatus(player.status, (player as any).lastActive || player.lastPlayedAt, language)}</span>
                                       </div>
                                     </div>
                                     <button
@@ -11792,6 +11792,9 @@ useEffect(() => {
                               <div className="flex flex-col">
                                 <span className="font-medium text-[11px] font-sans leading-tight">
                                   {player.name}
+                                </span>
+                                <span className="text-[9px] text-stone-400 capitalize">
+                                  {formatActiveStatus(player.status, (player as any).lastActive || player.lastPlayedAt, language)}
                                 </span>
                               </div>
                             </div>
@@ -13088,11 +13091,9 @@ useEffect(() => {
                                     <span className="font-bold text-xs font-sans truncate">
                                       {player.name}
                                     </span>
-                                    {player.lastPlayedAt && (
-                                      <span className="text-[9.5px] text-stone-400">
-                                        {formatMatchTimestamp(player.lastPlayedAt, "Saved Config", language)}
-                                      </span>
-                                    )}
+                                    <span className="text-[9.5px] text-stone-400 capitalize">
+                                      {formatActiveStatus(player.status, (player as any).lastActive || player.lastPlayedAt, language)}
+                                    </span>
                                   </div>
                                 </div>
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { Check, X, Plus } from "lucide-react";
-import { formatMatchTimestamp } from "../../utils/formatTimestamp";
+import { formatMatchTimestamp, formatActiveStatus } from "../../utils/formatTimestamp";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
 
@@ -63,7 +63,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
   const { t } = useTranslation();
   const [activePlayersTab, setActivePlayersTab] = React.useState<"recent" | "friends">("recent");
   const playerIds = (multiplayerPlayers || []).map((p) => p.id);
-  const { getFriendStatus } = useFriendPresence(undefined, playerIds);
+  const { getFriendStatus, getFriendLastActive } = useFriendPresence(undefined, playerIds);
   return (
     <div
       className={`p-4 md:p-8 flex-1 w-full flex flex-col items-center justify-start overflow-y-auto pb-10 select-none pt-[calc(85px+env(safe-area-inset-top,0px))] lg:pt-[130px] transition-colors duration-300 ${
@@ -615,7 +615,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                                     <div className="flex flex-col truncate">
                                       <span className="font-sans font-bold text-xs truncate">{friend.name}</span>
                                       <span className="text-[9.5px] text-stone-400 capitalize">
-                                        {effectiveStatus}
+                                        {formatActiveStatus(effectiveStatus, getFriendLastActive(friend.id, (friend as any).lastActive || (friend as any).lastPlayedAt))}
                                       </span>
                                     </div>
                                   </div>
@@ -698,13 +698,9 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                                     )}
                                     <div className="flex flex-col truncate min-w-0">
                                       <span className="font-sans font-bold text-xs truncate">{player.name}</span>
-                                      {player.lastPlayedAt ? (
-                                        <span className="text-[9.5px] text-stone-400">
-                                          {formatMatchTimestamp(player.lastPlayedAt)}
-                                        </span>
-                                      ) : (
-                                        <span className="text-[9.5px] text-stone-400">{t("matchParticipant")}</span>
-                                      )}
+                                      <span className="text-[9.5px] text-stone-400 capitalize">
+                                        {formatActiveStatus(effectiveStatus, getFriendLastActive(player.id, (player as any).lastActive || player.lastPlayedAt))}
+                                      </span>
                                     </div>
                                   </div>
                                 </div>

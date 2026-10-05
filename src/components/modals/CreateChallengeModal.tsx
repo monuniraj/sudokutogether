@@ -15,7 +15,7 @@ import {
   Plus,
   ArrowLeft
 } from "lucide-react";
-import { formatMatchTimestamp } from "../../utils/formatTimestamp";
+import { formatMatchTimestamp, formatActiveStatus } from "../../utils/formatTimestamp";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
 
@@ -94,7 +94,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const playerIds = multiplayerPlayers.map((p) => p.id);
-  const { isIncognito, toggleIncognito, getFriendStatus } = useFriendPresence(undefined, playerIds);
+  const { isIncognito, toggleIncognito, getFriendStatus, getFriendLastActive } = useFriendPresence(undefined, playerIds);
   const [openDropdown, setOpenDropdown] = useState<"difficulty" | "mistakes" | "hints" | "timer" | null>(null);
   const [isLobbyLocked, setIsLobbyLocked] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"recent" | "friends">("recent");
@@ -617,11 +617,9 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                           <span className="font-bold text-xs font-sans truncate">
                             {player.name}
                           </span>
-                          {player.lastPlayedAt && (
-                            <span className="text-[9.5px] text-stone-400">
-                              {formatMatchTimestamp(player.lastPlayedAt)}
-                            </span>
-                          )}
+                          <span className="text-[9.5px] text-stone-400 capitalize">
+                            {formatActiveStatus(effectiveStatus, getFriendLastActive(player.id, player.lastActive || player.lastPlayedAt))}
+                          </span>
                         </div>
                       </div>
 

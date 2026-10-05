@@ -86,3 +86,32 @@ export const formatMatchTimestamp = (dateStrOrTimestamp?: any, fallback = "Saved
 export const formatInviteTimestamp = (timestamp?: any, locale?: string): string => {
   return formatMatchTimestamp(timestamp, "Just now", locale);
 };
+
+/**
+ * Standardized user presence subtext formatter.
+ * Strict Rule: When online, strictly returns "Active now".
+ * When offline, returns relative time ("Active 10m ago", "Active 2h ago", etc.) or "Offline".
+ */
+export const formatActiveStatus = (
+  status?: string,
+  lastSeenOrPlayed?: any,
+  locale?: string
+): string => {
+  if (status === "online") {
+    return "Active now";
+  }
+
+  if (!lastSeenOrPlayed) {
+    return "Offline";
+  }
+
+  const rel = formatMatchTimestamp(lastSeenOrPlayed, "Offline", locale);
+  if (!rel || rel === "Offline" || rel === "Saved Config") {
+    return "Offline";
+  }
+  if (rel === "Just now") {
+    return "Active just now";
+  }
+  return `Active ${rel}`;
+};
+

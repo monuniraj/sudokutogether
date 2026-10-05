@@ -11,7 +11,9 @@ export interface FriendPresenceState {
   setIsIncognito: (val: boolean | ((prev: boolean) => boolean)) => void;
   toggleIncognito: () => void;
   friendPresenceMap: Record<string, "online" | "offline">;
+  friendLastActiveMap: Record<string, any>;
   getFriendStatus: (friendId: string, fallbackStatus?: "online" | "offline") => "online" | "offline";
+  getFriendLastActive: (friendId: string, fallbackLastActive?: any) => any;
 }
 
 /**
@@ -50,6 +52,7 @@ export function useFriendPresence(
   });
 
   const [friendPresenceMap, setFriendPresenceMap] = useState<Record<string, "online" | "offline">>({});
+  const [friendLastActiveMap, setFriendLastActiveMap] = useState<Record<string, any>>({});
 
   const userId = explicitUserId || getStoredUserId();
   const isIncognitoRef = useRef(isIncognito);
@@ -189,10 +192,16 @@ export function useFriendPresence(
             if (snap.exists()) {
               const data = snap.data();
               const status = data?.status === "online" ? "online" : "offline";
+              const lastActive = data?.lastActive || data?.updatedAt || null;
+
               setFriendPresenceMap((prev) => {
                 if (prev[friendId] === status) return prev;
                 return { ...prev, [friendId]: status };
               });
+
+              if (lastActive) {
+                setFriendLastActiveMap((prev) => ({ ...prev, [friendId]: lastActive }));
+              }
             }
           },
           (err) => {
@@ -230,11 +239,24 @@ export function useFriendPresence(
     [userId, isIncognito, friendPresenceMap]
   );
 
+  // Helper to resolve a friend's lastActive timestamp
+  const getFriendLastActive = useCallback(
+    (friendId: string, fallbackLastActive?: any): any => {
+      if (friendLastActiveMap[friendId]) {
+        return friendLastActiveMap[friendId];
+      }
+      return fallbackLastActive;
+    },
+    [friendLastActiveMap]
+  );
+
   return {
     isIncognito,
     setIsIncognito,
     toggleIncognito,
     friendPresenceMap,
+    friendLastActiveMap,
     getFriendStatus,
+    getFriendLastActive,
   };
 }

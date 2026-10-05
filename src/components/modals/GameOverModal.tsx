@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
+import { formatActiveStatus } from "../../utils/formatTimestamp";
 
 export interface GameOverModalProps {
   isOpen: boolean;
@@ -102,7 +103,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const playerIds = (multiplayerPlayers || []).map((p: any) => p.id);
-  const { isIncognito, toggleIncognito, getFriendStatus } = useFriendPresence(userProfile?.id, playerIds);
+  const { isIncognito, toggleIncognito, getFriendStatus, getFriendLastActive } = useFriendPresence(userProfile?.id, playerIds);
 
   if (!isOpen || !boardState) return null;
 
@@ -688,7 +689,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                                   <Plus className="w-5 h-5 stroke-[2.5]" />
                                 </button>
                               )}
-                              <span className="font-bold text-xs font-sans truncate">{player.name}</span>
+                              <div className="flex flex-col min-w-0">
+                                <span className="font-bold text-xs font-sans truncate">{player.name}</span>
+                                <span className="text-[9.5px] text-stone-400 capitalize">
+                                  {formatActiveStatus(effectiveStatus, getFriendLastActive(player.id, player.lastActive || player.lastPlayedAt))}
+                                </span>
+                              </div>
                             </div>
 
                             {/* Right: Dedicated match invite button */}
