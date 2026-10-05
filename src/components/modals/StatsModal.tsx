@@ -342,7 +342,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                                 : "bg-[#eff6ff] text-[#172554]"
                             }`}
                           >
-                            {game.isChallenge ? "Multi" : "Solo"}
+                            {game.isChallenge ? t("multiBadge") : t("soloBadge")}
                           </span>
                         </div>
                         <span
@@ -355,12 +355,6 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       </div>
 
                       <div className="flex items-center gap-3.5 font-sans text-xs font-black">
-                        <div className="flex flex-col items-end leading-tight">
-                          <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
-                            {t("timeLabel")}
-                          </span>
-                          <span>{formatTimer(game.timeSec)}</span>
-                        </div>
                         <div className="flex flex-col items-end leading-tight">
                           <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
                             {t("errsLabel")}
@@ -471,7 +465,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                                 : "bg-[#eff6ff] text-[#172554]"
                             }`}
                           >
-                            {game.isChallenge ? "Multi" : "Solo"}
+                            {game.isChallenge ? t("multiBadge") : t("soloBadge")}
                           </span>
                         </div>
                         <span
@@ -484,12 +478,6 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       </div>
 
                       <div className="flex items-center gap-3.5 font-sans text-xs font-black">
-                        <div className="flex flex-col items-end leading-tight">
-                          <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
-                            {t("timeLabel")}
-                          </span>
-                          <span>{formatTimer(game.timeSec)}</span>
-                        </div>
                         <div className="flex flex-col items-end leading-tight">
                           <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
                             {t("errsLabel")}

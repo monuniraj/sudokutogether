@@ -18,6 +18,7 @@ import { ClappingHands } from "./components/common/ClappingHands";
 import { Sudoku3DWatermark } from "./components/common/Sudoku3DWatermark";
 import { playPartyPopperSound as synthesizePartyPopper } from "./utils/soundEffects";
 import { formatMatchTimestamp, formatInviteTimestamp, formatActiveStatus } from "./utils/formatTimestamp";
+import { useFriendPresence } from "./hooks/useFriendPresence";
 import {
   doc,
   setDoc,
@@ -1829,6 +1830,9 @@ useEffect(() => {
       localStorage.setItem("sudoku_past_players", JSON.stringify(multiplayerPlayers));
     } catch {}
   }, [multiplayerPlayers]);
+
+  const drawerPlayerIds = useMemo(() => (multiplayerPlayers || []).map((p: any) => p.id), [multiplayerPlayers]);
+  const { getFriendStatus: getDrawerFriendStatus, getFriendLastActive: getDrawerFriendLastActive } = useFriendPresence(userProfile?.id, drawerPlayerIds);
 
   const [privacyEnabled, setPrivacyEnabled] = useState<boolean>(() => {
     try {
@@ -6277,17 +6281,58 @@ useEffect(() => {
     }
 
     setCompletedGames(prev => {
-      const existsIndex = prev.findIndex(r => r.id === finalGameId);
+      const existsIndex = prev.findIndex(r => r.id === finalGameId || (gameSeed && r.seed === gameSeed));
       if (existsIndex !== -1) {
-        if (resolvedParts && resolvedParts.length > (prev[existsIndex].participants?.length || 0)) {
+        const oldRecord = prev[existsIndex];
+        const oldIsWon = Boolean(oldRecord.isWon);
+        const newIsWon = Boolean(isWon);
+        const oldTimeSec = Number(oldRecord.timeSec) > 0 ? Number(oldRecord.timeSec) : Infinity;
+        const newTimeSec = Number(sessionSeconds) > 0 ? Number(sessionSeconds) : Infinity;
+        const oldMistakes = Number(oldRecord.mistakes || 0);
+        const newMistakes = Number(finalMistakes || 0);
+
+        // 2. RESTORE SMART BEST-SCORE REPLAY SYNC:
+        // - If prior record was a WIN and new run is FAILED/ABANDONED -> NEVER overwrite the WIN.
+        // - If both runs are WINS -> Overwrite ONLY if newTimeSec < oldTimeSec OR (newTimeSec === oldTimeSec AND newMistakes < oldMistakes).
+        // - If new run is slower or worse -> Preserve previous superior record intact.
+        let shouldOverwrite = false;
+        if (!oldIsWon && newIsWon) {
+          shouldOverwrite = true;
+        } else if (oldIsWon && !newIsWon) {
+          shouldOverwrite = false;
+        } else if (oldIsWon && newIsWon) {
+          shouldOverwrite = newTimeSec < oldTimeSec || (newTimeSec === oldTimeSec && newMistakes < oldMistakes);
+        } else {
+          shouldOverwrite = newMistakes < oldMistakes;
+        }
+
+        if (shouldOverwrite) {
           const updated = [...prev];
-          updated[existsIndex] = { ...updated[existsIndex], participants: resolvedParts, isChallenge: isMultiplayerMatch };
+          updated[existsIndex] = {
+            ...oldRecord,
+            timeSec: sessionSeconds,
+            mistakes: finalMistakes,
+            hints: hintsUsed,
+            isWon: newIsWon,
+            date: new Date().toISOString(),
+            participants: (resolvedParts && resolvedParts.length > 0) ? resolvedParts : oldRecord.participants,
+            isChallenge: isMultiplayerMatch
+          };
           try {
             localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
           } catch {}
           return updated;
+        } else {
+          if (resolvedParts && resolvedParts.length > (oldRecord.participants?.length || 0)) {
+            const updated = [...prev];
+            updated[existsIndex] = { ...oldRecord, participants: resolvedParts, isChallenge: isMultiplayerMatch };
+            try {
+              localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
+            } catch {}
+            return updated;
+          }
+          return prev;
         }
-        return prev;
       }
 
       const newRecord: CompletedGame = {
@@ -6688,13 +6733,28 @@ useEffect(() => {
         timestamp: serverTimestamp()
       };
 
-      // Only update if: previously pending, new win over a loss, better time, or fewer mistakes
-      const shouldUpdate =
-        !existingData ||
-        existingData.isPending ||
-        (newRecord.isWon && !existingData.isWon) ||
-        (newRecord.isWon && existingData.isWon && newRecord.timeSec < (existingData.timeSec || Infinity)) ||
-        (!newRecord.isWon && !existingData.isWon && newRecord.mistakes < (existingData.mistakes || Infinity));
+      // 2. RESTORE SMART BEST-SCORE REPLAY SYNC:
+      const oldIsWon = existingData ? Boolean(existingData.isWon) : false;
+      const newIsWon = Boolean(newRecord.isWon);
+      const oldTimeSec = (existingData && Number(existingData.timeSec) > 0) ? Number(existingData.timeSec) : Infinity;
+      const newTimeSec = Number(newRecord.timeSec) > 0 ? Number(newRecord.timeSec) : Infinity;
+      const oldMistakes = existingData ? Number(existingData.mistakes ?? Infinity) : Infinity;
+      const newMistakes = Number(newRecord.mistakes ?? Infinity);
+
+      let shouldUpdate = false;
+      if (!existingData || existingData.isPending) {
+        shouldUpdate = true;
+      } else if (!oldIsWon && newIsWon) {
+        shouldUpdate = true;
+      } else if (oldIsWon && !newIsWon) {
+        // Prior was WIN and new run is FAILED/ABANDONED -> NEVER overwrite the WIN
+        shouldUpdate = false;
+      } else if (oldIsWon && newIsWon) {
+        // Overwrite ONLY if newTimeSec < oldTimeSec OR (newTimeSec === oldTimeSec AND newMistakes < oldMistakes)
+        shouldUpdate = newTimeSec < oldTimeSec || (newTimeSec === oldTimeSec && newMistakes < oldMistakes);
+      } else {
+        shouldUpdate = newMistakes < oldMistakes;
+      }
 
       if (shouldUpdate) {
         await setDoc(participantRef, newRecord);
@@ -9799,6 +9859,7 @@ useEffect(() => {
               <GameOverModal
                 isOpen={Boolean(boardState && showGameOverModal && challengeMode)}
                 isMultiplayer={Boolean(challengeMode)}
+                completedGames={completedGames}
                 onClose={() => {
                   setShowGameOverModal(false);
                   setShowCelebrationConfetti(false);
@@ -10574,7 +10635,7 @@ useEffect(() => {
                                       ? (darkMode ? "bg-[#2e1065] text-[#e9d5ff] border border-[#3b0764] shadow-[0_2px_8px_rgba(0,0,0,0.4)]" : "bg-[#F3E8FF] text-[#6B21A8] border border-[#D8B4FE] shadow-[0_2px_8px_rgba(107,33,168,0.06)]")
                                       : (darkMode ? "bg-[#172554] text-[#dbeafe]" : "bg-[#eff6ff] text-[#172554]")
                                   }`}>
-                                    {game.isChallenge ? "Multi" : "Solo"}
+                                    {game.isChallenge ? t("multiBadge") : t("soloBadge")}
                                   </span>
                                 </div>
                                 <span className={`font-sans font-black text-sm uppercase leading-none ${darkMode ? "text-stone-200" : "text-stone-850"}`}>
@@ -10583,10 +10644,6 @@ useEffect(() => {
                               </div>
 
                               <div className="flex items-center gap-3.5 font-sans text-xs font-black">
-                                <div className="flex flex-col items-end leading-tight">
-                                  <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">Time</span>
-                                  <span>{formatTimer(game.timeSec)}</span>
-                                </div>
                                 <div className="flex flex-col items-end leading-tight">
                                   <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">Errs</span>
                                   <span className="text-rose-500">{game.mistakes}/{game.maxMistakes}</span>
@@ -10671,7 +10728,7 @@ useEffect(() => {
                                       ? (darkMode ? "bg-[#2e1065] text-[#e9d5ff] border border-[#3b0764] shadow-[0_2px_8px_rgba(0,0,0,0.4)]" : "bg-[#F3E8FF] text-[#6B21A8] border border-[#D8B4FE] shadow-[0_2px_8px_rgba(107,33,168,0.06)]")
                                       : (darkMode ? "bg-[#172554] text-[#dbeafe]" : "bg-[#eff6ff] text-[#172554]")
                                   }`}>
-                                    {game.isChallenge ? "Multi" : "Solo"}
+                                    {game.isChallenge ? t("multiBadge") : t("soloBadge")}
                                   </span>
                                 </div>
                                 <span className={`font-sans font-black text-sm uppercase leading-none ${darkMode ? "text-stone-200" : "text-stone-850"}`}>
@@ -10680,10 +10737,6 @@ useEffect(() => {
                               </div>
 
                               <div className="flex items-center gap-3.5 font-sans text-xs font-black">
-                                <div className="flex flex-col items-end leading-tight">
-                                  <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">Time</span>
-                                  <span>{formatTimer(game.timeSec)}</span>
-                                </div>
                                 <div className="flex flex-col items-end leading-tight">
                                   <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">Errs</span>
                                   <span className="text-rose-500">{game.mistakes}/{game.maxMistakes}</span>
@@ -12967,7 +13020,7 @@ useEffect(() => {
                           setShowMidGameInviteModal(false);
                           setIsTimerPaused(false);
                         }}
-                        className={`p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 ${
+                        className={`p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 shrink-0 ${
                           darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
                         }`}
                         title="Close"
@@ -13042,9 +13095,11 @@ useEffect(() => {
                                 if (timeA !== timeB) return timeB - timeA;
                               }
 
-                              // Online players first
-                              const isOnlineA = a.status === 'online';
-                              const isOnlineB = b.status === 'online';
+                              // Online players first (live presence synced)
+                              const statusA = getDrawerFriendStatus(a.id, a.status);
+                              const statusB = getDrawerFriendStatus(b.id, b.status);
+                              const isOnlineA = statusA === 'online';
+                              const isOnlineB = statusB === 'online';
                               if (isOnlineA !== isOnlineB) return isOnlineA ? -1 : 1;
 
                               if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
@@ -13057,6 +13112,8 @@ useEffect(() => {
 
                           const renderRow = (player: any, index: number) => {
                             const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
+                            const effectiveStatus = getDrawerFriendStatus(player.id, player.status);
+                            const effectiveLastActive = getDrawerFriendLastActive(player.id, (player as any).lastActive || player.lastPlayedAt);
                             const isAnimated = index < 5;
                             const cardContent = (
                               <div
@@ -13068,7 +13125,7 @@ useEffect(() => {
                               >
                                 {/* Left: Status Dot (omitted if offline/incognito), Add Friend Icon, Username */}
                                 <div className="flex items-center gap-2 min-w-0">
-                                  {player.status === 'online' && (
+                                  {effectiveStatus === 'online' && (
                                     <span className="w-2 h-2 rounded-full shrink-0 bg-emerald-400 animate-pulse-gentle" />
                                   )}
                                   {player.isFriend ? (
@@ -13093,7 +13150,7 @@ useEffect(() => {
                                       {player.name}
                                     </span>
                                     <span className="text-[9.5px] text-stone-400 capitalize">
-                                      {formatActiveStatus(player.status, (player as any).lastActive || player.lastPlayedAt, language)}
+                                      {formatActiveStatus(effectiveStatus, effectiveLastActive, language)}
                                     </span>
                                   </div>
                                 </div>

@@ -148,42 +148,10 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 <Copy className="w-3.5 h-3.5" />
               </button>
             )}
-
-            {/* Lobby Quick Status Chip */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                playClickSound();
-                toggleIncognito();
-              }}
-              title={isIncognito ? "Ghost Mode active (tap to appear online)" : "Online (tap for Ghost Mode)"}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-mono font-bold tracking-wider uppercase border-none cursor-pointer transition-all active:scale-95 select-none ${
-                isIncognito
-                  ? (darkMode
-                      ? "bg-purple-950/70 text-purple-300 border border-purple-800/60 hover:bg-purple-900/60"
-                      : "bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-200/80")
-                  : (darkMode
-                      ? "bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 hover:bg-emerald-900/60"
-                      : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100")
-              }`}
-            >
-              {isIncognito ? (
-                <>
-                  <span className="text-xs leading-none">🕶️</span>
-                  <span>Ghost Mode</span>
-                </>
-              ) : (
-                <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>Online</span>
-                </>
-              )}
-            </button>
           </div>
 
-          {/* Right: Lock toggle & Close button */}
-          <div className="flex items-center gap-2">
+          {/* Right: Lock toggle & Close button securely pinned */}
+          <div className="flex items-center gap-2 pr-1">
             <button
               onClick={() => {
                 playClickSound();
@@ -221,9 +189,10 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 setOpenDropdown(null);
                 onClose();
               }}
-              className={`p-1.5 rounded-full border-none cursor-pointer transition-all active:scale-95 hover:scale-105 ${
+              className={`p-1.5 rounded-full border-none cursor-pointer transition-all active:scale-95 hover:scale-105 shrink-0 ${
                 darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-250" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
               }`}
+              title="Close"
             >
               <X className="w-4 h-4" />
             </button>

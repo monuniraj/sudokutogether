@@ -39,6 +39,7 @@ export interface GameOverModalProps {
   formatTimer: (seconds: number) => string;
   playClickSound: () => void;
   isMultiplayer?: boolean;
+  completedGames?: any[];
 
   // Step 1 Actions
   onSameGameReplay: () => Promise<void>;
@@ -102,67 +103,267 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   isInvitingAll,
   shareChallengeLink,
   onStartRematchGame,
-  isMultiplayer
+  isMultiplayer,
+  completedGames
 }) => {
   const { t } = useTranslation();
   const playerIds = (multiplayerPlayers || []).map((p: any) => p.id);
   const { isIncognito, toggleIncognito, getFriendStatus, getFriendLastActive } = useFriendPresence(userProfile?.id, playerIds);
 
+  // 1. PERMANENT STANDINGS LOCK: Cache and permanently freeze standings snapshot
+  const cachedStandingsRef = useRef<any[] | null>(null);
+  const activeMatchKeyRef = useRef<string | null>(null);
+  // 4. ELIMINATE "00:00" FALLBACK: Freeze completed duration at instant of match resolution
+  const frozenDurationRef = useRef<number | null>(null);
+
+  const currentMatchKey = String(challengeSeed || rematchGameId || boardState?.seed || "");
+  if (activeMatchKeyRef.current !== currentMatchKey && currentMatchKey !== "") {
+    activeMatchKeyRef.current = currentMatchKey;
+    cachedStandingsRef.current = null;
+    frozenDurationRef.current = null;
+  }
+
   const results = useMemo(() => {
+    // 6. ALIGN MODAL STANDINGS WITH HISTORY / STATS: Resolve recorded match snapshot
+    const allCompletedGames = completedGames || (() => {
+      try {
+        const stored = localStorage.getItem("sudoku_completed_games");
+        return stored ? JSON.parse(stored) : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    const currentSeedNum = challengeSeed ?? (boardState?.seed ? Number(boardState.seed) : undefined);
+    const matchedGame = (allCompletedGames || []).find((g: any) => {
+      if (currentSeedNum !== undefined && (g.seed === currentSeedNum || Number(g.seed) === currentSeedNum)) return true;
+      if (rematchGameId && (g.id === rematchGameId || String(g.seed).slice(-6) === rematchGameId)) return true;
+      if (boardState?.seed && (g.seed === boardState.seed || Number(g.seed) === Number(boardState.seed))) return true;
+      return false;
+    });
+
     const didCurrentPlayerFail =
       mistakeLimitEnabled &&
       (boardState?.maxMistakesLimit === 0
         ? (boardState?.currentMistakesCount ?? 0) > 0
         : (boardState?.currentMistakesCount ?? 0) >= (boardState?.maxMistakesLimit ?? 3));
 
-    const resultsMap = new Map<string, any>();
+    // 4. ELIMINATE "00:00" FALLBACK: Freeze actual completed duration; disconnect from volatile live sessionSeconds
+    if (sessionSeconds > 0 && frozenDurationRef.current === null) {
+      frozenDurationRef.current = sessionSeconds;
+    }
 
-    const isConfigured = checkIsDisplayNameConfigured();
+    let resolvedLocalTime = didCurrentPlayerFail ? 9999 : (frozenDurationRef.current ?? sessionSeconds);
+
+    // If 0 is encountered unexpectedly on a win, resolve time from recorded match snapshot in completedGames, syncedLeaderboard, or lastCompletedSession
+    if (!didCurrentPlayerFail && (resolvedLocalTime === 0 || !resolvedLocalTime)) {
+      if (matchedGame && Number(matchedGame.timeSec) > 0) {
+        resolvedLocalTime = Number(matchedGame.timeSec);
+      } else {
+        const syncedMe = (syncedLeaderboard || []).find((r: any) => r.userId === userProfile?.id);
+        if (syncedMe && Number(syncedMe.timeSec) > 0) {
+          resolvedLocalTime = Number(syncedMe.timeSec);
+        } else {
+          try {
+            const lastSession = JSON.parse(localStorage.getItem("sudoku_lastCompletedSession") || "{}");
+            if (lastSession && Number(lastSession.seconds) > 0) {
+              resolvedLocalTime = Number(lastSession.seconds);
+            }
+          } catch {}
+        }
+      }
+      if (resolvedLocalTime === 0 || !resolvedLocalTime) {
+        resolvedLocalTime = 1; // absolute minimum guard against "00:00" on a win
+      }
+      frozenDurationRef.current = resolvedLocalTime;
+    }
+
+    // 2. RESTORE SMART BEST-SCORE REPLAY SYNC for local user
+    let localIsWon = !didCurrentPlayerFail;
+    let localMistakes = boardState?.currentMistakesCount || 0;
+
+    if (matchedGame) {
+      const priorWasWin = Boolean(matchedGame.isWon);
+      const priorTimeSec = Number(matchedGame.timeSec) > 0 ? Number(matchedGame.timeSec) : Infinity;
+      const priorMistakes = Number(matchedGame.mistakes || 0);
+
+      if (priorWasWin && didCurrentPlayerFail) {
+        // If prior record was a WIN and new run is FAILED/ABANDONED -> NEVER overwrite the WIN
+        localIsWon = true;
+        resolvedLocalTime = priorTimeSec;
+        localMistakes = priorMistakes;
+      } else if (priorWasWin && !didCurrentPlayerFail) {
+        // If both runs are WINS -> Overwrite ONLY if newTimeSec < oldTimeSec OR (newTimeSec === oldTimeSec AND newMistakes < oldMistakes)
+        const isBetter = resolvedLocalTime < priorTimeSec || (resolvedLocalTime === priorTimeSec && localMistakes < priorMistakes);
+        if (!isBetter) {
+          resolvedLocalTime = priorTimeSec;
+          localMistakes = priorMistakes;
+        }
+      }
+    }
+
+    const resultsMap = new Map<string, any>();
     const currentLocalName = (userProfile?.name && userProfile.name.trim()) || getActiveDisplayName();
+
     const localMe = {
       id: userProfile?.id || "me",
       name: currentLocalName,
-      time: didCurrentPlayerFail ? 9999 : sessionSeconds,
-      elapsedTime: sessionSeconds,
-      mistakes: boardState?.currentMistakesCount || 0,
-      failed: didCurrentPlayerFail,
+      time: !localIsWon ? 9999 : resolvedLocalTime,
+      elapsedTime: resolvedLocalTime,
+      mistakes: localMistakes,
+      failed: !localIsWon,
+      isAbandoned: false,
       isMe: true,
       isReal: true,
-      isPending: false
+      isPending: false,
+      timestamp: Date.now()
     };
     resultsMap.set(localMe.id, localMe);
 
-    (syncedLeaderboard || []).forEach((r: any) => {
-      const isCurrentUser = r.userId === userProfile?.id;
-      const isAbandoned = r.status === "abandoned" || r.status === "left" || r.status === "forfeited";
-      resultsMap.set(r.userId, {
-        id: r.userId,
-        name: isCurrentUser ? r.playerName || currentLocalName : r.playerName,
-        time: isAbandoned ? 99999 : !r.isWon ? 9999 : Number(r.timeSec),
-        elapsedTime:
-          Number(r.timeSec) > 0 && Number(r.timeSec) < 9999
-            ? Number(r.timeSec)
-            : Number(r.elapsedTime) || 0,
-        mistakes: Number(r.mistakes) || 0,
-        failed: (!r.isWon && !r.isPending) || isAbandoned,
+    // Helper to merge participant records (matching MatchResultsModal in History)
+    const mergeParticipant = (item: any) => {
+      if (!item) return;
+      const pId = item.userId || item.id;
+      if (!pId) return;
+
+      const isCurrentUser = pId === userProfile?.id || pId === "me" || item.isMe === true;
+      const pName = isCurrentUser
+        ? (item.playerName || item.name || currentLocalName)
+        : (item.playerName || item.name || "Opponent");
+
+      // 5. ABANDONED / FORFEIT RULES
+      const isAbandoned =
+        item.status === "abandoned" ||
+        item.status === "left" ||
+        item.status === "forfeited" ||
+        item.status === "quit" ||
+        Boolean(item.abandoned) ||
+        Boolean(item.forfeited) ||
+        Boolean(item.isAbandoned);
+
+      const isWon = !isAbandoned && (
+        item.isWon !== undefined
+          ? Boolean(item.isWon)
+          : item.failed !== undefined
+          ? !item.failed
+          : !item.isPending
+      );
+
+      const isPending = !isCurrentUser && !isAbandoned && (item.isPending ?? false);
+      const rawTime = Number(item.timeSec ?? item.time ?? item.elapsedTime ?? 0);
+      const pTime = isAbandoned ? 99999 : !isWon ? 9999 : rawTime;
+      const elapsedTime = rawTime > 0 && rawTime < 9999 ? rawTime : (Number(item.elapsedTime) || 0);
+
+      // Smart Replay preservation: if existing entry is already a superior win, do not downgrade it
+      const existing = resultsMap.get(pId);
+      if (existing) {
+        const existingWon = !existing.failed && !existing.isAbandoned && !existing.isPending;
+        if (existingWon && (isAbandoned || !isWon)) {
+          return;
+        }
+        if (existingWon && isWon && !isAbandoned) {
+          if (existing.time < pTime || (existing.time === pTime && existing.mistakes <= (Number(item.mistakes) || 0))) {
+            return;
+          }
+        }
+      }
+
+      resultsMap.set(pId, {
+        id: pId,
+        name: pName,
+        time: pTime,
+        elapsedTime: elapsedTime,
+        mistakes: item.mistakes !== undefined ? Number(item.mistakes) : 0,
+        hints: item.hints !== undefined ? Number(item.hints) : ((item as any).hintsUsed ?? 0),
+        failed: (!isWon && !isPending) || isAbandoned,
         isAbandoned: isAbandoned,
+        status: item.status,
         isMe: isCurrentUser,
         isReal: true,
-        isPending: !isCurrentUser && !isAbandoned ? !!r.isPending : false
+        isPending: isPending,
+        timestamp: item.timestamp?.toMillis ? item.timestamp.toMillis() : (item.timestamp ? new Date(item.timestamp).getTime() : (item.date ? new Date(item.date).getTime() : 0))
       });
-    });
+    };
 
+    // 6. Merge stored participants from matched history / completedGames
+    const storedParticipants = matchedGame?.participants;
+    if (Array.isArray(storedParticipants)) {
+      storedParticipants.forEach(mergeParticipant);
+    }
+
+    // Overlay live synced results from Firestore
+    if (Array.isArray(syncedLeaderboard)) {
+      syncedLeaderboard.forEach(mergeParticipant);
+    }
+
+    // Merge previously cached standings snapshot (Rule 1 lock: freeze against drops)
+    if (Array.isArray(cachedStandingsRef.current)) {
+      cachedStandingsRef.current.forEach(mergeParticipant);
+    }
+
+    // 3. STRICT RANKING & TIE-BREAKER LOGIC
     const list = Array.from(resultsMap.values());
     list.sort((a, b) => {
-      if (a.isAbandoned !== b.isAbandoned) return a.isAbandoned ? 1 : -1;
-      const aPending = !!a.isPending;
-      const bPending = !!b.isPending;
-      if (aPending !== bPending) return aPending ? 1 : -1;
-      if (a.failed !== b.failed) return a.failed ? 1 : -1;
-      if (a.time !== b.time) return a.time - b.time;
-      if (a.mistakes !== b.mistakes) return a.mistakes - b.mistakes;
-      return (a.elapsedTime || 0) - (b.elapsedTime || 0);
+      // 1. Status: Completed/Won > Pending > Failed/Abandoned/Left
+      const getStatusPriority = (p: any) => {
+        if (p.isAbandoned || p.failed) return 2;
+        if (p.isPending) return 1;
+        return 0; // Completed / Won
+      };
+
+      const priorityA = getStatusPriority(a);
+      const priorityB = getStatusPriority(b);
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      // If both are Completed/Won:
+      if (priorityA === 0) {
+        // 2. Completion Time: Ascending (lower time = higher rank)
+        if (a.time !== b.time) {
+          return a.time - b.time;
+        }
+        // 3. Mistakes: Fewer errors win ties
+        if (a.mistakes !== b.mistakes) {
+          return a.mistakes - b.mistakes;
+        }
+        // 4. Submission Timestamp: Earliest completion breaks deadlocks
+        const timeA = Number(a.timestamp || 0);
+        const timeB = Number(b.timestamp || 0);
+        if (timeA && timeB && timeA !== timeB) {
+          return timeA - timeB;
+        }
+        return (a.elapsedTime || 0) - (b.elapsedTime || 0);
+      }
+
+      // If both are Pending:
+      if (priorityA === 1) {
+        if (a.mistakes !== b.mistakes) {
+          return a.mistakes - b.mistakes;
+        }
+        return (a.elapsedTime || 0) - (b.elapsedTime || 0);
+      }
+
+      // If both are Failed / Abandoned:
+      if (a.isAbandoned !== b.isAbandoned) {
+        return a.isAbandoned ? 1 : -1;
+      }
+      if (a.mistakes !== b.mistakes) {
+        return a.mistakes - b.mistakes;
+      }
+      return (b.elapsedTime || 0) - (a.elapsedTime || 0);
     });
+
+    // 1. PERMANENT STANDINGS LOCK:
+    // Cache and permanently freeze standings snapshot whenever results.length >= 2 is present.
+    // Do NOT let the list clear or revert when live room listeners drop or opponents leave.
+    if (list.length >= 2) {
+      cachedStandingsRef.current = list;
+      return list;
+    } else if (cachedStandingsRef.current && cachedStandingsRef.current.length >= 2) {
+      return cachedStandingsRef.current;
+    }
+
     return list;
   }, [
     boardState,
@@ -171,7 +372,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
     mistakeLimitEnabled,
     sessionSeconds,
     syncedLeaderboard,
-    userProfile
+    userProfile,
+    completedGames,
+    challengeSeed,
+    rematchGameId
   ]);
 
   const isMultiplayerCompetitive = isMultiplayer ?? (challengeSeed !== undefined || results.length >= 2);
@@ -203,7 +407,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   }, [isOpen, endGameStep]);
 
   const winnerTime = useMemo(() => {
-    if (results.length > 0 && !results[0].failed && !results[0].isAbandoned && results[0].time < 9999) {
+    if (results.length > 0 && !results[0].failed && !results[0].isAbandoned && !results[0].isPending && results[0].time < 9999) {
       return results[0].time;
     }
     return null;
@@ -289,9 +493,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             <div className="max-h-[48vh] sm:max-h-[52vh] overflow-y-auto overscroll-contain px-1 py-1 custom-scrollbar flex flex-col gap-2.5">
               {results.map((player, idx) => {
                 const isPending = !!player.isPending;
-                const isPodium1 = isMultiplayerCompetitive && idx === 0 && !player.failed && !player.isAbandoned;
-                const isPodium2 = isMultiplayerCompetitive && idx === 1 && !player.failed && !player.isAbandoned;
-                const isPodium3 = isMultiplayerCompetitive && idx === 2 && !player.failed && !player.isAbandoned;
+                const isPodium1 = isMultiplayerCompetitive && idx === 0 && !player.failed && !player.isAbandoned && !isPending;
+                const isPodium2 = isMultiplayerCompetitive && idx === 1 && !player.failed && !player.isAbandoned && !isPending;
+                const isPodium3 = isMultiplayerCompetitive && idx === 2 && !player.failed && !player.isAbandoned && !isPending;
                 const isLowerRank = isMultiplayerCompetitive && idx >= 3;
                 const positionStr = isMultiplayerCompetitive
                   ? idx === 0
@@ -486,7 +690,16 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     {/* Right: Clean Time + Gap Delta Badge + error count */}
                     <div className="flex flex-col items-end justify-center shrink-0 whitespace-nowrap text-right relative z-10">
                       {player.isAbandoned ? (
-                        <span className="font-mono text-xs font-semibold text-rose-500">Left</span>
+                        <div className="flex flex-col items-end">
+                          <span className="font-mono text-xs font-semibold text-rose-500">
+                            {player.status === "left" ? "Left" : "Abandoned"}
+                          </span>
+                          {player.mistakes > 0 && (
+                            <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400">
+                              {player.mistakes} errors
+                            </span>
+                          )}
+                        </div>
                       ) : isPending ? (
                         <span className="font-mono text-xs text-amber-500 flex items-center gap-1 font-bold">
                           <span>Solving</span>
@@ -609,6 +822,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               <button
                 onClick={() => {
                   playClickSound();
+                  cachedStandingsRef.current = null;
+                  frozenDurationRef.current = null;
                   onNewGameClick();
                 }}
                 className={`flex-1 py-3 px-2 rounded-2xl flex items-center justify-center gap-1.5 text-xs font-mono font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 border-none cursor-pointer ${
@@ -646,42 +861,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     >
                       <Copy className="w-3.5 h-3.5" />
                     </button>
-
-                    {/* Lobby Quick Status Chip */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        playClickSound();
-                        toggleIncognito();
-                      }}
-                      title={isIncognito ? "Ghost Mode active (tap to appear online)" : "Online (tap for Ghost Mode)"}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-mono font-bold tracking-wider uppercase border-none cursor-pointer transition-all active:scale-95 select-none ${
-                        isIncognito
-                          ? (darkMode
-                              ? "bg-purple-950/70 text-purple-300 border border-purple-800/60 hover:bg-purple-900/60"
-                              : "bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-200/80")
-                          : (darkMode
-                              ? "bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 hover:bg-emerald-900/60"
-                              : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100")
-                      }`}
-                    >
-                      {isIncognito ? (
-                        <>
-                          <span className="text-xs leading-none">🕶️</span>
-                          <span>Ghost Mode</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span>Online</span>
-                        </>
-                      )}
-                    </button>
                   </div>
 
-                  {/* Right: Lock toggle + Close button */}
-                  <div className="flex items-center gap-2">
+                  {/* Right: Lock toggle + Close button securely pinned */}
+                  <div className="flex items-center gap-2 pr-1">
                     <button
                       onClick={() => {
                         playClickSound();
@@ -717,12 +900,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                         playClickSound();
                         onClose();
                       }}
-                      className={`p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 ${
+                      className={`p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 shrink-0 ${
                         darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
                       }`}
                       title="Close"
                     >
-                      <X className="w-4 h-4" strokeWidth={2.5} />
+                      <X className="w-4 h-4 stroke-[2.5]" />
                     </button>
                   </div>
                 </div>

@@ -16,6 +16,8 @@ const ALIAS_MAP: Record<string, TranslationKey> = {
   FRIENDSTAB: 'friendsTabTitle',
   WONBADGE: 'wonBadge',
   FAILEDBADGE: 'failedBadge',
+  MULTIBADGE: 'multiBadge',
+  SOLOBADGE: 'soloBadge',
   TIMELABEL: 'timeLabel',
   ERRSLABEL: 'errsLabel',
   REPLAYACTION: 'replayAction',
@@ -41,6 +43,8 @@ function sanitizeFallbackKey(key: string, params?: Record<string, string | numbe
   if (upper === 'PLAYNEWGAME' || upper === 'PLAY_NEW_GAME') return 'PLAY NEW GAME';
   if (upper === 'REVIEWGAME' || upper === 'REVIEW_GAME') return 'REVIEW';
   if (upper === 'RESUMEGAME' || upper === 'RESUME_GAME') return 'RESUME';
+  if (upper === 'MULTIBADGE' || upper === 'MULTI_BADGE' || upper === 'MULTI') return 'MULTI';
+  if (upper === 'SOLOBADGE' || upper === 'SOLO_BADGE' || upper === 'SOLO') return 'SOLO';
   if (upper === 'WINRATELABEL' || upper === 'WIN_RATE_LABEL') return 'Win Rate';
   if (upper === 'WINSRATIO' || upper === 'WINS_RATIO') {
     if (params && params.wins !== undefined && params.total !== undefined) {
