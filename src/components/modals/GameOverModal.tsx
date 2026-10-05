@@ -313,19 +313,19 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
                 if (isMultiplayerCompetitive) {
                   if (isPodium1) {
-                    // RANK 1 — Frosted Champagne (soft buttermilk candlelight wash)
+                    // RANK 1 — Soft warm honey champagne with subtle diffuse glow
                     containerClass += `animate-podium-rank-1 ${isMeNewPB ? "animate-radiant-sheen" : ""} ${
-                      darkMode ? "bg-amber-300/[0.10] text-amber-200" : "bg-amber-400/[0.08] text-amber-950"
+                      darkMode ? "bg-amber-400/20 text-amber-200 shadow-lg shadow-amber-500/10" : "bg-amber-100/70 text-amber-900"
                     }`;
                     containerStyle = {
-                      boxShadow: "0 12px 32px -8px rgba(245, 195, 110, 0.12)",
+                      boxShadow: darkMode ? "0 10px 25px -5px rgba(245, 158, 11, 0.1)" : "0 12px 32px -8px rgba(245, 195, 110, 0.15)",
                       transform: "scale(1.03)",
                       transformOrigin: "center"
                     };
                   } else if (isPodium2) {
-                    // RANK 2 — Frosted Mist (cool sky-slate / platinum wash), flush
+                    // RANK 2 — Cool ice-platinum / crisp mist
                     containerClass += `animate-podium-rank-2 shadow-none ${
-                      darkMode ? "bg-slate-300/[0.07] text-stone-200" : "bg-slate-400/[0.06] text-stone-850"
+                      darkMode ? "bg-sky-400/15 text-sky-200" : "bg-sky-100/60 text-sky-900"
                     }`;
                     containerStyle = {
                       boxShadow: "none",
@@ -333,9 +333,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                       transformOrigin: "center"
                     };
                   } else if (isPodium3) {
-                    // RANK 3 — Smoked Sandstone (creamy raw linen / warm clay wash), flush
+                    // RANK 3 — Soft pastel sandstone / warm muted terracotta
                     containerClass += `animate-podium-rank-3 shadow-none ${
-                      darkMode ? "bg-orange-200/[0.06] text-stone-300" : "bg-orange-950/[0.05] text-stone-850"
+                      darkMode ? "bg-orange-400/15 text-orange-200" : "bg-orange-100/60 text-orange-900"
                     }`;
                     containerStyle = {
                       boxShadow: "none",
@@ -347,11 +347,11 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     containerClass += `animate-podium-lower shadow-none ${
                       player.isMe
                         ? darkMode
-                          ? "bg-zinc-800/80 text-stone-100"
-                          : "bg-stone-200/80 text-stone-900"
+                          ? "bg-white/[0.08] text-stone-100"
+                          : "bg-black/[0.06] text-stone-900"
                         : darkMode
-                        ? "bg-zinc-900/35 text-stone-400"
-                        : "bg-stone-100/60 text-stone-600"
+                        ? "bg-white/[0.04] text-stone-400"
+                        : "bg-black/[0.03] text-stone-600"
                     }`;
                     containerStyle = {
                       animationDelay: `${700 + (idx - 3) * 60}ms`,
@@ -397,12 +397,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                               : "text-amber-600"
                             : isPodium2
                             ? darkMode
-                              ? "text-slate-300"
-                              : "text-slate-500"
+                              ? "text-sky-300"
+                              : "text-sky-600"
                             : isPodium3
                             ? darkMode
-                              ? "text-amber-500/80"
-                              : "text-amber-700/80"
+                              ? "text-orange-300"
+                              : "text-orange-600"
                             : darkMode
                             ? "text-zinc-500 text-xs font-bold"
                             : "text-stone-400 text-xs font-bold"
@@ -419,9 +419,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                             }`}
                           />
                         ) : isPodium2 ? (
-                          <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-slate-300" : "text-slate-500"}`} />
+                          <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-sky-300" : "text-sky-600"}`} />
                         ) : isPodium3 ? (
-                          <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-amber-500/80" : "text-amber-700/80"}`} />
+                          <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-orange-300" : "text-orange-600"}`} />
                         ) : (
                           positionStr
                         )}
@@ -436,12 +436,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                                 : "text-amber-950 font-black"
                               : isPodium2
                               ? darkMode
-                                ? "text-stone-200"
-                                : "text-stone-850"
+                                ? "text-sky-200 font-bold"
+                                : "text-sky-950 font-bold"
                               : isPodium3
                               ? darkMode
-                                ? "text-stone-300"
-                                : "text-stone-850"
+                                ? "text-orange-200 font-bold"
+                                : "text-orange-950 font-bold"
                               : player.isMe
                               ? darkMode
                                 ? "text-stone-100 font-bold"
@@ -520,11 +520,11 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                                 className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md border-none tracking-tight leading-none ${
                                   isPodium2
                                     ? darkMode
-                                      ? "bg-slate-500/10 text-slate-300"
-                                      : "bg-slate-500/10 text-slate-600"
+                                      ? "bg-sky-500/20 text-sky-200"
+                                      : "bg-sky-500/15 text-sky-800"
                                     : darkMode
-                                    ? "bg-stone-500/10 text-stone-300"
-                                    : "bg-stone-500/10 text-stone-600"
+                                    ? "bg-orange-500/20 text-orange-200"
+                                    : "bg-orange-500/15 text-orange-800"
                                 }`}
                               >
                                 {gapDelta}
@@ -538,12 +538,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                                     : "text-amber-950 font-black"
                                   : isPodium2
                                   ? darkMode
-                                    ? "text-stone-200"
-                                    : "text-stone-850"
+                                    ? "text-sky-200"
+                                    : "text-sky-900"
                                   : isPodium3
                                   ? darkMode
-                                    ? "text-stone-300"
-                                    : "text-stone-850"
+                                    ? "text-orange-200"
+                                    : "text-orange-900"
                                   : player.isMe
                                   ? darkMode
                                     ? "text-indigo-300 font-bold"
@@ -564,12 +564,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                                   : "text-amber-900/70"
                                 : isPodium2
                                 ? darkMode
-                                  ? "text-stone-400"
-                                  : "text-stone-500"
+                                  ? "text-sky-300/70"
+                                  : "text-sky-800/70"
                                 : isPodium3
                                 ? darkMode
-                                  ? "text-stone-400"
-                                  : "text-stone-500"
+                                  ? "text-orange-300/70"
+                                  : "text-orange-800/70"
                                 : darkMode
                                 ? "text-zinc-400"
                                 : "text-stone-500"
