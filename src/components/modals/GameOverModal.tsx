@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -21,6 +21,7 @@ import {
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { formatActiveStatus } from "../../utils/formatTimestamp";
+import { usePodiumAudio } from "../../hooks/usePodiumAudio";
 
 export interface GameOverModalProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export interface GameOverModalProps {
   isNewRecordAchieved: boolean;
   formatTimer: (seconds: number) => string;
   playClickSound: () => void;
+  isMultiplayer?: boolean;
 
   // Step 1 Actions
   onSameGameReplay: () => Promise<void>;
@@ -99,11 +101,122 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   handleReinviteAll,
   isInvitingAll,
   shareChallengeLink,
-  onStartRematchGame
+  onStartRematchGame,
+  isMultiplayer
 }) => {
   const { t } = useTranslation();
   const playerIds = (multiplayerPlayers || []).map((p: any) => p.id);
   const { isIncognito, toggleIncognito, getFriendStatus, getFriendLastActive } = useFriendPresence(userProfile?.id, playerIds);
+
+  const results = useMemo(() => {
+    const didCurrentPlayerFail =
+      mistakeLimitEnabled &&
+      (boardState?.maxMistakesLimit === 0
+        ? (boardState?.currentMistakesCount ?? 0) > 0
+        : (boardState?.currentMistakesCount ?? 0) >= (boardState?.maxMistakesLimit ?? 3));
+
+    const resultsMap = new Map<string, any>();
+
+    const isConfigured = checkIsDisplayNameConfigured();
+    const currentLocalName = (userProfile?.name && userProfile.name.trim()) || getActiveDisplayName();
+    const localMe = {
+      id: userProfile?.id || "me",
+      name: currentLocalName,
+      time: didCurrentPlayerFail ? 9999 : sessionSeconds,
+      elapsedTime: sessionSeconds,
+      mistakes: boardState?.currentMistakesCount || 0,
+      failed: didCurrentPlayerFail,
+      isMe: true,
+      isReal: true,
+      isPending: false
+    };
+    resultsMap.set(localMe.id, localMe);
+
+    (syncedLeaderboard || []).forEach((r: any) => {
+      const isCurrentUser = r.userId === userProfile?.id;
+      const isAbandoned = r.status === "abandoned" || r.status === "left" || r.status === "forfeited";
+      resultsMap.set(r.userId, {
+        id: r.userId,
+        name: isCurrentUser ? r.playerName || currentLocalName : r.playerName,
+        time: isAbandoned ? 99999 : !r.isWon ? 9999 : Number(r.timeSec),
+        elapsedTime:
+          Number(r.timeSec) > 0 && Number(r.timeSec) < 9999
+            ? Number(r.timeSec)
+            : Number(r.elapsedTime) || 0,
+        mistakes: Number(r.mistakes) || 0,
+        failed: (!r.isWon && !r.isPending) || isAbandoned,
+        isAbandoned: isAbandoned,
+        isMe: isCurrentUser,
+        isReal: true,
+        isPending: !isCurrentUser && !isAbandoned ? !!r.isPending : false
+      });
+    });
+
+    const list = Array.from(resultsMap.values());
+    list.sort((a, b) => {
+      if (a.isAbandoned !== b.isAbandoned) return a.isAbandoned ? 1 : -1;
+      const aPending = !!a.isPending;
+      const bPending = !!b.isPending;
+      if (aPending !== bPending) return aPending ? 1 : -1;
+      if (a.failed !== b.failed) return a.failed ? 1 : -1;
+      if (a.time !== b.time) return a.time - b.time;
+      if (a.mistakes !== b.mistakes) return a.mistakes - b.mistakes;
+      return (a.elapsedTime || 0) - (b.elapsedTime || 0);
+    });
+    return list;
+  }, [
+    boardState,
+    checkIsDisplayNameConfigured,
+    getActiveDisplayName,
+    mistakeLimitEnabled,
+    sessionSeconds,
+    syncedLeaderboard,
+    userProfile
+  ]);
+
+  const isMultiplayerCompetitive = isMultiplayer ?? (challengeSeed !== undefined || results.length >= 2);
+  const { playPodiumSequence } = usePodiumAudio();
+  const podiumAudioTriggeredRef = useRef<boolean>(false);
+  const localLowerRankRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || endGameStep !== 1) {
+      podiumAudioTriggeredRef.current = false;
+      return;
+    }
+
+    if (!isMultiplayerCompetitive || podiumAudioTriggeredRef.current) return;
+
+    podiumAudioTriggeredRef.current = true;
+    const isWinner = Boolean(results[0]?.isMe && !results[0]?.failed && !results[0]?.isAbandoned);
+    const isPB = Boolean(isNewRecordAchieved && results.find((p) => p.isMe && !p.failed));
+    playPodiumSequence(isWinner, isPB);
+  }, [isOpen, endGameStep, isMultiplayerCompetitive, results, isNewRecordAchieved, playPodiumSequence]);
+
+  useEffect(() => {
+    if (isOpen && endGameStep === 1 && localLowerRankRef.current) {
+      const timer = setTimeout(() => {
+        localLowerRankRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 750);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, endGameStep]);
+
+  const winnerTime = useMemo(() => {
+    if (results.length > 0 && !results[0].failed && !results[0].isAbandoned && results[0].time < 9999) {
+      return results[0].time;
+    }
+    return null;
+  }, [results]);
+
+  const formatGapDelta = (playerTime: number) => {
+    if (winnerTime === null || !playerTime || playerTime <= winnerTime || playerTime >= 9999) return null;
+    const deltaSec = Math.round(playerTime - winnerTime);
+    if (deltaSec <= 0 || deltaSec > 7200) return null;
+    const mins = Math.floor(deltaSec / 60);
+    const secs = deltaSec % 60;
+    return `+${mins}:${String(secs).padStart(2, "0")}s`;
+  };
 
   if (!isOpen || !boardState) return null;
 
@@ -173,239 +286,251 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             <div className={`w-full h-px shrink-0 ${darkMode ? "bg-zinc-800" : "bg-stone-200"}`} />
 
             {/* SCREEN 1: Middle Leaderboard Player List cleanly spaced */}
-            <div className="max-h-[48vh] sm:max-h-[52vh] overflow-y-auto overscroll-contain pr-1 custom-scrollbar flex flex-col gap-2">
-              {(() => {
-                const didCurrentPlayerFail =
-                  mistakeLimitEnabled &&
-                  (boardState.maxMistakesLimit === 0
-                    ? boardState.currentMistakesCount > 0
-                    : boardState.currentMistakesCount >= boardState.maxMistakesLimit);
+            <div className="max-h-[48vh] sm:max-h-[52vh] overflow-y-auto overscroll-contain px-1 py-1 custom-scrollbar flex flex-col gap-2.5">
+              {results.map((player, idx) => {
+                const isPending = !!player.isPending;
+                const isPodium1 = isMultiplayerCompetitive && idx === 0 && !player.failed && !player.isAbandoned;
+                const isPodium2 = isMultiplayerCompetitive && idx === 1 && !player.failed && !player.isAbandoned;
+                const isPodium3 = isMultiplayerCompetitive && idx === 2 && !player.failed && !player.isAbandoned;
+                const isLowerRank = isMultiplayerCompetitive && idx >= 3;
+                const positionStr = isMultiplayerCompetitive
+                  ? idx === 0
+                    ? t("podium1st")
+                    : idx === 1
+                    ? t("podium2nd")
+                    : idx === 2
+                    ? t("podium3rd")
+                    : `${idx + 1}th`
+                  : "—";
+                const isMeNewPB = Boolean(player.isMe && isNewRecordAchieved && !player.failed);
+                const gapDelta = (isPodium2 || isPodium3) && !player.failed && !player.isAbandoned && !isPending
+                  ? formatGapDelta(player.time)
+                  : null;
 
-                const resultsMap = new Map<string, any>();
+                // Hierarchy Styling based on BORDERLESS Design Language
+                let containerClass = "flex items-center justify-between p-3.5 rounded-2xl gap-3 transition-all border-none border-0 ";
+                let containerStyle: React.CSSProperties = { transformOrigin: "center" };
 
-                const isConfigured = checkIsDisplayNameConfigured();
-                const currentLocalName = (userProfile?.name && userProfile.name.trim()) || getActiveDisplayName();
-                const localMe = {
-                  id: userProfile?.id || "me",
-                  name: currentLocalName,
-                  time: didCurrentPlayerFail ? 9999 : sessionSeconds,
-                  elapsedTime: sessionSeconds,
-                  mistakes: boardState.currentMistakesCount,
-                  failed: didCurrentPlayerFail,
-                  isMe: true,
-                  isReal: true,
-                  isPending: false
-                };
-                resultsMap.set(localMe.id, localMe);
+                if (isMultiplayerCompetitive) {
+                  if (isPodium1) {
+                    containerClass += `animate-podium-rank-1 ${isMeNewPB ? "animate-radiant-sheen" : ""} ${
+                      darkMode ? "bg-amber-400/[0.12] text-amber-200" : "bg-amber-500/[0.08] text-amber-950"
+                    }`;
+                    containerStyle = {
+                      boxShadow: darkMode ? "0 12px 32px -8px rgba(0,0,0,0.5)" : "0 12px 32px -8px rgba(0,0,0,0.08)",
+                      transform: "scale(1.04)",
+                      transformOrigin: "center"
+                    };
+                  } else if (isPodium2) {
+                    containerClass += `animate-podium-rank-2 shadow-none ${
+                      darkMode ? "bg-slate-500/[0.08] text-stone-200" : "bg-slate-500/[0.04] text-stone-850"
+                    }`;
+                    containerStyle = {
+                      boxShadow: "none",
+                      transform: "scale(1.0)",
+                      transformOrigin: "center"
+                    };
+                  } else if (isPodium3) {
+                    containerClass += `animate-podium-rank-3 shadow-none ${
+                      darkMode ? "bg-slate-500/[0.06] text-stone-300" : "bg-slate-500/[0.04] text-stone-850"
+                    }`;
+                    containerStyle = {
+                      boxShadow: "none",
+                      transform: "scale(0.96)",
+                      transformOrigin: "center"
+                    };
+                  } else {
+                    // Lower ranks (4+)
+                    containerClass += `animate-podium-lower shadow-none ${
+                      player.isMe
+                        ? darkMode
+                          ? "bg-zinc-800/80 text-stone-100"
+                          : "bg-stone-200/80 text-stone-900"
+                        : darkMode
+                        ? "bg-zinc-900/35 text-stone-400"
+                        : "bg-stone-100/60 text-stone-600"
+                    }`;
+                    containerStyle = {
+                      animationDelay: `${700 + (idx - 3) * 60}ms`,
+                      transform: "scale(1.0)",
+                      transformOrigin: "center"
+                    };
+                  }
+                } else {
+                  // Solo fallback
+                  containerClass += `animate-podium-reveal ${isMeNewPB ? "animate-radiant-sheen" : ""} ${
+                    idx === 0
+                      ? darkMode
+                        ? "bg-[#4c0519]/70 text-[#fecdd3] shadow-[0_2px_12px_rgba(0,0,0,0.25)]"
+                        : "bg-[#FFE4E6] text-[#9D174D] shadow-[0_2px_12px_rgba(244,63,94,0.08)]"
+                      : darkMode
+                      ? "bg-zinc-800/40 text-zinc-400"
+                      : "bg-stone-100/80 text-stone-500"
+                  }`;
+                  containerStyle = {
+                    animationDelay: `${idx * 80}ms`,
+                    transform: isMeNewPB ? "scale(1.02)" : undefined
+                  };
+                }
 
-                syncedLeaderboard.forEach((r: any) => {
-                  const isCurrentUser = r.userId === userProfile?.id;
-                  const isAbandoned = r.status === "abandoned" || r.status === "left" || r.status === "forfeited";
-                  resultsMap.set(r.userId, {
-                    id: r.userId,
-                    name: isCurrentUser ? r.playerName || currentLocalName : r.playerName,
-                    time: isAbandoned ? 99999 : !r.isWon ? 9999 : Number(r.timeSec),
-                    elapsedTime:
-                      Number(r.timeSec) > 0 && Number(r.timeSec) < 9999
-                        ? Number(r.timeSec)
-                        : Number(r.elapsedTime) || 0,
-                    mistakes: Number(r.mistakes),
-                    failed: (!r.isWon && !r.isPending) || isAbandoned,
-                    isAbandoned: isAbandoned,
-                    isMe: isCurrentUser,
-                    isReal: true,
-                    isPending: !isCurrentUser && !isAbandoned ? !!r.isPending : false
-                  });
-                });
+                return (
+                  <div
+                    key={player.id}
+                    ref={isLowerRank && player.isMe ? localLowerRankRef : undefined}
+                    style={containerStyle}
+                    className={containerClass}
+                  >
+                    {/* Left: Rank Medal/Trophy icon + Player Name + subtle badges */}
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 relative z-10">
+                      <span
+                        className={`font-mono text-sm sm:text-base font-black w-7 sm:w-8 text-center flex items-center justify-center shrink-0 ${
+                          player.isAbandoned
+                            ? "text-rose-500"
+                            : isPending
+                            ? "text-amber-500 animate-pulse"
+                            : isPodium1
+                            ? darkMode
+                              ? "text-amber-300"
+                              : "text-amber-600"
+                            : isPodium2
+                            ? darkMode
+                              ? "text-slate-300"
+                              : "text-slate-500"
+                            : isPodium3
+                            ? darkMode
+                              ? "text-amber-500/80"
+                              : "text-amber-700/80"
+                            : darkMode
+                            ? "text-zinc-500 text-xs font-bold"
+                            : "text-stone-400 text-xs font-bold"
+                        }`}
+                      >
+                        {player.isAbandoned ? (
+                          <XCircle className="w-4 h-4 text-rose-500 stroke-[2.5]" />
+                        ) : isPending ? (
+                          <Clock className="w-4 h-4 text-amber-500 animate-spin" />
+                        ) : isPodium1 ? (
+                          <Trophy
+                            className={`w-5 h-5 stroke-[2.5] shrink-0 ${
+                              darkMode ? "text-amber-300 fill-amber-400/20" : "text-amber-600 fill-amber-400/30"
+                            }`}
+                          />
+                        ) : isPodium2 ? (
+                          <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-slate-300" : "text-slate-500"}`} />
+                        ) : isPodium3 ? (
+                          <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-amber-500/80" : "text-amber-700/80"}`} />
+                        ) : (
+                          positionStr
+                        )}
+                      </span>
 
-                const results = Array.from(resultsMap.values());
-                results.sort((a, b) => {
-                  if (a.isAbandoned !== b.isAbandoned) return a.isAbandoned ? 1 : -1;
-                  const aPending = !!a.isPending;
-                  const bPending = !!b.isPending;
-                  if (aPending !== bPending) return aPending ? 1 : -1;
-                  if (a.failed !== b.failed) return a.failed ? 1 : -1;
-                  if (a.time !== b.time) return a.time - b.time;
-                  if (a.mistakes !== b.mistakes) return a.mistakes - b.mistakes;
-                  return (a.elapsedTime || 0) - (b.elapsedTime || 0);
-                });
-
-                return results.map((player, idx) => {
-                  const isMultiplayerCompetitive = results.length >= 2;
-                  const isPending = !!player.isPending;
-                  const isPodium1 = isMultiplayerCompetitive && idx === 0 && !player.failed && !player.isAbandoned;
-                  const isPodium2 = isMultiplayerCompetitive && idx === 1 && !player.failed && !player.isAbandoned;
-                  const isPodium3 = isMultiplayerCompetitive && idx === 2 && !player.failed && !player.isAbandoned;
-                  const isSoloComplete = !isMultiplayerCompetitive && idx === 0 && !player.failed && !player.isAbandoned;
-                  const positionStr = isMultiplayerCompetitive
-                    ? idx === 0
-                      ? t("podium1st")
-                      : idx === 1
-                      ? t("podium2nd")
-                      : idx === 2
-                      ? t("podium3rd")
-                      : `${idx + 1}th`
-                    : "—";
-                  const isMeNewPB = Boolean(player.isMe && isNewRecordAchieved && !player.failed);
-
-                  return (
-                    <div
-                      key={player.id}
-                      style={{
-                        animationDelay: `${idx * 80}ms`,
-                        transform: isMeNewPB ? "scale(1.02)" : undefined
-                      }}
-                      className={`animate-podium-reveal ${
-                        isMeNewPB ? "animate-radiant-sheen" : ""
-                      } flex items-center justify-between p-3.5 rounded-2xl gap-3 transition-all border-none ${
-                        isPodium1
-                          ? darkMode
-                            ? "bg-[#4c0519]/70 text-[#fecdd3] shadow-[0_2px_12px_rgba(0,0,0,0.25)]"
-                            : "bg-[#FFE4E6] text-[#9D174D] shadow-[0_2px_12px_rgba(244,63,94,0.08)]"
-                          : isPodium2
-                          ? darkMode
-                            ? "bg-[#2e1065]/70 text-[#e9d5ff] shadow-xs"
-                            : "bg-[#F3E8FF] text-[#6B21A8] shadow-xs"
-                          : isPodium3
-                          ? darkMode
-                            ? "bg-[#451a03]/70 text-[#fef08a] shadow-xs"
-                            : "bg-[#FFF99D] text-[#854D0E] shadow-xs"
-                          : darkMode
-                          ? "bg-zinc-800/40 text-zinc-400"
-                          : "bg-stone-100/80 text-stone-500"
-                      }`}
-                    >
-                      {/* Left: Rank Medal/Trophy icon + Player Name + subtle 'YOU' badge + subtle 'New PB' pill badge */}
-                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 relative z-10">
+                      <div className="flex items-center gap-2 min-w-0 flex-wrap">
                         <span
-                          className={`font-mono text-sm sm:text-base font-black w-7 sm:w-8 text-center flex items-center justify-center shrink-0 ${
-                            player.isAbandoned
-                              ? "text-rose-500"
-                              : isPending
-                              ? "text-amber-500 animate-pulse"
-                              : isPodium1
+                          className={`font-sans font-bold text-sm leading-normal overflow-visible truncate ${
+                            isPodium1
                               ? darkMode
-                                ? "text-[#fecdd3]"
-                                : "text-[#9D174D]"
+                                ? "text-amber-200"
+                                : "text-amber-950 font-black"
                               : isPodium2
                               ? darkMode
-                                ? "text-[#e9d5ff]"
-                                : "text-[#6B21A8]"
+                                ? "text-stone-200"
+                                : "text-stone-850"
                               : isPodium3
                               ? darkMode
-                                ? "text-[#fef08a]"
-                                : "text-[#854D0E]"
+                                ? "text-stone-300"
+                                : "text-stone-850"
+                              : player.isMe
+                              ? darkMode
+                                ? "text-stone-100 font-bold"
+                                : "text-stone-900 font-bold"
                               : darkMode
-                              ? "text-zinc-400"
-                              : "text-stone-500"
+                              ? "text-zinc-400 font-medium"
+                              : "text-stone-600 font-medium"
                           }`}
                         >
-                          {player.isAbandoned ? (
-                            <XCircle className="w-4 h-4 text-rose-500 stroke-[2.5]" />
-                          ) : isPending ? (
-                            <Clock className="w-4 h-4 text-amber-500 animate-spin" />
-                          ) : isPodium1 ? (
-                            <Trophy
-                              className={`w-5 h-5 stroke-[2.5] shrink-0 ${
-                                darkMode ? "text-[#fecdd3] fill-[#9F1239]/60" : "text-[#9D174D] fill-[#FECDD3]"
-                              }`}
-                            />
-                          ) : isPodium2 ? (
-                            <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-[#e9d5ff]" : "text-[#6B21A8]"}`} />
-                          ) : isPodium3 ? (
-                            <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-[#fef08a]" : "text-[#854D0E]"}`} />
-                          ) : (
-                            positionStr
-                          )}
+                          {player.name}
                         </span>
 
-                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                        {/* Top 3 'YOU' badge */}
+                        {player.isMe && !isLowerRank && (
                           <span
-                            className={`font-sans font-bold text-sm leading-normal overflow-visible truncate ${
+                            className={`text-[9px] px-1.5 py-0.5 rounded font-sans font-bold uppercase tracking-wider shrink-0 leading-normal overflow-visible ${
                               isPodium1
-                                ? darkMode
-                                  ? "text-[#fecdd3]"
-                                  : "text-[#9D174D]"
-                                : isPodium2
-                                ? darkMode
-                                  ? "text-[#e9d5ff]"
-                                  : "text-[#6B21A8]"
-                                : isPodium3
-                                ? darkMode
-                                  ? "text-[#fef08a]"
-                                  : "text-[#854D0E]"
-                                : player.isMe
-                                ? darkMode
-                                  ? "text-indigo-300 font-bold"
-                                  : "text-indigo-950 font-bold"
-                                : darkMode
-                                ? "text-zinc-300 font-medium"
-                                : "text-stone-700 font-medium"
+                                ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                                : "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
                             }`}
                           >
-                            {player.name}
+                            {t("youBadge")}
                           </span>
+                        )}
 
-                          {player.isMe && (
-                            <span className="text-[9px] bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 px-1.5 py-0.5 rounded font-sans font-semibold uppercase tracking-wider shrink-0 leading-normal overflow-visible">
-                              {t("youBadge")}
-                            </span>
-                          )}
+                        {/* Lower Rank 4+ 'YOU • #X' badge */}
+                        {player.isMe && isLowerRank && (
+                          <span className="text-[9px] bg-stone-500/20 text-stone-700 dark:text-stone-300 px-2 py-0.5 rounded-full font-mono font-bold uppercase tracking-wider shrink-0 leading-normal">
+                            YOU • #{idx + 1}
+                          </span>
+                        )}
 
-                          {player.isMe && isNewRecordAchieved && !player.failed && (
-                            <span className="text-[8.5px] bg-amber-400/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-sans font-medium uppercase tracking-wider flex items-center gap-1 shrink-0 animate-pulse">
-                              <Sparkles className="w-2.5 h-2.5 text-amber-500" />
-                              <span>New PB</span>
-                            </span>
-                          )}
-                        </div>
+                        {player.isMe && isNewRecordAchieved && !player.failed && (
+                          <span className="text-[8.5px] bg-amber-400/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-sans font-medium uppercase tracking-wider flex items-center gap-1 shrink-0 animate-pulse">
+                            <Sparkles className="w-2.5 h-2.5 text-amber-500" />
+                            <span>New PB</span>
+                          </span>
+                        )}
                       </div>
+                    </div>
 
-                      {/* Right: Clean Time + small compact error count */}
-                      <div className="flex flex-col items-end justify-center shrink-0 whitespace-nowrap text-right relative z-10">
-                        {player.isAbandoned ? (
-                          <span className="font-mono text-xs font-semibold text-rose-500">Left</span>
-                        ) : isPending ? (
-                          <span className="font-mono text-xs text-amber-500 flex items-center gap-1 font-bold">
-                            <span>Solving</span>
-                            <span className="inline-flex items-center gap-0.5 ml-0.5">
-                              <span
-                                className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-pulse-dots"
-                                style={{ animationDelay: "0s" }}
-                              />
-                              <span
-                                className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-pulse-dots"
-                                style={{ animationDelay: "0.2s" }}
-                              />
-                              <span
-                                className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-pulse-dots"
-                                style={{ animationDelay: "0.4s" }}
-                              />
-                            </span>
+                    {/* Right: Clean Time + Gap Delta Badge + error count */}
+                    <div className="flex flex-col items-end justify-center shrink-0 whitespace-nowrap text-right relative z-10">
+                      {player.isAbandoned ? (
+                        <span className="font-mono text-xs font-semibold text-rose-500">Left</span>
+                      ) : isPending ? (
+                        <span className="font-mono text-xs text-amber-500 flex items-center gap-1 font-bold">
+                          <span>Solving</span>
+                          <span className="inline-flex items-center gap-0.5 ml-0.5">
+                            <span
+                              className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-pulse-dots"
+                              style={{ animationDelay: "0s" }}
+                            />
+                            <span
+                              className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-pulse-dots"
+                              style={{ animationDelay: "0.2s" }}
+                            />
+                            <span
+                              className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-pulse-dots"
+                              style={{ animationDelay: "0.4s" }}
+                            />
                           </span>
-                        ) : player.failed ? (
-                          <>
-                            <span className="font-mono font-semibold text-xs sm:text-sm text-rose-500">Failed</span>
-                            <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400">
-                              {player.mistakes} errors
-                            </span>
-                          </>
-                        ) : (
-                          <>
+                        </span>
+                      ) : player.failed ? (
+                        <>
+                          <span className="font-mono font-semibold text-xs sm:text-sm text-rose-500">Failed</span>
+                          <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400">
+                            {player.mistakes} errors
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            {gapDelta && (
+                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-stone-500/10 text-stone-600 dark:text-stone-300 tracking-tight leading-none">
+                                {gapDelta}
+                              </span>
+                            )}
                             <span
                               className={`font-mono font-bold text-sm sm:text-base ${
                                 isPodium1
                                   ? darkMode
-                                    ? "text-[#fecdd3]"
-                                    : "text-[#9D174D]"
+                                    ? "text-amber-200"
+                                    : "text-amber-950 font-black"
                                   : isPodium2
                                   ? darkMode
-                                    ? "text-[#e9d5ff]"
-                                    : "text-[#6B21A8]"
+                                    ? "text-stone-200"
+                                    : "text-stone-850"
                                   : isPodium3
                                   ? darkMode
-                                    ? "text-[#fef08a]"
-                                    : "text-[#854D0E]"
+                                    ? "text-stone-300"
+                                    : "text-stone-850"
                                   : player.isMe
                                   ? darkMode
                                     ? "text-indigo-300 font-bold"
@@ -417,36 +542,36 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                             >
                               {formatTimer(player.time < 9999 ? player.time : player.elapsedTime || 0)}
                             </span>
-                            <span
-                              className={`font-sans text-[9px] ${
-                                isPodium1
-                                  ? darkMode
-                                    ? "text-[#fecdd3]/80"
-                                    : "text-[#9D174D]/80"
-                                  : isPodium2
-                                  ? darkMode
-                                    ? "text-[#e9d5ff]/80"
-                                    : "text-[#6B21A8]/80"
-                                  : isPodium3
-                                  ? darkMode
-                                    ? "text-[#fef08a]/80"
-                                    : "text-[#854D0E]/80"
-                                  : darkMode
-                                  ? "text-zinc-400"
+                          </div>
+                          <span
+                            className={`font-sans text-[9px] ${
+                              isPodium1
+                                ? darkMode
+                                  ? "text-amber-300/70"
+                                  : "text-amber-900/70"
+                                : isPodium2
+                                ? darkMode
+                                  ? "text-stone-400"
                                   : "text-stone-500"
-                              }`}
-                            >
-                              {player.mistakes === 0
-                                ? "0 errors"
-                                : `${player.mistakes} ${player.mistakes === 1 ? "error" : "errors"}`}
-                            </span>
-                          </>
-                        )}
-                      </div>
+                                : isPodium3
+                                ? darkMode
+                                  ? "text-stone-400"
+                                  : "text-stone-500"
+                                : darkMode
+                                ? "text-zinc-400"
+                                : "text-stone-500"
+                            }`}
+                          >
+                            {player.mistakes === 0
+                              ? "0 errors"
+                              : `${player.mistakes} ${player.mistakes === 1 ? "error" : "errors"}`}
+                          </span>
+                        </>
+                      )}
                     </div>
-                  );
-                });
-              })()}
+                  </div>
+                );
+              })}
             </div>
 
             {/* SCREEN 1: Action buttons — SAME GAME | NEW GAME — Evenly Sharing Footer */}

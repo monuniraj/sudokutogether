@@ -9798,6 +9798,7 @@ useEffect(() => {
               {/* 1. MULTIPLAYER LEADERBOARD MODAL (when challengeMode is true) */}
               <GameOverModal
                 isOpen={Boolean(boardState && showGameOverModal && challengeMode)}
+                isMultiplayer={Boolean(challengeMode)}
                 onClose={() => {
                   setShowGameOverModal(false);
                   setShowCelebrationConfetti(false);
