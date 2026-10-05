@@ -4,6 +4,7 @@ import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
 import { Language } from "../../i18n/translations";
+import { useFriendPresence } from "../../hooks/useFriendPresence";
 
 export interface SettingsModalProps {
   fromGameplaySettings: boolean;
@@ -94,6 +95,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenResetSettingsModal
 }) => {
   const { t, language, setLanguage, languages } = useTranslation();
+  const { isIncognito, toggleIncognito } = useFriendPresence(userProfile?.id);
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
 
   const toggleInfo = (id: string) => {
@@ -182,6 +184,55 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               title={t("displayName")}
             >
               <Pencil className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Incognito Master Toggle (Ghost Mode) */}
+          <div
+            className={`p-3.5 rounded-xl border-none flex items-center justify-between ${
+              darkMode ? "bg-zinc-950/45" : "bg-white/70"
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0 pr-2">
+              <span className="text-xl select-none shrink-0" role="img" aria-label="Incognito">
+                🕶️
+              </span>
+              <div className="flex flex-col min-w-0">
+                <span
+                  className={`font-sans font-bold text-sm truncate ${
+                    darkMode ? "text-purple-100" : "text-purple-950"
+                  }`}
+                >
+                  Incognito Mode
+                </span>
+                <span
+                  className={`text-[11px] leading-snug mt-0.5 ${
+                    darkMode ? "text-purple-300/80" : "text-purple-800/80"
+                  }`}
+                >
+                  Appear offline to friends without losing access to games or invites
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                playClickSound();
+                toggleIncognito();
+              }}
+              className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer shrink-0 active:scale-95 ${
+                isIncognito
+                  ? (darkMode ? "bg-purple-500 shadow-none" : "bg-[#6b21a8] shadow-none")
+                  : (darkMode ? "bg-zinc-850" : "bg-[#BAE6FD] active:bg-[#90cdf4] shadow-sm")
+              }`}
+              aria-label="Toggle Incognito Mode"
+            >
+              <div
+                className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
+                  isIncognito ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
             </button>
           </div>
 

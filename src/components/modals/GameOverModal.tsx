@@ -19,6 +19,7 @@ import {
   Play
 } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
+import { useFriendPresence } from "../../hooks/useFriendPresence";
 
 export interface GameOverModalProps {
   isOpen: boolean;
@@ -100,6 +101,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   onStartRematchGame
 }) => {
   const { t } = useTranslation();
+  const playerIds = (multiplayerPlayers || []).map((p: any) => p.id);
+  const { isIncognito, toggleIncognito, getFriendStatus } = useFriendPresence(userProfile?.id, playerIds);
 
   if (!isOpen || !boardState) return null;
 
@@ -504,6 +507,38 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     >
                       <Copy className="w-3.5 h-3.5" />
                     </button>
+
+                    {/* Lobby Quick Status Chip */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playClickSound();
+                        toggleIncognito();
+                      }}
+                      title={isIncognito ? "Ghost Mode active (tap to appear online)" : "Online (tap for Ghost Mode)"}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-mono font-bold tracking-wider uppercase border-none cursor-pointer transition-all active:scale-95 select-none ${
+                        isIncognito
+                          ? (darkMode
+                              ? "bg-purple-950/70 text-purple-300 border border-purple-800/60 hover:bg-purple-900/60"
+                              : "bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-200/80")
+                          : (darkMode
+                              ? "bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 hover:bg-emerald-900/60"
+                              : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100")
+                      }`}
+                    >
+                      {isIncognito ? (
+                        <>
+                          <span className="text-xs leading-none">🕶️</span>
+                          <span>Ghost Mode</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>Online</span>
+                        </>
+                      )}
+                    </button>
                   </div>
 
                   {/* Right: Lock toggle + Close button */}
@@ -595,24 +630,28 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 ) : (
                   <>
                     {(() => {
-                      const friends = multiplayerPlayers
-                        .filter((p) => p.isFriend)
-                        .sort((a, b) => {
+                      const sortPlayers = (list: any[]) => {
+                        return [...list].sort((a, b) => {
+                          const statusA = getFriendStatus(a.id, a.status);
+                          const statusB = getFriendStatus(b.id, b.status);
+                          const isOnlineA = statusA === "online";
+                          const isOnlineB = statusB === "online";
+                          if (isOnlineA !== isOnlineB) {
+                            return isOnlineA ? -1 : 1;
+                          }
                           if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
                           return a.name.localeCompare(b.name);
                         });
+                      };
 
-                      const recentPlayers = multiplayerPlayers
-                        .filter((p) => !p.isFriend)
-                        .sort((a, b) => {
-                          if (a.lastPlayedAt !== b.lastPlayedAt) return (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0);
-                          return a.name.localeCompare(b.name);
-                        });
+                      const friends = sortPlayers(multiplayerPlayers.filter((p) => p.isFriend));
+                      const recentPlayers = sortPlayers(multiplayerPlayers.filter((p) => !p.isFriend));
 
                       const renderRow = (player: any, index: number) => {
                         const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(
                           player.id
                         );
+                        const effectiveStatus = getFriendStatus(player.id, player.status);
                         const isAnimated = index < 5;
 
                         const cardContent = (
@@ -623,13 +662,11 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                                 : "bg-white border border-stone-200/60 text-stone-850 shadow-xs"
                             }`}
                           >
-                            {/* Left: Status Dot, Add Friend Icon, Username */}
+                            {/* Left: Status Dot (omitted if offline/incognito), Add Friend Icon, Username */}
                             <div className="flex items-center gap-2 min-w-0">
-                              <span
-                                className={`w-2 h-2 rounded-full shrink-0 ${
-                                  player.status === "online" ? "bg-emerald-400 animate-pulse" : "bg-stone-300 dark:bg-zinc-700"
-                                }`}
-                              />
+                              {effectiveStatus === "online" && (
+                                <span className="w-2 h-2 rounded-full shrink-0 bg-emerald-400 animate-pulse-gentle" />
+                              )}
                               {player.isFriend ? (
                                 <span
                                   className={`text-[8.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${

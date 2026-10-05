@@ -350,7 +350,8 @@ html.theme-snapshotting *::after {
 
 @keyframes shimmerButtonScale {
   0% { transform: scale(1); }
-  50% { transform: scale(1.025); }
+  10.78% { transform: scale(1.03); }
+  21.57% { transform: scale(1); }
   100% { transform: scale(1); }
 }
 
@@ -359,11 +360,15 @@ html.theme-snapshotting *::after {
     transform: translateX(-100%) skewX(-15deg);
     opacity: 0;
   }
-  20% {
+  4.3% {
     opacity: 1;
   }
-  80% {
+  17.2% {
     opacity: 1;
+  }
+  21.57% {
+    transform: translateX(220%) skewX(-15deg);
+    opacity: 0;
   }
   100% {
     transform: translateX(220%) skewX(-15deg);
@@ -374,7 +379,8 @@ html.theme-snapshotting *::after {
 .animate-shimmer-sweep {
   position: relative;
   overflow: hidden;
-  animation: shimmerButtonScale 0.5s ease-in-out both;
+  animation: shimmerButtonScale 5.1s ease-in-out infinite both;
+  animation-delay: 0.4s;
   will-change: transform;
 }
 
@@ -385,11 +391,83 @@ html.theme-snapshotting *::after {
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
   pointer-events: none;
-  animation: shimmerSweep 0.5s ease-in-out both;
+  animation: shimmerSweep 5.1s ease-in-out infinite both;
   animation-delay: inherit;
   will-change: transform, opacity;
+}
+
+.animate-shimmer-sweep:disabled,
+.animate-shimmer-sweep[disabled] {
+  animation: none !important;
+}
+
+.animate-shimmer-sweep:disabled::after,
+.animate-shimmer-sweep[disabled]::after {
+  display: none !important;
+}
+
+/* In-Game Board Modal: Ambient 4s loop on Share Link button */
+[class*="max-h-[85dvh]"] .grid.grid-cols-2 button:last-child {
+  position: relative;
+  overflow: hidden;
+  animation: shimmerButtonScale 5.1s ease-in-out infinite both;
+  animation-delay: 0.4s;
+  will-change: transform;
+}
+
+[class*="max-h-[85dvh]"] .grid.grid-cols-2 button:last-child::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  pointer-events: none;
+  animation: shimmerSweep 5.1s ease-in-out infinite both;
+  animation-delay: 0.4s;
+  will-change: transform, opacity;
+}
+
+[class*="max-h-[85dvh]"] .grid.grid-cols-2 button:last-child:disabled,
+[class*="max-h-[85dvh]"] .grid.grid-cols-2 button:last-child[disabled] {
+  animation: none !important;
+}
+
+[class*="max-h-[85dvh]"] .grid.grid-cols-2 button:last-child:disabled::after,
+[class*="max-h-[85dvh]"] .grid.grid-cols-2 button:last-child[disabled]::after {
+  display: none !important;
+}
+
+/* In-Game Board Modal: Staggered 45ms cascade on first 5 visible friend cards */
+[class*="max-h-[260px]"] .flex.flex-col.gap-2 > div:nth-child(-n+5) {
+  animation: cascadeDrop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  will-change: transform, opacity;
+}
+
+[class*="max-h-[260px]"] .flex.flex-col.gap-2 > div:nth-child(1) { animation-delay: 0ms; }
+[class*="max-h-[260px]"] .flex.flex-col.gap-2 > div:nth-child(2) { animation-delay: 45ms; }
+[class*="max-h-[260px]"] .flex.flex-col.gap-2 > div:nth-child(3) { animation-delay: 90ms; }
+[class*="max-h-[260px]"] .flex.flex-col.gap-2 > div:nth-child(4) { animation-delay: 135ms; }
+[class*="max-h-[260px]"] .flex.flex-col.gap-2 > div:nth-child(5) { animation-delay: 180ms; }
+
+/* In-Game Board Modal: Below the fold (item 6+) render statically for zero scroll latency (60fps lock) */
+[class*="max-h-[260px]"] .flex.flex-col.gap-2 > div:nth-child(n+6) {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* In-Game Board Modal: Omit dot for offline players and apply gentle 2.5s pulse for online */
+[class*="max-h-[260px]"] .flex.flex-col.gap-2 .bg-stone-300,
+[class*="max-h-[260px]"] .flex.flex-col.gap-2 [class*="dark:bg-zinc-700"] {
+  display: none !important;
+}
+
+[class*="max-h-[260px]"] .flex.flex-col.gap-2 .bg-emerald-400 {
+  animation: pulseGentle 2.5s ease-in-out infinite !important;
 }
 
 @keyframes pulseDots {
@@ -405,6 +483,22 @@ html.theme-snapshotting *::after {
 
 .animate-pulse-dots {
   animation: pulseDots 1.2s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes pulseGentle {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+.animate-pulse-gentle {
+  animation: pulseGentle 2.5s ease-in-out infinite;
   will-change: transform, opacity;
 }
 
