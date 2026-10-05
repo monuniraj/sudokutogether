@@ -1547,14 +1547,10 @@ useEffect(() => {
       const saved = localStorage.getItem("sudoku_userProfile");
       if (saved) return JSON.parse(saved);
     } catch {}
-    // Auto-generate unique guest token identity with unique username
-    const guestId = "GUEST_" + Math.floor(10000 + Math.random() * 90000);
-    const adjectives = ["Bold", "Silent", "Clever", "Swift", "Sharp", "Quiet", "Bright", "Epic", "Calm", "Sonic", "Lunar", "Solar", "Nova", "Cosmic", "Vesta"];
-    const nouns = ["Voyager", "Solver", "Maverick", "Pro", "Challenger", "Matrix", "Mind", "Zen", "Guru", "Wizard", "Ranger", "Pioneer", "Stargazer", "Kepler", "Comet"];
-    const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-    const noun = nouns[Math.floor(Math.random() * nouns.length)];
+    // Auto-generate unique guest token identity with unique username strictly capped at 12 characters (e.g. Pro_8492)
+    const guestId = "GUEST_" + Math.floor(1000 + Math.random() * 9000);
     const randNum = guestId.split("_")[1];
-    const uniqueName = `${adj} ${noun} ${randNum}`;
+    const uniqueName = `Pro_${randNum}`;
     
     const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
     const randColor = colors[Math.floor(Math.random() * colors.length)];
@@ -1591,6 +1587,8 @@ useEffect(() => {
                       currentName === "Guest Voyager" || 
                       currentName === "Guest Solver" || 
                       currentName === "Guest" || 
+                      currentName.startsWith("Pro_") ||
+                      currentName.startsWith("Bold Voyager") ||
                       currentName.startsWith("Player");
     
     if (isDefault) return false;
@@ -1621,14 +1619,18 @@ useEffect(() => {
       raw === "Guest Voyager" ||
       raw === "Guest Solver" ||
       raw === "Guest" ||
+      raw.startsWith("Bold Voyager") ||
       raw.startsWith("Player");
 
-    if (!isGenericGuestName) {
+    if (!isGenericGuestName && raw.length <= 12) {
       return raw;
     }
+    if (!isGenericGuestName && raw.length > 12 && !raw.startsWith("Bold Voyager")) {
+      return raw.slice(0, 12);
+    }
 
-    const randNum = (userProfile?.id || "").replace(/[^0-9]/g, "").slice(-5) || String(Math.floor(10000 + Math.random() * 90000));
-    return `Bold Voyager ${randNum}`;
+    const randNum = (userProfile?.id || "").replace(/[^0-9]/g, "").slice(-4) || String(Math.floor(1000 + Math.random() * 9000));
+    return `Pro_${randNum}`;
   };
 
   const handleAcceptInvitationWithProfileCheck = (onConfirm: () => void) => {
@@ -1636,7 +1638,7 @@ useEffect(() => {
 
     if (!isConfigured) {
       inviteJoinCallbackRef.current = onConfirm;
-      setInviteJoinName("");
+      setInviteJoinName(getActiveDisplayName());
       setInviteJoinError(null);
       setShowInviteJoinNamePopup(true);
       setShowInviteModal(false);
@@ -1692,7 +1694,7 @@ useEffect(() => {
       const saved = localStorage.getItem("sudoku_userProfile");
       if (saved) {
         const profile = JSON.parse(saved);
-        if (profile?.name && !profile.name.includes("Anonymous Voyager") && !profile.name.includes("Guest Voyager")) {
+        if (profile?.name && !profile.name.includes("Anonymous Voyager") && !profile.name.includes("Guest Voyager") && !profile.name.includes("Bold Voyager") && profile.name.length <= 12) {
           return profile.name;
         }
       }
@@ -1729,6 +1731,7 @@ useEffect(() => {
   const [challengeRoomAccess, setChallengeRoomAccess] = useState<"OPEN" | "PRIVATE">("OPEN");
   
   // Custom states matching user requirements
+  const [openedCreateFromMultiplayerResult, setOpenedCreateFromMultiplayerResult] = useState<boolean>(false);
   const [timerVisibility, setTimerVisibility] = useState<boolean>(true);
   const [roomPassword, setRoomPassword] = useState<string>("");
   const [isRoomLocked, setIsRoomLocked] = useState<boolean>(false);
@@ -5832,6 +5835,96 @@ useEffect(() => {
     await updateRoomSettingsInFirestore({ isLocked: locked, pin });
   };
 
+  const handleSoloChallengeFriends = async () => {
+    playClickSound();
+    if (!boardState) return;
+
+    const seed = boardState.seed ?? challengeSeed ?? (Math.floor(Math.random() * 900000) + 100000);
+    const roomCode = String(seed).padStart(6, '0').slice(-6);
+
+    const isFailed = Boolean(mistakeLimitEnabled && boardState && boardState.currentMistakesCount >= boardState.maxMistakesLimit);
+    const pName = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 12 && !userProfile.name.includes("Voyager")) ? userProfile.name.trim() : getActiveDisplayName();
+    const uId = userProfile?.id || "GUEST_ANON";
+    const userTime = isFailed ? 9999 : sessionSeconds;
+
+    setRematchMatchMode("replay");
+    setChallengeDifficulty(difficulty);
+    setChallengeMistakeLimit(mistakeLimitEnabled ? (boardState.maxMistakesLimit || 3) : 999);
+    setChallengeHintLimit(boardState.hintsRemaining !== undefined ? boardState.hintsRemaining : 3);
+    setChallengeTimerEnabled(timerEnabled);
+    setChallengeSeed(seed);
+    setPendingRematchSeed(seed);
+    setRematchGameId(roomCode);
+    setActiveGameId(roomCode);
+    setIsHost(true);
+    setChallengeMode(true);
+    setRematchInvitedPlayers(new Set());
+    setLobbyAcceptedUserIds(new Set());
+    setRematchInviteStates({});
+
+    // Seed local syncedLeaderboard with current user's completion result so podium has it immediately
+    setSyncedLeaderboard([{
+      userId: uId,
+      playerName: pName,
+      timeSec: userTime,
+      elapsedTime: sessionSeconds,
+      mistakes: boardState.currentMistakesCount || 0,
+      hints: boardState.hintsCount || 0,
+      isWon: !isFailed,
+      status: isFailed ? "mistake_game_over" : "completed"
+    }]);
+
+    // Submit result to Firestore so friends joining will sync against it
+    if (isOnline) {
+      const rBody = {
+        challengeId: roomCode,
+        userId: uId,
+        playerName: pName,
+        timeSec: userTime,
+        elapsedTime: sessionSeconds,
+        mistakes: boardState.currentMistakesCount || 0,
+        hints: boardState.hintsCount || 0,
+        maxHints: 3,
+        isWon: !isFailed,
+        date: new Date().toISOString()
+      };
+      submitGameResult(rBody);
+
+      try {
+        await setDoc(doc(db, "rooms", roomCode), {
+          roomCode: roomCode,
+          seed: seed,
+          difficulty: difficulty,
+          mistakesLimit: mistakeLimitEnabled ? (boardState.maxMistakesLimit || 3) : 999,
+          hintsLimit: boardState.hintsRemaining !== undefined ? boardState.hintsRemaining : 3,
+          timerEnabled: timerEnabled,
+          isLocked: isRoomLocked,
+          pin: isRoomLocked ? roomPin : "",
+          status: "active",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        await setDoc(doc(db, "rooms", roomCode, "players", uId), {
+          id: uId,
+          name: pName,
+          status: isFailed ? "mistake_game_over" : "completed",
+          isWon: !isFailed,
+          timeSec: userTime,
+          elapsedTime: sessionSeconds,
+          mistakes: boardState.currentMistakesCount || 0,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (err) {
+        console.error("[Firestore] Failed to initialize room for Solo challenge:", err);
+      }
+    }
+
+    // Transition cleanly to the exact Same Game Invite modal (Step 2 of End Game flow)
+    setEndGameStep(2);
+    setShowGameOverModal(true);
+  };
+
   const executeStartGameAction = () => {
     const canonicalSeed = challengeSeed || 100000;
     const activeRoomCode = String(canonicalSeed).padStart(6, '0').slice(-6);
@@ -5862,6 +5955,7 @@ useEffect(() => {
     }
 
     // ─── ONLINE BRANCH: full multiplayer session (unchanged behavior) ───
+    setOpenedCreateFromMultiplayerResult(false);
     setActiveGameId(activeRoomCode);
     setRematchGameId(activeRoomCode);
     setChallengeMode(true);
@@ -6546,10 +6640,10 @@ useEffect(() => {
   const validateNameLocally = (name: string): { isValid: boolean; error?: string } => {
     const trimmed = name.trim();
     if (!trimmed) return { isValid: false, error: "Name is required." };
-    if (trimmed.length > 16) {
-      return { isValid: false, error: "Name cannot exceed 16 characters." };
+    if (trimmed.length > 15) {
+      return { isValid: false, error: "Name cannot exceed 15 characters." };
     }
-    if (!/^[a-zA-Z0-9\s]+$/.test(trimmed)) {
+    if (!/^[a-zA-Z0-9_\s]+$/.test(trimmed)) {
       return { isValid: false, error: "Please choose a name that contains only alphanumeric characters." };
     }
     const restricted = [
@@ -9985,50 +10079,13 @@ useEffect(() => {
                              <span>{t("sameGame")}</span>
                           </button>
 
-                          {/* [ NEW GAME ] — Fresh board seed and parameters */}
+                          {/* [ NEW GAME ] — Fresh board seed and parameters via full Create Room modal */}
                           <button
-                            onClick={async () => {
+                            onClick={() => {
                               playClickSound();
-                              setRematchMatchMode("remix");
-                              const newSeed = Math.floor(Math.random() * 900000) + 100000;
-                              const roomCode = String(newSeed).padStart(6, '0').slice(-6);
-                              addLog(`⚔️ Initializing New Challenge (Room #${roomCode})...`);
-
-                              const othersList: Array<{ id: string; name: string; isReal: boolean }> = [];
-                              syncedLeaderboard.forEach(r => {
-                                if (r.userId !== userProfile?.id && !othersList.some(o => o.id === r.userId)) {
-                                  othersList.push({ id: r.userId, name: r.playerName, isReal: true });
-                                }
-                              });
-                              setLastGameParticipants(othersList);
-                              setRematchParticipants(othersList);
-                              setRematchGameId(roomCode);
-                              setChallengeSeed(newSeed);
-                              setPendingRematchSeed(newSeed);
-                              setRematchInvitedPlayers(new Set());
-                              setLobbyAcceptedUserIds(new Set());
-                              setRematchInviteStates({});
-
-                              // Create / update room in Firestore
-                              try {
-                                await setDoc(doc(db, "rooms", roomCode), {
-                                  roomCode: roomCode,
-                                  seed: newSeed,
-                                  difficulty: challengeDifficulty,
-                                  mistakesLimit: challengeMistakeLimit,
-                                  hintsLimit: challengeHintLimit,
-                                  timerEnabled: challengeTimerEnabled,
-                                  isLocked: isRoomLocked,
-                                  pin: isRoomLocked ? roomPin : "",
-                                  status: "active",
-                                  createdAt: serverTimestamp(),
-                                  updatedAt: serverTimestamp()
-                                });
-                              } catch (err) {
-                                console.error("[Firestore] Failed to create room for NEW GAME:", err);
-                              }
-
-                              setEndGameStep(2);
+                              setOpenedCreateFromMultiplayerResult(true);
+                              setShowGameOverModal(false);
+                              openCreateRoomModal(challengeDifficulty, challengeTimerEnabled);
                             }}
                             className={`flex-1 py-3 px-2 rounded-2xl flex items-center justify-center gap-1.5 text-xs font-mono font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#2e1065] hover:bg-[#2e1065]/80 text-[#e9d5ff]" : "bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8]"}`}
                           >
@@ -10640,11 +10697,7 @@ useEffect(() => {
                         : "Challenge Friends ⚡";
                       return (
                         <button
-                          onClick={() => {
-                            playClickSound();
-                            setShowGameOverModal(false);
-                            openCreateRoomModal(difficulty, timerEnabled);
-                          }}
+                          onClick={handleSoloChallengeFriends}
                           className="w-full py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 font-sans font-black text-xs tracking-wider uppercase transition-all shadow-md active:scale-98 border-none cursor-pointer text-white bg-purple-700 hover:bg-purple-800 dark:bg-purple-800 dark:hover:bg-purple-700 leading-normal overflow-visible"
                         >
                           <Users className="w-4 h-4" />
@@ -12016,7 +12069,23 @@ useEffect(() => {
               {/* 3. CREATE / CHALLENGE SETUP */}
               <CreateChallengeModal
                 isOpen={showCreateChallengeModal}
-                onClose={() => setShowCreateChallengeModal(false)}
+                onClose={() => {
+                  setShowCreateChallengeModal(false);
+                  if (openedCreateFromMultiplayerResult) {
+                    setOpenedCreateFromMultiplayerResult(false);
+                    setShowGameOverModal(true);
+                    setEndGameStep(1);
+                  }
+                }}
+                onBack={openedCreateFromMultiplayerResult ? () => {
+                  setShowCreateChallengeModal(false);
+                  setOpenedCreateFromMultiplayerResult(false);
+                  setShowGameOverModal(true);
+                  setEndGameStep(1);
+                } : () => {
+                  setShowCreateChallengeModal(false);
+                  setShowMultiplayerForkModal(true);
+                }}
                 challengeSeed={challengeSeed}
                 boardState={boardState}
                 isRoomLocked={isRoomLocked}
@@ -12041,6 +12110,11 @@ useEffect(() => {
                 onShareLink={async () => {
                   const isConfigured = checkIsDisplayNameConfigured();
                   if (!isConfigured) {
+                    const current = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 12 && !userProfile.name.includes("Voyager")) 
+                      ? userProfile.name.trim() 
+                      : getActiveDisplayName();
+                    setEnteredDisplayName(current);
+                    setDisplayNameError(null);
                     setDisplayNameCallbackAction("SHARE");
                     setShowDisplayNameModal(true);
                   } else {
@@ -12050,6 +12124,11 @@ useEffect(() => {
                 onStartGame={() => {
                   const isConfigured = checkIsDisplayNameConfigured();
                   if (!isConfigured) {
+                    const current = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 12 && !userProfile.name.includes("Voyager")) 
+                      ? userProfile.name.trim() 
+                      : getActiveDisplayName();
+                    setEnteredDisplayName(current);
+                    setDisplayNameError(null);
                     setDisplayNameCallbackAction("START");
                     setShowDisplayNameModal(true);
                   } else {
@@ -12268,6 +12347,11 @@ useEffect(() => {
                     playClickSound();
                     const isConfigured = checkIsDisplayNameConfigured();
                     if (!isConfigured) {
+                      const current = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 12 && !userProfile.name.includes("Voyager")) 
+                        ? userProfile.name.trim() 
+                        : getActiveDisplayName();
+                      setEnteredDisplayName(current);
+                      setDisplayNameError(null);
                       setDisplayNameCallbackAction("HISTORY_SHARE");
                       setShowDisplayNameModal(true);
                     } else {
@@ -13715,12 +13799,12 @@ useEffect(() => {
               <div className="flex flex-col gap-2">
                 <input
                   type="text"
-                  maxLength={16}
+                  maxLength={15}
                   placeholder="Enter your name..."
                   value={enteredDisplayName}
                   onChange={(e) => {
                     setDisplayNameError(null);
-                    setEnteredDisplayName(e.target.value.replace(/[^a-zA-Z0-9\s]/g, ''));
+                    setEnteredDisplayName(e.target.value.replace(/[^a-zA-Z0-9_\s]/g, ''));
                   }}
                   className={`w-full py-3.5 px-4 rounded-xl text-center text-xs font-sans font-bold tracking-wider border-none focus:outline-none focus:ring-0 select-none ${
                     darkMode ? "bg-zinc-950 text-stone-100 placeholder-zinc-700" : "bg-stone-100 text-stone-850 placeholder-stone-400"
@@ -13743,9 +13827,9 @@ useEffect(() => {
               {/* Action Button */}
               <div className="flex flex-col gap-3.5 pt-2 select-none">
                 <button
-                  disabled={!enteredDisplayName.trim() || isValidatingDisplayName}
+                  disabled={isValidatingDisplayName}
                   onClick={async () => {
-                    const finalName = enteredDisplayName.trim();
+                    const finalName = (enteredDisplayName.trim() || getActiveDisplayName()).trim();
                     if (!finalName) return;
 
                     playClickSound();
@@ -13757,7 +13841,7 @@ useEffect(() => {
                       if (validation.isValid) {
                         // Save locally in user profile structure
                         const updatedProfile = {
-                          ...(userProfile || { id: "GUEST_" + Math.floor(10000 + Math.random() * 90000), avatarColor: "#6B7280", isSynced: false }),
+                          ...(userProfile || { id: "GUEST_" + Math.floor(1000 + Math.random() * 9000), avatarColor: "#6B7280", isSynced: false }),
                           name: finalName
                         };
                         setUserProfile(updatedProfile);
@@ -13791,7 +13875,7 @@ useEffect(() => {
                   }`}
                 >
                   <Check className="w-4 h-4" />
-                  <span>{isValidatingDisplayName ? "Verifying..." : "Continue"}</span>
+                  <span>{isValidatingDisplayName ? "Verifying..." : "OK"}</span>
                 </button>
               </div>
             </motion.div>
@@ -13844,12 +13928,12 @@ useEffect(() => {
               <div className="flex flex-col gap-2">
                 <input
                   type="text"
-                  maxLength={16}
+                  maxLength={15}
                   placeholder="Enter your name..."
                   value={inviteJoinName}
                   onChange={(e) => {
                     setInviteJoinError(null);
-                    setInviteJoinName(e.target.value.replace(/[^a-zA-Z0-9\s]/g, ''));
+                    setInviteJoinName(e.target.value.replace(/[^a-zA-Z0-9_\s]/g, ''));
                   }}
                   onKeyDown={async (e) => {
                     if (e.key === "Enter" && inviteJoinName.trim() && !isVerifyingInviteJoinName) {
@@ -13883,7 +13967,7 @@ useEffect(() => {
                   }`}
                 >
                   <Check className="w-4 h-4" />
-                  <span>{isVerifyingInviteJoinName ? "Verifying..." : "Continue"}</span>
+                  <span>{isVerifyingInviteJoinName ? "Verifying..." : "OK"}</span>
                 </button>
               </div>
             </motion.div>

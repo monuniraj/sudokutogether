@@ -12,7 +12,8 @@ import {
   Users,
   Link2,
   AlertTriangle,
-  Plus
+  Plus,
+  ArrowLeft
 } from "lucide-react";
 import { formatMatchTimestamp } from "../../utils/formatTimestamp";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -22,6 +23,7 @@ export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 export interface CreateChallengeModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onBack?: () => void;
   challengeSeed?: number;
   boardState?: { seed?: number | string; [key: string]: any } | null;
   isRoomLocked: boolean;
@@ -57,6 +59,7 @@ export interface CreateChallengeModalProps {
 export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
   isOpen,
   onClose,
+  onBack,
   challengeSeed,
   boardState,
   isRoomLocked,
@@ -739,24 +742,42 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           </button>
         </div>
 
-        {/* Full-width primary START GAME button */}
-        <button
-          onClick={() => {
-            if (!isOnline) return;
-            playClickSound();
-            onStartGame();
-          }}
-          disabled={!isOnline}
-          className={`w-full py-3.5 sm:py-4 px-4 text-xs sm:text-sm font-sans font-black uppercase tracking-wider rounded-2xl border-none transition-all duration-150 text-center shadow-md flex items-center justify-center gap-2 ${
-            !isOnline
-              ? "opacity-50 cursor-not-allowed bg-stone-300 dark:bg-zinc-800 text-stone-500 dark:text-stone-400"
-              : darkMode
-              ? "cursor-pointer hover:scale-[1.01] active:scale-98 bg-[#022c22] hover:bg-[#064e3b] text-[#d1fae5] shadow-[0_8px_20px_rgba(0,0,0,0.5)]"
-              : "cursor-pointer hover:scale-[1.01] active:scale-98 bg-[#D1FAE5] hover:bg-[#A7F3D0] active:bg-[#6EE7B7] text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.12)]"
-          }`}
-        >
-          <span className="truncate">{isOnline ? t("startGameAction") : t("offline")}</span>
-        </button>
+        {/* Bottom row: Back button [ ← ] | START GAME button */}
+        <div className="flex items-center gap-3 w-full shrink-0">
+          {onBack && (
+            <button
+              onClick={() => {
+                playClickSound();
+                onBack();
+              }}
+              className={`p-3 rounded-2xl flex items-center justify-center transition-all shadow-xs active:scale-95 border-none cursor-pointer shrink-0 ${
+                darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
+              }`}
+              title="Back"
+            >
+              <ArrowLeft className="w-5 h-5" strokeWidth={2} />
+            </button>
+          )}
+
+          {/* Primary START GAME button */}
+          <button
+            onClick={() => {
+              if (!isOnline) return;
+              playClickSound();
+              onStartGame();
+            }}
+            disabled={!isOnline}
+            className={`flex-1 py-3.5 sm:py-4 px-4 text-xs sm:text-sm font-sans font-black uppercase tracking-wider rounded-2xl border-none transition-all duration-150 text-center shadow-md flex items-center justify-center gap-2 ${
+              !isOnline
+                ? "opacity-50 cursor-not-allowed bg-stone-300 dark:bg-zinc-800 text-stone-500 dark:text-stone-400"
+                : darkMode
+                ? "cursor-pointer hover:scale-[1.01] active:scale-98 bg-[#022c22] hover:bg-[#064e3b] text-[#d1fae5] shadow-[0_8px_20px_rgba(0,0,0,0.5)]"
+                : "cursor-pointer hover:scale-[1.01] active:scale-98 bg-[#D1FAE5] hover:bg-[#A7F3D0] active:bg-[#6EE7B7] text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.12)]"
+            }`}
+          >
+            <span className="truncate">{isOnline ? t("startGameAction") : t("offline")}</span>
+          </button>
+        </div>
       </div>
     </motion.div>
   );
