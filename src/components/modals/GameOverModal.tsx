@@ -313,17 +313,19 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
                 if (isMultiplayerCompetitive) {
                   if (isPodium1) {
+                    // RANK 1 — Frosted Champagne (soft buttermilk candlelight wash)
                     containerClass += `animate-podium-rank-1 ${isMeNewPB ? "animate-radiant-sheen" : ""} ${
-                      darkMode ? "bg-amber-400/[0.12] text-amber-200" : "bg-amber-500/[0.08] text-amber-950"
+                      darkMode ? "bg-amber-300/[0.10] text-amber-200" : "bg-amber-400/[0.08] text-amber-950"
                     }`;
                     containerStyle = {
-                      boxShadow: darkMode ? "0 12px 32px -8px rgba(0,0,0,0.5)" : "0 12px 32px -8px rgba(0,0,0,0.08)",
-                      transform: "scale(1.04)",
+                      boxShadow: "0 12px 32px -8px rgba(245, 195, 110, 0.12)",
+                      transform: "scale(1.03)",
                       transformOrigin: "center"
                     };
                   } else if (isPodium2) {
+                    // RANK 2 — Frosted Mist (cool sky-slate / platinum wash), flush
                     containerClass += `animate-podium-rank-2 shadow-none ${
-                      darkMode ? "bg-slate-500/[0.08] text-stone-200" : "bg-slate-500/[0.04] text-stone-850"
+                      darkMode ? "bg-slate-300/[0.07] text-stone-200" : "bg-slate-400/[0.06] text-stone-850"
                     }`;
                     containerStyle = {
                       boxShadow: "none",
@@ -331,8 +333,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                       transformOrigin: "center"
                     };
                   } else if (isPodium3) {
+                    // RANK 3 — Smoked Sandstone (creamy raw linen / warm clay wash), flush
                     containerClass += `animate-podium-rank-3 shadow-none ${
-                      darkMode ? "bg-slate-500/[0.06] text-stone-300" : "bg-slate-500/[0.04] text-stone-850"
+                      darkMode ? "bg-orange-200/[0.06] text-stone-300" : "bg-orange-950/[0.05] text-stone-850"
                     }`;
                     containerStyle = {
                       boxShadow: "none",
@@ -513,7 +516,17 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                         <>
                           <div className="flex items-center gap-1.5">
                             {gapDelta && (
-                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-stone-500/10 text-stone-600 dark:text-stone-300 tracking-tight leading-none">
+                              <span
+                                className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md border-none tracking-tight leading-none ${
+                                  isPodium2
+                                    ? darkMode
+                                      ? "bg-slate-500/10 text-slate-300"
+                                      : "bg-slate-500/10 text-slate-600"
+                                    : darkMode
+                                    ? "bg-stone-500/10 text-stone-300"
+                                    : "bg-stone-500/10 text-stone-600"
+                                }`}
+                              >
                                 {gapDelta}
                               </span>
                             )}
