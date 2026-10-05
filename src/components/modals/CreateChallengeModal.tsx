@@ -534,12 +534,13 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 const friends = sortPlayers(multiplayerPlayers.filter(p => p.isFriend));
                 const recentPlayers = sortPlayers(multiplayerPlayers);
 
-                const renderRow = (player: any) => {
+                const renderRow = (player: any, index: number) => {
                   const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
-                  return (
+                  const isAnimated = index < 5;
+
+                  const cardContent = (
                     <div
-                      key={player.id}
-                      className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-200 shrink-0 ${
+                      className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-200 shrink-0 w-full ${
                         darkMode 
                           ? "bg-zinc-900/60 border border-zinc-800/60 text-stone-200" 
                           : "bg-white border border-stone-200/60 text-stone-850 shadow-xs"
@@ -640,6 +641,24 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                       </div>
                     </div>
                   );
+
+                  if (isAnimated) {
+                    return (
+                      <div
+                        key={player.id}
+                        className="w-full shrink-0 animate-cascade-drop"
+                        style={{ animationDelay: `${index * 45}ms` }}
+                      >
+                        {cardContent}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={player.id} className="w-full shrink-0">
+                      {cardContent}
+                    </div>
+                  );
                 };
 
                 return (
@@ -647,7 +666,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                     {activeTab === 'friends' && (
                       friends.length > 0 ? (
                         <div className="flex flex-col gap-2">
-                          {friends.map(renderRow)}
+                          {friends.map((player, idx) => renderRow(player, idx))}
                         </div>
                       ) : (
                         <span className="text-xs italic text-stone-500 py-6 text-center block">
@@ -658,7 +677,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                     {activeTab === 'recent' && (
                       recentPlayers.length > 0 ? (
                         <div className="flex flex-col gap-2">
-                          {recentPlayers.map(renderRow)}
+                          {recentPlayers.map((player, idx) => renderRow(player, idx))}
                         </div>
                       ) : (
                         <span className="text-xs italic text-stone-500 py-6 text-center block">
@@ -726,8 +745,11 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
               onShareLink();
             }}
             disabled={!isOnline}
-            style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
-            className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 text-center flex items-center justify-center gap-1.5 shadow-xs ${
+            style={{
+              ...(!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : {}),
+              animationDelay: "0.4s"
+            }}
+            className={`animate-shimmer-sweep w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 text-center flex items-center justify-center gap-1.5 shadow-xs ${
               !isOnline
                 ? "cursor-not-allowed opacity-40 pointer-events-none"
                 : "cursor-pointer active:scale-95"
