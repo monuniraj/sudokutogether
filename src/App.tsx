@@ -97,7 +97,8 @@ import {
   TrendingUp,
   Link2,
   XCircle,
-  Crown
+  Crown,
+  WifiOff
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Capacitor } from '@capacitor/core';
@@ -1741,6 +1742,7 @@ useEffect(() => {
   const [isOnline, setIsOnline] = useState<boolean>(() => 
     typeof navigator !== "undefined" && typeof navigator.onLine === "boolean" ? navigator.onLine : true
   );
+  const [wasDisconnectedMultiplayer, setWasDisconnectedMultiplayer] = useState<boolean>(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -5180,10 +5182,16 @@ useEffect(() => {
     if (boardState?.isGameOver) {
       if (!hasTriggeredGameOverRef.current) {
         hasTriggeredGameOverRef.current = true;
+        const isDisconnected = !isOnline;
+        if (challengeMode && isDisconnected) {
+          setWasDisconnectedMultiplayer(true);
+        } else if (!challengeMode) {
+          setWasDisconnectedMultiplayer(false);
+        }
         setShowGameOverModal(true);
-        setEndGameStep(1); // Always start on Screen 1 (Results) when game first ends
-        setPendingRematchSeed(null);
-        if (challengeMode) {
+        if (challengeMode && !isDisconnected) {
+          setEndGameStep(1); // Always start on Screen 1 (Results) when game first ends
+          setPendingRematchSeed(null);
           // Populate rematchParticipants immediately when game is over
           const othersList: Array<{ id: string; name: string; isReal: boolean }> = [];
           syncedLeaderboard.forEach(r => {
@@ -5199,7 +5207,7 @@ useEffect(() => {
       hasTriggeredGameOverRef.current = false;
       setShowGameOverModal(false);
     }
-  }, [boardState?.isGameOver, challengeMode, syncedLeaderboard, userProfile?.id]);
+  }, [boardState?.isGameOver, challengeMode, isOnline, syncedLeaderboard, userProfile?.id]);
 
   const [pencilMode, setPencilMode] = useState<boolean>(false);
   const [solutionGrid, setSolutionGrid] = useState<number[][]>([]);
@@ -5659,6 +5667,10 @@ useEffect(() => {
   };
 
   const shareChallengeLink = async (gameId: string, customText?: string) => {
+    if (!isOnline) {
+      showToast(t("noInternetConnection") || "No internet connection");
+      return;
+    }
     const isLocked = isRoomLocked;
     const currentProfileName = getActiveDisplayName();
     
@@ -5842,6 +5854,10 @@ useEffect(() => {
 
   const handleSoloChallengeFriends = async () => {
     playClickSound();
+    if (!isOnline) {
+      setShowMultiplayerForkModal(true);
+      return;
+    }
     if (!boardState) return;
 
     const seed = boardState.seed ?? challengeSeed ?? (Math.floor(Math.random() * 900000) + 100000);
@@ -6018,6 +6034,11 @@ useEffect(() => {
   const handleInviteFriend = async (playerId: string) => {
     playClickSound();
 
+    if (!isOnline) {
+      showToast(t("noInternetConnection") || "No internet connection");
+      return;
+    }
+
     // Issue 7 requirement: Require Google Login before Direct Friend Invites
     if (!isUserAuthorizedForMultiplayer()) {
       setLoginRequiredPurpose("DIRECT_INVITE");
@@ -6083,6 +6104,11 @@ useEffect(() => {
     if (isInvitingAll) {
       cancelInviteAll();
       addLog("⏹️ Batch invitations stopped by user.");
+      return;
+    }
+
+    if (!isOnline) {
+      showToast(t("noInternetConnection") || "No internet connection");
       return;
     }
 
@@ -7631,6 +7657,7 @@ useEffect(() => {
     setGeneratorLogs([]);
     setIsNewRecordAchieved(false);
     setShowCelebrationConfetti(false);
+    setWasDisconnectedMultiplayer(false);
     setLastCompletedSession(null);
     try {
       localStorage.removeItem("sudoku_lastCompletedSession");
@@ -9336,7 +9363,13 @@ useEffect(() => {
                               type="button"
                               onClick={() => {
                                 playClickSound();
-                                if (challengeMode) {
+                                const isDisconnected = !isOnline;
+                                if (challengeMode && isDisconnected) {
+                                  setWasDisconnectedMultiplayer(true);
+                                } else if (!challengeMode) {
+                                  setWasDisconnectedMultiplayer(false);
+                                }
+                                if (challengeMode && !isDisconnected) {
                                   setEndGameStep(1);
                                 }
                                 setShowGameOverModal(true);
@@ -9855,9 +9888,10 @@ useEffect(() => {
 
               {/* GAME OVER AND VICTORY OVERLAYS */}
 
-              {/* 1. MULTIPLAYER LEADERBOARD MODAL (when challengeMode is true) */}
-              <GameOverModal
-                isOpen={Boolean(boardState && showGameOverModal && challengeMode)}
+              {/* 1. MULTIPLAYER LEADERBOARD MODAL (when challengeMode is true AND isOnline is true) */}
+              {Boolean(challengeMode && isOnline) && (
+                <GameOverModal
+                  isOpen={Boolean(boardState && showGameOverModal && challengeMode && isOnline)}
                 isMultiplayer={Boolean(challengeMode)}
                 completedGames={completedGames}
                 onClose={() => {
@@ -9899,22 +9933,24 @@ useEffect(() => {
                   setLobbyAcceptedUserIds(new Set());
                   setRematchInviteStates({});
 
-                  try {
-                    await setDoc(doc(db, "rooms", roomCode), {
-                      roomCode: roomCode,
-                      seed: seed,
-                      difficulty: challengeDifficulty,
-                      mistakesLimit: challengeMistakeLimit,
-                      hintsLimit: challengeHintLimit,
-                      timerEnabled: challengeTimerEnabled,
-                      isLocked: isRoomLocked,
-                      pin: isRoomLocked ? roomPin : "",
-                      status: "active",
-                      createdAt: serverTimestamp(),
-                      updatedAt: serverTimestamp()
-                    }, { merge: true });
-                  } catch (err) {
-                    console.error("[Firestore] Failed to update room for SAME GAME:", err);
+                  if (isOnline) {
+                    try {
+                      await setDoc(doc(db, "rooms", roomCode), {
+                        roomCode: roomCode,
+                        seed: seed,
+                        difficulty: challengeDifficulty,
+                        mistakesLimit: challengeMistakeLimit,
+                        hintsLimit: challengeHintLimit,
+                        timerEnabled: challengeTimerEnabled,
+                        isLocked: isRoomLocked,
+                        pin: isRoomLocked ? roomPin : "",
+                        status: "active",
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                      }, { merge: true });
+                    } catch (err) {
+                      console.error("[Firestore] Failed to update room for SAME GAME:", err);
+                    }
                   }
 
                   setEndGameStep(2);
@@ -9943,6 +9979,10 @@ useEffect(() => {
                 isInvitingAll={isInvitingAll}
                 shareChallengeLink={shareChallengeLink}
                 onStartRematchGame={() => {
+                  if (!isOnline) {
+                    showToast(t("noInternetConnection") || "No internet connection");
+                    return;
+                  }
                   const targetSeed = pendingRematchSeed ?? challengeSeed ?? 100000;
                   const roomCode = String(targetSeed).padStart(6, '0').slice(-6);
 
@@ -9970,9 +10010,10 @@ useEffect(() => {
                   showToast("🚀 Match started!");
                 }}
               />
+              )}
 
-              {/* 2. SOLO GAME OVER AND VICTORY OVERLAY (when challengeMode is false) */}
-              {boardState && showGameOverModal && !challengeMode && (
+              {/* 2. SOLO GAME OVER AND VICTORY OVERLAY (when challengeMode is false OR offline fallback) */}
+              {boardState && showGameOverModal && (!challengeMode || !isOnline) && (
                 <div className="fixed inset-0 z-50 bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm flex items-center justify-center p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
                   {/* Backdrop click dismisser — closes overlay and reveals the completed board */}
                   <div
@@ -10016,7 +10057,7 @@ useEffect(() => {
                         <>
                           <div className="flex flex-col items-center gap-1">
                             <span className={`text-[10px] font-sans font-bold tracking-widest leading-normal overflow-visible ${boardState?.currentMistakesCount === 0 ? "" : "uppercase"} ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
-                              {boardState?.currentMistakesCount === 0 ? "Flawless Run 🎯" : `${t(difficulty.toLowerCase() as any)} ${t("difficultyLabel")}`}
+                              {boardState?.currentMistakesCount === 0 ? "Flawless Run 🎯" : t(difficulty.toLowerCase() as any)}
                             </span>
                             {isFailed ? (
                               <motion.h3 
@@ -10100,6 +10141,25 @@ useEffect(() => {
                               </p>
                             ) : null}
                           </div>
+
+                          {/* Luxury Status Badge for Disconnected Multiplayer */}
+                          {wasDisconnectedMultiplayer && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -4, scale: 0.96 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              transition={{ duration: 0.25, ease: "easeOut" }}
+                              className={`mb-3 py-1.5 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold border backdrop-blur-sm select-none ${
+                                darkMode
+                                  ? "bg-amber-950/30 border-amber-500/30 text-amber-200/90 shadow-[0_2px_8px_rgba(245,158,11,0.06)]"
+                                  : "bg-amber-50/80 border-amber-200/70 text-amber-900/90 shadow-[0_2px_8px_rgba(217,119,6,0.06)]"
+                              }`}
+                            >
+                              <WifiOff className="w-3.5 h-3.5 shrink-0 text-amber-500/80" strokeWidth={2.2} />
+                              <span className="leading-tight text-center">
+                                {t("connectionLostPersonalResult")}
+                              </span>
+                            </motion.div>
+                          )}
 
                           {/* Stats */}
                           <div className="relative">
@@ -10238,6 +10298,7 @@ useEffect(() => {
                           playClickSound();
                           setShowGameOverModal(false);
                           cleanupRoomSession();
+                          setWasDisconnectedMultiplayer(false);
                           navigateToScreen("home");
                         }}
                         className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-700"}`}
@@ -10253,6 +10314,7 @@ useEffect(() => {
                           generateAndSetNewPuzzle(difficulty, boardState?.seed, undefined, undefined, undefined, undefined, false);
                           setIsTimerPaused(false);
                           setShowGameOverModal(false);
+                          setWasDisconnectedMultiplayer(false);
                         }}
                         className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#D1FAE5]/10 hover:bg-[#D1FAE5]/20 text-[#a7f3d0]" : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"}`}
                         title="Replay Same Board"
@@ -10267,6 +10329,7 @@ useEffect(() => {
                           generateAndSetNewPuzzle(difficulty, undefined, undefined, undefined, undefined, undefined, false);
                           setIsTimerPaused(false);
                           setShowGameOverModal(false);
+                          setWasDisconnectedMultiplayer(false);
                         }}
                         className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-purple-900/40 hover:bg-purple-900/60 text-purple-200" : "bg-purple-100 hover:bg-purple-200 text-purple-900"}`}
                         title="Start New Puzzle"
@@ -10639,7 +10702,7 @@ useEffect(() => {
                                   </span>
                                 </div>
                                 <span className={`font-sans font-black text-sm uppercase leading-none ${darkMode ? "text-stone-200" : "text-stone-850"}`}>
-                                  {game.difficulty}
+                                  {t(game.difficulty?.toLowerCase() as any) || game.difficulty}
                                 </span>
                               </div>
 
@@ -10732,7 +10795,7 @@ useEffect(() => {
                                   </span>
                                 </div>
                                 <span className={`font-sans font-black text-sm uppercase leading-none ${darkMode ? "text-stone-200" : "text-stone-850"}`}>
-                                  {game.difficulty}
+                                  {t(game.difficulty?.toLowerCase() as any) || game.difficulty}
                                 </span>
                               </div>
 
@@ -11594,6 +11657,11 @@ useEffect(() => {
                 if (showJoinRoomModal || showCreateChallengeModal) return;
                 playClickSound();
                 setShowMultiplayerForkModal(false);
+                if (openedCreateFromMultiplayerResult) {
+                  setOpenedCreateFromMultiplayerResult(false);
+                  setShowGameOverModal(true);
+                  setEndGameStep(1);
+                }
                 if (currentScreen === "game" && !boardState?.isGameOver) {
                   setIsTimerPaused(false);
                 }
@@ -11606,6 +11674,11 @@ useEffect(() => {
                 isOpen={showMultiplayerForkModal}
                 onClose={() => {
                   setShowMultiplayerForkModal(false);
+                  if (openedCreateFromMultiplayerResult) {
+                    setOpenedCreateFromMultiplayerResult(false);
+                    setShowGameOverModal(true);
+                    setEndGameStep(1);
+                  }
                   if (currentScreen === "game" && !boardState?.isGameOver) {
                     setIsTimerPaused(false);
                   }
@@ -12026,7 +12099,7 @@ useEffect(() => {
               }`}>
                 <span>ROOM: #{String(viewingRankingsGame.seed || viewingRankingsGame.id.slice(0, 6)).padStart(6, '0').slice(-6)}</span>
                 <span className="mx-1.5 opacity-40">•</span>
-                <span className="text-[#9D174D] dark:text-pink-300 font-black">{viewingRankingsGame.difficulty}</span>
+                <span className="text-[#9D174D] dark:text-pink-300 font-black">{t(viewingRankingsGame.difficulty?.toLowerCase() as any) || viewingRankingsGame.difficulty}</span>
                 <span className="mx-1.5 opacity-40">•</span>
                 <span>{viewingRankingsGame.mistakes}/{viewingRankingsGame.maxMistakes || 3} MISTAKES</span>
                 <span className="mx-1.5 opacity-40">•</span>
