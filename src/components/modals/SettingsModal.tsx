@@ -404,7 +404,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
               <p className="text-xs font-normal leading-relaxed text-stone-500 dark:text-zinc-400 font-sans m-0 truncate whitespace-nowrap">
-                English • हिन्दी • 日本語 • Deutsch • +5 more
+                English • हिन्दी • 日本語 • 한국어 • Deutsch ...
               </p>
             </div>
 
