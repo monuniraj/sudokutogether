@@ -189,12 +189,19 @@ export const RulesModal: React.FC<RulesModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 0.15, ease: "easeOut" } }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+        >
           <div className="absolute inset-0 cursor-pointer" onClick={handleClose} />
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            exit={{ opacity: 0, scale: 0.95, y: 12, transition: { duration: 0.15, ease: "easeOut" } }}
+            transition={{ type: "spring", damping: 28, stiffness: 220 }}
             className={`modal card relative w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col border-none ${
               darkMode ? "bg-[#18181c] text-stone-100" : "bg-[#FDFBF7] text-stone-900"
             }`}
@@ -457,7 +464,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({
               </div>
             </div>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );

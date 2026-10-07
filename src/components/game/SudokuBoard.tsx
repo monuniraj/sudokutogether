@@ -154,7 +154,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           }}
           className={`absolute inset-0 ${
             darkMode ? "bg-zinc-950/75 text-zinc-100" : "bg-[#FDFBF7]/75 text-stone-900"
-          } backdrop-blur-[8px] z-45 flex items-center justify-center cursor-pointer select-none transition-all duration-200 overflow-hidden rounded-[inherit]`}
+          } backdrop-blur-[8px] z-45 flex items-center justify-center cursor-pointer select-none overflow-hidden rounded-[inherit]`}
           style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
           title={t("resumeGameTitle")}
         >

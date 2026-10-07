@@ -27,13 +27,9 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <motion.div 
+    <div 
       key="multiplayer-fork-modal"
-      initial={{ scale: 0.96, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0.96, opacity: 0 }}
-      transition={{ duration: 0.15, ease: "easeOut" }}
-      className={`relative w-full max-w-[400px] rounded-3xl p-6 border-none flex flex-col gap-5 select-none z-[10001] transition-colors duration-300 ${
+      className={`relative w-full max-w-[400px] rounded-3xl p-6 border-none flex flex-col gap-5 select-none z-[10001] ${
         darkMode ? "bg-[#1A1A1A] text-stone-200" : "bg-[#FDFBF7] text-stone-850"
       }`}
       style={{
@@ -142,6 +138,6 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
           </button>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 };

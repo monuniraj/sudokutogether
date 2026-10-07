@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "./i18n/useTranslation";
 import type { TranslationKey } from "./i18n/translations";
@@ -7245,6 +7245,24 @@ useEffect(() => {
     }
   }, [showGameOverModal, showCreateChallengeModal, showMidGameInviteModal, showRematchInviteModal, showMultiplayerForkModal, isInvitingAll]);
 
+  // Auto-pause the game while the Rules (?), Multiplayer Fork, or Bell Invites modal is open,
+  // and resume synchronously (layout effect, before paint) when it closes.
+  // Only resumes if this effect itself triggered the pause.
+  const autoPausedByModalRef = useRef<boolean>(false);
+  const isPauseModalOpen = showHowToPlayModal || showMultiplayerForkModal || showBellInvitesModal;
+  useLayoutEffect(() => {
+    if (isPauseModalOpen) {
+      if (!autoPausedByModalRef.current && currentScreen === "game" && boardState && !boardState.isGameOver && !isTimerPaused) {
+        autoPausedByModalRef.current = true;
+        setIsTimerPaused(true);
+      }
+    } else if (autoPausedByModalRef.current) {
+      autoPausedByModalRef.current = false;
+      setIsTimerPaused(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPauseModalOpen]);
+
   // Real-time listener for active lobby/rematch invites and joins
   useEffect(() => {
     if (!rematchGameId) {
@@ -11647,9 +11665,10 @@ useEffect(() => {
       </AnimatePresence>
 
       {/* 🤝 TOGETHER MODE: UNIFIED MULTIPLAYER MODAL WRAPPER (LOBBY | JOIN | CREATE) */}
-      <AnimatePresence>
-        {(showMultiplayerForkModal || showJoinRoomModal || showCreateChallengeModal) && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+      {(showMultiplayerForkModal || showJoinRoomModal || showCreateChallengeModal) && (
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+        >
             {/* Backdrop click dismisser (disabled for JoinRoomModal and CreateChallengeModal to prevent accidental closure while typing) */}
             <div 
               className={`absolute inset-0 ${(showJoinRoomModal || showCreateChallengeModal) ? "pointer-events-none" : "cursor-pointer"}`} 
@@ -11668,53 +11687,56 @@ useEffect(() => {
               }} 
             />
 
-            <AnimatePresence mode="wait" initial={false}>
               {/* 1. ROUTE SELECTION (LOBBY) */}
-              <MultiplayerForkModal
-                isOpen={showMultiplayerForkModal}
-                onClose={() => {
-                  setShowMultiplayerForkModal(false);
-                  if (openedCreateFromMultiplayerResult) {
-                    setOpenedCreateFromMultiplayerResult(false);
-                    setShowGameOverModal(true);
-                    setEndGameStep(1);
-                  }
-                  if (currentScreen === "game" && !boardState?.isGameOver) {
-                    setIsTimerPaused(false);
-                  }
-                }}
-                onCreateRoom={() => openCreateRoomModal()}
-                onOpenJoinRoom={() => {
-                  setShowMultiplayerForkModal(false);
-                  setJoinRoomCodeInput("");
-                  setJoinRoomPinInput("");
-                  setJoinRoomError(null);
-                  setShowJoinRoomModal(true);
-                }}
-                isOnline={isOnline}
-                darkMode={darkMode}
-                playClickSound={playClickSound}
-              />
+              {showMultiplayerForkModal && (
+                <MultiplayerForkModal
+                  isOpen={true}
+                  onClose={() => {
+                    setShowMultiplayerForkModal(false);
+                    if (openedCreateFromMultiplayerResult) {
+                      setOpenedCreateFromMultiplayerResult(false);
+                      setShowGameOverModal(true);
+                      setEndGameStep(1);
+                    }
+                    if (currentScreen === "game" && !boardState?.isGameOver) {
+                      setIsTimerPaused(false);
+                    }
+                  }}
+                  onCreateRoom={() => openCreateRoomModal()}
+                  onOpenJoinRoom={() => {
+                    setShowMultiplayerForkModal(false);
+                    setJoinRoomCodeInput("");
+                    setJoinRoomPinInput("");
+                    setJoinRoomError(null);
+                    setShowJoinRoomModal(true);
+                  }}
+                  isOnline={isOnline}
+                  darkMode={darkMode}
+                  playClickSound={playClickSound}
+                />
+              )}
 
               {/* 2. JOIN ROOM BY CODE */}
-              <JoinRoomModal
-                isOpen={showJoinRoomModal}
-                onClose={() => setShowJoinRoomModal(false)}
-                onBack={() => {
-                  setShowJoinRoomModal(false);
-                  setShowMultiplayerForkModal(true);
-                }}
-                roomCodeInput={joinRoomCodeInput}
-                setRoomCodeInput={setJoinRoomCodeInput}
-                roomPinInput={joinRoomPinInput}
-                setRoomPinInput={setJoinRoomPinInput}
-                joinRoomError={joinRoomError}
-                setJoinRoomError={setJoinRoomError}
-                isJoiningRoomLoading={isJoiningRoomLoading}
-                onJoinRoom={handleExecuteJoinRoomByCode}
-                darkMode={darkMode}
-                playClickSound={playClickSound}
-              />
+              {showJoinRoomModal && (
+                <JoinRoomModal
+                  isOpen={true}
+                  onClose={() => setShowJoinRoomModal(false)}
+                  onBack={() => {
+                    setShowJoinRoomModal(false);
+                    setShowMultiplayerForkModal(true);
+                  }}
+                  roomCodeInput={joinRoomCodeInput}
+                  setRoomCodeInput={setJoinRoomCodeInput}
+                  roomPinInput={joinRoomPinInput}
+                  setRoomPinInput={setJoinRoomPinInput}
+                  joinRoomError={joinRoomError}
+                  setJoinRoomError={setJoinRoomError}
+                  isJoiningRoomLoading={isJoiningRoomLoading}
+                  onJoinRoom={handleExecuteJoinRoomByCode}
+                  darkMode={darkMode}
+                  playClickSound={playClickSound}
+                />
+              )}
 
               {/* 3. CREATE / CHALLENGE SETUP */}
               <CreateChallengeModal
@@ -11793,10 +11815,8 @@ useEffect(() => {
                 darkMode={darkMode}
                 playClickSound={playClickSound}
               />
-            </AnimatePresence>
-          </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
       {/* 🔮 CUSTOM GAME HISTORY OR SAVED CHALLENGE LOBBY MODAL */}
       <AnimatePresence>
@@ -13010,30 +13030,25 @@ useEffect(() => {
       />
 
       {/* MID-GAME MULTIPLAYER INVITE MODAL */}
-      <AnimatePresence>
-        {showMidGameInviteModal && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 sm:p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-            <div 
-              className="absolute inset-0 cursor-pointer" 
-              onClick={() => {
-                playClickSound();
-                setShowMidGameInviteModal(false);
-                setIsTimerPaused(false);
-              }} 
-            />
-            {(() => {
-              const liveRoomCode = activeGameId || String(challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000)).padStart(6, '0').slice(-6);
+      {showMidGameInviteModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 sm:p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div 
+            className="absolute inset-0 cursor-pointer" 
+            onClick={() => {
+              playClickSound();
+              setShowMidGameInviteModal(false);
+              setIsTimerPaused(false);
+            }} 
+          />
+          {(() => {
+            const liveRoomCode = activeGameId || String(challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000)).padStart(6, '0').slice(-6);
 
-              return (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                  className={`p-4 sm:p-6 w-[92%] sm:w-full max-w-lg max-h-[85dvh] relative flex flex-col gap-3 sm:gap-4 rounded-[28px] shadow-[0_24px_50px_rgba(0,0,0,0.2)] overflow-hidden z-[10001] select-none ${
-                    darkMode ? "bg-zinc-900 border border-zinc-700/50 text-stone-100" : "bg-[#FDFBF7] border border-stone-200 text-stone-850"
-                  }`}
-                >
+            return (
+              <div
+                className={`p-4 sm:p-6 w-[92%] sm:w-full max-w-lg max-h-[85dvh] relative flex flex-col gap-3 sm:gap-4 rounded-[28px] shadow-[0_24px_50px_rgba(0,0,0,0.2)] overflow-hidden z-[10001] select-none ${
+                  darkMode ? "bg-zinc-900 border border-zinc-700/50 text-stone-100" : "bg-[#FDFBF7] border border-stone-200 text-stone-850"
+                }`}
+              >
                   {/* Top Header Bar */}
                   <div className="flex items-center justify-between shrink-0 select-none pb-1 border-b border-stone-200/60 dark:border-zinc-800">
                     {/* Left: CODE: [ActiveRoomCode] + Copy Button */}
@@ -13433,12 +13448,11 @@ useEffect(() => {
                       <span className="leading-normal overflow-visible">{t("resumeGame")}</span>
                     </button>
                   </div>
-                </motion.div>
-              );
-            })()}
-          </div>
-        )}
-      </AnimatePresence>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
 
       <AnimatePresence>
