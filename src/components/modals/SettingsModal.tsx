@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pencil, Check, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost } from "lucide-react";
+import { Pencil, Check, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -363,36 +363,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </span>
 
             {/* Language Selector */}
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <Globe className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
-                  <span className={`text-sm font-medium ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
+                  <span className={`text-sm font-medium truncate ${darkMode ? "text-sky-100" : "text-sky-950"}`}>
                     {t("selectLanguage")}
                   </span>
                 </div>
-                <select
-                  value={language}
-                  onChange={(e) => {
-                    playClickSound();
-                    setLanguage(e.target.value as Language);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border-none cursor-pointer outline-none transition-all ${
+                <div
+                  className={`relative w-fit flex items-center justify-between gap-2.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all shrink-0 ${
                     darkMode
                       ? "bg-sky-950/80 text-sky-100 hover:bg-sky-900/80"
                       : "bg-white text-sky-950 hover:bg-sky-50 shadow-xs"
                   }`}
-                  aria-label={t("selectLanguage")}
                 >
-                  {languages.map((langOpt) => (
-                    <option key={langOpt.code} value={langOpt.code}>
-                      {langOpt.nativeName}
-                    </option>
-                  ))}
-                </select>
+                  <span className="truncate pointer-events-none select-none">
+                    {languages.find((l) => l.code === language)?.nativeName || language}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-70 pointer-events-none" />
+                  <select
+                    value={language}
+                    onChange={(e) => {
+                      playClickSound();
+                      setLanguage(e.target.value as Language);
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    aria-label={t("selectLanguage")}
+                  >
+                    {languages.map((langOpt) => (
+                      <option
+                        key={langOpt.code}
+                        value={langOpt.code}
+                        className={darkMode ? "bg-zinc-900 text-stone-100" : "bg-white text-stone-900"}
+                      >
+                        {langOpt.nativeName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 font-sans m-0">
-                English • हिन्दी • 日本語 • 한국어 • Deutsch • Español • Français • Italiano • Português
+              <p className="text-xs font-normal leading-relaxed text-stone-500 dark:text-zinc-400 font-sans m-0 truncate whitespace-nowrap">
+                English • हिन्दी • 日本語 • Deutsch • +5 more
               </p>
             </div>
 
