@@ -86,7 +86,9 @@ export function useFriendPresence(
       try {
         localStorage.setItem(INCOGNITO_STORAGE_KEY, String(nextVal));
       } catch {}
-      window.dispatchEvent(new CustomEvent(INCOGNITO_EVENT, { detail: nextVal }));
+      queueMicrotask(() => {
+        window.dispatchEvent(new CustomEvent(INCOGNITO_EVENT, { detail: nextVal }));
+      });
       return nextVal;
     });
   }, []);
@@ -106,7 +108,7 @@ export function useFriendPresence(
     const handleCustomChange = (e: Event) => {
       const custom = e as CustomEvent<boolean>;
       if (typeof custom.detail === "boolean") {
-        setIsIncognitoState(custom.detail);
+        setIsIncognitoState((prev) => (prev === custom.detail ? prev : custom.detail));
       }
     };
 

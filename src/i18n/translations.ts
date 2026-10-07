@@ -339,7 +339,12 @@ export type TranslationKey =
   | "sudoku_invite_title"
   | "user_invited_you"
   | "btn_accept"
-  | "sameGame";
+  | "sameGame"
+  | "setPin"
+  | "incognitoMode"
+  | "incognitoDesc"
+  | "connectionLostPersonalResult"
+  | "noInternetConnection";
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -663,6 +668,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     user_invited_you: "{name} invited you to play!",
     btn_accept: "Accept",
     sameGame: "SAME GAME",
+    setPin: "SET 4-DIGIT PIN:",
+    incognitoMode: "Ghost Mode",
+    incognitoDesc: "Hide your online visibility",
+    connectionLostPersonalResult: "Connection lost • Showing your personal result",
+    noInternetConnection: "No internet connection",
   },
   hi: {
     playerInsights: "खिलाड़ी अंतर्दृष्टि",
@@ -985,6 +995,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     user_invited_you: "{name} ने आपको खेलने के लिए आमंत्रित किया!",
     btn_accept: "स्वीकार करें",
     sameGame: "वही खेल",
+    setPin: "4-अंकों का पिन सेट करें:",
+    incognitoMode: "घोस्ट मोड",
+    incognitoDesc: "अपनी ऑनलाइन मौजूदगी छुपाएँ",
+    connectionLostPersonalResult: "इंटरनेट संपर्क टूटा • केवल व्यक्तिगत परिणाम दिखाया जा रहा है",
+    noInternetConnection: "कोई इंटरनेट कनेक्शन नहीं है",
   },
   de: {
     playerInsights: "Spieler-Einblicke",
@@ -1307,6 +1322,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     user_invited_you: "{name} hat dich zum Spielen eingeladen!",
     btn_accept: "Annehmen",
     sameGame: "SELBES SPIEL",
+    setPin: "4-STELLIGE PIN FESTLEGEN:",
+    incognitoMode: "Geist-Modus",
+    incognitoDesc: "Verberge deine Online-Sichtbarkeit",
+    connectionLostPersonalResult: "Verbindung verloren • Dein persönliches Ergebnis wird angezeigt",
+    noInternetConnection: "Keine Internetverbindung",
   },
   ja: {
     playerInsights: "プレイヤーデータ",
@@ -1629,6 +1649,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     user_invited_you: "{name}さんから対戦招待が届きました！",
     btn_accept: "承諾",
     sameGame: "同じ問題",
+    setPin: "4桁のPINを設定:",
+    incognitoMode: "ゴースト モード",
+    incognitoDesc: "オンライン状態を非表示にする",
+    connectionLostPersonalResult: "接続が切断されました • 個人の結果を表示しています",
+    noInternetConnection: "インターネット接続がありません",
   },
   ko: {
     playerInsights: "플레이어 통계",
@@ -1951,6 +1976,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     user_invited_you: "{name}님이 대결에 초대했습니다!",
     btn_accept: "수락",
     sameGame: "동일 게임",
+    setPin: "4자리 PIN 설정:",
+    incognitoMode: "고스트 모드",
+    incognitoDesc: "온라인 상태 숨기기",
+    connectionLostPersonalResult: "연결 끊김 • 개인 결과 표시 중",
+    noInternetConnection: "인터넷에 연결되지 않음",
   },
   es: {
     playerInsights: "Estadísticas",
@@ -2273,6 +2303,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     user_invited_you: "¡{name} te invitó a jugar!",
     btn_accept: "Aceptar",
     sameGame: "MISMO JUEGO",
+    setPin: "PIN DE 4 DÍGITOS:",
+    incognitoMode: "Modo Fantasma",
+    incognitoDesc: "Oculta tu visibilidad en línea",
+    connectionLostPersonalResult: "Conexión perdida • Mostrando tu resultado personal",
+    noInternetConnection: "Sin conexión a internet",
   },
   fr: {
     playerInsights: "Statistiques Joueur",
@@ -2595,6 +2630,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     user_invited_you: "{name} vous invite à jouer !",
     btn_accept: "Accepter",
     sameGame: "MÊME PARTIE",
+    setPin: "CODE PIN À 4 CHIFFRES :",
+    incognitoMode: "Mode Fantôme",
+    incognitoDesc: "Masquez votre visibilité en ligne",
+    connectionLostPersonalResult: "Connexion perdue • Affichage de votre résultat personnel",
+    noInternetConnection: "Aucune connexion Internet",
   },
   it: {
     playerInsights: "Statistiche Giocatore",
@@ -2917,6 +2957,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     user_invited_you: "{name} ti ha invitato a giocare!",
     btn_accept: "Accetta",
     sameGame: "STESSA PARTITA",
+    setPin: "IMPOSTA PIN A 4 CIFRE:",
+    incognitoMode: "Modalità Fantasma",
+    incognitoDesc: "Nascondi la tua visibilità online",
+    connectionLostPersonalResult: "Connessione persa • Visualizzazione del risultato personale",
+    noInternetConnection: "Nessuna connessione Internet",
   },
   "pt-BR": {
     playerInsights: "Estatísticas",
@@ -3007,7 +3052,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     easy: "Fácil",
     medium: "Médio",
     hard: "Difícil",
-    expert: "Expert",
+    expert: "Especialista",
     codeLabel: "CÓDIGO:",
     offline: "OFFLINE",
     roomCodeCopied: "Código da sala copiado!",
@@ -3239,5 +3284,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     user_invited_you: "{name} convidou você para jogar!",
     btn_accept: "Aceitar",
     sameGame: "MESMO JOGO",
+    setPin: "DEFINIR PIN DE 4 DÍGITOS:",
+    incognitoMode: "Modo Fantasma",
+    incognitoDesc: "Oculte sua visibilidade online",
+    connectionLostPersonalResult: "Conexão perdida • Mostrando seu resultado pessoal",
+    noInternetConnection: "Sem conexão com a internet",
   },
 };

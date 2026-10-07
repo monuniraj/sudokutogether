@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pencil, Check, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell } from "lucide-react";
+import { Pencil, Check, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -208,23 +208,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <div className="flex items-center gap-3 min-w-0 pr-2 pointer-events-none">
-              <span className="text-xl select-none shrink-0" role="img" aria-label="Incognito">
-                🕶️
-              </span>
+              <div
+                className={`p-2 rounded-xl border flex items-center justify-center transition-colors duration-200 shrink-0 ${
+                  isIncognito
+                    ? darkMode
+                      ? "bg-purple-900/30 text-purple-300 border-purple-500/20"
+                      : "bg-purple-100/70 text-purple-900 border-purple-200/50"
+                    : darkMode
+                    ? "bg-white/[0.06] text-stone-400 border-transparent"
+                    : "bg-black/[0.04] text-stone-600 border-transparent"
+                }`}
+              >
+                <Ghost className="w-5 h-5 shrink-0" strokeWidth={2.2} />
+              </div>
               <div className="flex flex-col min-w-0">
                 <span
                   className={`font-sans font-bold text-sm truncate ${
                     darkMode ? "text-purple-100" : "text-purple-950"
                   }`}
                 >
-                  Incognito Mode
+                  {t("incognitoMode")}
                 </span>
                 <span
-                  className={`text-[11px] leading-snug mt-0.5 ${
+                  className={`text-[11px] leading-snug mt-0.5 truncate ${
                     darkMode ? "text-purple-300/80" : "text-purple-800/80"
                   }`}
                 >
-                  Appear offline to friends without losing access to games or invites
+                  {t("incognitoDesc")}
                 </span>
               </div>
             </div>

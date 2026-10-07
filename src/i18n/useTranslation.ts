@@ -31,6 +31,94 @@ const ALIAS_MAP: Record<string, TranslationKey> = {
   PLAYNEWGAME: 'playNewGame',
   REVIEWGAME: 'reviewGame',
   RESUMEGAME: 'resumeGame',
+  EASY: 'easy',
+  MEDIUM: 'medium',
+  HARD: 'hard',
+  EXPERT: 'expert',
+  SETPIN: 'setPin',
+  SET4DIGITPIN: 'setPin',
+  INCOGNITOMODE: 'incognitoMode',
+  INCOGNITODESC: 'incognitoDesc',
+  CONNECTIONLOSTPERSONALRESULT: 'connectionLostPersonalResult',
+  NOINTERNETCONNECTION: 'noInternetConnection',
+};
+
+/**
+ * Industry-standard localized puzzle difficulty terms across all 9 supported locales.
+ */
+export const DIFFICULTY_TRANSLATIONS: Record<string, { easy: string; medium: string; hard: string; expert: string }> = {
+  en: { easy: "Easy", medium: "Medium", hard: "Hard", expert: "Expert" },
+  hi: { easy: "आसान", medium: "मध्यम", hard: "कठिन", expert: "विशेषज्ञ" },
+  es: { easy: "Fácil", medium: "Medio", hard: "Difícil", expert: "Experto" },
+  fr: { easy: "Facile", medium: "Moyen", hard: "Difficile", expert: "Expert" },
+  de: { easy: "Einfach", medium: "Mittel", hard: "Schwer", expert: "Experte" },
+  it: { easy: "Facile", medium: "Medio", hard: "Difficile", expert: "Esperto" },
+  pt: { easy: "Fácil", medium: "Médio", hard: "Difícil", expert: "Especialista" },
+  'pt-BR': { easy: "Fácil", medium: "Médio", hard: "Difícil", expert: "Especialista" },
+  ja: { easy: "かんたん", medium: "ふつう", hard: "むずかしい", expert: "エキスパート" },
+  ru: { easy: "Легкий", medium: "Средний", hard: "Сложный", expert: "Эксперт" },
+  ko: { easy: "쉬움", medium: "보통", hard: "어려움", expert: "전문가" },
+};
+
+/**
+ * Industry-standard incognito and PIN setup translations across all 9 supported locales.
+ */
+export const INCOGNITO_TRANSLATIONS: Record<string, { incognitoMode: string; incognitoDesc: string; setPin: string }> = {
+  en: {
+    incognitoMode: "Ghost Mode",
+    incognitoDesc: "Hide your online visibility",
+    setPin: "SET 4-DIGIT PIN:",
+  },
+  hi: {
+    incognitoMode: "घोस्ट मोड",
+    incognitoDesc: "अपनी ऑनलाइन मौजूदगी छुपाएँ",
+    setPin: "4-अंकों का पिन सेट करें:",
+  },
+  es: {
+    incognitoMode: "Modo Fantasma",
+    incognitoDesc: "Oculta tu visibilidad en línea",
+    setPin: "PIN DE 4 DÍGITOS:",
+  },
+  fr: {
+    incognitoMode: "Mode Fantôme",
+    incognitoDesc: "Masquez votre visibilité en ligne",
+    setPin: "CODE PIN À 4 CHIFFRES :",
+  },
+  de: {
+    incognitoMode: "Geist-Modus",
+    incognitoDesc: "Verberge deine Online-Sichtbarkeit",
+    setPin: "4-STELLIGE PIN FESTLEGEN:",
+  },
+  it: {
+    incognitoMode: "Modalità Fantasma",
+    incognitoDesc: "Nascondi la tua visibilità online",
+    setPin: "IMPOSTA PIN A 4 CIFRE:",
+  },
+  pt: {
+    incognitoMode: "Modo Fantasma",
+    incognitoDesc: "Oculte sua visibilidade online",
+    setPin: "DEFINIR PIN DE 4 DÍGITOS:",
+  },
+  'pt-BR': {
+    incognitoMode: "Modo Fantasma",
+    incognitoDesc: "Oculte sua visibilidade online",
+    setPin: "DEFINIR PIN DE 4 DÍGITOS:",
+  },
+  ja: {
+    incognitoMode: "ゴースト モード",
+    incognitoDesc: "オンライン状態を非表示にする",
+    setPin: "4桁のPINを設定:",
+  },
+  ru: {
+    incognitoMode: "Режим невидимки",
+    incognitoDesc: "Скрыть видимость в сети",
+    setPin: "УСТАНОВИТЬ 4-ЗНАЧНЫЙ PIN:",
+  },
+  ko: {
+    incognitoMode: "고스트 모드",
+    incognitoDesc: "온라인 상태 숨기기",
+    setPin: "4자리 PIN 설정:",
+  },
 };
 
 /**
@@ -163,6 +251,24 @@ export function useTranslation() {
 
   const t = useCallback(
     (key: TranslationKey | string, params?: Record<string, string | number>): string => {
+      // Direct difficulty key interception across all 9 locales
+      const lowerKey = String(key).toLowerCase();
+      if (lowerKey === 'easy' || lowerKey === 'medium' || lowerKey === 'hard' || lowerKey === 'expert') {
+        const diffDict = DIFFICULTY_TRANSLATIONS[lang] || DIFFICULTY_TRANSLATIONS['en'];
+        if (diffDict && diffDict[lowerKey as 'easy' | 'medium' | 'hard' | 'expert']) {
+          return diffDict[lowerKey as 'easy' | 'medium' | 'hard' | 'expert'];
+        }
+      }
+
+      // Direct incognito / setPin key interception across all locales
+      if (key === 'incognitoMode' || key === 'incognitoDesc' || key === 'setPin' || key === 'set4DigitPin') {
+        const mappedKey = key === 'set4DigitPin' ? 'setPin' : (key as 'incognitoMode' | 'incognitoDesc' | 'setPin');
+        const incogDict = INCOGNITO_TRANSLATIONS[lang] || INCOGNITO_TRANSLATIONS['en'];
+        if (incogDict && incogDict[mappedKey]) {
+          return incogDict[mappedKey];
+        }
+      }
+
       const currentDict = translations[lang] || translations['en'];
 
       // 1. Direct key match in current language dictionary or English dictionary

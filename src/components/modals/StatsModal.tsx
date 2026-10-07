@@ -350,7 +350,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                             darkMode ? "text-stone-200" : "text-stone-850"
                           }`}
                         >
-                          {game.difficulty}
+                          {t(game.difficulty?.toLowerCase() as any) || game.difficulty}
                         </span>
                       </div>
 
@@ -473,7 +473,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                             darkMode ? "text-stone-200" : "text-stone-850"
                           }`}
                         >
-                          {game.difficulty}
+                          {t(game.difficulty?.toLowerCase() as any) || game.difficulty}
                         </span>
                       </div>
 

@@ -18,6 +18,7 @@ import {
 import { formatMatchTimestamp, formatActiveStatus } from "../../utils/formatTimestamp";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
+import { IncognitoIcon } from "../common/IncognitoIcon";
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 
@@ -150,8 +151,30 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             )}
           </div>
 
-          {/* Right: Lock toggle & Close button securely pinned */}
-          <div className="flex items-center gap-2 pr-1">
+          {/* Right: Incognito toggle + Lock toggle & Close button securely pinned */}
+          <div className="flex items-center gap-1.5 sm:gap-2 pr-1">
+            <button
+              type="button"
+              onClick={() => {
+                playClickSound();
+                toggleIncognito();
+              }}
+              title={isIncognito ? `${t("incognitoMode")} ON` : `${t("incognitoMode")} OFF`}
+              aria-label={t("incognitoMode")}
+              aria-pressed={isIncognito}
+              className={`p-1.5 rounded-xl border flex items-center justify-center cursor-pointer select-none transition-colors duration-200 active:scale-95 ${
+                isIncognito
+                  ? darkMode
+                    ? "bg-purple-900/30 text-purple-300 border-purple-500/20"
+                    : "bg-purple-100/70 text-purple-900 border-purple-200/50"
+                  : darkMode
+                  ? "bg-white/[0.06] text-stone-400 border-transparent hover:bg-white/[0.1]"
+                  : "bg-black/[0.04] text-stone-600 border-transparent hover:bg-black/[0.07]"
+              }`}
+            >
+              <IncognitoIcon className="w-3.5 h-3.5" />
+            </button>
+
             <button
               onClick={() => {
                 playClickSound();
@@ -159,7 +182,9 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 setIsRoomLocked(next);
                 updateRoomSettingsInFirestore({ isLocked: next, pin: roomPin });
               }}
-              className={`px-3 py-1.5 rounded-xl font-mono text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all duration-150 cursor-pointer border-none active:scale-95 flex items-center gap-1.5 select-none ${
+              title={isRoomLocked ? (t("locked") || "Locked") : (t("unlocked") || "Unlocked")}
+              aria-label={isRoomLocked ? "Room Locked" : "Room Unlocked"}
+              className={`p-2 rounded-xl transition-all duration-150 cursor-pointer border-none active:scale-95 flex items-center justify-center select-none ${
                 isRoomLocked
                   ? (darkMode
                       ? "bg-[#4c0519] text-[#fecdd3] shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
@@ -170,15 +195,9 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
               }`}
             >
               {isRoomLocked ? (
-                <>
-                  <Lock className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>{t("locked")}</span>
-                </>
+                <Lock className="w-3.5 h-3.5 stroke-[2.5]" />
               ) : (
-                <>
-                  <Unlock className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>{t("unlocked")}</span>
-                </>
+                <Unlock className="w-3.5 h-3.5 stroke-[2.5]" />
               )}
             </button>
 
@@ -211,7 +230,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             >
               <div className="flex items-center justify-between gap-2 px-3 py-2 mt-1 rounded-xl bg-stone-100/80 dark:bg-zinc-900/60 border border-stone-200/80 dark:border-zinc-800/80">
                 <span className="font-sans font-bold text-[10px] sm:text-xs uppercase tracking-wider text-stone-700 dark:text-stone-300">
-                  {t("set4DigitPin")}
+                  {t("setPin")}
                 </span>
                 <input
                   type="text"
