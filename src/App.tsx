@@ -4531,6 +4531,17 @@ useEffect(() => {
         if (permStatus.receive === 'granted') {
           console.log("[Push] Native push permission granted. Registering...");
           try {
+            await PushNotifications.createChannel({
+              id: 'sudoku_duels',
+              name: 'Sudoku Duel Alerts',
+              description: 'Heads-up notifications and sounds for multiplayer challenges and results',
+              importance: 5, // IMPORTANCE_HIGH (pops on screen and plays sound)
+              visibility: 1, // VISIBILITY_PUBLIC
+              sound: 'default',
+              vibration: true,
+              lights: true,
+            });
+            console.log("[Push] High-importance Android channel 'sudoku_duels' initialized.");
             await PushNotifications.register();
             await LocalNotifications.requestPermissions();
           } catch (fcmErr: any) {
@@ -4587,12 +4598,13 @@ useEffect(() => {
               title,
               body,
               id: Math.floor(Math.random() * 100000),
+              channelId: "sudoku_duels",
               extra: { gameId, password, senderName },
               actionTypeId: "tap_invite"
             }
           ]
         });
-        console.log("[Push] Scheduled native background local notification.");
+        console.log("[Push] Scheduled native background local notification on channel sudoku_duels.");
       } catch (err) {
         console.error("[Push] Failed to schedule native local notification:", err);
       }
@@ -4602,9 +4614,13 @@ useEffect(() => {
           const registration = await navigator.serviceWorker.ready;
           registration.showNotification(title, {
             body,
-            icon: '/logo.png',
+            icon: '/pwa-192x192.png',
+            badge: '/favicon-48x48.png',
+            vibrate: [300, 150, 300],
+            tag: 'sudoku-duel-alert',
+            renotify: true,
             data: { gameId, password, senderName }
-          });
+          } as any);
           console.log("[Push] Dispatched web background notification via SW.");
         } catch (err) {
           new Notification(title, { body });
@@ -4629,6 +4645,20 @@ useEffect(() => {
     const setupListeners = async () => {
       try {
         if (Capacitor.isNativePlatform()) {
+          try {
+            await PushNotifications.createChannel({
+              id: 'sudoku_duels',
+              name: 'Sudoku Duel Alerts',
+              description: 'Heads-up notifications and sounds for multiplayer challenges and results',
+              importance: 5,
+              visibility: 1,
+              sound: 'default',
+              vibration: true,
+              lights: true,
+            });
+          } catch (chErr) {
+            console.warn("[Push] Channel setup notice in setupListeners:", chErr);
+          }
           pushRegListener = await PushNotifications.addListener('registration', (token) => {
             console.log("[Push] Native registration success. Token:", token.value);
             saveFcmToken(token.value);

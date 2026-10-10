@@ -101,9 +101,28 @@ exports.onInviteCreated = onDocumentCreated("invites/{inviteId}", async (event) 
       },
       android: {
         priority: "high",
-        ttl: 172800 * 1000 // 48 hours in milliseconds
+        ttl: 172800 * 1000, // 48 hours in milliseconds
+        notification: {
+          channelId: "sudoku_duels",
+          sound: "default",
+          defaultSound: true,
+          defaultVibrateTimings: true,
+          priority: "max",
+          visibility: "public"
+        }
       },
       webpush: {
+        headers: {
+          Urgency: "high"
+        },
+        notification: {
+          icon: "/pwa-192x192.png",
+          badge: "/favicon-48x48.png",
+          vibrate: [300, 150, 300],
+          renotify: true,
+          requireInteraction: false,
+          tag: "sudoku-duel-alert"
+        },
         fcmOptions: {
           link: `/?room=${encodeURIComponent(roomCode)}`
         }
@@ -178,9 +197,28 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
         },
         android: {
           priority: "high",
-          ttl: 172800 * 1000 // 48 hours in milliseconds
+          ttl: 172800 * 1000, // 48 hours in milliseconds
+          notification: {
+            channelId: "sudoku_duels",
+            sound: "default",
+            defaultSound: true,
+            defaultVibrateTimings: true,
+            priority: "max",
+            visibility: "public"
+          }
         },
         webpush: {
+          headers: {
+            Urgency: "high"
+          },
+          notification: {
+            icon: "/pwa-192x192.png",
+            badge: "/favicon-48x48.png",
+            vibrate: [300, 150, 300],
+            renotify: true,
+            requireInteraction: false,
+            tag: "sudoku-duel-alert"
+          },
           fcmOptions: {
             link: `/?room=${encodeURIComponent(roomCode)}&view=results`
           }

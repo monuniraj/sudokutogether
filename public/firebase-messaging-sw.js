@@ -23,7 +23,12 @@ messaging.onBackgroundMessage((payload) => {
   const notificationOptions = {
     body: payload.notification?.body || payload.data?.body || 'You have a new game invitation!',
     icon: payload.notification?.icon || '/pwa-192x192.png',
-    badge: '/favicon-48x48.png',
+    badge: payload.notification?.badge || '/favicon-48x48.png',
+    vibrate: [300, 150, 300],
+    renotify: true,
+    tag: 'sudoku-duel-alert',
+    requireInteraction: false,
+    silent: false,
     data: payload.data || {}
   };
 
