@@ -3,6 +3,7 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getMessaging } from "firebase/messaging";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 const env = (import.meta as any).env || {};
 
@@ -20,8 +21,11 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 export const db = getFirestore(app);
+export const auth = getAuth(app);
+export { GoogleAuthProvider };
 
 // Safe export for Firebase Messaging (checking for service worker support, i.e. browser environment)
 export const messaging = (typeof window !== "undefined" && "serviceWorker" in navigator)
   ? getMessaging(app)
   : null;
+

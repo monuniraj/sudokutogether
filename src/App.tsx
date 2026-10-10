@@ -2,7 +2,8 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import { createPortal } from "react-dom";
 import { useTranslation } from "./i18n/useTranslation";
 import type { TranslationKey } from "./i18n/translations";
-import { db } from "./firebase";
+import { db, auth, GoogleAuthProvider } from "./firebase";
+import { signInAnonymously, linkWithPopup, signInWithPopup, signInWithCredential, onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
 import { RulesModal } from "./components/modals/RulesModal";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { StatsModal } from "./components/modals/StatsModal";
@@ -29,7 +30,9 @@ import {
   getDocs,
   query,
   where,
-  updateDoc
+  updateDoc,
+  deleteDoc,
+  arrayUnion
 } from "firebase/firestore";
 import { 
   Paintbrush, 
@@ -1541,7 +1544,7 @@ useEffect(() => {
   const [userProfile, setUserProfile] = useState<{
     id: string;
     name: string;
-    email?: string;
+    email?: string | null;
     phone?: string;
     avatarColor: string;
     isSynced: boolean;
@@ -1625,11 +1628,11 @@ useEffect(() => {
       raw.startsWith("Bold Voyager") ||
       raw.startsWith("Player");
 
-    if (!isGenericGuestName && raw.length <= 12) {
+    if (!isGenericGuestName && raw.length <= 15) {
       return raw;
     }
-    if (!isGenericGuestName && raw.length > 12 && !raw.startsWith("Bold Voyager")) {
-      return raw.slice(0, 12);
+    if (!isGenericGuestName && raw.length > 15 && !raw.startsWith("Bold Voyager")) {
+      return raw.slice(0, 15);
     }
 
     const randNum = (userProfile?.id || "").replace(/[^0-9]/g, "").slice(-4) || String(Math.floor(1000 + Math.random() * 9000));
@@ -1697,7 +1700,7 @@ useEffect(() => {
       const saved = localStorage.getItem("sudoku_userProfile");
       if (saved) {
         const profile = JSON.parse(saved);
-        if (profile?.name && !profile.name.includes("Anonymous Voyager") && !profile.name.includes("Guest Voyager") && !profile.name.includes("Bold Voyager") && profile.name.length <= 12) {
+        if (profile?.name && !profile.name.includes("Anonymous Voyager") && !profile.name.includes("Guest Voyager") && !profile.name.includes("Bold Voyager") && profile.name.length <= 15) {
           return profile.name;
         }
       }
@@ -2086,11 +2089,32 @@ useEffect(() => {
     showToast("Journal stats merged into database successfully!");
   };
 
-  // Google OAuth flow disabled at this stage as requested
+  // Silent background anonymous authentication bootstrap
   useEffect(() => {
-    // Intentionally inactive in current build
-    return;
-  }, [gisLoaded, googleClientId, authModalTab, currentScreen]);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        signInAnonymously(auth).catch((err) => {
+          console.warn("[Auth] Background anonymous session init error:", err);
+        });
+      } else if (user && user.email && !user.isAnonymous) {
+        // If user already had Google account linked from a previous session, restore sync state without touching id or local stats
+        setUserProfile((prev) => {
+          if (prev && !prev.isSynced) {
+            const updated = { ...prev, isSynced: true, email: user.email || prev.email };
+            try {
+              localStorage.setItem("sudoku_userProfile", JSON.stringify(updated));
+            } catch {}
+            return updated;
+          }
+          return prev;
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const [isConnectingGoogle, setIsConnectingGoogle] = useState<boolean>(false);
+  const isConnectingRef = useRef<boolean>(false);
 
   // --- DYNAMIC RESUME GAME STATE LOOP ---
   const [savedSessionInfo, setSavedSessionInfo] = useState<{ difficulty: Difficulty; seconds: number; isMultiplayer?: boolean; roomCode?: string } | null>(null);
@@ -2396,6 +2420,7 @@ useEffect(() => {
   const [inviteCountdown, setInviteCountdown] = useState<number>(5);
   const [isDockingToBell, setIsDockingToBell] = useState<boolean>(false);
   const [bellPing, setBellPing] = useState<boolean>(false);
+  const preservedSoloBoardRef = useRef<any | null>(null);
 
   const dockInviteToBell = useCallback(() => {
     setIsDockingToBell(true);
@@ -2703,6 +2728,453 @@ useEffect(() => {
     }
     setIsNewRecordAchieved(false);
     return false;
+  };
+
+  // --- AUTHENTICATION & MULTI-ACCOUNT ISOLATION LOGIC ---
+  // Helper to detect default / auto-generated display names
+  const isDefaultOrEmptyPlayerName = (name?: string | null): boolean => {
+    if (!name) return true;
+    const trimmed = name.trim();
+    if (!trimmed) return true;
+
+    const isManuallyConfigured = localStorage.getItem("sudoku_is_display_name_configured") === "true";
+    if (isManuallyConfigured) return false;
+
+    const defaultExact = [
+      "Anonymous Voyager",
+      "Guest Voyager",
+      "Guest Solver",
+      "Guest",
+      "Pro_Player",
+      "Player"
+    ];
+    if (defaultExact.includes(trimmed)) return true;
+    if (
+      trimmed.startsWith("Pro_") ||
+      trimmed.startsWith("GUEST_") ||
+      trimmed.startsWith("Bold Voyager") ||
+      trimmed.startsWith("Player_") ||
+      trimmed.startsWith("PL")
+    ) {
+      return true;
+    }
+    const adjectivesList = ["Bold", "Silent", "Clever", "Swift", "Sharp", "Quiet", "Bright", "Epic", "Calm", "Sonic", "Lunar", "Solar", "Nova", "Cosmic", "Vesta"];
+    const nounsList = ["Voyager", "Solver", "Maverick", "Pro", "Challenger", "Matrix", "Mind", "Zen", "Guru", "Wizard", "Ranger", "Pioneer", "Stargazer", "Kepler", "Comet"];
+    const parts = trimmed.split(" ");
+    if (parts.length === 3 && adjectivesList.includes(parts[0]) && nounsList.includes(parts[1]) && /^\d+$/.test(parts[2])) {
+      return true;
+    }
+    return false;
+  };
+
+  // Sanitized auth error message mapper: prevents raw stack traces, API keys, and internal errors
+  const getSanitizedAuthErrorMessage = (error: any): string => {
+    const code = error?.code || "";
+    switch (code) {
+      case "auth/popup-closed-by-user":
+      case "auth/cancelled-popup-request":
+        return "Sign-in cancelled.";
+      case "auth/popup-blocked":
+        return "Sign-in popup was blocked by your browser. Please allow popups.";
+      case "auth/account-exists-with-different-credential":
+        return "An account already exists with these credentials.";
+      case "auth/credential-already-in-use":
+        return "This Google account is already linked to another player profile.";
+      case "auth/network-request-failed":
+        return "Network connection error. Please verify your internet connection.";
+      case "auth/user-disabled":
+        return "This player account has been disabled.";
+      case "auth/operation-not-allowed":
+        return "Google Sign-In is not currently enabled.";
+      case "auth/invalid-credential":
+      case "auth/invalid-verification-code":
+        return "Authentication verification failed. Please try again.";
+      case "auth/timeout":
+        return "Authentication timed out. Please check connection and try again.";
+      default:
+        return "Unable to complete sign-in. Please try again.";
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    if (isConnectingRef.current || isConnectingGoogle) {
+      console.warn("[Auth] Connect Google already in flight. Aborting duplicate trigger.");
+      return;
+    }
+    isConnectingRef.current = true;
+    setIsConnectingGoogle(true);
+
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope("profile");
+      provider.addScope("email");
+      provider.setCustomParameters({
+        prompt: "select_account"
+      });
+
+      let credentialUser = auth.currentUser;
+      if (!credentialUser) {
+        credentialUser = (await signInAnonymously(auth)).user;
+      }
+
+      let finalUser = credentialUser;
+
+      if (credentialUser.isAnonymous) {
+        try {
+          const linkResult = await linkWithPopup(credentialUser, provider);
+          finalUser = linkResult.user;
+        } catch (linkError: any) {
+          console.warn("[Auth] linkWithPopup notice:", {
+            code: linkError?.code,
+            message: linkError?.message
+          });
+          if (
+            linkError.code === "auth/credential-already-in-use" ||
+            linkError.code === "auth/account-exists-with-different-credential"
+          ) {
+            // Already an existing Google account -> sign in directly with credential from error without opening a second popup
+            const credential = GoogleAuthProvider.credentialFromError(linkError);
+            if (credential) {
+              const signInResult = await signInWithCredential(auth, credential);
+              finalUser = signInResult.user;
+            } else {
+              const signInResult = await signInWithPopup(auth, provider);
+              finalUser = signInResult.user;
+            }
+          } else {
+            throw linkError;
+          }
+        }
+      } else {
+        const signInResult = await signInWithPopup(auth, provider);
+        finalUser = signInResult.user;
+      }
+
+      if (finalUser && finalUser.email) {
+        // 1. MULTI-ACCOUNT ISOLATION (PREVENT DATA BLEED):
+        // Completely reset cached profile stats before loading User B's state
+        const resetPB: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
+        setPersonalBestTimes(resetPB);
+        personalBestTimesRef.current = resetPB;
+        setTotalGamesPlayed(0);
+        setTotalWinsCount(0);
+        setCompletedGames([]);
+        setSavedGames([]);
+
+        const keysToPurge = [
+          "sudoku_best_times",
+          "sudoku_total_games_played",
+          "sudoku_total_wins_count",
+          "sudoku_completed_games",
+          "sudoku_saved_games",
+          "sudoku_gamesPlayed",
+          "sudoku_winsCount"
+        ];
+        keysToPurge.forEach(k => {
+          try {
+            localStorage.removeItem(k);
+          } catch {}
+        });
+
+        // 2. SAFE DISPLAY NAME:
+        // If current name is default/empty, set result.user.displayName; if player already has custom name, preserve it
+        let resolvedDisplayName = userProfile?.name || "";
+        const googleDisplayName = (finalUser.displayName?.trim() || "").slice(0, 15);
+
+        if (isDefaultOrEmptyPlayerName(userProfile?.name)) {
+          if (googleDisplayName) {
+            resolvedDisplayName = googleDisplayName;
+            try {
+              localStorage.setItem("sudoku_is_display_name_configured", "true");
+            } catch {}
+          } else {
+            resolvedDisplayName = userProfile?.name || "Pro_Player";
+          }
+        } else {
+          // Preserve player's custom display name
+          resolvedDisplayName = userProfile!.name;
+        }
+
+        // 3. FETCH OR CREATE SPECIFIC DOCUMENT UNDER `/users/{auth.currentUser.uid}` FOR USER B:
+        const userDocRef = doc(db, "users", finalUser.uid);
+        let cloudDocData: any = null;
+
+        try {
+          const userSnap = await getDoc(userDocRef);
+          if (userSnap.exists()) {
+            cloudDocData = userSnap.data();
+
+            // If local name was default and cloud document has a custom name, load cloud name
+            if (isDefaultOrEmptyPlayerName(userProfile?.name) && cloudDocData?.name && typeof cloudDocData.name === "string" && cloudDocData.name.trim()) {
+              resolvedDisplayName = cloudDocData.name.trim().slice(0, 15);
+              try {
+                localStorage.setItem("sudoku_is_display_name_configured", "true");
+              } catch {}
+            }
+
+            // Restore User B's existing personal stats from cloud document
+            if (cloudDocData?.bestTimes && typeof cloudDocData.bestTimes === "object") {
+              const loadedPB: Record<Difficulty, number> = {
+                EASY: Number(cloudDocData.bestTimes.EASY) || 0,
+                MEDIUM: Number(cloudDocData.bestTimes.MEDIUM) || 0,
+                HARD: Number(cloudDocData.bestTimes.HARD) || 0,
+                EXPERT: Number(cloudDocData.bestTimes.EXPERT) || 0,
+              };
+              setPersonalBestTimes(loadedPB);
+              personalBestTimesRef.current = loadedPB;
+              try {
+                localStorage.setItem("sudoku_best_times", JSON.stringify(loadedPB));
+              } catch {}
+            }
+
+            if (typeof cloudDocData?.totalGamesPlayed === "number" && cloudDocData.totalGamesPlayed >= 0) {
+              setTotalGamesPlayed(cloudDocData.totalGamesPlayed);
+              try {
+                localStorage.setItem("sudoku_total_games_played", String(cloudDocData.totalGamesPlayed));
+              } catch {}
+            }
+
+            if (typeof cloudDocData?.totalWinsCount === "number" && cloudDocData.totalWinsCount >= 0) {
+              setTotalWinsCount(cloudDocData.totalWinsCount);
+              try {
+                localStorage.setItem("sudoku_total_wins_count", String(cloudDocData.totalWinsCount));
+              } catch {}
+            }
+
+            if (Array.isArray(cloudDocData?.completedGames)) {
+              const loadedCompleted = cloudDocData.completedGames.slice(0, 10);
+              setCompletedGames(loadedCompleted);
+              try {
+                localStorage.setItem("sudoku_completed_games", JSON.stringify(loadedCompleted));
+              } catch {}
+            }
+
+            if (Array.isArray(cloudDocData?.savedGames)) {
+              const loadedSaved = cloudDocData.savedGames.slice(0, 20);
+              setSavedGames(loadedSaved);
+              try {
+                localStorage.setItem("sudoku_saved_games", JSON.stringify(loadedSaved));
+              } catch {}
+            }
+
+            // Update User B's profile document with latest active session timestamp & sync state
+            await setDoc(
+              userDocRef,
+              {
+                name: resolvedDisplayName,
+                email: finalUser.email,
+                authUid: finalUser.uid,
+                isSynced: true,
+                updatedAt: serverTimestamp()
+              },
+              { merge: true }
+            );
+          } else {
+            // First-time profile document creation for User B under `/users/{auth.currentUser.uid}`
+            await setDoc(userDocRef, {
+              name: resolvedDisplayName,
+              email: finalUser.email,
+              authUid: finalUser.uid,
+              isSynced: true,
+              avatarColor: userProfile?.avatarColor || "#8B5CF6",
+              bestTimes: { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 },
+              totalGamesPlayed: 0,
+              totalWinsCount: 0,
+              completedGames: [],
+              savedGames: [],
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+          }
+        } catch (dbErr) {
+          console.warn("[Auth] Cloud profile sync notice:", dbErr);
+        }
+
+        const updatedProfile = {
+          id: finalUser.uid,
+          name: resolvedDisplayName,
+          avatarColor: cloudDocData?.avatarColor || userProfile?.avatarColor || "#8B5CF6",
+          isSynced: true,
+          email: finalUser.email || undefined
+        };
+
+        setUserProfile(updatedProfile);
+        try {
+          localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
+        } catch {}
+
+        addLog(`🔒 Connected Google Account: ${finalUser.email}`);
+        showToast("Connected to Google Account!");
+      }
+    } catch (err: any) {
+      console.error("[Auth] Google Sign-In error:", {
+        code: err?.code,
+        message: err?.message,
+        name: err?.name,
+        raw: err
+      });
+      showToast(`${err?.code || 'ERROR'}: ${err?.message || 'Unknown'}`);
+    } finally {
+      isConnectingRef.current = false;
+      setIsConnectingGoogle(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      addLog("🔒 Disconnecting session...");
+      await signOut(auth);
+
+      // 1. COMPLETELY RESET STATS IN MEMORY (MULTI-ACCOUNT ISOLATION):
+      const defaultPB: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
+      setPersonalBestTimes(defaultPB);
+      personalBestTimesRef.current = defaultPB;
+      setTotalGamesPlayed(0);
+      setTotalWinsCount(0);
+      setCompletedGames([]);
+      setSavedGames([]);
+
+      // 2. CLEAR CACHED STATS & USER PROFILE IN LOCALSTORAGE:
+      const keysToRemove = [
+        "sudoku_best_times",
+        "sudoku_total_games_played",
+        "sudoku_total_wins_count",
+        "sudoku_completed_games",
+        "sudoku_saved_games",
+        "sudoku_gamesPlayed",
+        "sudoku_winsCount",
+        "sudoku_is_display_name_configured"
+      ];
+      keysToRemove.forEach(k => {
+        try {
+          localStorage.removeItem(k);
+        } catch {}
+      });
+
+      // 3. RE-INITIALIZE A CLEAN LOCAL ANONYMOUS SESSION SO OFFLINE GAMEPLAY/ROOMS CONTINUE WORKING:
+      let anonUid = "GUEST_" + Math.floor(1000 + Math.random() * 9000);
+      try {
+        const anonResult = await signInAnonymously(auth);
+        if (anonResult?.user?.uid) {
+          anonUid = anonResult.user.uid;
+        }
+      } catch (anonErr) {
+        console.warn("[Auth] Anonymous bootstrap notice on logout:", anonErr);
+      }
+
+      const randNum = Math.floor(1000 + Math.random() * 9000);
+      const uniqueName = `Pro_${randNum}`;
+      const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
+      const randColor = colors[Math.floor(Math.random() * colors.length)];
+
+      const cleanProfile = {
+        id: anonUid,
+        name: uniqueName,
+        avatarColor: randColor,
+        isSynced: false,
+        email: null
+      };
+
+      setUserProfile(cleanProfile);
+      try {
+        localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanProfile));
+      } catch {}
+
+      addLog("👤 Returned to clean local guest session.");
+      showToast("Logged out successfully.");
+    } catch (err: any) {
+      const friendlyMsg = getSanitizedAuthErrorMessage(err);
+      console.warn("[Auth] Logout notice:", err?.code || "unknown_error");
+      showToast(friendlyMsg);
+    }
+  };
+
+  const [isDeletingAccount, setIsDeletingAccount] = useState<boolean>(false);
+
+  const handleDeleteAccountAndData = async () => {
+    if (isDeletingAccount) return;
+    setIsDeletingAccount(true);
+    try {
+      addLog("🗑️ Deleting account and all associated data...");
+      const currentUser = auth.currentUser;
+      const currentUid = currentUser?.uid || userProfile?.id;
+
+      // 1. Live Room Cleanup: If liveRoomCode exists, remove the player doc under rooms/{liveRoomCode}/players/{currentUid}
+      const liveRoomCode = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
+      if (liveRoomCode && currentUid) {
+        try {
+          await deleteDoc(doc(db, "rooms", liveRoomCode, "players", currentUid));
+        } catch (roomErr) {
+          console.warn("[Auth] Live room player cleanup warning:", roomErr);
+        }
+      }
+
+      // 2. Complete Cloud Purge: Safely delete users/{uid} and presence/{uid} in Firestore
+      if (currentUser && !currentUser.isAnonymous) {
+        if (currentUid) {
+          try {
+            await deleteDoc(doc(db, "users", currentUid));
+          } catch (docErr) {
+            console.warn("[Auth] Cloud user doc purge warning:", docErr);
+          }
+          try {
+            await deleteDoc(doc(db, "presence", currentUid));
+          } catch (presenceErr) {
+            // Non-blocking if presence path does not exist
+          }
+        }
+
+        try {
+          await deleteUser(currentUser);
+        } catch (authErr: any) {
+          if (authErr?.code === "auth/requires-recent-login") {
+            showToast("For security, please log in again before deleting your account.");
+            setShowDeleteAccountModal(false);
+            return;
+          }
+          throw authErr;
+        }
+      } else if (currentUid) {
+        try {
+          await deleteDoc(doc(db, "users", currentUid));
+        } catch (docErr) {}
+        try {
+          await deleteDoc(doc(db, "presence", currentUid));
+        } catch (presenceErr) {}
+        if (currentUser) {
+          try {
+            await deleteUser(currentUser);
+          } catch (anonAuthErr) {
+            console.warn("[Auth] Anonymous deleteUser warning:", anonAuthErr);
+          }
+        }
+      }
+
+      // 3. Complete Storage Purge: Execute localStorage.clear() and sessionStorage.clear()
+      try {
+        localStorage.clear();
+      } catch {}
+      try {
+        sessionStorage.clear();
+      } catch {}
+
+      addLog("🗑️ Account and all data permanently deleted.");
+      setShowDeleteAccountModal(false);
+      showToast("Account and data deleted.");
+
+      // 4. Hard Refresh: Perform window.location.href = window.location.origin; so browser RAM/React memory completely flushes
+      setTimeout(() => {
+        window.location.href = window.location.origin;
+      }, 150);
+    } catch (err: any) {
+      console.warn("[Auth] Delete account error:", err?.code || "unknown");
+      const friendlyMsg = err?.code === "auth/requires-recent-login"
+        ? "For security, please log in again before deleting your account."
+        : "Failed to delete account. Please try again.";
+      showToast(friendlyMsg);
+    } finally {
+      setIsDeletingAccount(false);
+    }
   };
 
   // STRICT 4-BEAT PSYCHOLOGY & AUDIO TIMELINE (~8.0s Total Lifecycle):
@@ -3631,7 +4103,10 @@ useEffect(() => {
       localStorage.setItem("sudoku_fcm_token", token);
       if (userProfile?.id) {
         const userRef = doc(db, "users", userProfile.id);
-        await setDoc(userRef, { fcmToken: token }, { merge: true });
+        await setDoc(userRef, { 
+          fcmToken: token,
+          fcmTokens: arrayUnion(token)
+        }, { merge: true });
       }
     } catch (e) {
       console.error("[FCM] Failed to save FCM token:", e);
@@ -3924,6 +4399,121 @@ useEffect(() => {
     showToast("Challenge invitation declined.");
   };
 
+  const handleViewChallengeResults = async (roomCode: string) => {
+    playClickSound();
+    setActiveInviteNotification(null);
+    setIsDockingToBell(false);
+
+    if (!roomCode) return;
+    const cleanRoomCode = String(roomCode).padStart(6, '0').slice(-6);
+
+    try {
+      showToast(t("syncingResults") || "Syncing match standings...");
+      // 1. Fetch room document from Firestore
+      const roomSnap = await getDoc(doc(db, "rooms", cleanRoomCode));
+      const roomData = roomSnap.exists() ? roomSnap.data() : null;
+
+      // 2. Fetch players subcollection from /rooms/{roomCode}/players
+      const playersCol = collection(db, "rooms", cleanRoomCode, "players");
+      const playersSnap = await getDocs(playersCol);
+      
+      const mergedMap = new Map<string, any>();
+
+      playersSnap.docs.forEach((d) => {
+        const pData = d.data();
+        const pId = pData.id || d.id;
+        mergedMap.set(pId, {
+          userId: pId,
+          playerName: pData.name || pData.playerName || "Player",
+          timeSec: pData.timeSec || pData.elapsedTime || 0,
+          elapsedTime: pData.elapsedTime || pData.timeSec || 0,
+          mistakes: pData.mistakes || 0,
+          hints: pData.hints || 0,
+          isWon: pData.status === "won" || pData.isWon === true,
+          status: pData.status || (pData.isWon ? "completed" : "active"),
+          isPending: pData.status === "active" || pData.status === "solving"
+        });
+      });
+
+      // Also query /challenge_results/{cleanRoomCode}/participants for full parity
+      try {
+        const resultsSnap = await getDocs(collection(db, "challenge_results", cleanRoomCode, "participants"));
+        resultsSnap.docs.forEach((d) => {
+          const rData = d.data();
+          const rId = rData.userId || d.id;
+          if (rId && (!mergedMap.has(rId) || mergedMap.get(rId).isPending)) {
+            mergedMap.set(rId, {
+              userId: rId,
+              playerName: rData.playerName || "Player",
+              timeSec: rData.timeSec || 0,
+              elapsedTime: rData.timeSec || 0,
+              mistakes: rData.mistakes || 0,
+              hints: rData.hints || 0,
+              isWon: !!rData.isWon,
+              status: rData.isWon ? "completed" : "mistake_game_over",
+              isPending: !!rData.isPending
+            });
+          }
+        });
+      } catch (err) {}
+
+      const resultsList = Array.from(mergedMap.values());
+      const seedNum = roomData?.seed ? Number(roomData.seed) : parseInt(cleanRoomCode, 10);
+      const diffVal = (roomData?.difficulty || "MEDIUM").toUpperCase() as Difficulty;
+
+      // 3. Preserve active solo board without destroying it if user is currently playing solo
+      if (boardState && !challengeMode && !boardState.isGameOver) {
+        preservedSoloBoardRef.current = {
+          boardState,
+          sessionSeconds,
+          difficulty,
+          timerEnabled,
+          mistakeLimitEnabled
+        };
+      }
+
+      setSyncedLeaderboard(resultsList);
+      setRematchGameId(cleanRoomCode);
+      setChallengeSeed(seedNum);
+      setChallengeDifficulty(diffVal);
+      setChallengeMistakeLimit(roomData?.mistakesLimit || 3);
+      setChallengeHintLimit(roomData?.hintsLimit || 3);
+      setChallengeTimerEnabled(roomData?.timerEnabled ?? true);
+      setChallengeMode(true);
+      setEndGameStep(1);
+
+      // Construct a viewing board state if none exists or needs seed alignment
+      const viewingBoard: BoardState = {
+        grid: Array(9).fill(null).map((_, r) =>
+          Array(9).fill(null).map((_, c) => ({
+            row: r,
+            col: c,
+            value: 0,
+            isOriginalClue: false,
+            isUserInput: false,
+            notes: new Set<number>()
+          }))
+        ),
+        selectedRow: null,
+        selectedCol: null,
+        currentMistakesCount: 0,
+        maxMistakesLimit: roomData?.mistakesLimit || 3,
+        hintsCount: 0,
+        maxHintsLimit: roomData?.hintsLimit || 3,
+        isGameOver: true,
+        difficulty: diffVal,
+        seed: seedNum
+      };
+
+      setBoardState(viewingBoard);
+      navigateToScreen("game");
+      setShowGameOverModal(true);
+    } catch (err) {
+      console.error("[Push] Failed to view challenge results:", err);
+      showToast("Unable to load match results.");
+    }
+  };
+
   const registerPushNotifications = async () => {
     const user = userProfile ? { uid: userProfile.id } : null;
     if (!user?.uid) return;
@@ -3960,8 +4550,9 @@ useEffect(() => {
             console.log("[Push] Web push permission granted.");
             if (messaging) {
               try {
-                const registration = await navigator.serviceWorker.ready;
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
                 const token = await getToken(messaging, { 
+                  vapidKey: 'BFJRNRY4LO8dVenQpZLSzz8UOrMqorhwrsxX35MDzeifpZiQXsueOtgoc',
                   serviceWorkerRegistration: registration
                 });
                 if (token) {
@@ -4051,7 +4642,17 @@ useEffect(() => {
             console.log("[Push] Native push received in foreground/background:", notification);
             if (notificationsEnabled) {
               playInviteChime();
-              const { gameId, password, senderName } = notification.data || {};
+              const { gameId, password, senderName, type, roomCode, fromName } = notification.data || {};
+              if (type === 'challenge_completed') {
+                setActiveInviteNotification({
+                  id: notification.id || `push-${Date.now()}`,
+                  type: 'challenge_completed',
+                  fromName: fromName || senderName || "Opponent",
+                  roomCode: roomCode || gameId,
+                  gameId: roomCode || gameId
+                });
+                return;
+              }
               if (gameId) {
                 const inviteId = notification.id || `push-${Date.now()}`;
                 const inviteObj = {
@@ -4083,7 +4684,11 @@ useEffect(() => {
 
           pushActListener = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
             console.log("[Push] Native push action performed:", action);
-            const { gameId, password, senderName } = action.notification.data || {};
+            const { gameId, password, senderName, type, roomCode } = action.notification.data || {};
+            if (type === 'challenge_completed') {
+              handleViewChallengeResults(roomCode || gameId);
+              return;
+            }
             if (gameId) {
               handleLoadChallengeFromId(gameId, password, senderName);
             }
@@ -4091,7 +4696,11 @@ useEffect(() => {
 
           localActListener = await LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
             console.log("[Push] Native local action performed:", action);
-            const { gameId, password, senderName } = action.notification.extra || {};
+            const { gameId, password, senderName, type, roomCode } = action.notification.extra || {};
+            if (type === 'challenge_completed') {
+              handleViewChallengeResults(roomCode || gameId);
+              return;
+            }
             if (gameId) {
               handleLoadChallengeFromId(gameId, password, senderName);
             }
@@ -4102,6 +4711,16 @@ useEffect(() => {
               console.log("[Push] Web push action received from SW:", event.data);
               const { gameId, password, senderName } = event.data;
               handleLoadChallengeFromId(gameId, password, senderName);
+            } else if (event.data && event.data.type === 'challenge_completed') {
+              console.log("[Push] Web push challenge completed received from SW:", event.data);
+              const { roomCode, gameId, senderName, fromName } = event.data;
+              setActiveInviteNotification({
+                id: `sw-completed-${Date.now()}`,
+                type: 'challenge_completed',
+                fromName: fromName || senderName || "Opponent",
+                roomCode: roomCode || gameId,
+                gameId: roomCode || gameId
+              });
             }
           };
           navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
@@ -5761,7 +6380,8 @@ useEffect(() => {
         pin: "",
         status: "active",
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
       }).then(() => {
         console.log(`[Firestore] Initialized canonical room /rooms/${roomCode} with flat puzzle arrays`);
       }).catch(err => {
@@ -5864,7 +6484,7 @@ useEffect(() => {
     const roomCode = String(seed).padStart(6, '0').slice(-6);
 
     const isFailed = Boolean(mistakeLimitEnabled && boardState && boardState.currentMistakesCount >= boardState.maxMistakesLimit);
-    const pName = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 12 && !userProfile.name.includes("Voyager")) ? userProfile.name.trim() : getActiveDisplayName();
+    const pName = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 15 && !userProfile.name.includes("Voyager")) ? userProfile.name.trim() : getActiveDisplayName();
     const uId = userProfile?.id || "GUEST_ANON";
     const userTime = isFailed ? 9999 : sessionSeconds;
 
@@ -5923,7 +6543,8 @@ useEffect(() => {
           pin: isRoomLocked ? roomPin : "",
           status: "active",
           createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
+          updatedAt: serverTimestamp(),
+          expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
         }, { merge: true });
 
         await setDoc(doc(db, "rooms", roomCode, "players", uId), {
@@ -6084,7 +6705,8 @@ useEffect(() => {
         roomCode: activeRoomCode,
         gameId: activeRoomCode,
         status: "pending",
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        expiresAt: Date.now() + (48 * 60 * 60 * 1000)
       });
       console.log(`[Firestore] Dispatched real-time invite to player ${playerId} for canonical room ${activeRoomCode}`);
     } catch (err) {
@@ -7484,6 +8106,7 @@ useEffect(() => {
     let chalParam = params.get("room") || params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("c");
     let queryPw = params.get("pin") || params.get("pw") || params.get("password");
     let senderParam = params.get("sender") || params.get("senderName") || params.get("invitedBy") || params.get("sender_name");
+    let viewParam = params.get("view");
     
     // Support hash parameters too for static routing structures
     if (!chalParam && window.location.hash) {
@@ -7497,6 +8120,9 @@ useEffect(() => {
         }
         if (!senderParam) {
           senderParam = hashParams.get("sender") || hashParams.get("senderName") || hashParams.get("invitedBy") || hashParams.get("sender_name");
+        }
+        if (!viewParam) {
+          viewParam = hashParams.get("view");
         }
       }
     }
@@ -7519,10 +8145,12 @@ useEffect(() => {
           chalParam = ssChallenge;
           if (!queryPw) queryPw = sessionStorage.getItem("sudoku_invite_pw") || undefined;
           if (!senderParam) senderParam = sessionStorage.getItem("sudoku_invite_sender") || undefined;
+          if (!viewParam) viewParam = sessionStorage.getItem("sudoku_invite_view") || undefined;
           // Consume immediately so a page refresh doesn't replay the invite
           sessionStorage.removeItem("sudoku_invite_challenge");
           sessionStorage.removeItem("sudoku_invite_pw");
           sessionStorage.removeItem("sudoku_invite_sender");
+          sessionStorage.removeItem("sudoku_invite_view");
         }
       } catch (e) {}
     }
@@ -7531,7 +8159,9 @@ useEffect(() => {
       const sanitizedChallenge = sanitizeGameId(chalParam);
       const sanitizedPw = queryPw ? sanitizePassword(queryPw) : undefined;
       const sanitizedSender = senderParam ? sanitizeSenderName(senderParam) : undefined;
-      if (sanitizedChallenge) {
+      if (viewParam === "results" && sanitizedChallenge) {
+        handleViewChallengeResults(sanitizedChallenge);
+      } else if (sanitizedChallenge) {
         handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true);
       } else {
         generateAndSetNewPuzzle(difficulty);
@@ -7558,6 +8188,7 @@ useEffect(() => {
             let chalParam = params.get("room") || params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("c");
             let queryPw = params.get("pin") || params.get("pw") || params.get("password");
             let senderParam = params.get("sender") || params.get("senderName") || params.get("invitedBy") || params.get("sender_name");
+            let viewParam = params.get("view");
             
             if (!chalParam && urlObj.hash) {
               const hashIdx = urlObj.hash.indexOf("?");
@@ -7571,6 +8202,9 @@ useEffect(() => {
                 if (!senderParam) {
                   senderParam = hashParams.get("sender") || hashParams.get("senderName") || hashParams.get("invitedBy") || hashParams.get("sender_name");
                 }
+                if (!viewParam) {
+                  viewParam = hashParams.get("view");
+                }
               }
             }
             
@@ -7578,7 +8212,9 @@ useEffect(() => {
               const sanitizedChallenge = sanitizeGameId(chalParam);
               const sanitizedPw = queryPw ? sanitizePassword(queryPw) : undefined;
               const sanitizedSender = senderParam ? sanitizeSenderName(senderParam) : undefined;
-              if (sanitizedChallenge) {
+              if (viewParam === "results" && sanitizedChallenge) {
+                handleViewChallengeResults(sanitizedChallenge);
+              } else if (sanitizedChallenge) {
                 handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true);
               }
             }
@@ -7980,7 +8616,8 @@ useEffect(() => {
       pin: isRoomLocked && roomPin ? roomPin : "",
       status: "active",
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
+      expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
     }, { merge: true }).catch(err => {
       console.error("[Firestore] Failed to write mid-game room document:", err);
     });
@@ -9915,9 +10552,19 @@ useEffect(() => {
                 onClose={() => {
                   setShowGameOverModal(false);
                   setShowCelebrationConfetti(false);
-                  setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
                   setLockedNum(null);
                   setActiveKeypadNum(null);
+                  if (preservedSoloBoardRef.current) {
+                    setBoardState(preservedSoloBoardRef.current.boardState);
+                    setSessionSeconds(preservedSoloBoardRef.current.sessionSeconds);
+                    setDifficulty(preservedSoloBoardRef.current.difficulty);
+                    setTimerEnabled(preservedSoloBoardRef.current.timerEnabled);
+                    setMistakeLimitEnabled(preservedSoloBoardRef.current.mistakeLimitEnabled);
+                    setChallengeMode(false);
+                    preservedSoloBoardRef.current = null;
+                  } else {
+                    setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                  }
                 }}
                 darkMode={darkMode}
                 difficulty={difficulty}
@@ -9964,7 +10611,8 @@ useEffect(() => {
                         pin: isRoomLocked ? roomPin : "",
                         status: "active",
                         createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp()
+                        updatedAt: serverTimestamp(),
+                        expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
                       }, { merge: true });
                     } catch (err) {
                       console.error("[Firestore] Failed to update room for SAME GAME:", err);
@@ -10399,7 +11047,7 @@ useEffect(() => {
               challengeMode={challengeMode}
               boardState={boardState}
               challengeMistakeLimit={challengeMistakeLimit}
-              userProfile={userProfile}
+              userProfile={userProfile ? { ...userProfile, email: userProfile.email || undefined } : null}
               setUserProfile={setUserProfile}
               playClickSound={playClickSound}
               addLog={addLog}
@@ -10417,6 +11065,8 @@ useEffect(() => {
               onOpenCompliancePage={(page) => setActiveCompliancePage(page)}
               onOpenDeleteAccountModal={() => setShowDeleteAccountModal(true)}
               onOpenResetSettingsModal={() => setShowResetSettingsModal(true)}
+              onConnectGoogle={handleConnectGoogle}
+              isConnectingGoogle={isConnectingGoogle}
             />
           )}
 
@@ -10561,9 +11211,9 @@ useEffect(() => {
                                 : "bg-white/70 hover:bg-[#F3E8FF]/30 text-stone-850"
                             }`}
                           >
-                            <div className="flex items-center gap-2.5 text-left">
+                            <div className="flex items-center gap-2.5 text-left min-w-0 flex-1">
                               {/* Glowing soft status bullets */}
-                              <span className="relative flex h-2.5 w-2.5">
+                              <span className="relative flex h-2.5 w-2.5 shrink-0">
                                 {isOnline && (
                                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70" />
                                 )}
@@ -10571,15 +11221,15 @@ useEffect(() => {
                                   isOnline ? "bg-emerald-500 shadow-[0_0_8px_#10B981]" : "bg-stone-300 dark:bg-zinc-700"
                                 }`} />
                               </span>
-                              <div className="text-left flex flex-col">
-                                <span className="text-xs font-black tracking-tight leading-none mb-1">{friend.name}</span>
+                              <div className="text-left flex flex-col min-w-0">
+                                <span className="text-xs font-black tracking-tight leading-none mb-1 truncate">{friend.name}</span>
                                 <span className="text-[9.5px] text-stone-500 leading-none">
                                   {isOnline ? "Online" : "Offline"}
                                 </span>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               <button
                                 onClick={() => {
                                   playClickSound();
@@ -10885,8 +11535,8 @@ useEffect(() => {
                                       darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-200" : "bg-stone-50/45 border-stone-200/50 text-stone-850"
                                     }`}
                                   >
-                                    <div className="flex items-center gap-2.5">
-                                      <div className="relative">
+                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                      <div className="relative shrink-0">
                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
                                           darkMode ? "bg-purple-950/60 text-purple-300 border border-purple-800/40" : "bg-purple-100 text-purple-800 border border-purple-200"
                                         }`}>
@@ -10898,14 +11548,14 @@ useEffect(() => {
                                           }`} />
                                         )}
                                       </div>
-                                      <div className="flex flex-col">
-                                        <span className="font-sans font-bold text-xs">{friend.name}</span>
+                                      <div className="flex flex-col min-w-0">
+                                        <span className="font-sans font-bold text-xs truncate">{friend.name}</span>
                                         <span className="text-[9.5px] text-stone-400 capitalize">{formatActiveStatus(friend.status, (friend as any).lastActive || friend.lastPlayedAt, language)}</span>
                                       </div>
                                     </div>
                                     <button
                                       onClick={() => handleToggleFriend(friend.id, friend.name)}
-                                      className="text-[10.5px] font-sans font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 border-none bg-transparent cursor-pointer transition-all active:scale-95 px-2 py-1"
+                                      className="text-[10.5px] font-sans font-semibold text-rose-500 hover:text-rose-600 dark:text-rose-400 border-none bg-transparent cursor-pointer transition-all active:scale-95 px-2 py-1 shrink-0"
                                     >
                                       Remove
                                     </button>
@@ -11782,7 +12432,7 @@ useEffect(() => {
                 onShareLink={async () => {
                   const isConfigured = checkIsDisplayNameConfigured();
                   if (!isConfigured) {
-                    const current = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 12 && !userProfile.name.includes("Voyager")) 
+                    const current = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 15 && !userProfile.name.includes("Voyager")) 
                       ? userProfile.name.trim() 
                       : getActiveDisplayName();
                     setEnteredDisplayName(current);
@@ -11796,7 +12446,7 @@ useEffect(() => {
                 onStartGame={() => {
                   const isConfigured = checkIsDisplayNameConfigured();
                   if (!isConfigured) {
-                    const current = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 12 && !userProfile.name.includes("Voyager")) 
+                    const current = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 15 && !userProfile.name.includes("Voyager")) 
                       ? userProfile.name.trim() 
                       : getActiveDisplayName();
                     setEnteredDisplayName(current);
@@ -11932,12 +12582,12 @@ useEffect(() => {
                           <div 
                             className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-300 w-full shrink-0 ${rowBgClass}`}
                           >
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
                               {player.status === 'online' && (
                                 <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-400 animate-pulse-gentle" />
                               )}
-                              <div className="flex flex-col">
-                                <span className="font-medium text-[11px] font-sans leading-tight">
+                              <div className="flex flex-col min-w-0">
+                                <span className="font-medium text-[11px] font-sans leading-tight truncate">
                                   {player.name}
                                 </span>
                                 <span className="text-[9px] text-stone-400 capitalize">
@@ -12037,7 +12687,7 @@ useEffect(() => {
                     playClickSound();
                     const isConfigured = checkIsDisplayNameConfigured();
                     if (!isConfigured) {
-                      const current = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 12 && !userProfile.name.includes("Voyager")) 
+                      const current = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 15 && !userProfile.name.includes("Voyager")) 
                         ? userProfile.name.trim() 
                         : getActiveDisplayName();
                       setEnteredDisplayName(current);
@@ -12765,47 +13415,18 @@ useEffect(() => {
               </div>
               <div className="flex flex-col gap-2.5 w-full mt-1">
                 <button 
-                  onClick={() => { 
+                  disabled={isDeletingAccount}
+                  onClick={async () => { 
                     playClickSound(); 
-                    
-                    // Clear all sudoku_ related local storage keys to simulate full data deletion
-                    const keysToRemove = [];
-                    for (let i = 0; i < localStorage.length; i++) {
-                      const key = localStorage.key(i);
-                      if (key && key.startsWith("sudoku_")) {
-                        keysToRemove.push(key);
-                      }
-                    }
-                    keysToRemove.forEach(k => localStorage.removeItem(k));
-                    
-                    setUserProfile({
-                      id: "GUEST_" + Math.floor(10000 + Math.random() * 90000),
-                      name: "Guest Voyager",
-                      avatarColor: "#6B7280",
-                      isSynced: false
-                    });
-                    const emptyBestTimes: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
-                    setPersonalBestTimes(emptyBestTimes);
-                    personalBestTimesRef.current = emptyBestTimes;
-                    setPreviousRecordTime(null);
-                    setIsNewRecordAchieved(false);
-                    setPbStage("idle");
-                    setTotalGamesPlayed(0);
-                    setTotalWinsCount(0);
-                    setCompletedGames([]);
-                    setSavedGames([]);
-                    setBoardState(null);
-                    setCurrentScreen("home");
-                    
-                    addLog("🗑️ Account and all local data permanently deleted.");
-                    setShowDeleteAccountModal(false);
-                    showToast("Account and data deleted");
+                    await handleDeleteAccountAndData();
                   }} 
                   className={`w-full py-3.5 px-4 rounded-xl border-0 cursor-pointer font-sans text-xs font-black uppercase tracking-wider transition-all active:translate-y-px ${
+                    isDeletingAccount ? "opacity-60 cursor-wait" : ""
+                  } ${
                     darkMode ? "bg-[#7f1d1d] text-[#fecaca] hover:bg-[#991b1b]" : "bg-[#FEE2E2] text-[#DC2626] hover:bg-[#FECACA]"
                   }`}
                 >
-                  {t("deleteAccountConfirm")}
+                  {isDeletingAccount ? "..." : t("deleteAccountConfirm")}
                 </button>
                 <button 
                   onClick={() => { playClickSound(); setShowDeleteAccountModal(false); }} 
@@ -13730,12 +14351,12 @@ useEffect(() => {
                     >
                       {userProfile?.name ? userProfile.name.charAt(0).toUpperCase() : "V"}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-sans font-black text-[#2B6CB0] text-sm">
-                          {userProfile?.name || "Anonymous Voyager"}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-sans font-black text-[#2B6CB0] text-sm truncate">
+                          {userProfile?.name || "Voyager_Guest"}
                         </span>
-                        <span className={`text-[8.5px] font-mono font-black px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                        <span className={`text-[8.5px] font-mono font-black px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0 ${
                           userProfile?.isSynced ? "bg-[#E6F4EA] text-[#135236]" : "bg-[#F3E8FF] text-[#6B21A8]"
                         }`}>
                           {userProfile?.isSynced ? (
@@ -13817,18 +14438,10 @@ useEffect(() => {
                       </div>
                       
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           playClickSound();
-                          if (window.confirm("Disconnect security identity and return to offline Guest mode? Current device stats remain intact.")) {
-                            setUserProfile({
-                              id: "GUEST_" + Math.floor(10000 + Math.random() * 90000),
-                              name: "Anonymous Voyager",
-                              avatarColor: "#6B7280",
-                              isSynced: false
-                            });
-                            localStorage.removeItem("sudoku_userProfile");
-                            localStorage.removeItem("sudoku_is_display_name_configured");
-                            addLog("👤 Returned to Guest Offline Profile Mode.");
+                          if (window.confirm("Disconnect security identity and return to offline Guest mode?")) {
+                            await handleLogout();
                           }
                         }}
                         className="bg-[#FCE7F3] text-[#9D174D] hover:bg-[#FBCFE8] border-none transition-colors py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer mt-2 shadow-sm"
@@ -14286,80 +14899,117 @@ useEffect(() => {
               <div className="w-10 h-1 rounded-full bg-stone-400/40 mx-auto -mt-0.5 mb-0.5" />
 
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-purple-950/50 text-purple-300" : "bg-purple-50 text-purple-600"}`}>
-                    <Users className="w-5 h-5" strokeWidth={2.5} />
-                  </div>
-                  <div className="flex flex-col text-left">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-purple-400" : "text-purple-700"}`}>
-                        {t("sudoku_invite_title")}
-                      </span>
-                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-purple-500/15 text-purple-500">
-                        {inviteCountdown}s
-                      </span>
-                    </div>
-                    {(() => {
-                      const text = t("user_invited_you", { name: "___NAME___" });
-                      const parts = text.split("___NAME___");
-                      if (parts.length === 2) {
-                        return (
-                          <span className="font-sans text-xs font-semibold mt-0.5">
-                            {parts[0]}<strong>{activeInviteNotification.fromName}</strong>{parts[1]}
+                {activeInviteNotification.type === 'challenge_completed' ? (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-emerald-950/50 text-emerald-300" : "bg-emerald-50 text-emerald-600"}`}>
+                        <Trophy className="w-5 h-5 shrink-0" strokeWidth={2.5} />
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
+                            CHALLENGE COMPLETED
                           </span>
-                        );
-                      }
-                      return (
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-500">
+                            {inviteCountdown}s
+                          </span>
+                        </div>
                         <span className="font-sans text-xs font-semibold mt-0.5">
-                          {t("user_invited_you", { name: activeInviteNotification.fromName })}
+                          {activeInviteNotification.fromName || 'Opponent'} completed the duel!
                         </span>
-                      );
-                    })()}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      playClickSound();
-                      try {
-                        await updateDoc(doc(db, "invites", activeInviteNotification.id), { status: "declined" });
-                      } catch (e) {
-                        console.error("Failed to decline invite in DB:", e);
-                      }
-                      setPendingChallenges(prev => prev.filter(c => c.id !== activeInviteNotification.id && c.inviteId !== activeInviteNotification.id));
-                      setActiveInviteNotification(null);
-                    }}
-                    className={`px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 ${
-                      darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
-                    }`}
-                  >
-                    {t("btn_decline")}
-                  </button>
-                  <button
-                    disabled={isJoiningRoomLoading}
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      if (isJoiningRoomLoading) return;
-                      const { gameId, roomCode, id, password } = activeInviteNotification;
-                      await handleAcceptAndLaunchInvite(roomCode || gameId, id, password, true);
-                    }}
-                    className={`px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 text-white flex items-center justify-center gap-1.5 ${
-                      isJoiningRoomLoading
-                        ? "opacity-80 cursor-not-allowed bg-emerald-700"
-                        : "cursor-pointer bg-emerald-600 hover:bg-emerald-500"
-                    }`}
-                  >
-                    {isJoiningRoomLoading ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin stroke-[2]" />
-                        <span>{t("joining_status")}</span>
-                      </>
-                    ) : (
-                      <span>{t("btn_accept")}</span>
-                    )}
-                  </button>
-                </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playClickSound();
+                          handleViewChallengeResults(activeInviteNotification.roomCode || activeInviteNotification.gameId);
+                        }}
+                        className="px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 text-white cursor-pointer bg-emerald-600 hover:bg-emerald-500"
+                      >
+                        VIEW RESULTS
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-purple-950/50 text-purple-300" : "bg-purple-50 text-purple-600"}`}>
+                        <Users className="w-5 h-5" strokeWidth={2.5} />
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-purple-400" : "text-purple-700"}`}>
+                            {t("sudoku_invite_title")}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-purple-500/15 text-purple-500">
+                            {inviteCountdown}s
+                          </span>
+                        </div>
+                        {(() => {
+                          const text = t("user_invited_you", { name: "___NAME___" });
+                          const parts = text.split("___NAME___");
+                          if (parts.length === 2) {
+                            return (
+                              <span className="font-sans text-xs font-semibold mt-0.5">
+                                {parts[0]}<strong>{activeInviteNotification.fromName}</strong>{parts[1]}
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="font-sans text-xs font-semibold mt-0.5">
+                              {t("user_invited_you", { name: activeInviteNotification.fromName })}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          playClickSound();
+                          try {
+                            await updateDoc(doc(db, "invites", activeInviteNotification.id), { status: "declined" });
+                          } catch (e) {
+                            console.error("Failed to decline invite in DB:", e);
+                          }
+                          setPendingChallenges(prev => prev.filter(c => c.id !== activeInviteNotification.id && c.inviteId !== activeInviteNotification.id));
+                          setActiveInviteNotification(null);
+                        }}
+                        className={`px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 ${
+                          darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
+                        }`}
+                      >
+                        {t("btn_decline")}
+                      </button>
+                      <button
+                        disabled={isJoiningRoomLoading}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (isJoiningRoomLoading) return;
+                          const { gameId, roomCode, id, password } = activeInviteNotification;
+                          await handleAcceptAndLaunchInvite(roomCode || gameId, id, password, true);
+                        }}
+                        className={`px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 text-white flex items-center justify-center gap-1.5 ${
+                          isJoiningRoomLoading
+                            ? "opacity-80 cursor-not-allowed bg-emerald-700"
+                            : "cursor-pointer bg-emerald-600 hover:bg-emerald-500"
+                        }`}
+                      >
+                        {isJoiningRoomLoading ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin stroke-[2]" />
+                            <span>{t("joining_status")}</span>
+                          </>
+                        ) : (
+                          <span>{t("btn_accept")}</span>
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* 5-second countdown progress bar */}
@@ -14368,7 +15018,11 @@ useEffect(() => {
                   initial={{ width: "100%" }}
                   animate={{ width: "0%" }}
                   transition={{ duration: 5, ease: "linear" }}
-                  className="h-full bg-gradient-to-r from-purple-500 to-indigo-500"
+                  className={`h-full ${
+                    activeInviteNotification.type === 'challenge_completed'
+                      ? "bg-gradient-to-r from-emerald-500 to-teal-500"
+                      : "bg-gradient-to-r from-purple-500 to-indigo-500"
+                  }`}
                 />
               </div>
             </motion.div>
@@ -14570,13 +15224,25 @@ useEffect(() => {
                     <ul className="list-disc pl-5 space-y-2 text-xs">
                       <li>{t("privacyLocalStorageItem")}</li>
                       <li>{t("privacyCloudStorageItem")}</li>
+                      <li>{t("privacyGoogleSyncItem")}</li>
+                      <li>{t("privacyPushNotificationItem")}</li>
                     </ul>
+
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">{t("privacyAdSenseHeader")}</h4>
+                    <p className="text-xs leading-normal overflow-visible">
+                      {t("privacyAdSenseDesc")}
+                    </p>
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">{t("privacySection2Header")}</h4>
                     <p className="text-xs leading-normal overflow-visible">
                       {t("privacySection2Desc")}
                       <br />
                       <strong className="text-sky-500 dark:text-sky-400">sudokutogethermode@gmail.com</strong>
+                    </p>
+
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">{t("privacySection3Header")}</h4>
+                    <p className="text-xs leading-normal overflow-visible">
+                      {t("privacySection3Desc")}
                     </p>
                   </div>
                 )}
@@ -14596,6 +15262,16 @@ useEffect(() => {
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsSection2Header")}</h4>
                     <p className="text-xs leading-normal overflow-visible">
                       {t("termsSection2Desc")}
+                    </p>
+
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsFairPlayHeader")}</h4>
+                    <p className="text-xs leading-normal overflow-visible">
+                      {t("termsFairPlayDesc")}
+                    </p>
+
+                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsCloudAccountHeader")}</h4>
+                    <p className="text-xs leading-normal overflow-visible">
+                      {t("termsCloudAccountDesc")}
                     </p>
 
                     <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsSection3Header")}</h4>

@@ -20,6 +20,7 @@
             sessionStorage.setItem('sudoku_invite_challenge', c);
             sessionStorage.setItem('sudoku_invite_pw', p.get('pw') || p.get('password') || '');
             sessionStorage.setItem('sudoku_invite_sender', p.get('sender') || p.get('senderName') || p.get('invitedBy') || '');
+            sessionStorage.setItem('sudoku_invite_view', p.get('view') || '');
           }
           // Also rescue hash-embedded params (e.g. /#?challenge=...)
           if (!c && window.location.hash) {
@@ -31,6 +32,7 @@
                 sessionStorage.setItem('sudoku_invite_challenge', hc);
                 sessionStorage.setItem('sudoku_invite_pw', hp.get('pw') || hp.get('password') || '');
                 sessionStorage.setItem('sudoku_invite_sender', hp.get('sender') || hp.get('senderName') || '');
+                sessionStorage.setItem('sudoku_invite_view', hp.get('view') || '');
               }
             } else {
               var cleanHash = window.location.hash.replace(/^[#\/]+/, '');

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pencil, Check, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown } from "lucide-react";
+import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -52,6 +52,9 @@ export interface SettingsModalProps {
   onOpenCompliancePage: (page: "terms" | "privacy" | "about" | "contact") => void;
   onOpenDeleteAccountModal: () => void;
   onOpenResetSettingsModal: () => void;
+  onConnectGoogle?: () => void;
+  isConnectingGoogle?: boolean;
+  onLogout?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -92,7 +95,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenHowToPlay,
   onOpenCompliancePage,
   onOpenDeleteAccountModal,
-  onOpenResetSettingsModal
+  onOpenResetSettingsModal,
+  onConnectGoogle,
+  isConnectingGoogle,
+  onLogout
 }) => {
   const { t, language, setLanguage, languages } = useTranslation();
   const { isIncognito, toggleIncognito } = useFriendPresence(userProfile?.id);
@@ -172,6 +178,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     ? userProfile.name
                     : t("anonymousVoyager")}
                 </span>
+                {userProfile?.isSynced && userProfile?.email && (
+                  <span
+                    className={`font-sans text-[11px] leading-snug mt-0.5 truncate ${
+                      darkMode ? "text-purple-300/80" : "text-purple-800/80"
+                    }`}
+                  >
+                    {userProfile.email}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -258,90 +273,78 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Sync status */}
+          {/* Bottom Action: Log Out (when authenticated) or Connect Google (when unauthenticated) */}
           {userProfile?.isSynced ? (
-            <div className="flex flex-col gap-2.5">
-              <div
-                className={`p-3 rounded-xl border-none ${
-                  darkMode
-                    ? "bg-purple-950/40 text-purple-100"
-                    : "bg-white text-purple-950"
-                }`}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block animate-pulse" />
-                  <span className="text-xs font-sans font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                    <span>{t("syncedSecurely")}</span>
-                    <Check className="w-3 h-3 stroke-[2.5]" />
-                  </span>
-                </div>
-                <span
-                  className={`text-[11px] font-mono mt-1 select-all truncate block ${
-                    darkMode ? "text-purple-200" : "text-purple-900"
-                  }`}
-                >
-                  {userProfile?.email || "sudokutogethermode@gmail.com"}
-                </span>
-              </div>
-
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setUserProfile({
-                    id: "GUEST_" + Math.floor(10000 + Math.random() * 90000),
-                    name: "Guest Voyager",
-                    avatarColor: "#6B7280",
-                    isSynced: false
+            <button
+              type="button"
+              onClick={() => {
+                playClickSound();
+                if (onLogout) {
+                  onLogout();
+                } else {
+                  setUserProfile((prev: any) => {
+                    const updated = {
+                      ...(prev || {}),
+                      isSynced: false,
+                      email: undefined
+                    };
+                    try {
+                      localStorage.setItem("sudoku_userProfile", JSON.stringify(updated));
+                    } catch {}
+                    return updated;
                   });
-                  localStorage.removeItem("sudoku_userProfile");
-                  localStorage.removeItem("sudoku_is_display_name_configured");
                   addLog("👤 Profile disconnected from cloud sync.");
-                }}
-                className={`w-full font-sans text-[10px] lg:text-[12px] font-black uppercase tracking-wider py-2.5 lg:py-3 border-none rounded-xl active:scale-[0.98] transition-all text-center cursor-pointer ${
-                  darkMode
-                    ? "bg-purple-950/50 hover:bg-purple-950/80 text-purple-200"
-                    : "bg-purple-100 hover:bg-purple-200 text-purple-950"
-                }`}
-              >
-                {t("disconnectSync")}
-              </button>
-            </div>
+                }
+              }}
+              className={`w-full font-sans text-[10.5px] lg:text-[12.5px] font-black uppercase tracking-wider py-2.5 lg:py-3 border-none rounded-xl active:scale-[0.98] transition-all text-center cursor-pointer shadow-sm ${
+                darkMode
+                  ? "bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/30"
+                  : "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60"
+              }`}
+            >
+              {t("logOut")}
+            </button>
           ) : (
-            <div className="flex flex-col gap-1.5 w-full select-none">
-              <button
-                disabled={true}
-                aria-disabled="true"
-                className={`w-full flex items-center justify-center gap-2 font-sans text-[10.5px] lg:text-[13px] font-black uppercase tracking-wider py-2.5 lg:py-3.5 px-4 rounded-xl transition-all text-center border-none opacity-50 cursor-not-allowed pointer-events-none ${
-                  darkMode ? "bg-zinc-800 text-stone-500" : "bg-stone-100 text-stone-400"
-                }`}
+            <button
+              type="button"
+              disabled={isConnectingGoogle}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isConnectingGoogle) return;
+                playClickSound();
+                if (onConnectGoogle) onConnectGoogle();
+              }}
+              className={`w-full flex items-center justify-center gap-2 font-sans text-[10.5px] lg:text-[13px] font-black uppercase tracking-wider py-2.5 lg:py-3.5 px-4 rounded-xl transition-all text-center border-none cursor-pointer active:scale-[0.98] shadow-sm ${
+                isConnectingGoogle ? "opacity-70 cursor-wait" : ""
+              } ${
+                darkMode
+                  ? "bg-white text-stone-900 hover:bg-stone-100"
+                  : "bg-white text-stone-850 hover:bg-stone-50 border border-stone-200 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+              }`}
+            >
+              <svg
+                className="w-4 h-4 shrink-0"
+                viewBox="0 0 24 24"
               >
-                <svg
-                  className="w-3.5 h-3.5 lg:w-4 lg:h-4 shrink-0 bg-[#A8A29E]/30 p-0.5 rounded-full grayscale opacity-50"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    fill="currentColor"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <span>{t("connectGoogleAccount")}</span>
-              </button>
-              <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 mt-1.5 font-sans text-center">
-                {t("cloudSyncUpcoming")}
-              </p>
-            </div>
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                />
+              </svg>
+              <span>{isConnectingGoogle ? "..." : t("connectGoogle")}</span>
+            </button>
           )}
         </div>
 
@@ -510,14 +513,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </span>
                 </div>
                 <button
-                  disabled
+                  onClick={() => {
+                    playClickSound?.();
+                    setNotificationsEnabled(!notificationsEnabled);
+                  }}
                   title={t("pushNotificationsDesc")}
-                  className={`w-11 h-6 flex items-center rounded-full p-0.5 border-none cursor-not-allowed opacity-50 ${
-                    darkMode ? "bg-zinc-850" : "bg-[#BAE6FD]"
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
+                    notificationsEnabled
+                      ? darkMode
+                        ? "bg-sky-500"
+                        : "bg-[#0369A1] active:bg-[#025a8b] shadow-none"
+                      : darkMode
+                      ? "bg-zinc-850"
+                      : "bg-[#BAE6FD] active:bg-[#90cdf4] shadow-sm active:shadow-none"
                   }`}
                 >
                   <div
-                    className="w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none translate-x-0"
+                    className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
+                      notificationsEnabled ? "translate-x-5" : "translate-x-0"
+                    }`}
                   />
                 </button>
               </div>
@@ -1129,11 +1143,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 onClick={() => {
                   playClickSound();
-                  if (!userProfile?.isSynced) {
-                    alert(t("noAccountDataNotice"));
-                  } else {
-                    onOpenDeleteAccountModal();
-                  }
+                  onOpenDeleteAccountModal();
                 }}
                 className={`w-full mt-2 py-2.5 px-4 text-sm font-medium text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
                   darkMode

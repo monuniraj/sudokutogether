@@ -656,9 +656,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                         )}
                       </span>
 
-                      <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span
-                          className={`font-sans font-bold text-sm leading-normal overflow-visible truncate ${
+                          className={`font-sans font-bold text-sm leading-normal truncate ${
                             isPodium1
                               ? darkMode
                                 ? "text-amber-200"

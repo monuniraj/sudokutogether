@@ -93,10 +93,13 @@
             <li>Anonymous Challenge ID, seed number, and difficulty level.</li>
             <li>Player display nickname (user-chosen alphanumeric string) and user ID.</li>
             <li>Match performance metrics: Completion time (seconds), mistake count, and win/loss completion status.</li>
-            <li>Multiplayer room invitations (sender ID, recipient ID, game ID, status: pending/accepted/declined).</li>
-            <li>Firebase Cloud Messaging (FCM) push notification tokens (if opted-in, used strictly to alert you of incoming match invites).</li>
-            <li>Recent opponent player list (for 1-click rematch invitations).</li>
-          </ul>
+        <li>
+          <strong>Firebase Cloud Messaging (FCM) & Device Identifiers:</strong> When notification permissions are granted, an anonymous Firebase Cloud Messaging (FCM) registration token and anonymous device identifier are generated strictly to deliver real-time challenge invites, opponent duel alerts, and match completion updates. <em>Push tokens are never used for cross-app tracking, device fingerprinting, behavioral profiling, or unsolicited advertising.</em>
+          <br />
+          <strong>User Control & Revocation:</strong> Players maintain total control over notifications and may enable or disable notifications at any time via the in-game toggle under <em>Settings &rarr; "Push Notifications"</em> or through the operating system / web browser application settings.
+        </li>
+        <li>
+          <strong>Google Account & Cloud Synchronization (Optional):</strong> When players choose to link or sign in with their Google Account ("Connect Google"), we receive basic profile identity credentials via Google OAuth (Display Name, Email address, and unique authentication User ID) solely to authenticate user sessions, securely synchronize personal stats and puzzle records across devices, and manage player profile settings. <em>We do NOT collect, access, or store passwords, contacts, personal device files, or financial details.</em> Authentication credentials are used strictly for game functionality and cross-device continuity, and are never sold, rented, or shared with third-party advertisers.
         </li>
         <li>
           <strong>Infrastructure & Diagnostic Server Logs:</strong> Standard web server request logs (including IP addresses, browser user-agent, timestamps, and rate limiting metrics) are processed automatically by Google Firebase Hosting and our Express server solely for operational security, DDoS prevention, and rate-limiting integrity.
@@ -125,15 +128,24 @@
         <strong>Ad Traffic & Quality Protection:</strong> Automated bots, click-farms, repeated manual ad clicks, ad-block tampering, or proxy manipulations are strictly prohibited and actively filtered to preserve ecosystem integrity.
       </p>
 
-      <h2>3. GDPR Rights (European Economic Area & UK)</h2>
+      <h2>3. Right to Erasure / Account & Data Deletion (Google Play & Global Privacy Standards)</h2>
       <p>
-        Under the European Union General Data Protection Regulation (GDPR), users located in the EEA and UK possess statutory rights including:
+        Under global privacy frameworks (GDPR, CCPA/CPRA, DPDP) and <strong>Google Play Store Data Safety Guidelines</strong>, every player maintains the absolute right to request the permanent deletion of their account, gameplay records, and associated personal or telemetry data.
+      </p>
+      <div class="highlight-box">
+        <strong>🗑️ Account & Data Deletion Methods:</strong>
+        <ul>
+          <li><strong>Directly In-App (Instant Self-Service):</strong> Open <strong>Settings</strong> &rarr; Navigate to the <strong>SUPPORT & INFO</strong> section &rarr; Click <strong>"Delete Account & Data"</strong>. This immediately purges your Firestore cloud profile, real-time presence documents, active multiplayer room player documents, stored FCM push notification tokens, device localStorage and sessionStorage cache, and revokes your authentication session.</li>
+          <li><strong>Web & Email Request (Alternative Channel):</strong> If you cannot access the application or have uninstalled it, you may submit a data deletion request by emailing <a href="mailto:sudokutogethermode@gmail.com">sudokutogethermode@gmail.com</a>. Please provide your player display name or associated email address. Deletion requests are processed and confirmed within 24 to 48 business hours.</li>
+        </ul>
+      </div>
+      <p>
+        Additional statutory rights for users in the EEA, UK, and worldwide include:
       </p>
       <ul>
         <li><strong>Right of Access:</strong> Request a copy of your stored player and leaderboard records.</li>
         <li><strong>Right to Rectification:</strong> Update or modify your player display nickname at any time in-game.</li>
-        <li><strong>Right to Erasure ("Right to be Forgotten"):</strong> Instantly delete all your Firestore data and local storage via the in-app <em>"Delete Account & Data"</em> button or by emailing <a href="mailto:sudokutogethermode@gmail.com">sudokutogethermode@gmail.com</a>.</li>
-        <li><strong>Right to Data Portability & Restriction:</strong> Request restrictions or export of your match telemetry.</li>
+        <li><strong>Right to Restriction & Data Portability:</strong> Request limitations on processing or export of your match telemetry.</li>
       </ul>
 
       <h2>4. California Privacy Rights (CCPA / CPRA)</h2>

@@ -62,11 +62,11 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
               darkMode ? "bg-[#2A2D24] text-[#FDFBF7]" : "bg-[#FDFBF7] text-[#4B5563]"
             }`}
           >
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex flex-col items-center gap-1 min-w-0 max-w-full">
               <span className={`text-[12px] font-sans font-bold uppercase tracking-widest ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
                 {t("gameInvitationTitle")}
               </span>
-              <h3 className={`text-2xl font-sans font-medium tracking-tight mt-1 ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
+              <h3 className={`text-2xl font-sans font-medium tracking-tight mt-1 max-w-full truncate ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
                 {incomingChallengeDetails.senderName || t("fellowPlayer")}
               </h3>
               <p className={`text-sm font-sans mt-0.5 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>

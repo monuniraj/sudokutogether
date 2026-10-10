@@ -19,11 +19,12 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
   
-  const notificationTitle = payload.notification?.title || 'Sudoku Invite';
+  const notificationTitle = payload.notification?.title || payload.data?.title || 'Sudoku Challenge Invite';
   const notificationOptions = {
-    body: payload.notification?.body || 'You have a new game invitation!',
-    icon: '/logo.png',
-    data: payload.data
+    body: payload.notification?.body || payload.data?.body || 'You have a new game invitation!',
+    icon: payload.notification?.icon || '/pwa-192x192.png',
+    badge: '/favicon-48x48.png',
+    data: payload.data || {}
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
@@ -33,14 +34,17 @@ messaging.onBackgroundMessage((payload) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
-  const data = event.notification.data;
-  const gameId = data?.gameId;
-  const password = data?.password || '';
-  const senderName = data?.senderName || 'Player';
+  const data = event.notification.data || {};
+  const gameId = data.gameId || data.challengeId;
+  const password = data.password || '';
+  const senderName = data.senderName || data.fromName || 'Player';
   
   let targetUrl = '/';
-  if (gameId) {
-    targetUrl = `/?challenge=${gameId}&pw=${password}&sender=${encodeURIComponent(senderName)}`;
+  if (data.type === 'challenge_completed') {
+    const roomCode = data.roomCode || gameId || '';
+    targetUrl = `/?room=${encodeURIComponent(roomCode)}&view=results`;
+  } else if (gameId) {
+    targetUrl = `/?challenge=${encodeURIComponent(gameId)}&pw=${encodeURIComponent(password)}&sender=${encodeURIComponent(senderName)}`;
   }
   
   event.waitUntil(
@@ -49,7 +53,12 @@ self.addEventListener('notificationclick', (event) => {
       for (let i = 0; i < windowClients.length; i++) {
         const client = windowClients[i];
         if (client.url.includes(location.origin) && 'focus' in client) {
-          client.postMessage({ type: 'navigate_invite', gameId, password, senderName });
+          if (data.type === 'challenge_completed') {
+            const roomCode = data.roomCode || gameId || '';
+            client.postMessage({ type: 'challenge_completed', roomCode, fromName: senderName });
+          } else {
+            client.postMessage({ type: 'navigate_invite', gameId, password, senderName });
+          }
           return client.focus();
         }
       }
