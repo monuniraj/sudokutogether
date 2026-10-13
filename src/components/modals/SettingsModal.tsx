@@ -160,13 +160,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               <div className="flex flex-col min-w-0 flex-1">
                 <span
-                  className={`text-[10px] font-mono font-black uppercase tracking-wider ${
-                    darkMode ? "text-purple-300" : "text-purple-700"
-                  }`}
-                >
-                  {t("displayName")}
-                </span>
-                <span
                   className={`font-sans font-bold text-sm truncate ${
                     darkMode ? "text-stone-100" : "text-purple-950"
                   }`}
@@ -517,7 +510,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     playClickSound?.();
                     setNotificationsEnabled(!notificationsEnabled);
                   }}
-                  title={t("pushNotificationsDesc")}
+                  title={t("pushNotifications")}
                   className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
                     notificationsEnabled
                       ? darkMode
@@ -535,9 +528,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </button>
               </div>
-              <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 font-sans m-0">
-                {t("pushNotificationsDesc")}
-              </p>
             </div>
           </div>
 

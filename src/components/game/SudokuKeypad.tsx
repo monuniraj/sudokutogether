@@ -223,7 +223,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               triggerHapticTap(vibrations);
               onHint();
             }}
-            disabled={!boardState || isGameOver}
+            disabled={!boardState || isGameOver || effectiveHintCount <= 0}
             className={`aspect-[1.12/1] lg:aspect-auto lg:h-[52px] w-full relative transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? "bg-zinc-900 border border-emerald-950 hover:bg-zinc-850 text-[#34D399] active:bg-[#135236]" 

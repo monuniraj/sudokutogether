@@ -94,6 +94,7 @@ import {
   Phone,
   Trophy,
   ThumbsUp,
+  Puzzle,
   Brain,
   Zap,
   Rocket,
@@ -2246,11 +2247,14 @@ useEffect(() => {
         state.currentMistakesCount = state.maxMistakesLimit;
       }
 
-      // Reconcile wall-clock elapsed time for multiplayer sessions to maintain timer integrity
-      const elapsedWallClock = (sessionData.isMultiplayer && sessionData.timestamp)
+      // Reconcile wall-clock elapsed time for active multiplayer room sessions only
+      // Single-player games must NEVER add offline wall-clock elapsed time (resume exactly from stored elapsed seconds)
+      const isMultiplayerRoom = Boolean(sessionData.isMultiplayer && sessionData.roomCode);
+      const elapsedWallClock = (isMultiplayerRoom && sessionData.timestamp)
         ? Math.max(0, Math.floor((Date.now() - sessionData.timestamp) / 1000))
         : 0;
-      const reconciledSeconds = (sessionData.sessionSeconds || 0) + elapsedWallClock;
+      const baseSeconds = Math.max(0, Number(sessionData.sessionSeconds) || 0);
+      const reconciledSeconds = baseSeconds + (isMultiplayerRoom ? elapsedWallClock : 0);
 
       return {
         state,
@@ -2288,13 +2292,15 @@ useEffect(() => {
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed && !parsed.isGameOver) {
-            const elapsed = (parsed.isMultiplayer && parsed.timestamp)
+            const isMultiplayerRoom = Boolean(parsed.isMultiplayer && parsed.roomCode);
+            const elapsed = (isMultiplayerRoom && parsed.timestamp)
               ? Math.max(0, Math.floor((Date.now() - parsed.timestamp) / 1000))
               : 0;
+            const baseSecs = Math.max(0, Number(parsed.sessionSeconds) || 0);
             setSavedSessionInfo({
               difficulty: parsed.difficulty,
-              seconds: (parsed.sessionSeconds || 0) + elapsed,
-              isMultiplayer: Boolean(parsed.isMultiplayer),
+              seconds: baseSecs + (isMultiplayerRoom ? elapsed : 0),
+              isMultiplayer: isMultiplayerRoom,
               roomCode: parsed.roomCode || undefined
             });
           } else {
@@ -5784,7 +5790,6 @@ useEffect(() => {
   const [rewardType, setRewardType] = useState<"hint_reward" | "mistake_reward" | null>(null);
   const [isWatchingAd, setIsWatchingAd] = useState<boolean>(false);
   const [adSuccessMsg, setAdSuccessMsg] = useState<boolean>(false);
-  const [hintExplanation, setHintExplanation] = useState<{ num: number, row: number, col: number } | null>(null);
 
   // Support Modals
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -8280,6 +8285,48 @@ useEffect(() => {
     }
   }, []);
 
+  // Industry-Standard Lifecycle Visibility, Blur, and App State Management
+  // Immediately pauses single-player timer on screen lock, minimize, tab switch, or app backgrounding
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden" || document.hidden) {
+        if (currentScreen === "game" && boardState && !boardState.isGameOver && !challengeMode) {
+          setIsTimerPaused(true);
+        }
+      }
+    };
+
+    const handleWindowBlur = () => {
+      if (currentScreen === "game" && boardState && !boardState.isGameOver && !challengeMode) {
+        setIsTimerPaused(true);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+
+    let capAppStateListener: any = null;
+    if (Capacitor.isNativePlatform()) {
+      CapApp.addListener('appStateChange', (state) => {
+        if (!state.isActive) {
+          if (currentScreen === "game" && boardState && !boardState.isGameOver && !challengeMode) {
+            setIsTimerPaused(true);
+          }
+        }
+      }).then(listener => {
+        capAppStateListener = listener;
+      }).catch(() => {});
+    }
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      if (capAppStateListener) {
+        capAppStateListener.remove();
+      }
+    };
+  }, [currentScreen, boardState, challengeMode]);
+
   // Game running session timer increment effect
   useEffect(() => {
     let interval: any = null;
@@ -8291,20 +8338,23 @@ useEffect(() => {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [currentScreen, boardState?.isGameOver, visualizingBacktrack, isTimerPaused]);
+  }, [currentScreen, boardState, boardState?.isGameOver, visualizingBacktrack, isTimerPaused]);
 
-  const formatTimer = (secs: number) => {
+  const formatTimer = (secs: number): string => {
     if (typeof secs !== "number" || isNaN(secs) || secs < 0) return "00:00";
-    if (secs >= 9999) return "--:--";
     const totalSecs = Math.floor(secs);
     const hours = Math.floor(totalSecs / 3600);
     const minutes = Math.floor((totalSecs % 3600) / 60);
     const seconds = totalSecs % 60;
 
-    if (hours > 0) {
-      return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+    const formattedMinutes = minutes.toString().padStart(2, "0");
+    const formattedSeconds = seconds.toString().padStart(2, "0");
+
+    if (totalSecs >= 3600) {
+      const formattedHours = hours.toString().padStart(2, "0");
+      return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
     }
-    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+    return `${formattedMinutes}:${formattedSeconds}`;
   };
 
   // Utility to push log updates
@@ -9033,38 +9083,17 @@ useEffect(() => {
     const isChallengeGame = boardState.maxHintsLimit !== undefined;
     const hintsLeft = isChallengeGame ? (boardState.maxHintsLimit - boardState.hintsCount) : hintInventory;
 
-    if (cell.value !== 0) {
-      if (cell.value === solvedNum) {
-        addLog("💡 Right! This is the correct number.");
-        showToast("Right! This is the correct number.");
-        return;
-      } else {
-        const conflict = getConflictReason(boardState.grid, selectedRow, selectedCol, cell.value);
-        let msg = `This is wrong because ${cell.value} already exists in this ${conflict}. The correct number is ${solvedNum}.`;
-        if (conflict === "puzzle logic") {
-           msg = `This is wrong because it violates the ${conflict}. The correct number is ${solvedNum}.`;
-        }
-        addLog(`💡 ${msg}`);
-        showToast(msg);
-        
-        if (hintsLeft <= 0) {
-          if (isChallengeGame) {
-            showToast("⚠️ You have reached the hint limit for this challenge!");
-          } else {
-            setRewardType("hint_reward");
-          }
-          return;
-        }
+    if (hintsLeft <= 0) {
+      if (isChallengeGame) {
+        showToast("⚠️ You have reached the hint limit for this challenge!");
       }
-    } else {
-      if (hintsLeft <= 0) {
-        if (isChallengeGame) {
-          showToast("⚠️ You have reached the hint limit for this challenge!");
-        } else {
-          setRewardType("hint_reward");
-        }
-        return;
-      }
+      return;
+    }
+
+    if (cell.value !== 0 && cell.value === solvedNum) {
+      addLog("💡 Right! This is the correct number.");
+      showToast("Right! This is the correct number.");
+      return;
     }
 
     pushToHistory();
@@ -9107,7 +9136,6 @@ useEffect(() => {
     }
 
     addLog(`💡 Smart hint injected for Cell (Row ${selectedRow + 1}, Col ${selectedCol + 1}) → ${solvedNum}`);
-    setHintExplanation({ num: solvedNum, row: selectedRow, col: selectedCol });
 
     // Fast Fill (Paint Mode) Hint Sync: sync active paintbrush digit to revealed hint
     if (isNumberFirstInputMode) {
@@ -9685,9 +9713,14 @@ useEffect(() => {
               <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
               <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
             </h1>
-            <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#d1fae5]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#fef08a]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : ((boardState?.difficulty || difficulty) === "EASY" ? "text-[#065F46]" : (boardState?.difficulty || difficulty) === "MEDIUM" ? "text-[#854D0E]" : (boardState?.difficulty || difficulty) === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
-              {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : ((boardState?.difficulty || difficulty) === "EASY" ? t("easy") : (boardState?.difficulty || difficulty) === "MEDIUM" ? t("medium") : (boardState?.difficulty || difficulty) === "HARD" ? t("hard") : t("expert"))}
-            </span>
+            {(() => {
+              const activeBadgeDiff = currentScreen === "home" ? difficulty : (boardState?.difficulty || difficulty);
+              return (
+                <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? (activeBadgeDiff === "EASY" ? "text-[#d1fae5]" : activeBadgeDiff === "MEDIUM" ? "text-[#fef08a]" : activeBadgeDiff === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : (activeBadgeDiff === "EASY" ? "text-[#065F46]" : activeBadgeDiff === "MEDIUM" ? "text-[#854D0E]" : activeBadgeDiff === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
+                  {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
+                </span>
+              );
+            })()}
           </div>
 
           {/* Right Actions: Responsive cluster (Notification Bell, Settings) */}
@@ -10031,10 +10064,8 @@ useEffect(() => {
                             type="button"
                             onClick={(e) => handleToggleNumberFirstMode(e)}
                             className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
-                              isNumberFirstInputMode
-                                ? (darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900")
-                                : (darkMode ? "opacity-50 text-zinc-500 hover:text-zinc-400" : "opacity-50 text-stone-400 hover:text-stone-500")
-                            }`}
+                              darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900"
+                            } ${isNumberFirstInputMode ? "" : "opacity-65"}`}
                             aria-label={isNumberFirstInputMode ? "Fast Fill Mode Active" : "Fast Fill Mode Inactive"}
                             title={isNumberFirstInputMode ? "Fast-Fill (Paintbrush) mode ON: Tap a number, then tap cells" : "Switch to Fast-Fill (Paintbrush) mode"}
                             id="hud-fast-fill-toggle-button"
@@ -10127,10 +10158,8 @@ useEffect(() => {
                               } catch {}
                             }}
                             className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
-                              soundEffects
-                                ? (darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900")
-                                : (darkMode ? "opacity-50 text-zinc-500 hover:text-zinc-400" : "opacity-50 text-stone-400 hover:text-stone-500")
-                            }`}
+                              darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900"
+                            } ${soundEffects ? "" : "opacity-65"}`}
                             title={soundEffects ? "Mute Sound Effects" : "Enable Sound Effects"}
                             aria-label={soundEffects ? "Mute Sound Effects" : "Enable Sound Effects"}
                             id="hud-sound-toggle-button"
@@ -10752,8 +10781,8 @@ useEffect(() => {
                       return (
                         <>
                           <div className="flex flex-col items-center gap-1">
-                            <span className={`text-[10px] font-sans font-bold tracking-widest leading-normal overflow-visible ${boardState?.currentMistakesCount === 0 ? "" : "uppercase"} ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
-                              {boardState?.currentMistakesCount === 0 ? "Flawless Run 🎯" : t(difficulty.toLowerCase() as any)}
+                            <span className={`text-[10px] font-sans font-bold tracking-widest leading-normal overflow-visible uppercase ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
+                              {boardState?.currentMistakesCount === 0 ? t("flawless") : t(difficulty.toLowerCase() as any)}
                             </span>
                             {isFailed ? (
                               <motion.h3 
@@ -10806,36 +10835,47 @@ useEffect(() => {
                               </div>
                             ) : (
                               <div className="h-8 min-h-[32px] mt-1.5 flex items-center justify-center">
-                                {!soloVictoryClappingComplete ? (
-                                  <ClappingHands 
-                                    tier="champion" 
-                                    darkMode={darkMode} 
-                                    size="md" 
-                                    onComplete={() => setSoloVictoryClappingComplete(true)}
-                                  />
-                                ) : (
-                                  <motion.div
-                                    initial={{ scale: 0.85, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    transition={{ duration: 0.25, ease: "easeOut" }}
-                                    className="flex items-center gap-1.5 text-amber-500"
-                                  >
-                                    <ThumbsUp className="w-5 h-5 fill-amber-500/20 stroke-[2.2]" />
-                                    <ThumbsUp className="w-5 h-5 fill-amber-500/20 stroke-[2.2]" />
-                                  </motion.div>
-                                )}
+                                <AnimatePresence mode="wait">
+                                  {!soloVictoryClappingComplete ? (
+                                    <motion.div
+                                      key="clapping-hands"
+                                      exit={{ opacity: 0, scale: 0.95 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="flex items-center justify-center"
+                                    >
+                                      <ClappingHands 
+                                        tier="champion" 
+                                        darkMode={darkMode} 
+                                        size="md" 
+                                        onComplete={() => setSoloVictoryClappingComplete(true)}
+                                      />
+                                    </motion.div>
+                                  ) : (
+                                    <motion.div
+                                      key="celebration-thumbs"
+                                      initial={{ scale: 0.8, opacity: 0 }}
+                                      animate={{ scale: 1, opacity: 1 }}
+                                      transition={{ duration: 0.35, ease: "easeOut" }}
+                                      className="flex items-center justify-center gap-2 text-amber-500 select-none"
+                                    >
+                                      <ThumbsUp
+                                        className="w-5 h-5 -scale-x-100 fill-amber-500/20 stroke-[2.2]"
+                                        style={{ transform: "scaleX(-1)" }}
+                                      />
+                                      <ThumbsUp
+                                        className="w-5 h-5 fill-amber-500/20 stroke-[2.2]"
+                                      />
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
                               </div>
                             )}
 
-                            {isFailed ? (
+                            {isFailed && (
                               <p className={`text-sm font-sans mt-1 leading-normal overflow-visible ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
                                 {t("mistakesLimitReached")}
                               </p>
-                            ) : !isNewRecordAchieved ? (
-                              <p className={`text-sm font-sans mt-1 leading-normal overflow-visible ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
-                                {t("victoryTitle")}
-                              </p>
-                            ) : null}
+                            )}
                           </div>
 
                           {/* Luxury Status Badge for Disconnected Multiplayer */}
@@ -10970,18 +11010,27 @@ useEffect(() => {
                     {/* Invite Friends / Play Together Action Button */}
                     {(() => {
                       const isFailed = Boolean(mistakeLimitEnabled && boardState && boardState.currentMistakesCount >= boardState.maxMistakesLimit);
-                      const ctaText = (isNewRecordAchieved && !isFailed)
-                        ? "Beat My Score 🏆"
+                      const ctaConfig = (isNewRecordAchieved && !isFailed)
+                        ? {
+                            icon: <Trophy className="w-4 h-4 shrink-0" strokeWidth={2} />,
+                            text: "Beat My Score",
+                          }
                         : isFailed
-                        ? "Solve with Friends 🧩"
-                        : "Challenge Friends ⚡";
+                        ? {
+                            icon: <Puzzle className="w-4 h-4 shrink-0" strokeWidth={2} />,
+                            text: "Solve with Friends",
+                          }
+                        : {
+                            icon: <Users className="w-4 h-4 shrink-0" strokeWidth={2} />,
+                            text: "Challenge Friends",
+                          };
                       return (
                         <button
                           onClick={handleSoloChallengeFriends}
                           className="w-full py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 font-sans font-black text-xs tracking-wider uppercase transition-all shadow-md active:scale-98 border-none cursor-pointer text-white bg-purple-700 hover:bg-purple-800 dark:bg-purple-800 dark:hover:bg-purple-700 leading-normal overflow-visible"
                         >
-                          <Users className="w-4 h-4" />
-                          <span className="leading-normal overflow-visible">{ctaText}</span>
+                          {ctaConfig.icon}
+                          <span className="leading-normal overflow-visible">{ctaConfig.text}</span>
                         </button>
                       );
                     })()}
@@ -12314,35 +12363,7 @@ useEffect(() => {
         </div>
       )}
 
-      {/* HINT EXPLANATION BOTTOM MODAL */}
-      <AnimatePresence>
-        {hintExplanation !== null && (
-          <div className="fixed inset-0 z-50 pointer-events-none flex items-end justify-center p-4 pb-8 sm:pb-12">
-            <motion.div 
-              initial={{ opacity: 0, y: 50, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className={`pointer-events-auto border-none p-6 max-w-sm w-full relative text-center rounded-[32px] shadow-[0_12px_40px_rgba(0,0,0,0.12)] flex flex-col gap-4 ${darkMode ? "bg-[#2A2D24]" : "bg-[#FDFBF7]"}`}
-            >
-              <button 
-                onClick={() => setHintExplanation(null)}
-                className={`absolute top-4 right-4 p-1.5 rounded-full transition-all active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#3F4238] text-[#FDFBF7] hover:bg-[#4E5146]" : "bg-[#F3F4F6] text-[#4B5563] hover:bg-[#E5E7EB]"}`}
-              >
-                 <X className="w-5 h-5" strokeWidth={2} />
-              </button>
-              
-              <div className="flex flex-col items-start text-left gap-1 pr-8">
-                <span className={`text-[12px] font-sans font-bold uppercase tracking-widest ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
-                  Hint Used
-                </span>
-                <p className={`text-[15px] font-sans leading-relaxed ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
-                  This is the only spot left for a <strong className="font-extrabold text-lg mx-0.5">{hintExplanation.num}</strong>! Checking the row, column, and block confirms it's the perfect fit.
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+
 
       {/* 🤝 TOGETHER MODE: UNIFIED MULTIPLAYER MODAL WRAPPER (LOBBY | JOIN | CREATE) */}
       {(showMultiplayerForkModal || showJoinRoomModal || showCreateChallengeModal) && (

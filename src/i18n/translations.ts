@@ -357,7 +357,8 @@ export type TranslationKey =
   | "incognitoMode"
   | "incognitoDesc"
   | "connectionLostPersonalResult"
-  | "noInternetConnection";
+  | "noInternetConnection"
+  | "flawless";
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -699,6 +700,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     incognitoDesc: "Hide your online visibility",
     connectionLostPersonalResult: "Connection lost • Showing your personal result",
     noInternetConnection: "No internet connection",
+    flawless: "Flawless",
   },
   hi: {
     playerInsights: "खिलाड़ी अंतर्दृष्टि",
@@ -1039,6 +1041,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     incognitoDesc: "अपनी ऑनलाइन मौजूदगी छुपाएँ",
     connectionLostPersonalResult: "इंटरनेट संपर्क टूटा • केवल व्यक्तिगत परिणाम दिखाया जा रहा है",
     noInternetConnection: "कोई इंटरनेट कनेक्शन नहीं है",
+    flawless: "त्रुटिहीन",
   },
   de: {
     playerInsights: "Spieler-Einblicke",
@@ -1379,6 +1382,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     incognitoDesc: "Verberge deine Online-Sichtbarkeit",
     connectionLostPersonalResult: "Verbindung verloren • Dein persönliches Ergebnis wird angezeigt",
     noInternetConnection: "Keine Internetverbindung",
+    flawless: "Fehlerfrei",
   },
   ja: {
     playerInsights: "プレイヤーデータ",
@@ -1719,6 +1723,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     incognitoDesc: "オンライン状態を非表示にする",
     connectionLostPersonalResult: "接続が切断されました • 個人の結果を表示しています",
     noInternetConnection: "インターネット接続がありません",
+    flawless: "パーフェクト",
   },
   ko: {
     playerInsights: "플레이어 통계",
@@ -2059,6 +2064,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     incognitoDesc: "온라인 상태 숨기기",
     connectionLostPersonalResult: "연결 끊김 • 개인 결과 표시 중",
     noInternetConnection: "인터넷에 연결되지 않음",
+    flawless: "완벽함",
   },
   es: {
     playerInsights: "Estadísticas",
@@ -2399,6 +2405,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     incognitoDesc: "Oculta tu visibilidad en línea",
     connectionLostPersonalResult: "Conexión perdida • Mostrando tu resultado personal",
     noInternetConnection: "Sin conexión a internet",
+    flawless: "Impecable",
   },
   fr: {
     playerInsights: "Statistiques Joueur",
@@ -2739,6 +2746,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     incognitoDesc: "Masquez votre visibilité en ligne",
     connectionLostPersonalResult: "Connexion perdue • Affichage de votre résultat personnel",
     noInternetConnection: "Aucune connexion Internet",
+    flawless: "Sans faute",
   },
   it: {
     playerInsights: "Statistiche Giocatore",
@@ -3079,6 +3087,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     incognitoDesc: "Nascondi la tua visibilità online",
     connectionLostPersonalResult: "Connessione persa • Visualizzazione del risultato personale",
     noInternetConnection: "Nessuna connessione Internet",
+    flawless: "Impeccabile",
   },
   "pt-BR": {
     playerInsights: "Estatísticas",
@@ -3419,5 +3428,6 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     incognitoDesc: "Oculte sua visibilidade online",
     connectionLostPersonalResult: "Conexão perdida • Mostrando seu resultado pessoal",
     noInternetConnection: "Sem conexão com a internet",
+    flawless: "Perfeito",
   },
 };

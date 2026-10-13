@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { motion } from "motion/react";
 
 export interface ClappingHandsProps {
@@ -44,17 +44,25 @@ export const ClappingHands: React.FC<ClappingHandsProps> = ({
 }) => {
   const isChampion = tier === "champion" || String(rank) === "1" || rank === "champion";
   const [isFinished, setIsFinished] = useState(false);
+  const onCompleteRef = useRef(onComplete);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   // Finite lifecycle duration: ~2.05s for Champion (5 claps), ~1.9s for Supportive (3 claps)
   const totalDuration = isChampion ? 2.05 : 1.9;
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setIsFinished(true);
-      onComplete?.();
+      if (onCompleteRef.current) {
+        onCompleteRef.current();
+      } else {
+        setIsFinished(true);
+      }
     }, totalDuration * 1000);
     return () => clearTimeout(timer);
-  }, [totalDuration, onComplete]);
+  }, [totalDuration]);
 
   if (isFinished) return null;
 
@@ -122,12 +130,12 @@ export const ClappingHands: React.FC<ClappingHandsProps> = ({
     <motion.div
       initial={{ opacity: 0, scale: 0.85 }}
       animate={{
-        opacity: [0, 1, 1, 1, 0],
-        scale: [0.85, 1, 1, 1, 0.95]
+        opacity: [0, 1, 1, 1],
+        scale: [0.85, 1, 1, 1]
       }}
       transition={{
         duration: totalDuration,
-        times: [0, 0.1, 0.75, 0.88, 1],
+        times: [0, 0.1, 0.75, 1],
         ease: "easeOut"
       }}
       style={{ width: dimensions.w, height: dimensions.h }}
