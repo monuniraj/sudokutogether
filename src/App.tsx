@@ -97,6 +97,7 @@ import {
   Puzzle,
   Brain,
   Zap,
+  ZapOff,
   Rocket,
   TrendingUp,
   Link2,
@@ -5714,6 +5715,46 @@ useEffect(() => {
     }
   }, [showGameOverModal]);
 
+  // Victory modal rolling count-up animation for completed elapsed time
+  const [animatedElapsedSecs, setAnimatedElapsedSecs] = useState<number>(0);
+
+  useEffect(() => {
+    if (!showGameOverModal) {
+      setAnimatedElapsedSecs(0);
+      return;
+    }
+
+    const targetSecs = sessionSeconds;
+    if (targetSecs <= 0) {
+      setAnimatedElapsedSecs(0);
+      return;
+    }
+
+    const duration = 800; // ms
+    const startTime = performance.now();
+    let animFrameId: number;
+
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(eased * targetSecs);
+      setAnimatedElapsedSecs(current);
+
+      if (progress < 1) {
+        animFrameId = requestAnimationFrame(tick);
+      }
+    };
+
+    animFrameId = requestAnimationFrame(tick);
+
+    return () => {
+      if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+      }
+    };
+  }, [showGameOverModal, sessionSeconds]);
+
   // Requirement 1 & 2: Responsive toggle for Paint Mode / Fast-Fill with digit inheritance and focus ring cleanup
   const handleToggleNumberFirstMode = (e?: React.MouseEvent) => {
     if (e) {
@@ -5767,18 +5808,18 @@ useEffect(() => {
         if (inheritDigit) {
           setLockedNum(inheritDigit);
           setActiveKeypadNum(inheritDigit);
-          showToast(`⚡ Fast Fill ON: Painting number ${inheritDigit}`);
+          showToast(t("fastFillToastOn"), "fastFillOn");
           addLog(`⚡ Fast Fill (Paint Mode) ON. Inherited number ${inheritDigit}.`);
         } else {
           setLockedNum(null);
           setActiveKeypadNum(null);
-          showToast("⚡ Fast Fill ON: Select a number, then tap cells");
+          showToast(t("fastFillToastOn"), "fastFillOn");
           addLog("⚡ Fast Fill (Paint Mode) ON.");
         }
       } else {
         setLockedNum(null);
         setActiveKeypadNum(null);
-        showToast("Normal Input Mode Restored");
+        showToast(t("fastFillToastOff"), "fastFillOff");
         addLog("✏️ Normal (Cell-First) input mode enabled.");
       }
 
@@ -5793,6 +5834,7 @@ useEffect(() => {
 
   // Support Modals
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<string | null>(null);
   const [recordWarningMessage, setRecordWarningMessage] = useState<string | null>(null);
   const recordWarningTimerRef = useRef<any>(null);
 
@@ -5816,15 +5858,17 @@ useEffect(() => {
 
   const toastTimeoutRef = useRef<any>(null);
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, type: string = "info") => {
     if (toastTimeoutRef.current) {
       clearTimeout(toastTimeoutRef.current);
     }
     setToastMessage(msg);
+    setToastType(type);
     toastTimeoutRef.current = setTimeout(() => {
       setToastMessage(null);
+      setToastType(null);
       toastTimeoutRef.current = null;
-    }, 3000);
+    }, 2000);
   };
 
   // Sudoku state variables
@@ -10566,7 +10610,7 @@ useEffect(() => {
                       setIsNumberFirstInputMode(next);
                       setLockedNum(null);
                       setActiveKeypadNum(null);
-                      showToast(next ? "⚡ Fast-Fill mode: select number, then tap cells" : "Cell-first mode: select cell, then tap number");
+                      showToast(next ? t("fastFillToastOn") : t("fastFillToastOff"), next ? "fastFillOn" : "fastFillOff");
                       addLog(next ? "⚡ Fast-Fill (Paintbrush) mode activated." : "Normal (Cell-First) mode activated.");
                     }}
                     showRemainingNumbers={showRemainingNumbers}
@@ -10851,21 +10895,9 @@ useEffect(() => {
                                       />
                                     </motion.div>
                                   ) : (
-                                    <motion.div
-                                      key="celebration-thumbs"
-                                      initial={{ scale: 0.8, opacity: 0 }}
-                                      animate={{ scale: 1, opacity: 1 }}
-                                      transition={{ duration: 0.35, ease: "easeOut" }}
-                                      className="flex items-center justify-center gap-2 text-amber-500 select-none"
-                                    >
-                                      <ThumbsUp
-                                        className="w-5 h-5 -scale-x-100 fill-amber-500/20 stroke-[2.2]"
-                                        style={{ transform: "scaleX(-1)" }}
-                                      />
-                                      <ThumbsUp
-                                        className="w-5 h-5 fill-amber-500/20 stroke-[2.2]"
-                                      />
-                                    </motion.div>
+                                    <div className="w-12 h-12 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+                                      <Trophy className="w-6 h-6 text-amber-500 fill-amber-500/20" strokeWidth={2}/>
+                                    </div>
                                   )}
                                 </AnimatePresence>
                               </div>
@@ -10945,7 +10977,7 @@ useEffect(() => {
                                     ? "font-black text-amber-950 dark:text-amber-300 dark:drop-shadow-[0_2px_8px_rgba(251,191,36,0.35)]"
                                     : `font-bold ${darkMode ? "text-white" : "text-stone-900"}`
                                 }`}>
-                                  {formatTimer(sessionSeconds)}
+                                  {formatTimer(animatedElapsedSecs)}
                                 </span>
                               </motion.div>
 
@@ -11012,17 +11044,17 @@ useEffect(() => {
                       const isFailed = Boolean(mistakeLimitEnabled && boardState && boardState.currentMistakesCount >= boardState.maxMistakesLimit);
                       const ctaConfig = (isNewRecordAchieved && !isFailed)
                         ? {
-                            icon: <Trophy className="w-4 h-4 shrink-0" strokeWidth={2} />,
+                            icon: <Trophy className="w-4 h-4 shrink-0" strokeWidth={2}/>,
                             text: t("beatMyScore"),
                           }
                         : isFailed
                         ? {
-                            icon: <Puzzle className="w-4 h-4 shrink-0" strokeWidth={2} />,
-                            text: "Solve with Friends",
+                            icon: <Users className="w-4 h-4 shrink-0" strokeWidth={2}/>,
+                            text: t("solveWithFriends"),
                           }
                         : {
-                            icon: <Users className="w-4 h-4 shrink-0" strokeWidth={2} />,
-                            text: "Challenge Friends",
+                            icon: <Users className="w-4 h-4 shrink-0" strokeWidth={2}/>,
+                            text: t("challengeFriends"),
                           };
                       return (
                         <button
@@ -15112,9 +15144,17 @@ useEffect(() => {
               initial={{ opacity: 0, y: -20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              className={`${darkMode ? "bg-zinc-800 text-white shadow-xl border border-zinc-700" : "bg-emerald-950 text-white shadow-[0_12px_24px_rgba(0,0,0,0.15)]"} px-5 py-3 rounded-full flex items-center gap-2 select-none`}
+              className={`${darkMode ? "bg-zinc-800 text-white shadow-xl border border-zinc-700" : "bg-emerald-950 text-white shadow-[0_12px_24px_rgba(0,0,0,0.15)]"} px-5 py-3 rounded-full flex items-center gap-2.5 select-none`}
             >
-              <Info className="w-4 h-4 text-sky-400" />
+              {(() => {
+                if (toastType === "fastFillOn") {
+                  return <Zap className="w-5 h-5 text-amber-500 shrink-0" strokeWidth={2} />;
+                }
+                if (toastType === "fastFillOff") {
+                  return <ZapOff className="w-5 h-5 text-stone-400 shrink-0" strokeWidth={2} />;
+                }
+                return <Info className="w-4 h-4 text-sky-400 shrink-0" />;
+              })()}
               <span className="font-sans font-medium text-sm tracking-wide">{toastMessage}</span>
             </motion.div>
           </div>

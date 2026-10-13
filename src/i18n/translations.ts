@@ -360,7 +360,11 @@ export type TranslationKey =
   | "noInternetConnection"
   | "flawless"
   | "newRecord"
-  | "beatMyScore";
+  | "beatMyScore"
+  | "challengeFriends"
+  | "solveWithFriends"
+  | "fastFillToastOn"
+  | "fastFillToastOff";
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -705,6 +709,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     flawless: "Flawless",
     newRecord: "NEW RECORD!",
     beatMyScore: "Beat My Score",
+    challengeFriends: "Challenge Friends",
+    solveWithFriends: "Solve with Friends",
+    fastFillToastOn: "Fast Fill ON: Select number, tap cells",
+    fastFillToastOff: "Fast Fill OFF",
   },
   hi: {
     playerInsights: "खिलाड़ी अंतर्दृष्टि",
@@ -1048,6 +1056,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     flawless: "परफेक्ट!",
     newRecord: "नया रिकॉर्ड!",
     beatMyScore: "मेरा स्कोर तोड़ें",
+    challengeFriends: "दोस्तों को चुनौती दें",
+    solveWithFriends: "दोस्तों के साथ सुलझाएँ",
+    fastFillToastOn: "फ़ास्ट फ़िल चालू: नंबर चुनकर बॉक्स पर टैप करें",
+    fastFillToastOff: "फ़ास्ट फ़िल बंद",
   },
   de: {
     playerInsights: "Spieler-Einblicke",
@@ -1391,6 +1403,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     flawless: "Fehlerfrei",
     newRecord: "NEUER REKORD!",
     beatMyScore: "Schlag meinen Rekord",
+    challengeFriends: "Freunde herausfordern",
+    solveWithFriends: "Mit Freunden lösen",
+    fastFillToastOn: "Schnellfüllen AN: Zahl wählen, Felder antippen",
+    fastFillToastOff: "Schnellfüllen AUS",
   },
   ja: {
     playerInsights: "プレイヤーデータ",
@@ -1734,6 +1750,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     flawless: "パーフェクト",
     newRecord: "新記録!",
     beatMyScore: "スコアに挑戦",
+    challengeFriends: "友達に対戦を挑む",
+    solveWithFriends: "友達と一緒に解く",
+    fastFillToastOn: "ファストフィル ON: 数字を選んでマスをタップ",
+    fastFillToastOff: "ファストフィル OFF",
   },
   ko: {
     playerInsights: "플레이어 통계",
@@ -2077,6 +2097,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     flawless: "완벽함",
     newRecord: "신기록!",
     beatMyScore: "내 기록 깨기",
+    challengeFriends: "친구에게 도전하기",
+    solveWithFriends: "친구와 함께 풀기",
+    fastFillToastOn: "빠른 채우기 ON: 숫자를 선택 후 셀 탭",
+    fastFillToastOff: "빠른 채우기 OFF",
   },
   es: {
     playerInsights: "Estadísticas",
@@ -2420,6 +2444,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     flawless: "Impecable",
     newRecord: "¡NUEVO RÉCORD!",
     beatMyScore: "Supera mi récord",
+    challengeFriends: "Desafiar amigos",
+    solveWithFriends: "Resolver con amigos",
+    fastFillToastOn: "Relleno rápido ACTIVO: Elige un número y toca celdas",
+    fastFillToastOff: "Relleno rápido DESACTIVADO",
   },
   fr: {
     playerInsights: "Statistiques Joueur",
@@ -2763,6 +2791,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     flawless: "Sans faute",
     newRecord: "NOUVEAU RECORD !",
     beatMyScore: "Bats mon record",
+    challengeFriends: "Défier des amis",
+    solveWithFriends: "Résoudre avec des amis",
+    fastFillToastOn: "Remplissage rapide ACTIVÉ : Choisissez un chiffre, touchez les cases",
+    fastFillToastOff: "Remplissage rapide DÉSACTIVÉ",
   },
   it: {
     playerInsights: "Statistiche Giocatore",
@@ -3106,6 +3138,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     flawless: "Impeccabile",
     newRecord: "NUOVO RECORD!",
     beatMyScore: "Batti il mio record",
+    challengeFriends: "Sfida amici",
+    solveWithFriends: "Risolvi con amici",
+    fastFillToastOn: "Riempimento rapido ATTIVO: Scegli un numero e tocca le caselle",
+    fastFillToastOff: "Riempimento rapido DISATTIVATO",
   },
   "pt-BR": {
     playerInsights: "Estatísticas",
@@ -3449,5 +3485,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     flawless: "Perfeito",
     newRecord: "NOVO RECORDE!",
     beatMyScore: "Bata Meu Recorde",
+    challengeFriends: "Desafiar Amigos",
+    solveWithFriends: "Resolver com Amigos",
+    fastFillToastOn: "Preenchimento rápido LIGADO: Escolha um número e toque nas células",
+    fastFillToastOff: "Preenchimento rápido DESLIGADO",
   },
 };
