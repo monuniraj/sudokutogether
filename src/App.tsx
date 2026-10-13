@@ -10829,7 +10829,7 @@ useEffect(() => {
                                   className="relative flex items-center justify-center gap-2 select-none border-none text-2xl sm:text-3xl font-black uppercase tracking-tight text-amber-950 dark:text-amber-300 dark:drop-shadow-[0_2px_12px_rgba(251,191,36,0.38)] leading-normal overflow-visible"
                                 >
                                   <Trophy className="w-6 h-6 sm:w-7 sm:h-7 text-amber-950 dark:text-amber-300 shrink-0" />
-                                  <span className="text-amber-950 dark:text-amber-300 leading-tight">NEW RECORD!</span>
+                                  <span className="text-amber-950 dark:text-amber-300 leading-tight">{t("newRecord")}</span>
                                   <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-amber-950 dark:text-amber-300 shrink-0" />
                                 </motion.div>
                               </div>
@@ -11013,7 +11013,7 @@ useEffect(() => {
                       const ctaConfig = (isNewRecordAchieved && !isFailed)
                         ? {
                             icon: <Trophy className="w-4 h-4 shrink-0" strokeWidth={2} />,
-                            text: "Beat My Score",
+                            text: t("beatMyScore"),
                           }
                         : isFailed
                         ? {

@@ -358,7 +358,9 @@ export type TranslationKey =
   | "incognitoDesc"
   | "connectionLostPersonalResult"
   | "noInternetConnection"
-  | "flawless";
+  | "flawless"
+  | "newRecord"
+  | "beatMyScore";
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -701,6 +703,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     connectionLostPersonalResult: "Connection lost • Showing your personal result",
     noInternetConnection: "No internet connection",
     flawless: "Flawless",
+    newRecord: "NEW RECORD!",
+    beatMyScore: "Beat My Score",
   },
   hi: {
     playerInsights: "खिलाड़ी अंतर्दृष्टि",
@@ -1041,7 +1045,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     incognitoDesc: "अपनी ऑनलाइन मौजूदगी छुपाएँ",
     connectionLostPersonalResult: "इंटरनेट संपर्क टूटा • केवल व्यक्तिगत परिणाम दिखाया जा रहा है",
     noInternetConnection: "कोई इंटरनेट कनेक्शन नहीं है",
-    flawless: "त्रुटिहीन",
+    flawless: "परफेक्ट!",
+    newRecord: "नया रिकॉर्ड!",
+    beatMyScore: "मेरा स्कोर तोड़ें",
   },
   de: {
     playerInsights: "Spieler-Einblicke",
@@ -1383,6 +1389,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     connectionLostPersonalResult: "Verbindung verloren • Dein persönliches Ergebnis wird angezeigt",
     noInternetConnection: "Keine Internetverbindung",
     flawless: "Fehlerfrei",
+    newRecord: "NEUER REKORD!",
+    beatMyScore: "Schlag meinen Rekord",
   },
   ja: {
     playerInsights: "プレイヤーデータ",
@@ -1724,6 +1732,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     connectionLostPersonalResult: "接続が切断されました • 個人の結果を表示しています",
     noInternetConnection: "インターネット接続がありません",
     flawless: "パーフェクト",
+    newRecord: "新記録!",
+    beatMyScore: "スコアに挑戦",
   },
   ko: {
     playerInsights: "플레이어 통계",
@@ -2065,6 +2075,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     connectionLostPersonalResult: "연결 끊김 • 개인 결과 표시 중",
     noInternetConnection: "인터넷에 연결되지 않음",
     flawless: "완벽함",
+    newRecord: "신기록!",
+    beatMyScore: "내 기록 깨기",
   },
   es: {
     playerInsights: "Estadísticas",
@@ -2406,6 +2418,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     connectionLostPersonalResult: "Conexión perdida • Mostrando tu resultado personal",
     noInternetConnection: "Sin conexión a internet",
     flawless: "Impecable",
+    newRecord: "¡NUEVO RÉCORD!",
+    beatMyScore: "Supera mi récord",
   },
   fr: {
     playerInsights: "Statistiques Joueur",
@@ -2747,6 +2761,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     connectionLostPersonalResult: "Connexion perdue • Affichage de votre résultat personnel",
     noInternetConnection: "Aucune connexion Internet",
     flawless: "Sans faute",
+    newRecord: "NOUVEAU RECORD !",
+    beatMyScore: "Bats mon record",
   },
   it: {
     playerInsights: "Statistiche Giocatore",
@@ -3088,6 +3104,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     connectionLostPersonalResult: "Connessione persa • Visualizzazione del risultato personale",
     noInternetConnection: "Nessuna connessione Internet",
     flawless: "Impeccabile",
+    newRecord: "NUOVO RECORD!",
+    beatMyScore: "Batti il mio record",
   },
   "pt-BR": {
     playerInsights: "Estatísticas",
@@ -3429,5 +3447,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     connectionLostPersonalResult: "Conexão perdida • Mostrando seu resultado pessoal",
     noInternetConnection: "Sem conexão com a internet",
     flawless: "Perfeito",
+    newRecord: "NOVO RECORDE!",
+    beatMyScore: "Bata Meu Recorde",
   },
 };
