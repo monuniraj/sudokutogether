@@ -54,7 +54,7 @@ service cloud.firestore {
     // User profiles, FCM tokens, and past players subcollections
     match /users/{userId} {
       allow read: if true;
-      allow delete: if false;
+      allow delete: if request.auth != null && request.auth.uid == userId;
       allow create, update: if (request.resource.data.id == userId || !('id' in request.resource.data))
                             && (!('name' in request.resource.data) || isValidString(request.resource.data.name, 1, 50));
 
