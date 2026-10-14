@@ -233,16 +233,20 @@ interface CompletedGame {
 interface PendingChallenge {
   id: string;
   inviteId?: string;
-  difficulty: Difficulty;
-  seed: number;
-  maxMistakes: number;
+  difficulty?: Difficulty;
+  seed?: number;
+  maxMistakes?: number;
   hintLimit?: number;
-  timerEnabled: boolean;
-  receivedAt: string;
-  isNew: boolean;
+  timerEnabled?: boolean;
+  receivedAt?: string;
+  isNew?: boolean;
   password?: string;
   senderName?: string;
+  fromName?: string;
   sentAt?: number;
+  type?: 'invite' | 'challenge_completed';
+  roomCode?: string;
+  gameId?: string;
 }
 
 interface FriendConnection {
@@ -2429,8 +2433,47 @@ useEffect(() => {
   const [bellPing, setBellPing] = useState<boolean>(false);
   const preservedSoloBoardRef = useRef<any | null>(null);
 
+  const activeInviteNotificationRef = useRef<any | null>(activeInviteNotification);
+  activeInviteNotificationRef.current = activeInviteNotification;
+
   const dockInviteToBell = useCallback(() => {
     setIsDockingToBell(true);
+
+    const currentNotif = activeInviteNotificationRef.current;
+    if (currentNotif) {
+      setPendingChallenges(prev => {
+        const notifId = currentNotif.id || currentNotif.inviteId;
+        const targetCode = currentNotif.roomCode || currentNotif.gameId || notifId;
+        if (prev.some(p => p.id === targetCode || p.inviteId === notifId || (currentNotif.id && p.id === currentNotif.id))) {
+          return prev;
+        }
+
+        const isCompleted = currentNotif.type === 'challenge_completed';
+        const pendingItem: PendingChallenge = {
+          id: targetCode,
+          inviteId: notifId,
+          type: isCompleted ? 'challenge_completed' : 'invite',
+          senderName: currentNotif.fromName || currentNotif.senderName || "Player",
+          fromName: currentNotif.fromName || currentNotif.senderName || "Player",
+          roomCode: currentNotif.roomCode || targetCode,
+          gameId: currentNotif.gameId || targetCode,
+          difficulty: currentNotif.difficulty || "MEDIUM",
+          seed: currentNotif.seed || 123456,
+          maxMistakes: currentNotif.maxMistakes ?? 3,
+          hintLimit: currentNotif.hintLimit ?? 3,
+          timerEnabled: currentNotif.timerEnabled ?? true,
+          password: currentNotif.password || "",
+          sentAt: Date.now()
+        };
+
+        const updated = [pendingItem, ...prev].slice(0, 10);
+        try {
+          localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+    }
+
     setTimeout(() => {
       setBellPing(true);
       setTimeout(() => setBellPing(false), 1200);
@@ -4429,36 +4472,45 @@ useEffect(() => {
       playersSnap.docs.forEach((d) => {
         const pData = d.data();
         const pId = pData.id || d.id;
+        const isLeft = pData.status === "left" || pData.status === "abandoned" || pData.status === "disconnected" || pData.status === "forfeited";
+        const isFinished = pData.status === "completed" || pData.status === "won" || pData.status === "victory" || pData.status === "mistake_game_over" || pData.status === "failed";
+        const isWon = pData.status === "won" || pData.status === "completed" || pData.status === "victory" || Boolean(pData.isWon);
         mergedMap.set(pId, {
           userId: pId,
           playerName: pData.name || pData.playerName || "Player",
-          timeSec: pData.timeSec || pData.elapsedTime || 0,
-          elapsedTime: pData.elapsedTime || pData.timeSec || 0,
-          mistakes: pData.mistakes || 0,
-          hints: pData.hints || 0,
-          isWon: pData.status === "won" || pData.isWon === true,
-          status: pData.status || (pData.isWon ? "completed" : "active"),
-          isPending: pData.status === "active" || pData.status === "solving"
+          timeSec: pData.timeSec !== undefined ? Number(pData.timeSec) : (pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : 0),
+          elapsedTime: pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : (pData.timeSec !== undefined ? Number(pData.timeSec) : 0),
+          mistakes: pData.mistakes !== undefined ? Number(pData.mistakes) : 0,
+          hints: pData.hints !== undefined ? Number(pData.hints) : 0,
+          isWon: isWon,
+          status: pData.status || (isWon ? "completed" : "active"),
+          isPending: !isLeft && !isFinished
         });
       });
 
-      // Also query /challenge_results/{cleanRoomCode}/participants for full parity
+      // Also query /challenge_results/{docId}/participants for full parity
       try {
-        const resultsSnap = await getDocs(collection(db, "challenge_results", cleanRoomCode, "participants"));
+        const docId = getSeedDocId(cleanRoomCode);
+        const resultsSnap = await getDocs(collection(db, "challenge_results", docId, "participants"));
         resultsSnap.docs.forEach((d) => {
           const rData = d.data();
           const rId = rData.userId || d.id;
-          if (rId && (!mergedMap.has(rId) || mergedMap.get(rId).isPending)) {
+          if (rId) {
+            const existing = mergedMap.get(rId);
+            const rFinished = rData.status === "completed" || rData.status === "won" || rData.status === "victory" || rData.status === "mistake_game_over" || rData.status === "failed" || (!rData.isPending && (rData.isWon !== undefined || rData.timeSec !== undefined));
+            const rWon = rData.status === "won" || rData.status === "completed" || rData.status === "victory" || Boolean(rData.isWon) || Boolean(existing?.isWon);
             mergedMap.set(rId, {
+              ...existing,
+              ...rData,
               userId: rId,
-              playerName: rData.playerName || "Player",
-              timeSec: rData.timeSec || 0,
-              elapsedTime: rData.timeSec || 0,
-              mistakes: rData.mistakes || 0,
-              hints: rData.hints || 0,
-              isWon: !!rData.isWon,
-              status: rData.isWon ? "completed" : "mistake_game_over",
-              isPending: !!rData.isPending
+              playerName: rData.playerName || existing?.playerName || "Player",
+              timeSec: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.timeSec || 0),
+              elapsedTime: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.elapsedTime || 0),
+              mistakes: rData.mistakes !== undefined ? Number(rData.mistakes) : (existing?.mistakes || 0),
+              hints: rData.hints !== undefined ? Number(rData.hints) : (existing?.hints || 0),
+              isWon: rWon,
+              status: rData.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
+              isPending: rFinished ? false : (rData.isPending !== undefined ? Boolean(rData.isPending) : (existing ? existing.isPending : true))
             });
           }
         });
@@ -4480,6 +4532,7 @@ useEffect(() => {
       }
 
       setSyncedLeaderboard(resultsList);
+      setActiveGameId(cleanRoomCode);
       setRematchGameId(cleanRoomCode);
       setChallengeSeed(seedNum);
       setChallengeDifficulty(diffVal);
@@ -4489,30 +4542,16 @@ useEffect(() => {
       setChallengeMode(true);
       setEndGameStep(1);
 
-      // Construct a viewing board state if none exists or needs seed alignment
-      const viewingBoard: BoardState = {
-        grid: Array(9).fill(null).map((_, r) =>
-          Array(9).fill(null).map((_, c) => ({
-            row: r,
-            col: c,
-            value: 0,
-            isOriginalClue: false,
-            isUserInput: false,
-            notes: new Set<number>()
-          }))
-        ),
-        selectedRow: null,
-        selectedCol: null,
-        currentMistakesCount: 0,
-        maxMistakesLimit: roomData?.mistakesLimit || 3,
-        hintsCount: 0,
-        maxHintsLimit: roomData?.hintsLimit || 3,
-        isGameOver: true,
-        difficulty: diffVal,
-        seed: seedNum
-      };
+      // Dismiss any pending challenge notification for this room
+      setPendingChallenges(prev => {
+        const updated = prev.filter(c => c.id !== cleanRoomCode && c.roomCode !== cleanRoomCode && c.gameId !== cleanRoomCode);
+        try {
+          localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
 
-      setBoardState(viewingBoard);
+      // Open match results overlay non-destructively without overwriting active game board
       navigateToScreen("game");
       setShowGameOverModal(true);
     } catch (err) {
@@ -4678,31 +4717,77 @@ useEffect(() => {
           pushRecListener = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
             console.log("[Push] Native push received in foreground/background:", notification);
             if (notificationsEnabled) {
-              playInviteChime();
               const { gameId, password, senderName, type, roomCode, fromName } = notification.data || {};
+              const targetCode = roomCode || gameId || "";
+
+              // Suppress foreground audio chime & duplicate banner if user is actively playing this duel
+              const isPlayingThisMatch = Boolean(
+                currentScreenRef.current === "game" &&
+                challengeModeRef.current &&
+                activeGameIdRef.current &&
+                targetCode &&
+                (activeGameIdRef.current === targetCode || activeGameIdRef.current.slice(-6) === targetCode.slice(-6))
+              );
+
               if (type === 'challenge_completed') {
-                setActiveInviteNotification({
-                  id: notification.id || `push-${Date.now()}`,
+                const notifId = notification.id || `push-${Date.now()}`;
+                const completedItem: PendingChallenge = {
+                  id: targetCode || notifId,
+                  inviteId: notifId,
                   type: 'challenge_completed',
                   fromName: fromName || senderName || "Opponent",
-                  roomCode: roomCode || gameId,
-                  gameId: roomCode || gameId
+                  senderName: fromName || senderName || "Opponent",
+                  roomCode: targetCode,
+                  gameId: targetCode,
+                  sentAt: Date.now()
+                };
+
+                setPendingChallenges(prev => {
+                  if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId)) return prev;
+                  const updated = [completedItem, ...prev].slice(0, 10);
+                  try {
+                    localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+                  } catch (e) {}
+                  return updated;
+                });
+
+                if (isPlayingThisMatch) {
+                  console.log(`[Push] Suppressed foreground push chime & toast banner for active duel: ${targetCode}`);
+                  return;
+                }
+
+                playInviteChime();
+                setActiveInviteNotification({
+                  id: notifId,
+                  type: 'challenge_completed',
+                  fromName: fromName || senderName || "Opponent",
+                  roomCode: targetCode,
+                  gameId: targetCode
                 });
                 return;
               }
-              if (gameId) {
+
+              if (isPlayingThisMatch) {
+                console.log(`[Push] Suppressed foreground push chime for active duel: ${targetCode}`);
+                return;
+              }
+
+              playInviteChime();
+              if (gameId || roomCode) {
+                const inviteCode = roomCode || gameId;
                 const inviteId = notification.id || `push-${Date.now()}`;
                 const inviteObj = {
-                  id: gameId,
+                  id: inviteCode,
                   inviteId: inviteId,
                   senderName: senderName || "Player",
                   fromName: senderName || "Player",
-                  gameId,
+                  gameId: inviteCode,
+                  roomCode: inviteCode,
                   password: password || "",
                   sentAt: Date.now()
                 };
                 setPendingChallenges(prev => {
-                  if (prev.some(p => p.id === gameId || p.inviteId === inviteId)) return prev;
+                  if (prev.some(p => p.id === inviteCode || p.inviteId === inviteId)) return prev;
                   const updated = [inviteObj as any, ...prev].slice(0, 10);
                   try {
                     localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
@@ -4712,7 +4797,8 @@ useEffect(() => {
                 setActiveInviteNotification({
                   id: inviteId,
                   fromName: senderName || "Player",
-                  gameId,
+                  gameId: inviteCode,
+                  roomCode: inviteCode,
                   password: password || ""
                 });
               }
@@ -4721,42 +4807,79 @@ useEffect(() => {
 
           pushActListener = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
             console.log("[Push] Native push action performed:", action);
-            const { gameId, password, senderName, type, roomCode } = action.notification.data || {};
+            const { gameId, password, type, roomCode } = action.notification.data || {};
             if (type === 'challenge_completed') {
               handleViewChallengeResults(roomCode || gameId);
               return;
             }
-            if (gameId) {
-              handleLoadChallengeFromId(gameId, password, senderName);
+            if (roomCode || gameId) {
+              executeJoinRoom(roomCode || gameId, { passwordOverride: password, isDirectInvite: true });
             }
           });
 
           localActListener = await LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
             console.log("[Push] Native local action performed:", action);
-            const { gameId, password, senderName, type, roomCode } = action.notification.extra || {};
+            const { gameId, password, type, roomCode } = action.notification.extra || {};
             if (type === 'challenge_completed') {
               handleViewChallengeResults(roomCode || gameId);
               return;
             }
-            if (gameId) {
-              handleLoadChallengeFromId(gameId, password, senderName);
+            if (roomCode || gameId) {
+              executeJoinRoom(roomCode || gameId, { passwordOverride: password, isDirectInvite: true });
             }
           });
         } else {
           const handleServiceWorkerMessage = (event: MessageEvent) => {
             if (event.data && event.data.type === 'navigate_invite') {
               console.log("[Push] Web push action received from SW:", event.data);
-              const { gameId, password, senderName } = event.data;
-              handleLoadChallengeFromId(gameId, password, senderName);
+              const { gameId, password, roomCode } = event.data;
+              if (roomCode || gameId) {
+                executeJoinRoom(roomCode || gameId, { passwordOverride: password, isDirectInvite: true });
+              }
             } else if (event.data && event.data.type === 'challenge_completed') {
               console.log("[Push] Web push challenge completed received from SW:", event.data);
               const { roomCode, gameId, senderName, fromName } = event.data;
-              setActiveInviteNotification({
-                id: `sw-completed-${Date.now()}`,
+              const targetCode = roomCode || gameId || "";
+              const notifId = `sw-completed-${Date.now()}`;
+              const completedItem: PendingChallenge = {
+                id: targetCode || notifId,
+                inviteId: notifId,
                 type: 'challenge_completed',
                 fromName: fromName || senderName || "Opponent",
-                roomCode: roomCode || gameId,
-                gameId: roomCode || gameId
+                senderName: fromName || senderName || "Opponent",
+                roomCode: targetCode,
+                gameId: targetCode,
+                sentAt: Date.now()
+              };
+
+              setPendingChallenges(prev => {
+                if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId)) return prev;
+                const updated = [completedItem, ...prev].slice(0, 10);
+                try {
+                  localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+                } catch (e) {}
+                return updated;
+              });
+
+              const isPlayingThisMatch = Boolean(
+                currentScreenRef.current === "game" &&
+                challengeModeRef.current &&
+                activeGameIdRef.current &&
+                targetCode &&
+                (activeGameIdRef.current === targetCode || activeGameIdRef.current.slice(-6) === targetCode.slice(-6))
+              );
+
+              if (isPlayingThisMatch) {
+                console.log(`[Push] Suppressed SW banner for active duel: ${targetCode}`);
+                return;
+              }
+
+              setActiveInviteNotification({
+                id: notifId,
+                type: 'challenge_completed',
+                fromName: fromName || senderName || "Opponent",
+                roomCode: targetCode,
+                gameId: targetCode
               });
             }
           };
@@ -5873,6 +5996,8 @@ useEffect(() => {
 
   // Sudoku state variables
   const [boardState, setBoardState] = useState<BoardState | null>(null);
+  const boardStateRef = useRef<BoardState | null>(boardState);
+  boardStateRef.current = boardState;
 
   const hasTriggeredGameOverRef = useRef(false);
 
@@ -7636,14 +7761,24 @@ useEffect(() => {
         console.log(`[Firestore] Registered join for ${userId} (${pName}) on ${challengeId}`);
       }
 
-      // Also register active presence in room players collection
+      // Also register active presence in room players collection if not already finished
       const playerRef = doc(db, "rooms", challengeId, "players", userId);
-      await setDoc(playerRef, {
-        id: userId,
-        name: pName,
-        status: "active",
-        updatedAt: serverTimestamp()
-      }, { merge: true });
+      const playerSnap = await getDoc(playerRef);
+      const isAlreadyFinished = playerSnap.exists() && (
+        playerSnap.data()?.status === "completed" ||
+        playerSnap.data()?.status === "won" ||
+        playerSnap.data()?.status === "victory" ||
+        playerSnap.data()?.status === "mistake_game_over" ||
+        playerSnap.data()?.status === "failed"
+      );
+      if (!isAlreadyFinished) {
+        await setDoc(playerRef, {
+          id: userId,
+          name: pName,
+          status: "active",
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      }
     } catch (err) {
       console.error("[Firestore] Failed to register join:", err);
     }
@@ -7678,7 +7813,7 @@ useEffect(() => {
         const uId = p.id || p.userId;
         if (uId) {
           const isLeft = p.status === "left" || p.status === "abandoned" || p.status === "disconnected" || p.status === "forfeited";
-          const isFinished = p.status === "completed" || p.status === "victory" || p.status === "mistake_game_over";
+          const isFinished = p.status === "completed" || p.status === "victory" || p.status === "mistake_game_over" || p.status === "won" || p.status === "failed";
           mergedMap.set(uId, {
             userId: uId,
             playerName: p.name || p.playerName || "Player",
@@ -7697,12 +7832,20 @@ useEffect(() => {
         const uId = r.userId || r.id;
         if (uId) {
           const existing = mergedMap.get(uId);
+          const rFinished = r.status === "completed" || r.status === "won" || r.status === "victory" || r.status === "mistake_game_over" || r.status === "failed" || (!r.isPending && (r.isWon !== undefined || r.timeSec !== undefined));
+          const rWon = r.status === "won" || r.status === "completed" || r.status === "victory" || Boolean(r.isWon) || Boolean(existing?.isWon);
           mergedMap.set(uId, {
             ...existing,
             ...r,
             userId: uId,
             playerName: r.playerName || existing?.playerName || "Player",
-            status: r.status || existing?.status || (r.isWon ? "completed" : (!r.isPending ? "mistake_game_over" : "active"))
+            timeSec: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.timeSec || 0),
+            elapsedTime: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.elapsedTime || 0),
+            mistakes: r.mistakes !== undefined ? Number(r.mistakes) : (existing?.mistakes || 0),
+            hints: r.hints !== undefined ? Number(r.hints) : (existing?.hints || 0),
+            isWon: rWon,
+            status: r.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
+            isPending: rFinished ? false : (r.isPending !== undefined ? Boolean(r.isPending) : (existing ? existing.isPending : true))
           });
         }
       });
@@ -8332,44 +8475,68 @@ useEffect(() => {
   // Industry-Standard Lifecycle Visibility, Blur, and App State Management
   // Immediately pauses single-player timer on screen lock, minimize, tab switch, or app backgrounding
   useEffect(() => {
+    const triggerAutoPause = () => {
+      const activeBoard = boardStateRef.current;
+      if (currentScreen === "game" && activeBoard && !activeBoard.isGameOver && !challengeMode) {
+        setIsTimerPaused(true);
+      }
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden" || document.hidden) {
-        if (currentScreen === "game" && boardState && !boardState.isGameOver && !challengeMode) {
-          setIsTimerPaused(true);
-        }
+        triggerAutoPause();
       }
     };
 
     const handleWindowBlur = () => {
-      if (currentScreen === "game" && boardState && !boardState.isGameOver && !challengeMode) {
-        setIsTimerPaused(true);
-      }
+      triggerAutoPause();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleWindowBlur);
 
-    let capAppStateListener: any = null;
+    let capAppStateHandle: any = null;
+    let capPauseHandle: any = null;
+    let isDisposed = false;
+
     if (Capacitor.isNativePlatform()) {
+      // 1. Native appStateChange listener
       CapApp.addListener('appStateChange', (state) => {
         if (!state.isActive) {
-          if (currentScreen === "game" && boardState && !boardState.isGameOver && !challengeMode) {
-            setIsTimerPaused(true);
-          }
+          triggerAutoPause();
         }
-      }).then(listener => {
-        capAppStateListener = listener;
+      }).then(handle => {
+        if (isDisposed) {
+          handle.remove();
+        } else {
+          capAppStateHandle = handle;
+        }
+      }).catch(() => {});
+
+      // 2. Native pause listener (fires on Android Activity onPause)
+      CapApp.addListener('pause', () => {
+        triggerAutoPause();
+      }).then(handle => {
+        if (isDisposed) {
+          handle.remove();
+        } else {
+          capPauseHandle = handle;
+        }
       }).catch(() => {});
     }
 
     return () => {
+      isDisposed = true;
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
-      if (capAppStateListener) {
-        capAppStateListener.remove();
+      if (capAppStateHandle) {
+        capAppStateHandle.remove();
+      }
+      if (capPauseHandle) {
+        capPauseHandle.remove();
       }
     };
-  }, [currentScreen, boardState, challengeMode]);
+  }, [currentScreen, challengeMode]);
 
   // Game running session timer increment effect
   useEffect(() => {
@@ -10649,7 +10816,7 @@ useEffect(() => {
               {/* 1. MULTIPLAYER LEADERBOARD MODAL (when challengeMode is true AND isOnline is true) */}
               {Boolean(challengeMode && isOnline) && (
                 <GameOverModal
-                  isOpen={Boolean(boardState && showGameOverModal && challengeMode && isOnline)}
+                  isOpen={Boolean(showGameOverModal && challengeMode && isOnline)}
                 isMultiplayer={Boolean(challengeMode)}
                 completedGames={completedGames}
                 onClose={() => {
@@ -10664,14 +10831,33 @@ useEffect(() => {
                     setTimerEnabled(preservedSoloBoardRef.current.timerEnabled);
                     setMistakeLimitEnabled(preservedSoloBoardRef.current.mistakeLimitEnabled);
                     setChallengeMode(false);
+                    setActiveGameId(null);
+                    setRematchGameId(null);
                     preservedSoloBoardRef.current = null;
-                  } else {
+                    return;
+                  }
+
+                  // Check if an active, non-blank game board exists with valid clues/numbers
+                  const hasActiveGameBoard = Boolean(
+                    boardState &&
+                    Array.isArray(boardState.grid) &&
+                    boardState.grid.some(row => Array.isArray(row) && row.some(cell => cell && cell.value > 0))
+                  );
+
+                  if (hasActiveGameBoard) {
+                    // Leave player on game screen untouched (clear cell selection)
                     setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                  } else {
+                    // Modal opened via external push/deep-link without active board: route gracefully to Home
+                    cleanupRoomSession();
+                    setBoardState(null);
+                    navigateToScreen("home");
+                    try { window.history.replaceState({ view: "home" }, "", window.location.pathname); } catch (e) {}
                   }
                 }}
                 darkMode={darkMode}
                 difficulty={difficulty}
-                boardState={boardState}
+                boardState={boardState || (challengeSeed ? { seed: challengeSeed, isGameOver: true, maxMistakesLimit: challengeMistakeLimit, currentMistakesCount: 0, hintsCount: 0 } : null)}
                 mistakeLimitEnabled={mistakeLimitEnabled}
                 sessionSeconds={sessionSeconds}
                 syncedLeaderboard={syncedLeaderboard}
@@ -14852,6 +15038,78 @@ useEffect(() => {
                     const challengeDifficulty = challenge.difficulty || "MEDIUM";
                     const timestampVal = challenge.sentAt ?? (challenge as any).timestamp ?? (challenge as any).createdAt ?? challenge.receivedAt;
 
+                    if (challenge.type === 'challenge_completed') {
+                      const finisherName = challenge.fromName || challenge.senderName || "Opponent";
+                      const targetCode = challenge.roomCode || challenge.gameId || challenge.id;
+
+                      return (
+                        <div 
+                          key={challenge.inviteId || challenge.id || `res-${Math.random()}`} 
+                          className={`p-4 rounded-2xl flex flex-col gap-3 border transition-all ${
+                            darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-300" : "bg-slate-50/80 border-stone-200/60 text-stone-850"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`p-2 rounded-xl shrink-0 ${darkMode ? "bg-emerald-950/60 text-emerald-300" : "bg-emerald-50 text-emerald-600"}`}>
+                                <Trophy className="w-4 h-4 shrink-0" strokeWidth={2.5} />
+                              </div>
+                              <div className="flex flex-col text-left">
+                                <span className={`text-[10px] font-black uppercase tracking-wider ${
+                                  darkMode ? "text-emerald-400" : "text-emerald-700"
+                                }`}>
+                                  CHALLENGE COMPLETED
+                                </span>
+                                <span className="font-sans text-xs font-bold mt-0.5">
+                                  <strong className="font-extrabold">{finisherName}</strong> completed the duel!
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-[9px] font-mono opacity-70">
+                              {formatInviteTimestamp(timestampVal)}
+                            </span>
+                          </div>
+
+                          <div className="flex gap-2 w-full mt-0.5">
+                            <button
+                              onClick={() => {
+                                playClickSound();
+                                setPendingChallenges(prev => {
+                                  const updated = prev.filter(c => c.id !== challenge.id && c.inviteId !== challenge.inviteId);
+                                  try {
+                                    localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+                                  } catch (e) {}
+                                  return updated;
+                                });
+                              }}
+                              className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 cursor-pointer ${
+                                darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
+                              }`}
+                            >
+                              DISMISS
+                            </button>
+                            <button
+                              onClick={() => {
+                                playClickSound();
+                                setPendingChallenges(prev => {
+                                  const updated = prev.filter(c => c.id !== challenge.id && c.inviteId !== challenge.inviteId && c.id !== targetCode && c.roomCode !== targetCode);
+                                  try {
+                                    localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+                                  } catch (e) {}
+                                  return updated;
+                                });
+                                setShowBellInvitesModal(false);
+                                handleViewChallengeResults(targetCode);
+                              }}
+                              className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border-none transition-all active:scale-95 text-white flex items-center justify-center gap-1.5 cursor-pointer bg-emerald-600 hover:bg-emerald-500"
+                            >
+                              VIEW RESULTS
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
                       <div 
                         key={challenge.inviteId || challenge.id || `inv-${Math.random()}`} 
@@ -15007,7 +15265,16 @@ useEffect(() => {
                         onClick={(e) => {
                           e.stopPropagation();
                           playClickSound();
-                          handleViewChallengeResults(activeInviteNotification.roomCode || activeInviteNotification.gameId);
+                          const targetCode = activeInviteNotification.roomCode || activeInviteNotification.gameId;
+                          setPendingChallenges(prev => {
+                            const updated = prev.filter(c => c.id !== activeInviteNotification.id && c.inviteId !== activeInviteNotification.id && c.id !== targetCode && c.roomCode !== targetCode);
+                            try {
+                              localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+                            } catch (err) {}
+                            return updated;
+                          });
+                          setActiveInviteNotification(null);
+                          handleViewChallengeResults(targetCode);
                         }}
                         className="px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 text-white cursor-pointer bg-emerald-600 hover:bg-emerald-500"
                       >

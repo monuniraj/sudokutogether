@@ -36,6 +36,8 @@
 -keep class com.capacitorjs.plugins.localnotifications.** { *; }
 # Push Notifications Plugin
 -keep class com.capacitorjs.plugins.pushnotifications.** { *; }
+# Browser Plugin
+-keep class com.capacitorjs.plugins.browser.** { *; }
 
 # 4. Firebase Cloud Messaging & Google Play Services
 -keep class com.google.firebase.** { *; }
