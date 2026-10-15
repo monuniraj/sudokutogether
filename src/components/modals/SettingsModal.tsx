@@ -307,7 +307,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 playClickSound();
                 if (onConnectGoogle) onConnectGoogle();
               }}
-              className={`w-full flex items-center justify-center gap-2 font-sans text-[10.5px] lg:text-[13px] font-black uppercase tracking-wider py-2.5 lg:py-3.5 px-4 rounded-xl transition-all text-center border-none cursor-pointer active:scale-[0.98] shadow-sm ${
+              className={`w-full min-h-[42px] lg:min-h-[48px] flex items-center justify-center gap-2 font-sans text-[10.5px] lg:text-[13px] font-black uppercase tracking-wider py-2.5 lg:py-3.5 px-4 rounded-xl transition-all text-center border-none cursor-pointer active:scale-[0.98] shadow-sm ${
                 isConnectingGoogle ? "opacity-70 cursor-wait" : ""
               } ${
                 darkMode
@@ -336,7 +336,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                 />
               </svg>
-              <span>{isConnectingGoogle ? "..." : t("connectGoogle")}</span>
+              {isConnectingGoogle ? (
+                <div className="flex items-center justify-center gap-1.5 h-4 px-2" aria-label="Loading">
+                  <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "0ms" }} />
+                  <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "160ms" }} />
+                  <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "320ms" }} />
+                </div>
+              ) : (
+                <span>{t("connectGoogle")}</span>
+              )}
             </button>
           )}
         </div>

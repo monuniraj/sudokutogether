@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "./i18n/useTranslation";
 import type { TranslationKey } from "./i18n/translations";
 import { db, auth, GoogleAuthProvider } from "./firebase";
-import { signInAnonymously, linkWithPopup, signInWithPopup, signInWithCredential, onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
+import { signInAnonymously, linkWithPopup, signInWithPopup, signInWithCredential, linkWithCredential, onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
 import { RulesModal } from "./components/modals/RulesModal";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { StatsModal } from "./components/modals/StatsModal";
@@ -17,6 +17,7 @@ import { SudokuKeypad } from "./components/game/SudokuKeypad";
 import { ConfettiBurst } from "./components/common/ConfettiBurst";
 import { ClappingHands } from "./components/common/ClappingHands";
 import { Sudoku3DWatermark } from "./components/common/Sudoku3DWatermark";
+import { StudioSplash } from "./components/common/StudioSplash";
 import { playPartyPopperSound as synthesizePartyPopper } from "./utils/soundEffects";
 import { formatMatchTimestamp, formatInviteTimestamp, formatActiveStatus } from "./utils/formatTimestamp";
 import { useFriendPresence } from "./hooks/useFriendPresence";
@@ -32,7 +33,9 @@ import {
   where,
   updateDoc,
   deleteDoc,
-  arrayUnion
+  arrayUnion,
+  arrayRemove,
+  increment
 } from "firebase/firestore";
 import { 
   Paintbrush, 
@@ -112,9 +115,10 @@ import { Share } from '@capacitor/share';
 import { App as CapApp } from '@capacitor/app';
 import { PushNotifications } from "@capacitor/push-notifications";
 import { LocalNotifications } from "@capacitor/local-notifications";
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { triggerHapticTap, triggerHapticError, triggerHapticCompletion, triggerHaptic, isHapticsEnabled, setGlobalHapticsEnabled } from "./utils/haptics";
 import { playThemeFeedback, applyThemeToggle } from "./utils/themeFeedback";
-import { getToken } from "firebase/messaging";
+import { getToken, onMessage } from "firebase/messaging";
 import { messaging } from "./firebase";
 
 let globalAudioCtx: AudioContext | null = null;
@@ -248,6 +252,22 @@ interface PendingChallenge {
   roomCode?: string;
   gameId?: string;
 }
+
+const INITIAL_GUEST_STATE = {
+  userProfile: { 
+    id: "GUEST_" + Math.random().toString(36).substring(2, 9), 
+    name: "Guest Voyager", 
+    avatarColor: "#6B7280", 
+    isSynced: false 
+  },
+  completedGames: [] as CompletedGame[],
+  totalGamesPlayed: 0,
+  totalWinsCount: 0,
+  personalBestTimes: { EASY: null, MEDIUM: null, HARD: null, EXPERT: null, MASTER: null } as Record<string, number | null>,
+  savedGames: [] as CompletedGame[],
+  multiplayerPlayers: [] as any[],
+  pendingChallenges: [] as PendingChallenge[]
+};
 
 interface FriendConnection {
   id: string;
@@ -1578,6 +1598,11 @@ useEffect(() => {
     return initialProfile;
   });
 
+  const userProfileRef = useRef(userProfile);
+  useEffect(() => {
+    userProfileRef.current = userProfile;
+  }, [userProfile]);
+
   // Display name registration state
   const [showDisplayNameModal, setShowDisplayNameModal] = useState<boolean>(false);
   const [showInviteJoinNamePopup, setShowInviteJoinNamePopup] = useState<boolean>(false);
@@ -1733,6 +1758,10 @@ useEffect(() => {
   // --- CHALLENGE / COMPETITIVE SYSTEM SEEDS AND CONFIGS ---
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
   const [syncedLeaderboard, setSyncedLeaderboard] = useState<any[]>([]);
+  const syncedLeaderboardRef = useRef<any[]>([]);
+  useEffect(() => {
+    syncedLeaderboardRef.current = syncedLeaderboard;
+  }, [syncedLeaderboard]);
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState<boolean>(false);
   const [challengeMode, setChallengeMode] = useState<boolean>(false);
   const [challengeSeed, setChallengeSeed] = useState<number | null>(null);
@@ -1817,12 +1846,29 @@ useEffect(() => {
   }>>(() => {
     try {
       const saved = localStorage.getItem("sudoku_past_players");
+      let priorGuestId: string | null = null;
+      let currentStoredId: string | null = null;
+      try {
+        priorGuestId = localStorage.getItem("sudoku_prior_guest_id");
+        const storedUser = localStorage.getItem("sudoku_userProfile");
+        if (storedUser) {
+          currentStoredId = JSON.parse(storedUser)?.id || null;
+        }
+      } catch {}
+
       if (saved) {
         const parsed = JSON.parse(saved) as any[];
         if (Array.isArray(parsed)) {
-          // Filter out legacy simulated demo bots and always reset stale inviteStatus to 'idle'
+          // Filter out legacy simulated demo bots, self, and prior guest persona
           return parsed
-            .filter(p => p.id !== "USER_88201" && p.id !== "GUEST_99210" && p.id !== "USER_33104")
+            .filter(p => 
+              p && p.id &&
+              p.id !== "USER_88201" && 
+              p.id !== "GUEST_99210" && 
+              p.id !== "USER_33104" &&
+              (!currentStoredId || p.id !== currentStoredId) &&
+              (!priorGuestId || p.id !== priorGuestId)
+            )
             .map(p => ({
               ...p,
               inviteStatus: "idle" as const,
@@ -1842,7 +1888,16 @@ useEffect(() => {
     } catch {}
   }, [multiplayerPlayers]);
 
-  const drawerPlayerIds = useMemo(() => (multiplayerPlayers || []).map((p: any) => p.id), [multiplayerPlayers]);
+  const drawerPlayerIds = useMemo(() => {
+    let priorGuestId: string | null = null;
+    try {
+      priorGuestId = localStorage.getItem("sudoku_prior_guest_id");
+    } catch {}
+    const myId = userProfile?.id;
+    return (multiplayerPlayers || [])
+      .map((p: any) => p.id)
+      .filter((id: string) => Boolean(id) && id !== myId && (!priorGuestId || id !== priorGuestId));
+  }, [multiplayerPlayers, userProfile?.id]);
   const { getFriendStatus: getDrawerFriendStatus, getFriendLastActive: getDrawerFriendLastActive } = useFriendPresence(userProfile?.id, drawerPlayerIds);
 
   const [privacyEnabled, setPrivacyEnabled] = useState<boolean>(() => {
@@ -2062,6 +2117,11 @@ useEffect(() => {
     }
   });
 
+  const completedGamesRef = useRef<CompletedGame[]>(completedGames);
+  useEffect(() => {
+    completedGamesRef.current = completedGames;
+  }, [completedGames]);
+
   const [pendingChallenges, setPendingChallenges] = useState<PendingChallenge[]>(() => {
     try {
       const saved = localStorage.getItem("sudoku_pending_challenges");
@@ -2095,29 +2155,8 @@ useEffect(() => {
     showToast("Journal stats merged into database successfully!");
   };
 
-  // Silent background anonymous authentication bootstrap
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        signInAnonymously(auth).catch((err) => {
-          console.warn("[Auth] Background anonymous session init error:", err);
-        });
-      } else if (user && user.email && !user.isAnonymous) {
-        // If user already had Google account linked from a previous session, restore sync state without touching id or local stats
-        setUserProfile((prev) => {
-          if (prev && !prev.isSynced) {
-            const updated = { ...prev, isSynced: true, email: user.email || prev.email };
-            try {
-              localStorage.setItem("sudoku_userProfile", JSON.stringify(updated));
-            } catch {}
-            return updated;
-          }
-          return prev;
-        });
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+  // Auth hydration status guard
+  const [isAuthHydrating, setIsAuthHydrating] = useState<boolean>(false);
 
   const [isConnectingGoogle, setIsConnectingGoogle] = useState<boolean>(false);
   const isConnectingRef = useRef<boolean>(false);
@@ -2426,6 +2465,89 @@ useEffect(() => {
       return true;
     }
   });
+
+  // Advanced Preference Variables (representing Jetpack DataStore states)
+  const [isNumberFirstInputMode, setIsNumberFirstInputMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_isNumberFirstInputMode");
+      return saved !== null ? saved === "true" : false;
+    } catch {
+      return false;
+    }
+  });
+  const [autoSwitchCompletedNumber, setAutoSwitchCompletedNumber] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_autoSwitchCompletedNumber");
+      return saved !== null ? saved === "true" : true;
+    } catch {
+      return true;
+    }
+  });
+  const [isAutoRemoveNotesEnabled, setIsAutoRemoveNotesEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_isAutoRemoveNotesEnabled");
+      return saved !== null ? saved === "true" : true;
+    } catch {
+      return true;
+    }
+  });
+  const [isPreventMistakeNotesEnabled, setIsPreventMistakeNotesEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_isPreventMistakeNotesEnabled");
+      return saved !== null ? saved === "true" : true;
+    } catch {
+      return true;
+    }
+  });
+  const [hintInventory, setHintInventory] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_hintInventory");
+      return saved !== null ? parseInt(saved, 10) : 3;
+    } catch {
+      return 3;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("sudoku_isNumberFirstInputMode", String(isNumberFirstInputMode));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [isNumberFirstInputMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("sudoku_autoSwitchCompletedNumber", String(autoSwitchCompletedNumber));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [autoSwitchCompletedNumber]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("sudoku_isAutoRemoveNotesEnabled", String(isAutoRemoveNotesEnabled));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [isAutoRemoveNotesEnabled]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("sudoku_isPreventMistakeNotesEnabled", String(isPreventMistakeNotesEnabled));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [isPreventMistakeNotesEnabled]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("sudoku_hintInventory", String(hintInventory));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [hintInventory]);
+
   const [sessionStartTime] = useState<number>(() => Date.now());
   const [activeInviteNotification, setActiveInviteNotification] = useState<any | null>(null);
   const [inviteCountdown, setInviteCountdown] = useState<number>(5);
@@ -2540,6 +2662,17 @@ useEffect(() => {
     } catch {}
     return winsInHistory;
   });
+
+  const [winStreak, setWinStreak] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_winStreak");
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 0) return val;
+      }
+    } catch {}
+    return 0;
+  });
   const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
 
   // Helper to parse times stored as raw numbers, numeric strings, or mm:ss / hh:mm:ss strings
@@ -2565,8 +2698,8 @@ useEffect(() => {
   };
 
   // Persistent Best Times tracking across Solo and Multiplayer sessions (never lost when history is capped)
-  const [personalBestTimes, setPersonalBestTimes] = useState<Record<Difficulty, number>>(() => {
-    const records: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
+  const [personalBestTimes, setPersonalBestTimes] = useState<Record<string, number | null>>(() => {
+    const records: Record<string, number | null> = { EASY: null, MEDIUM: null, HARD: null, EXPERT: null, MASTER: null };
     
     // 1. Read existing saved best times from localStorage (case-insensitive for tiers)
     try {
@@ -2619,7 +2752,8 @@ useEffect(() => {
 
               const timeSec = parseTimeToSeconds(g.timeSec ?? g.time);
               if (timeSec > 0) {
-                if (records[diffKey] === 0 || timeSec < records[diffKey]) {
+                const current = records[diffKey];
+                if (!current || current === 0 || timeSec < current) {
                   records[diffKey] = timeSec;
                 }
               }
@@ -2639,7 +2773,7 @@ useEffect(() => {
     return records;
   });
 
-  const personalBestTimesRef = useRef<Record<Difficulty, number>>(personalBestTimes);
+  const personalBestTimesRef = useRef<Record<string, number | null>>(personalBestTimes);
 
   useEffect(() => {
     personalBestTimesRef.current = personalBestTimes;
@@ -2846,6 +2980,505 @@ useEffect(() => {
     }
   };
 
+  interface UserCareerStats {
+    gamesPlayed?: number;
+    totalGamesPlayed?: number;
+    gamesWon?: number;
+    totalWinsCount?: number;
+    bestTimes?: Record<string, number | null>;
+    winStreak?: number;
+  }
+
+  const setStats = useCallback((stats: UserCareerStats) => {
+    if (typeof stats.totalGamesPlayed === "number" || typeof stats.gamesPlayed === "number") {
+      const gp = stats.totalGamesPlayed ?? stats.gamesPlayed ?? 0;
+      setTotalGamesPlayed(gp);
+      try {
+        localStorage.setItem("sudoku_total_games_played", String(gp));
+        localStorage.setItem("sudoku_gamesPlayed", String(gp));
+      } catch {}
+    }
+
+    if (typeof stats.totalWinsCount === "number" || typeof stats.gamesWon === "number") {
+      const gw = stats.totalWinsCount ?? stats.gamesWon ?? 0;
+      setTotalWinsCount(gw);
+      try {
+        localStorage.setItem("sudoku_total_wins_count", String(gw));
+        localStorage.setItem("sudoku_winsCount", String(gw));
+      } catch {}
+    }
+
+    if (stats.bestTimes && typeof stats.bestTimes === "object") {
+      const loadedPB: Record<string, number | null> = {
+        EASY: Number(stats.bestTimes.EASY ?? (stats.bestTimes as any).easy) || null,
+        MEDIUM: Number(stats.bestTimes.MEDIUM ?? (stats.bestTimes as any).medium) || null,
+        HARD: Number(stats.bestTimes.HARD ?? (stats.bestTimes as any).hard) || null,
+        EXPERT: Number(stats.bestTimes.EXPERT ?? (stats.bestTimes as any).expert) || null,
+        MASTER: Number(stats.bestTimes.MASTER ?? (stats.bestTimes as any).master) || null,
+      };
+      setPersonalBestTimes(loadedPB);
+      personalBestTimesRef.current = loadedPB;
+      try {
+        localStorage.setItem("sudoku_best_times", JSON.stringify(loadedPB));
+      } catch {}
+    }
+
+    if (typeof stats.winStreak === "number") {
+      setWinStreak(stats.winStreak);
+      try {
+        localStorage.setItem("sudoku_winStreak", String(stats.winStreak));
+      } catch {}
+    }
+  }, []);
+
+  const currentHydratedUidRef = useRef<string | null>(null);
+  const hydrationPromiseRef = useRef<Promise<void> | null>(null);
+
+  const hydrateUserFromCloud = useCallback(async (uid: string, authUser?: any, force = false) => {
+    if (!uid) return;
+    if (!force && currentHydratedUidRef.current === uid) {
+      return;
+    }
+    if (hydrationPromiseRef.current && !force) {
+      return hydrationPromiseRef.current;
+    }
+
+    const runHydration = async () => {
+      setIsAuthHydrating(true);
+      try {
+        const userDocRef = doc(db, "users", uid);
+        const userSnap = await getDoc(userDocRef);
+
+        // Read local session progress before evaluating cloud state
+        let localCompleted: CompletedGame[] = [];
+        try {
+          const stored = localStorage.getItem("sudoku_completed_games");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) localCompleted = parsed;
+          }
+        } catch {}
+
+        const localTotalGames = Math.max(
+          Number(localStorage.getItem("sudoku_total_games_played") || 0),
+          Number(localStorage.getItem("sudoku_gamesPlayed") || 0),
+          localCompleted.length
+        );
+
+        const localTotalWins = Math.max(
+          Number(localStorage.getItem("sudoku_total_wins_count") || 0),
+          Number(localStorage.getItem("sudoku_winsCount") || 0),
+          localCompleted.filter((g: any) => g && g.isWon).length
+        );
+
+        const localWinStreak = Number(localStorage.getItem("sudoku_winStreak") || 0);
+
+        if (userSnap.exists()) {
+          const cloudDocData = userSnap.data();
+
+          const cloudGames = typeof cloudDocData?.totalGamesPlayed === "number" 
+            ? cloudDocData.totalGamesPlayed 
+            : (typeof cloudDocData?.gamesPlayed === "number" ? cloudDocData.gamesPlayed : 0);
+
+          const cloudWins = typeof cloudDocData?.totalWinsCount === "number" 
+            ? cloudDocData.totalWinsCount 
+            : (typeof cloudDocData?.gamesWon === "number" 
+              ? cloudDocData.gamesWon 
+              : (typeof cloudDocData?.winsCount === "number" ? cloudDocData.winsCount : 0));
+
+          const cloudStreak = typeof cloudDocData?.winStreak === "number" ? cloudDocData.winStreak : 0;
+
+          // Returning User: If users/{finalUser.uid} already exists, strictly hydrate from cloudDocData.completedGames and cloud counters without merging stale guest memory
+          const finalTotalGames = cloudGames;
+          const finalTotalWins = cloudWins;
+          const finalWinStreak = cloudStreak;
+
+          // 1. Career stats via setStats
+          setStats({
+            totalGamesPlayed: finalTotalGames,
+            totalWinsCount: finalTotalWins,
+            bestTimes: cloudDocData?.bestTimes && typeof cloudDocData.bestTimes === "object" ? cloudDocData.bestTimes : undefined,
+            winStreak: finalWinStreak
+          });
+          setTotalGamesPlayed(finalTotalGames);
+          setTotalWinsCount(finalTotalWins);
+          setWinStreak(finalWinStreak);
+          try {
+            localStorage.setItem("sudoku_total_games_played", String(finalTotalGames));
+            localStorage.setItem("sudoku_gamesPlayed", String(finalTotalGames));
+            localStorage.setItem("sudoku_total_wins_count", String(finalTotalWins));
+            localStorage.setItem("sudoku_winsCount", String(finalTotalWins));
+            localStorage.setItem("sudoku_winStreak", String(finalWinStreak));
+          } catch {}
+
+          // 2. Match history (recent games) and saved boards: strictly from cloudDocData.completedGames
+          if (Array.isArray(cloudDocData?.completedGames) && cloudDocData.completedGames.length > 0) {
+            setCompletedGames(cloudDocData.completedGames);
+            try {
+              localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudDocData.completedGames));
+            } catch {}
+          }
+
+          if (Array.isArray(cloudDocData?.savedGames)) {
+            const loadedSaved = cloudDocData.savedGames.slice(0, 50);
+            setSavedGames(loadedSaved);
+            try {
+              localStorage.setItem("sudoku_saved_games", JSON.stringify(loadedSaved));
+            } catch {}
+          }
+
+          // 3. Existing friends list
+          try {
+            const storedPriorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
+            const pastPlayersSnap = await getDocs(collection(db, "users", uid, "past_players"));
+            if (!pastPlayersSnap.empty) {
+              const loadedFriends: Array<{
+                id: string;
+                name: string;
+                isFriend: boolean;
+                status: 'online' | 'offline';
+                inviteStatus: 'idle' | 'sent' | 'joined' | 'declined';
+                lastPlayedAt?: number;
+              }> = [];
+
+              pastPlayersSnap.forEach((d) => {
+                const dData = d.data();
+                if (
+                  d.id !== "USER_88201" && 
+                  d.id !== "GUEST_99210" && 
+                  d.id !== "USER_33104" &&
+                  d.id !== uid &&
+                  (!storedPriorGuestId || d.id !== storedPriorGuestId)
+                ) {
+                  loadedFriends.push({
+                    id: d.id,
+                    name: dData.name || "Player",
+                    isFriend: !!dData.isFriend,
+                    status: "offline",
+                    inviteStatus: "idle",
+                    lastPlayedAt: dData.timestamp?.toMillis ? dData.timestamp.toMillis() : (dData.lastPlayedAt || undefined)
+                  });
+                }
+              });
+
+              if (loadedFriends.length > 0) {
+                setMultiplayerPlayers(loadedFriends);
+                try {
+                  localStorage.setItem("sudoku_past_players", JSON.stringify(loadedFriends));
+                } catch {}
+              }
+            } else if (Array.isArray(cloudDocData?.pastPlayers) || Array.isArray(cloudDocData?.friends)) {
+              const rawPlayers = cloudDocData?.pastPlayers || cloudDocData?.friends || [];
+              const fallbackFriends = rawPlayers
+                .filter((p: any) => 
+                  p && 
+                  p.id && 
+                  p.id !== "USER_88201" && 
+                  p.id !== "GUEST_99210" && 
+                  p.id !== "USER_33104" &&
+                  p.id !== uid &&
+                  (!storedPriorGuestId || p.id !== storedPriorGuestId)
+                )
+                .map((p: any) => ({
+                  id: p.id,
+                  name: p.name || "Player",
+                  isFriend: !!p.isFriend,
+                  status: "offline" as const,
+                  inviteStatus: "idle" as const,
+                  lastPlayedAt: p.lastPlayedAt
+                }));
+              if (fallbackFriends.length > 0) {
+                setMultiplayerPlayers(fallbackFriends);
+                try {
+                  localStorage.setItem("sudoku_past_players", JSON.stringify(fallbackFriends));
+                } catch {}
+              }
+            }
+          } catch (friendsErr) {
+            console.warn("[Auth] Friends restoration notice:", friendsErr);
+          }
+
+          // 4. Settings Cloud Sync: Read cloudDocData.settings and apply preferences
+          if (cloudDocData?.settings && typeof cloudDocData.settings === "object") {
+            const s = cloudDocData.settings;
+            // Fast Fill
+            if (typeof s.isNumberFirstInputMode === "boolean") {
+              setIsNumberFirstInputMode(s.isNumberFirstInputMode);
+              try { localStorage.setItem("sudoku_isNumberFirstInputMode", String(s.isNumberFirstInputMode)); } catch {}
+            }
+            // Notes Auto-Remove
+            if (typeof s.isAutoRemoveNotesEnabled === "boolean") {
+              setIsAutoRemoveNotesEnabled(s.isAutoRemoveNotesEnabled);
+              try { localStorage.setItem("sudoku_isAutoRemoveNotesEnabled", String(s.isAutoRemoveNotesEnabled)); } catch {}
+            }
+            // Sound
+            if (typeof s.soundEffects === "boolean") {
+              setSoundEffects(s.soundEffects);
+              try { localStorage.setItem("sudoku_soundEffects", String(s.soundEffects)); } catch {}
+            }
+            // Theme
+            if (s.activeTheme === "Original" || s.activeTheme === "Sticky Note Pro") {
+              setActiveTheme(s.activeTheme);
+              try { localStorage.setItem("sudoku_activeTheme", s.activeTheme); } catch {}
+            }
+            if (typeof s.darkMode === "boolean") {
+              setDarkMode(s.darkMode);
+              try { localStorage.setItem("sudoku_darkMode", String(s.darkMode)); } catch {}
+            }
+            // Duplicates Highlight
+            if (typeof s.highlightIdentical === "boolean") {
+              setHighlightIdentical(s.highlightIdentical);
+              try { localStorage.setItem("sudoku_highlightIdentical", String(s.highlightIdentical)); } catch {}
+            }
+            // Additional gameplay preferences
+            if (typeof s.autoSwitchCompletedNumber === "boolean") {
+              setAutoSwitchCompletedNumber(s.autoSwitchCompletedNumber);
+              try { localStorage.setItem("sudoku_autoSwitchCompletedNumber", String(s.autoSwitchCompletedNumber)); } catch {}
+            }
+            if (typeof s.isPreventMistakeNotesEnabled === "boolean") {
+              setIsPreventMistakeNotesEnabled(s.isPreventMistakeNotesEnabled);
+              try { localStorage.setItem("sudoku_isPreventMistakeNotesEnabled", String(s.isPreventMistakeNotesEnabled)); } catch {}
+            }
+            if (typeof s.vibrations === "boolean") {
+              setVibrations(s.vibrations);
+              try { localStorage.setItem("sudoku_vibrations", String(s.vibrations)); } catch {}
+            }
+            if (typeof s.timerEnabled === "boolean") {
+              setTimerEnabled(s.timerEnabled);
+              try { localStorage.setItem("sudoku_timerEnabled", String(s.timerEnabled)); } catch {}
+            }
+            if (typeof s.displayScores === "boolean") {
+              setDisplayScores(s.displayScores);
+              try { localStorage.setItem("sudoku_displayScores", String(s.displayScores)); } catch {}
+            }
+            if (typeof s.mistakeLimitEnabled === "boolean") {
+              setMistakeLimitEnabled(s.mistakeLimitEnabled);
+              try { localStorage.setItem("sudoku_mistakeLimitEnabled", String(s.mistakeLimitEnabled)); } catch {}
+            }
+            if (typeof s.highlightAreas === "boolean") {
+              setHighlightAreas(s.highlightAreas);
+              try { localStorage.setItem("sudoku_highlightAreas", String(s.highlightAreas)); } catch {}
+            }
+            if (typeof s.showRemainingNumbers === "boolean") {
+              setShowRemainingNumbers(s.showRemainingNumbers);
+              try { localStorage.setItem("sudoku_showRemainingNumbers", String(s.showRemainingNumbers)); } catch {}
+            }
+            if (typeof s.notificationsEnabled === "boolean") {
+              setNotificationsEnabled(s.notificationsEnabled);
+              try { localStorage.setItem("sudoku_notificationsEnabled", String(s.notificationsEnabled)); } catch {}
+            }
+          }
+
+          // 5. Profile sync
+          const currentProfile = userProfileRef.current;
+          let resolvedDisplayName = currentProfile?.name || "";
+          if (isDefaultOrEmptyPlayerName(currentProfile?.name)) {
+            if (cloudDocData?.name && !isDefaultOrEmptyPlayerName(cloudDocData.name)) {
+              resolvedDisplayName = cloudDocData.name.trim().slice(0, 15);
+            } else if (authUser?.displayName) {
+              resolvedDisplayName = authUser.displayName.trim().slice(0, 15);
+            } else {
+              resolvedDisplayName = "Pro_Player";
+            }
+          } else {
+            resolvedDisplayName = currentProfile!.name;
+          }
+
+          const updatedProfile = {
+            id: uid,
+            name: resolvedDisplayName,
+            avatarColor: cloudDocData?.avatarColor || currentProfile?.avatarColor || "#8B5CF6",
+            isSynced: true,
+            email: authUser?.email || cloudDocData?.email || currentProfile?.email || undefined
+          };
+          userProfileRef.current = updatedProfile;
+          setUserProfile(updatedProfile);
+          try {
+            localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
+          } catch {}
+
+          // 6. Sync current FCM push token & preference to users/{user.uid}
+          const currentFcmToken = localStorage.getItem("sudoku_fcm_token");
+          const isNotifsEnabled = localStorage.getItem("sudoku_notificationsEnabled") !== "false";
+          try {
+            if (!isNotifsEnabled) {
+              const payload: any = { notificationsEnabled: false };
+              if (currentFcmToken) {
+                payload.fcmTokens = arrayRemove(currentFcmToken);
+                payload.fcmToken = "";
+              }
+              await setDoc(userDocRef, payload, { merge: true });
+            } else if (currentFcmToken) {
+              await setDoc(userDocRef, {
+                notificationsEnabled: true,
+                fcmToken: currentFcmToken,
+                fcmTokens: arrayUnion(currentFcmToken)
+              }, { merge: true });
+            }
+          } catch (fcmErr) {
+            console.warn("[Auth] Push token sync notice:", fcmErr);
+          }
+
+          currentHydratedUidRef.current = uid;
+        } else {
+          // Document does not exist in Firestore yet: initialize it with local progress
+          const currentProfile = userProfileRef.current;
+          const resolvedDisplayName = authUser?.displayName?.trim()?.slice(0, 15) || currentProfile?.name || "Pro_Player";
+          const updatedProfile = {
+            id: uid,
+            name: resolvedDisplayName,
+            avatarColor: currentProfile?.avatarColor || "#8B5CF6",
+            isSynced: true,
+            email: authUser?.email || currentProfile?.email || undefined
+          };
+          userProfileRef.current = updatedProfile;
+          setUserProfile(updatedProfile);
+          try {
+            localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
+          } catch {}
+
+          const currentSettingsPayload = {
+            isNumberFirstInputMode,
+            autoSwitchCompletedNumber,
+            isAutoRemoveNotesEnabled,
+            isPreventMistakeNotesEnabled,
+            soundEffects,
+            vibrations,
+            timerEnabled,
+            displayScores,
+            mistakeLimitEnabled,
+            darkMode,
+            activeTheme,
+            highlightIdentical,
+            highlightAreas,
+            showRemainingNumbers,
+            notificationsEnabled,
+          };
+
+          const safeCompleted = JSON.parse(JSON.stringify(localCompleted.slice(0, 50)));
+          await setDoc(userDocRef, {
+            name: resolvedDisplayName,
+            email: authUser?.email || null,
+            authUid: uid,
+            isSynced: true,
+            avatarColor: updatedProfile.avatarColor,
+            totalGamesPlayed: localTotalGames,
+            totalWinsCount: localTotalWins,
+            winStreak: localWinStreak,
+            bestTimes: personalBestTimesRef.current,
+            completedGames: safeCompleted,
+            settings: currentSettingsPayload,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+
+          setStats({
+            totalGamesPlayed: localTotalGames,
+            totalWinsCount: localTotalWins,
+            winStreak: localWinStreak,
+            bestTimes: personalBestTimesRef.current
+          });
+          setCompletedGames(localCompleted);
+
+          currentHydratedUidRef.current = uid;
+        }
+      } catch (err) {
+        console.warn("[Auth] Hydration error:", err);
+      } finally {
+        setIsAuthHydrating(false);
+        hydrationPromiseRef.current = null;
+      }
+    };
+
+    hydrationPromiseRef.current = runHydration();
+    return hydrationPromiseRef.current;
+  }, [setStats]);
+
+  const hydrateUserFromCloudRef = useRef(hydrateUserFromCloud);
+  useEffect(() => {
+    hydrateUserFromCloudRef.current = hydrateUserFromCloud;
+  }, [hydrateUserFromCloud]);
+
+  // Auth listener for cloud state hydration and anonymous session bootstrap
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        currentHydratedUidRef.current = null;
+        setIsAuthHydrating(false);
+        signInAnonymously(auth).catch((err) => {
+          console.warn("[Auth] Background anonymous session init error:", err);
+        });
+      } else if (user.isAnonymous) {
+        currentHydratedUidRef.current = user.uid;
+        setIsAuthHydrating(false);
+      } else if (user && !user.isAnonymous) {
+        if (!isConnectingRef.current) {
+          await hydrateUserFromCloudRef.current(user.uid, user);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 1s Debounced Cloud Sync for user settings/preferences
+  const isSettingsInitialMountRef = useRef<boolean>(true);
+  useEffect(() => {
+    if (isSettingsInitialMountRef.current) {
+      isSettingsInitialMountRef.current = false;
+      return;
+    }
+    if (isAuthHydrating) return;
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid || auth.currentUser?.isAnonymous || !userProfile?.isSynced) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const settingsPayload = {
+        isNumberFirstInputMode,
+        autoSwitchCompletedNumber,
+        isAutoRemoveNotesEnabled,
+        isPreventMistakeNotesEnabled,
+        soundEffects,
+        vibrations,
+        timerEnabled,
+        displayScores,
+        mistakeLimitEnabled,
+        darkMode,
+        activeTheme,
+        highlightIdentical,
+        highlightAreas,
+        showRemainingNumbers,
+        notificationsEnabled,
+      };
+      const userDocRef = doc(db, "users", currentUid);
+      setDoc(userDocRef, { settings: settingsPayload, updatedAt: serverTimestamp() }, { merge: true })
+        .catch((err) => {
+          console.warn("[Settings] Debounced Firestore settings sync notice:", err);
+        });
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [
+    isNumberFirstInputMode,
+    autoSwitchCompletedNumber,
+    isAutoRemoveNotesEnabled,
+    isPreventMistakeNotesEnabled,
+    soundEffects,
+    vibrations,
+    timerEnabled,
+    displayScores,
+    mistakeLimitEnabled,
+    darkMode,
+    activeTheme,
+    highlightIdentical,
+    highlightAreas,
+    showRemainingNumbers,
+    notificationsEnabled,
+    userProfile?.isSynced,
+    isAuthHydrating
+  ]);
+
   const handleConnectGoogle = async () => {
     if (isConnectingRef.current || isConnectingGoogle) {
       console.warn("[Auth] Connect Google already in flight. Aborting duplicate trigger.");
@@ -2855,203 +3488,413 @@ useEffect(() => {
     setIsConnectingGoogle(true);
 
     try {
-      const provider = new GoogleAuthProvider();
-      provider.addScope("profile");
-      provider.addScope("email");
-      provider.setCustomParameters({
-        prompt: "select_account"
-      });
-
       let credentialUser = auth.currentUser;
+      const wasAnonymous = !credentialUser || credentialUser.isAnonymous;
+      const priorProfileId = userProfile?.id;
+      const isPriorGuest = wasAnonymous || Boolean(priorProfileId && (priorProfileId.startsWith("GUEST_") || !userProfile?.isSynced));
+      const priorGuestId = isPriorGuest ? (priorProfileId || (credentialUser?.isAnonymous ? credentialUser.uid : null)) : null;
+
+      // 1. Read current local guest state snapshot before completing switch to authenticated UID
+      let guestCompleted = [...completedGames];
+      if (guestCompleted.length === 0) {
+        try {
+          const stored = localStorage.getItem("sudoku_completed_games");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) guestCompleted = parsed;
+          }
+        } catch {}
+      }
+
+      let guestSaved = [...savedGames];
+      if (guestSaved.length === 0) {
+        try {
+          const stored = localStorage.getItem("sudoku_saved_games");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) guestSaved = parsed;
+          }
+        } catch {}
+      }
+
+      let guestFriends = [...multiplayerPlayers];
+      if (guestFriends.length === 0) {
+        try {
+          const stored = localStorage.getItem("sudoku_past_players");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) guestFriends = parsed;
+          }
+        } catch {}
+      }
+
+      const guestSnapshot = wasAnonymous ? {
+        totalGamesPlayed: Math.max(
+          totalGamesPlayed,
+          Number(localStorage.getItem("sudoku_total_games_played") || 0),
+          Number(localStorage.getItem("sudoku_gamesPlayed") || 0),
+          guestCompleted.length
+        ),
+        totalWinsCount: Math.max(
+          totalWinsCount,
+          Number(localStorage.getItem("sudoku_total_wins_count") || 0),
+          Number(localStorage.getItem("sudoku_winsCount") || 0),
+          guestCompleted.filter(g => g.isWon).length
+        ),
+        winStreak: Math.max(
+          winStreak,
+          Number(localStorage.getItem("sudoku_winStreak") || 0)
+        ),
+        personalBestTimes: { ...personalBestTimesRef.current },
+        completedGames: guestCompleted,
+        savedGames: guestSaved,
+        multiplayerPlayers: guestFriends
+      } : null;
+
       if (!credentialUser) {
         credentialUser = (await signInAnonymously(auth)).user;
       }
 
       let finalUser = credentialUser;
 
-      if (credentialUser.isAnonymous) {
-        try {
-          const linkResult = await linkWithPopup(credentialUser, provider);
-          finalUser = linkResult.user;
-        } catch (linkError: any) {
-          console.warn("[Auth] linkWithPopup notice:", {
-            code: linkError?.code,
-            message: linkError?.message
-          });
-          if (
-            linkError.code === "auth/credential-already-in-use" ||
-            linkError.code === "auth/account-exists-with-different-credential"
-          ) {
-            // Already an existing Google account -> sign in directly with credential from error without opening a second popup
-            const credential = GoogleAuthProvider.credentialFromError(linkError);
-            if (credential) {
-              const signInResult = await signInWithCredential(auth, credential);
-              finalUser = signInResult.user;
+      if (Capacitor.isNativePlatform()) {
+        await GoogleAuth.initialize({
+          clientId: '116330285995-aiaskr693anl3bkhapd6vdu3kiieaphc.apps.googleusercontent.com',
+          scopes: ['profile', 'email'],
+          grantOfflineAccess: false
+        });
+
+        const googleUser = await GoogleAuth.signIn();
+        const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
+
+        if (credentialUser.isAnonymous) {
+          try {
+            finalUser = (await linkWithCredential(credentialUser, credential)).user;
+          } catch (linkError: any) {
+            console.warn("[Auth] Native linkWithCredential notice:", {
+              code: linkError?.code,
+              message: linkError?.message
+            });
+            if (
+              linkError.code === "auth/credential-already-in-use" ||
+              linkError.code === "auth/account-exists-with-different-credential"
+            ) {
+              finalUser = (await signInWithCredential(auth, credential)).user;
             } else {
-              const signInResult = await signInWithPopup(auth, provider);
-              finalUser = signInResult.user;
+              throw linkError;
             }
-          } else {
-            throw linkError;
           }
+        } else {
+          finalUser = (await signInWithCredential(auth, credential)).user;
         }
       } else {
+        const provider = new GoogleAuthProvider();
+        provider.addScope("profile");
+        provider.addScope("email");
+        provider.setCustomParameters({
+          prompt: "select_account"
+        });
+
         const signInResult = await signInWithPopup(auth, provider);
         finalUser = signInResult.user;
       }
 
       if (finalUser && finalUser.email) {
-        // 1. MULTI-ACCOUNT ISOLATION (PREVENT DATA BLEED):
-        // Completely reset cached profile stats before loading User B's state
-        const resetPB: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
-        setPersonalBestTimes(resetPB);
-        personalBestTimesRef.current = resetPB;
-        setTotalGamesPlayed(0);
-        setTotalWinsCount(0);
-        setCompletedGames([]);
-        setSavedGames([]);
-
-        const keysToPurge = [
-          "sudoku_best_times",
-          "sudoku_total_games_played",
-          "sudoku_total_wins_count",
-          "sudoku_completed_games",
-          "sudoku_saved_games",
-          "sudoku_gamesPlayed",
-          "sudoku_winsCount"
-        ];
-        keysToPurge.forEach(k => {
+        // GUEST-TO-GMAIL IDENTITY MIGRATION & GHOST CLEANUP:
+        // If the previous session was a guest, write { status: "migrated", lastActive: serverTimestamp() } to users/{guestId}
+        if (priorGuestId && priorGuestId !== finalUser.uid) {
           try {
-            localStorage.removeItem(k);
+            localStorage.setItem("sudoku_prior_guest_id", priorGuestId);
+            const guestDocRef = doc(db, "users", priorGuestId);
+            await setDoc(guestDocRef, {
+              status: "migrated",
+              lastActive: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              migratedTo: finalUser.uid
+            }, { merge: true });
+            console.log(`[Auth] Prior guest ID ${priorGuestId} marked as migrated to ${finalUser.uid}`);
+          } catch (migErr) {
+            console.warn("[Auth] Failed to mark prior guest as migrated in Firestore:", migErr);
+          }
+
+          // Clean up prior guest ID and current UID from past_players subcollection in Firestore
+          try {
+            await deleteDoc(doc(db, "users", finalUser.uid, "past_players", priorGuestId));
+            await deleteDoc(doc(db, "users", finalUser.uid, "past_players", finalUser.uid));
           } catch {}
-        });
 
-        // 2. SAFE DISPLAY NAME:
-        // If current name is default/empty, set result.user.displayName; if player already has custom name, preserve it
-        let resolvedDisplayName = userProfile?.name || "";
-        const googleDisplayName = (finalUser.displayName?.trim() || "").slice(0, 15);
+          // Remove prior guest ID from local rematchInviteStates to prevent ghost 60s cooldowns
+          setRematchInviteStates(prev => {
+            if (!prev[priorGuestId]) return prev;
+            const next = { ...prev };
+            delete next[priorGuestId];
+            return next;
+          });
+        }
 
-        if (isDefaultOrEmptyPlayerName(userProfile?.name)) {
-          if (googleDisplayName) {
-            resolvedDisplayName = googleDisplayName;
-            try {
-              localStorage.setItem("sudoku_is_display_name_configured", "true");
-            } catch {}
+        if (guestSnapshot) {
+          // Fetch existing cloud profile at users/{finalUser.uid} (if it already exists)
+          const userDocRef = doc(db, "users", finalUser.uid);
+          let cloudData: any = null;
+          let userExists = false;
+          try {
+            const userSnap = await getDoc(userDocRef);
+            if (userSnap.exists()) {
+              cloudData = userSnap.data();
+              userExists = true;
+            }
+          } catch (fetchErr) {
+            console.warn("[Auth] Failed to fetch existing cloud profile:", fetchErr);
+          }
+
+          if (userExists) {
+            // Returning User: If users/{finalUser.uid} already exists, strictly hydrate from cloudDocData.completedGames and cloud counters without merging stale guest memory
+            console.log(`[Auth] Returning user detected for UID ${finalUser.uid}. Hydrating directly from cloud without merging guest memory.`);
+            if (Array.isArray(cloudData?.completedGames) && cloudData.completedGames.length > 0) {
+              setCompletedGames(cloudData.completedGames);
+              try {
+                localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudData.completedGames));
+              } catch {}
+            }
+            await hydrateUserFromCloud(finalUser.uid, finalUser, true);
           } else {
-            resolvedDisplayName = userProfile?.name || "Pro_Player";
+            // First-Time Onboarding: If Firestore document users/{finalUser.uid} does NOT exist, merge initial guest games into the profile so new users do not lose their first played games.
+
+          // 1. Stats merge
+          const cloudGames = typeof cloudData?.totalGamesPlayed === "number"
+            ? cloudData.totalGamesPlayed
+            : (typeof cloudData?.gamesPlayed === "number" ? cloudData.gamesPlayed : 0);
+          const mergedTotalGames = cloudGames + guestSnapshot.totalGamesPlayed;
+
+          const cloudWins = typeof cloudData?.totalWinsCount === "number"
+            ? cloudData.totalWinsCount
+            : (typeof cloudData?.gamesWon === "number"
+              ? cloudData.gamesWon
+              : (typeof cloudData?.winsCount === "number" ? cloudData.winsCount : 0));
+          const mergedTotalWins = cloudWins + guestSnapshot.totalWinsCount;
+
+          const cloudStreak = typeof cloudData?.winStreak === "number" ? cloudData.winStreak : 0;
+          const mergedWinStreak = Math.max(cloudStreak, guestSnapshot.winStreak);
+
+          const diffKeys: Difficulty[] = ["EASY", "MEDIUM", "HARD", "EXPERT"];
+          const mergedBestTimes: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
+          diffKeys.forEach((diff) => {
+            const cloudRaw = cloudData?.bestTimes?.[diff] ?? cloudData?.bestTimes?.[diff.toLowerCase()] ?? 0;
+            const cloudSec = Number(cloudRaw) || 0;
+            const guestSec = Number(guestSnapshot.personalBestTimes[diff]) || 0;
+            if (cloudSec > 0 && guestSec > 0) {
+              mergedBestTimes[diff] = Math.min(cloudSec, guestSec);
+            } else {
+              mergedBestTimes[diff] = cloudSec > 0 ? cloudSec : (guestSec > 0 ? guestSec : 0);
+            }
+          });
+
+          // Helper for sorting game records by timestamp descending
+          const getGameTimestamp = (g: any): number => {
+            if (!g) return 0;
+            if (typeof g.timestamp === "number") return g.timestamp;
+            if (g.timestamp?.toMillis) return g.timestamp.toMillis();
+            if (g.date) {
+              const parsed = Date.parse(g.date);
+              if (!isNaN(parsed)) return parsed;
+            }
+            return 0;
+          };
+
+          // 2. Match History (completedGames) merge
+          const cloudCompleted: CompletedGame[] = Array.isArray(cloudData?.completedGames) ? cloudData.completedGames : [];
+          const combinedCompleted = [...guestSnapshot.completedGames, ...cloudCompleted];
+          const seenCompletedIds = new Set<string>();
+          const deduplicatedCompleted: CompletedGame[] = [];
+          for (const g of combinedCompleted) {
+            if (!g) continue;
+            const id = String(g.id || (g.seed ? `seed_${g.seed}` : ""));
+            if (id && !seenCompletedIds.has(id)) {
+              seenCompletedIds.add(id);
+              deduplicatedCompleted.push(g);
+            }
+          }
+          deduplicatedCompleted.sort((a, b) => getGameTimestamp(b) - getGameTimestamp(a));
+          const mergedCompleted = deduplicatedCompleted.slice(0, 20);
+
+          // 3. Saved Boards (savedGames) merge
+          const cloudSaved: CompletedGame[] = Array.isArray(cloudData?.savedGames) ? cloudData.savedGames : [];
+          const combinedSaved = [...guestSnapshot.savedGames, ...cloudSaved];
+          const seenSavedIds = new Set<string>();
+          const deduplicatedSaved: CompletedGame[] = [];
+          for (const g of combinedSaved) {
+            if (!g) continue;
+            const id = String(g.id || (g.seed ? `seed_${g.seed}` : ""));
+            if (id && !seenSavedIds.has(id)) {
+              seenSavedIds.add(id);
+              deduplicatedSaved.push(g);
+            }
+          }
+          deduplicatedSaved.sort((a, b) => getGameTimestamp(b) - getGameTimestamp(a));
+          const mergedSaved = deduplicatedSaved.slice(0, 20);
+
+          // 4. Friends List merge
+          const cloudFriendsMap = new Map<string, any>();
+          try {
+            const pastSnap = await getDocs(collection(db, "users", finalUser.uid, "past_players"));
+            pastSnap.forEach((d) => {
+              const dData = d.data();
+              if (
+                d.id !== "USER_88201" && 
+                d.id !== "GUEST_99210" && 
+                d.id !== "USER_33104" && 
+                d.id !== finalUser.uid &&
+                (!priorGuestId || d.id !== priorGuestId)
+              ) {
+                cloudFriendsMap.set(d.id, {
+                  id: d.id,
+                  name: dData.name || "Player",
+                  isFriend: !!dData.isFriend,
+                  status: "offline",
+                  inviteStatus: "idle",
+                  lastPlayedAt: dData.timestamp?.toMillis ? dData.timestamp.toMillis() : (dData.lastPlayedAt || undefined)
+                });
+              }
+            });
+          } catch (pastErr) {
+            console.warn("[Auth] Cloud past_players fetch notice:", pastErr);
+          }
+
+          const docFriends = cloudData?.pastPlayers || cloudData?.friends;
+          if (Array.isArray(docFriends)) {
+            for (const p of docFriends) {
+              if (
+                p && 
+                p.id && 
+                !cloudFriendsMap.has(p.id) && 
+                p.id !== "USER_88201" && 
+                p.id !== "GUEST_99210" && 
+                p.id !== "USER_33104" &&
+                p.id !== finalUser.uid &&
+                (!priorGuestId || p.id !== priorGuestId)
+              ) {
+                cloudFriendsMap.set(p.id, {
+                  id: p.id,
+                  name: p.name || "Player",
+                  isFriend: !!p.isFriend,
+                  status: "offline",
+                  inviteStatus: "idle",
+                  lastPlayedAt: p.lastPlayedAt
+                });
+              }
+            }
+          }
+
+          // Preserve existing cloud friends and append guest friends
+          const mergedFriendsList: any[] = Array.from(cloudFriendsMap.values());
+          for (const gf of guestSnapshot.multiplayerPlayers) {
+            if (
+              gf && 
+              gf.id && 
+              !cloudFriendsMap.has(gf.id) && 
+              gf.id !== "USER_88201" && 
+              gf.id !== "GUEST_99210" && 
+              gf.id !== "USER_33104" &&
+              gf.id !== finalUser.uid &&
+              (!priorGuestId || gf.id !== priorGuestId)
+            ) {
+              cloudFriendsMap.set(gf.id, gf);
+              mergedFriendsList.push({
+                id: gf.id,
+                name: gf.name || "Player",
+                isFriend: !!gf.isFriend,
+                status: "offline",
+                inviteStatus: "idle",
+                lastPlayedAt: gf.lastPlayedAt || Date.now()
+              });
+            }
+          }
+
+          const clampedFriends = mergedFriendsList.slice(0, 50);
+
+          // Write merged friends to past_players subcollection
+          for (const fr of clampedFriends) {
+            try {
+              const frRef = doc(db, "users", finalUser.uid, "past_players", fr.id);
+              await setDoc(frRef, {
+                id: fr.id,
+                name: fr.name || "Player",
+                isFriend: !!fr.isFriend,
+                timestamp: serverTimestamp()
+              }, { merge: true });
+            } catch (frErr) {
+              console.warn("[Auth] Failed to sync merged friend to subcollection:", frErr);
+            }
+          }
+
+          // 5. Display Name Resolution
+          let resolvedDisplayName = userProfile?.name || "";
+          const googleDisplayName = (finalUser.displayName?.trim() || "").slice(0, 15);
+          if (isDefaultOrEmptyPlayerName(userProfile?.name)) {
+            if (cloudData?.name && !isDefaultOrEmptyPlayerName(cloudData.name)) {
+              resolvedDisplayName = cloudData.name.trim().slice(0, 15);
+            } else {
+              resolvedDisplayName = googleDisplayName || "Pro_Player";
+            }
+          } else {
+            resolvedDisplayName = userProfile!.name;
+          }
+
+          // 6. Settings Cloud Sync: Merge preferences
+          const currentLocalSettings = {
+            isNumberFirstInputMode,
+            autoSwitchCompletedNumber,
+            isAutoRemoveNotesEnabled,
+            isPreventMistakeNotesEnabled,
+            soundEffects,
+            vibrations,
+            timerEnabled,
+            displayScores,
+            mistakeLimitEnabled,
+            darkMode,
+            activeTheme,
+            highlightIdentical,
+            highlightAreas,
+            showRemainingNumbers,
+            notificationsEnabled,
+          };
+          const mergedSettings = cloudData?.settings && typeof cloudData.settings === "object"
+            ? { ...currentLocalSettings, ...cloudData.settings }
+            : currentLocalSettings;
+
+          // Write merged payload to users/{finalUser.uid} using { merge: true }
+          const rawMergePayload = {
+            name: resolvedDisplayName,
+            email: finalUser.email,
+            authUid: finalUser.uid,
+            isSynced: true,
+            avatarColor: cloudData?.avatarColor || userProfile?.avatarColor || "#8B5CF6",
+            totalGamesPlayed: mergedTotalGames,
+            totalWinsCount: mergedTotalWins,
+            winStreak: mergedWinStreak,
+            bestTimes: mergedBestTimes,
+            completedGames: mergedCompleted,
+            savedGames: mergedSaved,
+            pastPlayers: clampedFriends,
+            friends: clampedFriends,
+            settings: mergedSettings
+          };
+          // Deep sanitize payload to strip any undefined values that cause Firestore setDoc to throw
+          const safeMergePayload = JSON.parse(JSON.stringify(rawMergePayload));
+
+          await setDoc(userDocRef, {
+            ...safeMergePayload,
+            updatedAt: serverTimestamp(),
+            createdAt: serverTimestamp()
+          }, { merge: true });
+
+          // 7. Update in-memory app state and local storage with merged record
+          await hydrateUserFromCloud(finalUser.uid, finalUser, true);
           }
         } else {
-          // Preserve player's custom display name
-          resolvedDisplayName = userProfile!.name;
+          // If already signed in on another account or no guest data to merge, hydrate directly
+          await hydrateUserFromCloud(finalUser.uid, finalUser, true);
         }
-
-        // 3. FETCH OR CREATE SPECIFIC DOCUMENT UNDER `/users/{auth.currentUser.uid}` FOR USER B:
-        const userDocRef = doc(db, "users", finalUser.uid);
-        let cloudDocData: any = null;
-
-        try {
-          const userSnap = await getDoc(userDocRef);
-          if (userSnap.exists()) {
-            cloudDocData = userSnap.data();
-
-            // If local name was default and cloud document has a custom name, load cloud name
-            if (isDefaultOrEmptyPlayerName(userProfile?.name) && cloudDocData?.name && typeof cloudDocData.name === "string" && cloudDocData.name.trim()) {
-              resolvedDisplayName = cloudDocData.name.trim().slice(0, 15);
-              try {
-                localStorage.setItem("sudoku_is_display_name_configured", "true");
-              } catch {}
-            }
-
-            // Restore User B's existing personal stats from cloud document
-            if (cloudDocData?.bestTimes && typeof cloudDocData.bestTimes === "object") {
-              const loadedPB: Record<Difficulty, number> = {
-                EASY: Number(cloudDocData.bestTimes.EASY) || 0,
-                MEDIUM: Number(cloudDocData.bestTimes.MEDIUM) || 0,
-                HARD: Number(cloudDocData.bestTimes.HARD) || 0,
-                EXPERT: Number(cloudDocData.bestTimes.EXPERT) || 0,
-              };
-              setPersonalBestTimes(loadedPB);
-              personalBestTimesRef.current = loadedPB;
-              try {
-                localStorage.setItem("sudoku_best_times", JSON.stringify(loadedPB));
-              } catch {}
-            }
-
-            if (typeof cloudDocData?.totalGamesPlayed === "number" && cloudDocData.totalGamesPlayed >= 0) {
-              setTotalGamesPlayed(cloudDocData.totalGamesPlayed);
-              try {
-                localStorage.setItem("sudoku_total_games_played", String(cloudDocData.totalGamesPlayed));
-              } catch {}
-            }
-
-            if (typeof cloudDocData?.totalWinsCount === "number" && cloudDocData.totalWinsCount >= 0) {
-              setTotalWinsCount(cloudDocData.totalWinsCount);
-              try {
-                localStorage.setItem("sudoku_total_wins_count", String(cloudDocData.totalWinsCount));
-              } catch {}
-            }
-
-            if (Array.isArray(cloudDocData?.completedGames)) {
-              const loadedCompleted = cloudDocData.completedGames.slice(0, 10);
-              setCompletedGames(loadedCompleted);
-              try {
-                localStorage.setItem("sudoku_completed_games", JSON.stringify(loadedCompleted));
-              } catch {}
-            }
-
-            if (Array.isArray(cloudDocData?.savedGames)) {
-              const loadedSaved = cloudDocData.savedGames.slice(0, 20);
-              setSavedGames(loadedSaved);
-              try {
-                localStorage.setItem("sudoku_saved_games", JSON.stringify(loadedSaved));
-              } catch {}
-            }
-
-            // Update User B's profile document with latest active session timestamp & sync state
-            await setDoc(
-              userDocRef,
-              {
-                name: resolvedDisplayName,
-                email: finalUser.email,
-                authUid: finalUser.uid,
-                isSynced: true,
-                updatedAt: serverTimestamp()
-              },
-              { merge: true }
-            );
-          } else {
-            // First-time profile document creation for User B under `/users/{auth.currentUser.uid}`
-            await setDoc(userDocRef, {
-              name: resolvedDisplayName,
-              email: finalUser.email,
-              authUid: finalUser.uid,
-              isSynced: true,
-              avatarColor: userProfile?.avatarColor || "#8B5CF6",
-              bestTimes: { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 },
-              totalGamesPlayed: 0,
-              totalWinsCount: 0,
-              completedGames: [],
-              savedGames: [],
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            });
-          }
-        } catch (dbErr) {
-          console.warn("[Auth] Cloud profile sync notice:", dbErr);
-        }
-
-        const updatedProfile = {
-          id: finalUser.uid,
-          name: resolvedDisplayName,
-          avatarColor: cloudDocData?.avatarColor || userProfile?.avatarColor || "#8B5CF6",
-          isSynced: true,
-          email: finalUser.email || undefined
-        };
-
-        setUserProfile(updatedProfile);
-        try {
-          localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
-        } catch {}
 
         addLog(`🔒 Connected Google Account: ${finalUser.email}`);
         showToast("Connected to Google Account!");
@@ -3070,65 +3913,109 @@ useEffect(() => {
     }
   };
 
+  const handleGoogleLogin = handleConnectGoogle;
+
   const handleLogout = async () => {
     try {
       addLog("🔒 Disconnecting session...");
+      const currentUid = auth.currentUser?.uid || userProfile?.id;
+      const cachedFcmToken = typeof window !== "undefined" ? localStorage.getItem("sudoku_fcm_token") : null;
+
+      // 1. Prune device push token from Firestore users/{userProfile.id}.fcmTokens via arrayRemove(cachedFcmToken)
+      if (currentUid && currentUid !== "GUEST" && !currentUid.startsWith("GUEST_")) {
+        try {
+          const userRef = doc(db, "users", currentUid);
+          const updateData: any = {
+            status: "offline",
+            lastActive: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          };
+          if (cachedFcmToken) {
+            updateData.fcmTokens = arrayRemove(cachedFcmToken);
+            updateData.fcmToken = "";
+          }
+          await setDoc(userRef, updateData, { merge: true });
+        } catch (err) {
+          console.warn("[Auth] Error updating user presence/token in Firestore on logout:", err);
+        }
+      }
+
+      // 2. Broadcast { status: "offline", lastActive: serverTimestamp() } and call await signOut(auth)
+      if (currentUid) {
+        try {
+          await setDoc(doc(db, "presence", currentUid), {
+            status: "offline",
+            lastActive: serverTimestamp()
+          }, { merge: true });
+        } catch {}
+      }
+      currentHydratedUidRef.current = null;
       await signOut(auth);
 
-      // 1. COMPLETELY RESET STATS IN MEMORY (MULTI-ACCOUNT ISOLATION):
-      const defaultPB: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
-      setPersonalBestTimes(defaultPB);
-      personalBestTimesRef.current = defaultPB;
-      setTotalGamesPlayed(0);
-      setTotalWinsCount(0);
-      setCompletedGames([]);
-      setSavedGames([]);
-
-      // 2. CLEAR CACHED STATS & USER PROFILE IN LOCALSTORAGE:
-      const keysToRemove = [
-        "sudoku_best_times",
-        "sudoku_total_games_played",
-        "sudoku_total_wins_count",
+      // 3. Wipe all local storage session items
+      const sessionKeysToWipe = [
         "sudoku_completed_games",
-        "sudoku_saved_games",
+        "sudoku_total_games_played",
         "sudoku_gamesPlayed",
+        "sudoku_total_wins_count",
         "sudoku_winsCount",
-        "sudoku_is_display_name_configured"
+        "sudoku_saved_games",
+        "sudoku_history",
+        "sudoku_best_times",
+        "sudoku_pending_challenges",
+        "sudoku_active_invite",
+        "sudoku_past_players",
+        "sudoku_winStreak",
+        "sudoku_prior_guest_id"
       ];
-      keysToRemove.forEach(k => {
+      sessionKeysToWipe.forEach(key => {
         try {
-          localStorage.removeItem(k);
+          localStorage.removeItem(key);
         } catch {}
       });
 
-      // 3. RE-INITIALIZE A CLEAN LOCAL ANONYMOUS SESSION SO OFFLINE GAMEPLAY/ROOMS CONTINUE WORKING:
-      let anonUid = "GUEST_" + Math.floor(1000 + Math.random() * 9000);
-      try {
-        const anonResult = await signInAnonymously(auth);
-        if (anonResult?.user?.uid) {
-          anonUid = anonResult.user.uid;
-        }
-      } catch (anonErr) {
-        console.warn("[Auth] Anonymous bootstrap notice on logout:", anonErr);
-      }
-
-      const randNum = Math.floor(1000 + Math.random() * 9000);
-      const uniqueName = `Pro_${randNum}`;
-      const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
-      const randColor = colors[Math.floor(Math.random() * colors.length)];
-
-      const cleanProfile = {
-        id: anonUid,
-        name: uniqueName,
-        avatarColor: randColor,
-        isSynced: false,
-        email: null
+      // 4. Deterministically apply INITIAL_GUEST_STATE to all relevant in-memory states in a single synchronous pass
+      const freshGuestId = "GUEST_" + Math.random().toString(36).substring(2, 9);
+      const cleanGuestProfile = {
+        ...INITIAL_GUEST_STATE.userProfile,
+        id: freshGuestId
       };
 
-      setUserProfile(cleanProfile);
+      setUserProfile(cleanGuestProfile);
+      userProfileRef.current = cleanGuestProfile;
       try {
-        localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanProfile));
+        localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuestProfile));
       } catch {}
+
+      setCompletedGames(INITIAL_GUEST_STATE.completedGames);
+      setTotalGamesPlayed(INITIAL_GUEST_STATE.totalGamesPlayed);
+      setTotalWinsCount(INITIAL_GUEST_STATE.totalWinsCount);
+      setPersonalBestTimes(INITIAL_GUEST_STATE.personalBestTimes);
+      personalBestTimesRef.current = INITIAL_GUEST_STATE.personalBestTimes;
+      setSavedGames(INITIAL_GUEST_STATE.savedGames);
+      setMultiplayerPlayers(INITIAL_GUEST_STATE.multiplayerPlayers);
+      setPendingChallenges(INITIAL_GUEST_STATE.pendingChallenges);
+      setActiveInviteNotification(null);
+      setIsDockingToBell(false);
+      setWinStreak(0);
+      setHistory([]);
+      setPreviousRecordTime(null);
+      setIsNewRecordAchieved(false);
+      setPbStage("idle");
+      setStats({
+        totalGamesPlayed: INITIAL_GUEST_STATE.totalGamesPlayed,
+        totalWinsCount: INITIAL_GUEST_STATE.totalWinsCount,
+        winStreak: 0,
+        bestTimes: INITIAL_GUEST_STATE.personalBestTimes
+      });
+
+      // 5. Call await generateAndSetNewPuzzle("EASY") to mount a fresh unseeded solo board
+      setActiveGameId(null);
+      setChallengeMode(false);
+      setChallengeSeed(null);
+      setRematchGameId("");
+      setIsHost(true);
+      await generateAndSetNewPuzzle("EASY");
 
       addLog("👤 Returned to clean local guest session.");
       showToast("Logged out successfully.");
@@ -3311,17 +4198,29 @@ useEffect(() => {
     }
 
     // TERMINAL STATE LOCK: Check local syncedLeaderboard if player already completed or failed via mistakes
-    const existingLocalEntry = syncedLeaderboard.find(r => r.userId === uid);
+    const existingLocalEntry = (syncedLeaderboardRef.current || syncedLeaderboard).find(r => r.userId === uid);
     if (existingLocalEntry) {
       const isTerminalLocal = existingLocalEntry.status === "completed" ||
+                              existingLocalEntry.status === "won" ||
                               existingLocalEntry.status === "victory" ||
                               existingLocalEntry.status === "mistake_game_over" ||
+                              existingLocalEntry.status === "failed" ||
                               Boolean(existingLocalEntry.isWon) ||
                               (!existingLocalEntry.isPending && existingLocalEntry.timeSec !== undefined && Number(existingLocalEntry.timeSec) > 0 && Number(existingLocalEntry.timeSec) < 9999);
       if (isTerminalLocal) {
         console.log(`[Multiplayer] Terminal state locked for user ${uid} via syncedLeaderboard. Forfeit aborted.`);
         return;
       }
+    }
+
+    // TERMINAL STATE LOCK: Check completedGames history if player already completed this match
+    const isCompletedInHistory = (completedGamesRef.current || completedGames)?.some(g =>
+      (g.id === targetRoom || String(g.seed) === targetRoom || String(g.roomCode) === targetRoom) &&
+      (g.userId === uid || !g.userId || g.userId === "GUEST_ANON")
+    );
+    if (isCompletedInHistory) {
+      console.log(`[Multiplayer] Match ${targetRoom} already completed in history for user ${uid}. Forfeit aborted.`);
+      return;
     }
 
     try {
@@ -3331,8 +4230,10 @@ useEffect(() => {
       if (existing.exists()) {
         const d = existing.data();
         const isTerminal = d.status === "completed" || 
+                           d.status === "won" || 
                            d.status === "victory" || 
                            d.status === "mistake_game_over" || 
+                           d.status === "failed" || 
                            Boolean(d.isWon) || 
                            (!d.isPending && d.timeSec !== undefined && Number(d.timeSec) > 0 && Number(d.timeSec) < 9999);
         if (isTerminal) {
@@ -3341,17 +4242,36 @@ useEffect(() => {
         }
       }
 
+      const playerRef = doc(db, "rooms", targetRoom, "players", uid);
+      const playerExisting = await getDoc(playerRef);
+      if (playerExisting.exists()) {
+        const pd = playerExisting.data();
+        const isPlayerTerminal = pd.status === "completed" || 
+                                 pd.status === "won" || 
+                                 pd.status === "victory" || 
+                                 pd.status === "mistake_game_over" || 
+                                 pd.status === "failed" || 
+                                 Boolean(pd.isWon);
+        if (isPlayerTerminal) {
+          console.log(`[Multiplayer] Room player terminal state locked for user ${uid} in room ${targetRoom}. Forfeit aborted.`);
+          return;
+        }
+      }
+
       await setDoc(participantRef, {
         status: "left",
         isPending: false,
         isWon: false,
+        isAbandoned: true,
         updatedAt: serverTimestamp()
       }, { merge: true });
 
-      const playerRef = doc(db, "rooms", targetRoom, "players", uid);
       await setDoc(playerRef, {
         id: uid,
         status: "left",
+        isPending: false,
+        isWon: false,
+        isAbandoned: true,
         updatedAt: serverTimestamp()
       }, { merge: true });
 
@@ -3511,7 +4431,43 @@ useEffect(() => {
 
   useEffect(() => {
     localStorage.setItem("sudoku_notificationsEnabled", String(notificationsEnabled));
-  }, [notificationsEnabled]);
+    const uid = userProfile?.id;
+    if (!uid) return;
+
+    const syncPushPreference = async () => {
+      try {
+        const userRef = doc(db, "users", uid);
+        const cachedToken = localStorage.getItem("sudoku_fcm_token");
+
+        if (!notificationsEnabled) {
+          console.log(`[Push] Notifications disabled. Pruning token from Firestore for user ${uid}.`);
+          const updateData: any = {
+            notificationsEnabled: false
+          };
+          if (cachedToken) {
+            updateData.fcmTokens = arrayRemove(cachedToken);
+            updateData.fcmToken = "";
+          }
+          await setDoc(userRef, updateData, { merge: true });
+        } else {
+          console.log(`[Push] Notifications enabled. Restoring token in Firestore for user ${uid}.`);
+          const updateData: any = {
+            notificationsEnabled: true
+          };
+          if (cachedToken) {
+            updateData.fcmTokens = arrayUnion(cachedToken);
+            updateData.fcmToken = cachedToken;
+          }
+          await setDoc(userRef, updateData, { merge: true });
+          registerPushNotifications();
+        }
+      } catch (err) {
+        console.warn("[Push] Failed to sync push notification preference to Firestore:", err);
+      }
+    };
+
+    syncPushPreference();
+  }, [notificationsEnabled, userProfile?.id]);
 
   // Synchronize dynamic friend invitations across multiple browser tabs
   useEffect(() => {
@@ -3600,7 +4556,7 @@ useEffect(() => {
               if (document.visibilityState === "hidden") {
                 triggerBackgroundNotification(inviteData);
               } else {
-                playInviteChime();
+                playInviteChime(inviteId);
                 setActiveInviteNotification({
                   id: inviteId,
                   fromName: inviteData.fromName || "Player",
@@ -3636,20 +4592,14 @@ useEffect(() => {
       });
     };
 
-    const q1 = query(invitesCol, where("toUserId", "==", user.uid), where("status", "==", "pending"));
-    const unsubscribe1 = onSnapshot(q1, handleSnapshot, (err) => {
-      console.warn("[Firestore] Incoming invites listener (toUserId) notice:", err);
-    });
-
-    const q2 = query(invitesCol, where("recipientId", "==", user.uid), where("status", "==", "pending"));
-    const unsubscribe2 = onSnapshot(q2, handleSnapshot, (err) => {
-      console.warn("[Firestore] Incoming invites listener (recipientId) notice:", err);
+    const q = query(invitesCol, where("toUserId", "==", user.uid), where("status", "==", "pending"));
+    const unsubscribe = onSnapshot(q, handleSnapshot, (err) => {
+      console.warn("[Firestore] Incoming invites listener notice:", err);
     });
 
     return () => {
       console.log(`[Firestore] Unsubscribing from incoming invites for user: ${user.uid}`);
-      unsubscribe1();
-      unsubscribe2();
+      unsubscribe();
     };
   }, [userProfile?.id, notificationsEnabled, sessionStartTime]);
 
@@ -3988,9 +4938,19 @@ useEffect(() => {
   const saveOpponentsToPastPlayers = async (opponents: Array<{ id: string, name: string }>) => {
     const currentUserId = userProfile?.id;
     if (!currentUserId) return;
+    let priorGuestId: string | null = null;
+    try {
+      priorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
+    } catch {}
 
-    // Filter out self and anonymous guests
-    const filteredOpponents = opponents.filter(opp => opp.id && opp.id !== currentUserId && opp.id !== "GUEST_ANON" && opp.id !== "me");
+    // Filter out self, prior guest persona, and anonymous guests
+    const filteredOpponents = opponents.filter(opp => 
+      opp.id && 
+      opp.id !== currentUserId && 
+      opp.id !== "GUEST_ANON" && 
+      opp.id !== "me" &&
+      (!priorGuestId || opp.id !== priorGuestId)
+    );
     if (filteredOpponents.length === 0) return;
 
     console.log("[Multiplayer] Saving opponents to past players:", filteredOpponents);
@@ -4153,10 +5113,19 @@ useEffect(() => {
       localStorage.setItem("sudoku_fcm_token", token);
       if (userProfile?.id) {
         const userRef = doc(db, "users", userProfile.id);
-        await setDoc(userRef, { 
-          fcmToken: token,
-          fcmTokens: arrayUnion(token)
-        }, { merge: true });
+        if (notificationsEnabled) {
+          await setDoc(userRef, { 
+            notificationsEnabled: true,
+            fcmToken: token,
+            fcmTokens: arrayUnion(token)
+          }, { merge: true });
+        } else {
+          await setDoc(userRef, {
+            notificationsEnabled: false,
+            fcmTokens: arrayRemove(token),
+            fcmToken: ""
+          }, { merge: true });
+        }
       }
     } catch (e) {
       console.error("[FCM] Failed to save FCM token:", e);
@@ -4345,6 +5314,8 @@ useEffect(() => {
     setSolutionGrid(solution2D.map(r => [...r]));
     setBoardState({
       grid: finishedGrid,
+      initialGrid: puzzle2D,
+      solutionGrid: solution2D,
       selectedRow: null,
       selectedCol: null,
       currentMistakesCount: 0,
@@ -4449,115 +5420,203 @@ useEffect(() => {
     showToast("Challenge invitation declined.");
   };
 
-  const handleViewChallengeResults = async (roomCode: string) => {
+  const handleViewChallengeResults = async (roomCode: string, forceOpenModal = false) => {
     playClickSound();
     setActiveInviteNotification(null);
     setIsDockingToBell(false);
 
-    if (!roomCode) return;
-    const cleanRoomCode = String(roomCode).padStart(6, '0').slice(-6);
+    if (!roomCode || typeof roomCode !== "string") return;
 
-    try {
-      showToast(t("syncingResults") || "Syncing match standings...");
-      // 1. Fetch room document from Firestore
-      const roomSnap = await getDoc(doc(db, "rooms", cleanRoomCode));
-      const roomData = roomSnap.exists() ? roomSnap.data() : null;
-
-      // 2. Fetch players subcollection from /rooms/{roomCode}/players
-      const playersCol = collection(db, "rooms", cleanRoomCode, "players");
-      const playersSnap = await getDocs(playersCol);
-      
-      const mergedMap = new Map<string, any>();
-
-      playersSnap.docs.forEach((d) => {
-        const pData = d.data();
-        const pId = pData.id || d.id;
-        const isLeft = pData.status === "left" || pData.status === "abandoned" || pData.status === "disconnected" || pData.status === "forfeited";
-        const isFinished = pData.status === "completed" || pData.status === "won" || pData.status === "victory" || pData.status === "mistake_game_over" || pData.status === "failed";
-        const isWon = pData.status === "won" || pData.status === "completed" || pData.status === "victory" || Boolean(pData.isWon);
-        mergedMap.set(pId, {
-          userId: pId,
-          playerName: pData.name || pData.playerName || "Player",
-          timeSec: pData.timeSec !== undefined ? Number(pData.timeSec) : (pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : 0),
-          elapsedTime: pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : (pData.timeSec !== undefined ? Number(pData.timeSec) : 0),
-          mistakes: pData.mistakes !== undefined ? Number(pData.mistakes) : 0,
-          hints: pData.hints !== undefined ? Number(pData.hints) : 0,
-          isWon: isWon,
-          status: pData.status || (isWon ? "completed" : "active"),
-          isPending: !isLeft && !isFinished
-        });
-      });
-
-      // Also query /challenge_results/{docId}/participants for full parity
-      try {
-        const docId = getSeedDocId(cleanRoomCode);
-        const resultsSnap = await getDocs(collection(db, "challenge_results", docId, "participants"));
-        resultsSnap.docs.forEach((d) => {
-          const rData = d.data();
-          const rId = rData.userId || d.id;
-          if (rId) {
-            const existing = mergedMap.get(rId);
-            const rFinished = rData.status === "completed" || rData.status === "won" || rData.status === "victory" || rData.status === "mistake_game_over" || rData.status === "failed" || (!rData.isPending && (rData.isWon !== undefined || rData.timeSec !== undefined));
-            const rWon = rData.status === "won" || rData.status === "completed" || rData.status === "victory" || Boolean(rData.isWon) || Boolean(existing?.isWon);
-            mergedMap.set(rId, {
-              ...existing,
-              ...rData,
-              userId: rId,
-              playerName: rData.playerName || existing?.playerName || "Player",
-              timeSec: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.timeSec || 0),
-              elapsedTime: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.elapsedTime || 0),
-              mistakes: rData.mistakes !== undefined ? Number(rData.mistakes) : (existing?.mistakes || 0),
-              hints: rData.hints !== undefined ? Number(rData.hints) : (existing?.hints || 0),
-              isWon: rWon,
-              status: rData.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
-              isPending: rFinished ? false : (rData.isPending !== undefined ? Boolean(rData.isPending) : (existing ? existing.isPending : true))
-            });
-          }
-        });
-      } catch (err) {}
-
-      const resultsList = Array.from(mergedMap.values());
-      const seedNum = roomData?.seed ? Number(roomData.seed) : parseInt(cleanRoomCode, 10);
-      const diffVal = (roomData?.difficulty || "MEDIUM").toUpperCase() as Difficulty;
-
-      // 3. Preserve active solo board without destroying it if user is currently playing solo
-      if (boardState && !challengeMode && !boardState.isGameOver) {
-        preservedSoloBoardRef.current = {
-          boardState,
-          sessionSeconds,
-          difficulty,
-          timerEnabled,
-          mistakeLimitEnabled
-        };
+    // Validate and extract 6-digit canonical room code
+    const rawCode = String(roomCode).trim();
+    const match6 = rawCode.match(/\b\d{6}\b/);
+    let cleanRoomCode = "";
+    if (match6) {
+      cleanRoomCode = match6[0];
+    } else if (/^\d{1,6}$/.test(rawCode)) {
+      cleanRoomCode = rawCode.padStart(6, '0');
+    } else {
+      const seedMatch = rawCode.match(/-(\d{6})-/);
+      if (seedMatch) {
+        cleanRoomCode = seedMatch[1];
       }
+    }
 
-      setSyncedLeaderboard(resultsList);
-      setActiveGameId(cleanRoomCode);
-      setRematchGameId(cleanRoomCode);
-      setChallengeSeed(seedNum);
-      setChallengeDifficulty(diffVal);
-      setChallengeMistakeLimit(roomData?.mistakesLimit || 3);
-      setChallengeHintLimit(roomData?.hintsLimit || 3);
-      setChallengeTimerEnabled(roomData?.timerEnabled ?? true);
-      setChallengeMode(true);
-      setEndGameStep(1);
+    if (!cleanRoomCode || cleanRoomCode.startsWith("sw-completed-") || cleanRoomCode.startsWith("push-")) {
+      console.warn("[Results] Cannot view results: invalid or non-numeric roomCode", roomCode);
+      showToast("Match room not found.");
+      return;
+    }
 
-      // Dismiss any pending challenge notification for this room
+    // 1. If user is currently in an active game (!challengeMode), dock the completed result into pendingChallenges (bell icon)
+    // instead of popping open GameOverModal over the board.
+    const isActivelyPlayingSolo = Boolean(
+      !forceOpenModal &&
+      currentScreenRef.current === "game" &&
+      !challengeMode &&
+      boardState &&
+      !boardState.isGameOver
+    );
+
+    if (isActivelyPlayingSolo) {
+      const completedItem: PendingChallenge = {
+        id: cleanRoomCode,
+        inviteId: `completed-${cleanRoomCode}`,
+        type: 'challenge_completed',
+        fromName: "Opponent",
+        senderName: "Opponent",
+        roomCode: cleanRoomCode,
+        gameId: cleanRoomCode,
+        sentAt: Date.now()
+      };
+
       setPendingChallenges(prev => {
-        const updated = prev.filter(c => c.id !== cleanRoomCode && c.roomCode !== cleanRoomCode && c.gameId !== cleanRoomCode);
+        if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId)) return prev;
+        const updated = [completedItem, ...prev].slice(0, 10);
         try {
           localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
         } catch (e) {}
         return updated;
       });
 
-      // Open match results overlay non-destructively without overwriting active game board
-      navigateToScreen("game");
-      setShowGameOverModal(true);
-    } catch (err) {
-      console.error("[Push] Failed to view challenge results:", err);
-      showToast("Unable to load match results.");
+      setBellPing(true);
+      setTimeout(() => setBellPing(false), 1200);
+      showToast(t("matchCompletedNotice") || "Challenge results ready in notifications!");
+      return;
     }
+
+    // 2. ZERO-LATENCY OPTIMISTIC MODAL OPEN:
+    // Resolve cached match from local state to display standings in 0 milliseconds
+    const seedNum = parseInt(cleanRoomCode, 10) || challengeSeed || 100000;
+    const cachedMatch = (completedGames || []).find((g: any) =>
+      g.id === cleanRoomCode ||
+      String(g.seed).slice(-6) === cleanRoomCode ||
+      g.seed === seedNum
+    );
+
+    // Preserve active solo board without destroying it if user is currently playing solo
+    if (boardState && !challengeMode && !boardState.isGameOver) {
+      preservedSoloBoardRef.current = {
+        boardState,
+        sessionSeconds,
+        difficulty,
+        timerEnabled,
+        mistakeLimitEnabled
+      };
+    }
+
+    // Seed local syncedLeaderboard with cached participants if available, or current local user fallback
+    if (cachedMatch?.participants && Array.isArray(cachedMatch.participants) && cachedMatch.participants.length > 0) {
+      setSyncedLeaderboard(cachedMatch.participants);
+    } else if (syncedLeaderboard.length === 0) {
+      const currentLocalName = (userProfile?.name && userProfile.name.trim()) || getActiveDisplayName();
+      setSyncedLeaderboard([{
+        userId: userProfile?.id || "me",
+        playerName: currentLocalName,
+        timeSec: cachedMatch?.timeSec || sessionSeconds || 0,
+        elapsedTime: cachedMatch?.timeSec || sessionSeconds || 0,
+        mistakes: cachedMatch?.mistakes || 0,
+        hints: cachedMatch?.hints || 0,
+        isWon: cachedMatch ? Boolean(cachedMatch.isWon) : true,
+        status: "completed",
+        isPending: false
+      }]);
+    }
+
+    setActiveGameId(cleanRoomCode);
+    setRematchGameId(cleanRoomCode);
+    setChallengeSeed(seedNum);
+    if (cachedMatch?.difficulty) {
+      setChallengeDifficulty((cachedMatch.difficulty).toUpperCase() as Difficulty);
+    }
+    setChallengeMode(true);
+    setEndGameStep(1);
+
+    // Dismiss any pending challenge notification for this room immediately
+    setPendingChallenges(prev => {
+      const updated = prev.filter(c => c.id !== cleanRoomCode && c.roomCode !== cleanRoomCode && c.gameId !== cleanRoomCode);
+      try {
+        localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // Immediately open results overlay without blocking on network queries
+    navigateToScreen("game");
+    setShowGameOverModal(true);
+
+    // 3. BACKGROUND STANDINGS SYNC:
+    // Run Firestore reads/aggregations asynchronously in the background and update props gracefully
+    (async () => {
+      try {
+        const docId = getSeedDocId(cleanRoomCode);
+        const [roomSnap, playersSnap, resultsSnap] = await Promise.all([
+          getDoc(doc(db, "rooms", cleanRoomCode)),
+          getDocs(collection(db, "rooms", cleanRoomCode, "players")),
+          getDocs(collection(db, "challenge_results", docId, "participants")).catch(() => ({ docs: [] } as any))
+        ]);
+        const roomData = roomSnap.exists() ? roomSnap.data() : null;
+
+        const mergedMap = new Map<string, any>();
+
+        playersSnap.docs.forEach((d: any) => {
+          const pData = d.data();
+          const pId = pData.id || d.id;
+          const isLeft = pData.status === "left" || pData.status === "abandoned" || pData.status === "disconnected" || pData.status === "forfeited";
+          const isFinished = pData.status === "completed" || pData.status === "won" || pData.status === "victory" || pData.status === "mistake_game_over" || pData.status === "failed";
+          const isWon = pData.status === "won" || pData.status === "completed" || pData.status === "victory" || Boolean(pData.isWon);
+          mergedMap.set(pId, {
+            userId: pId,
+            playerName: pData.name || pData.playerName || "Player",
+            timeSec: pData.timeSec !== undefined ? Number(pData.timeSec) : (pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : 0),
+            elapsedTime: pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : (pData.timeSec !== undefined ? Number(pData.timeSec) : 0),
+            mistakes: pData.mistakes !== undefined ? Number(pData.mistakes) : 0,
+            hints: pData.hints !== undefined ? Number(pData.hints) : 0,
+            isWon: isWon,
+            status: pData.status || (isWon ? "completed" : "active"),
+            isPending: !isLeft && !isFinished
+          });
+        });
+
+        // Also query /challenge_results/{docId}/participants for full parity
+        if (resultsSnap && resultsSnap.docs) {
+          resultsSnap.docs.forEach((d: any) => {
+            const rData = d.data();
+            const rId = rData.userId || d.id;
+            if (rId) {
+              const existing = mergedMap.get(rId);
+              const rFinished = rData.status === "completed" || rData.status === "won" || rData.status === "victory" || rData.status === "mistake_game_over" || rData.status === "failed" || (!rData.isPending && (rData.isWon !== undefined || rData.timeSec !== undefined));
+              const rWon = rData.status === "won" || rData.status === "completed" || rData.status === "victory" || Boolean(rData.isWon) || Boolean(existing?.isWon);
+              mergedMap.set(rId, {
+                ...existing,
+                ...rData,
+                userId: rId,
+                playerName: rData.playerName || existing?.playerName || "Player",
+                timeSec: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.timeSec || 0),
+                elapsedTime: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.elapsedTime || 0),
+                mistakes: rData.mistakes !== undefined ? Number(rData.mistakes) : (existing?.mistakes || 0),
+                hints: rData.hints !== undefined ? Number(rData.hints) : (existing?.hints || 0),
+                isWon: rWon,
+                status: rData.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
+                isPending: rFinished ? false : (rData.isPending !== undefined ? Boolean(rData.isPending) : (existing ? existing.isPending : true))
+              });
+            }
+          });
+        }
+
+        const resultsList = Array.from(mergedMap.values());
+        if (resultsList.length > 0) {
+          setSyncedLeaderboard(resultsList);
+        }
+        if (roomData?.seed) setChallengeSeed(Number(roomData.seed));
+        if (roomData?.difficulty) setChallengeDifficulty((roomData.difficulty).toUpperCase() as Difficulty);
+        if (roomData?.mistakesLimit !== undefined) setChallengeMistakeLimit(roomData.mistakesLimit);
+        if (roomData?.hintsLimit !== undefined) setChallengeHintLimit(roomData.hintsLimit);
+        if (roomData?.timerEnabled !== undefined) setChallengeTimerEnabled(roomData.timerEnabled);
+      } catch (err) {
+        console.error("[Results] Background standings sync error:", err);
+      }
+    })();
   };
 
   const registerPushNotifications = async () => {
@@ -4637,23 +5696,9 @@ useEffect(() => {
     const senderName = inviteData.fromName || "Player";
 
     if (Capacitor.isNativePlatform()) {
-      try {
-        await LocalNotifications.schedule({
-          notifications: [
-            {
-              title,
-              body,
-              id: Math.floor(Math.random() * 100000),
-              channelId: "sudoku_duels",
-              extra: { gameId, password, senderName },
-              actionTypeId: "tap_invite"
-            }
-          ]
-        });
-        console.log("[Push] Scheduled native background local notification on channel sudoku_duels.");
-      } catch (err) {
-        console.error("[Push] Failed to schedule native local notification:", err);
-      }
+      // Cloud Functions functions/index.js (onInviteCreated) is the authoritative FCM push provider.
+      // Do NOT call LocalNotifications.schedule here, which causes dual notifications & double audio on Android.
+      console.log("[Push] Native background notification delegated to authoritative Cloud Functions FCM push.");
     } else {
       if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
         try {
@@ -4687,6 +5732,8 @@ useEffect(() => {
     let pushRecListener: any = null;
     let pushActListener: any = null;
     let localActListener: any = null;
+    let unsubscribeWebFCM: (() => void) | null = null;
+    let removeWebSWListener: (() => void) | null = null;
 
     const setupListeners = async () => {
       try {
@@ -4756,7 +5803,7 @@ useEffect(() => {
                   return;
                 }
 
-                playInviteChime();
+                playInviteChime(notifId);
                 setActiveInviteNotification({
                   id: notifId,
                   type: 'challenge_completed',
@@ -4772,10 +5819,10 @@ useEffect(() => {
                 return;
               }
 
-              playInviteChime();
+              const inviteCode = roomCode || gameId;
+              const inviteId = (notification.data as any)?.inviteId || notification.id || (inviteCode ? `invite-${inviteCode}` : `push-${Date.now()}`);
+              playInviteChime(inviteId);
               if (gameId || roomCode) {
-                const inviteCode = roomCode || gameId;
-                const inviteId = notification.id || `push-${Date.now()}`;
                 const inviteObj = {
                   id: inviteCode,
                   inviteId: inviteId,
@@ -4809,7 +5856,7 @@ useEffect(() => {
             console.log("[Push] Native push action performed:", action);
             const { gameId, password, type, roomCode } = action.notification.data || {};
             if (type === 'challenge_completed') {
-              handleViewChallengeResults(roomCode || gameId);
+              handleViewChallengeResults(roomCode || gameId, true);
               return;
             }
             if (roomCode || gameId) {
@@ -4821,7 +5868,7 @@ useEffect(() => {
             console.log("[Push] Native local action performed:", action);
             const { gameId, password, type, roomCode } = action.notification.extra || {};
             if (type === 'challenge_completed') {
-              handleViewChallengeResults(roomCode || gameId);
+              handleViewChallengeResults(roomCode || gameId, true);
               return;
             }
             if (roomCode || gameId) {
@@ -4883,10 +5930,104 @@ useEffect(() => {
               });
             }
           };
-          navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
-          return () => {
-            navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
-          };
+
+          if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+            navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+            removeWebSWListener = () => {
+              navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+            };
+          }
+
+          // Web Foreground FCM real-time message handler
+          if (messaging) {
+            try {
+              unsubscribeWebFCM = onMessage(messaging, (payload) => {
+                console.log("[Push] Web foreground FCM message received:", payload);
+                const data = payload.data || {};
+                const notif = payload.notification || {};
+                const type = data.type || (notif as any)?.type;
+                const roomCode = data.roomCode || data.gameId || "";
+                const finisherName = data.finisherName || data.fromName || data.senderName || notif.title || "Opponent";
+
+                if (type === 'challenge_completed') {
+                  const notifId = `fcm-completed-${Date.now()}`;
+                  const completedItem: PendingChallenge = {
+                    id: roomCode || notifId,
+                    inviteId: notifId,
+                    type: 'challenge_completed',
+                    fromName: finisherName,
+                    senderName: finisherName,
+                    roomCode: roomCode,
+                    gameId: roomCode,
+                    sentAt: Date.now()
+                  };
+
+                  setPendingChallenges(prev => {
+                    if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId)) return prev;
+                    const updated = [completedItem, ...prev].slice(0, 10);
+                    try {
+                      localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+                    } catch (e) {}
+                    return updated;
+                  });
+
+                  const isPlayingThisMatch = Boolean(
+                    currentScreenRef.current === "game" &&
+                    challengeModeRef.current &&
+                    activeGameIdRef.current &&
+                    roomCode &&
+                    (activeGameIdRef.current === roomCode || activeGameIdRef.current.slice(-6) === roomCode.slice(-6))
+                  );
+
+                  if (isPlayingThisMatch) {
+                    console.log(`[Push] Suppressed foreground FCM banner for active duel: ${roomCode}`);
+                    return;
+                  }
+
+                  playInviteChime(notifId);
+                  setActiveInviteNotification({
+                    id: notifId,
+                    type: 'challenge_completed',
+                    fromName: finisherName,
+                    roomCode: roomCode,
+                    gameId: roomCode
+                  });
+                } else if (type === 'new_invite') {
+                  const fromName = data.fromName || "Player";
+                  const inviteCode = roomCode || data.gameId;
+                  const inviteId = data.inviteId || `fcm-inv-${Date.now()}`;
+                  const inviteObj = {
+                    id: inviteCode,
+                    inviteId: inviteId,
+                    senderName: fromName,
+                    fromName: fromName,
+                    gameId: inviteCode,
+                    roomCode: inviteCode,
+                    password: data.password || "",
+                    sentAt: Date.now()
+                  };
+                  setPendingChallenges(prev => {
+                    if (prev.some(p => p.id === inviteCode || p.inviteId === inviteId)) return prev;
+                    const updated = [inviteObj as any, ...prev].slice(0, 10);
+                    try {
+                      localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+                    } catch (e) {}
+                    return updated;
+                  });
+                  playInviteChime(inviteId);
+                  setActiveInviteNotification({
+                    id: inviteId,
+                    fromName: fromName,
+                    gameId: inviteCode,
+                    roomCode: inviteCode,
+                    password: data.password || ""
+                  });
+                }
+              });
+            } catch (fcmErr) {
+              console.warn("[Push] Error attaching foreground onMessage listener:", fcmErr);
+            }
+          }
         }
       } catch (err) {
         console.error("[Push] Error setting up listeners:", err);
@@ -4902,6 +6043,8 @@ useEffect(() => {
         if (pushRecListener) pushRecListener.remove();
         if (pushActListener) pushActListener.remove();
         if (localActListener) localActListener.remove();
+        if (removeWebSWListener) removeWebSWListener();
+        if (unsubscribeWebFCM) unsubscribeWebFCM();
       } catch (err) {
         console.error("[Push] Error cleaning up listeners:", err);
       }
@@ -5004,9 +6147,32 @@ useEffect(() => {
   };
   const playErrorSound = playMistakeSound;
 
+  const lastPlayedInviteChimesRef = useRef<Map<string, number>>(new Map());
+
   // Play a pleasant ascending invitation chime (C5 -> E5) using Web Audio API
-  const playInviteChime = () => {
+  const playInviteChime = (inviteId?: string) => {
     if (!notificationsEnabled) return; // settings guard cond
+    const now = Date.now();
+    const lastGlobalChime = lastPlayedInviteChimesRef.current.get("__global__") || 0;
+    if (now - lastGlobalChime < 1200) {
+      console.log("[Audio] Suppressed rapid repeated invite chime (<1.2s)");
+      return;
+    }
+    if (inviteId) {
+      const lastIdChime = lastPlayedInviteChimesRef.current.get(inviteId) || 0;
+      if (now - lastIdChime < 10000) {
+        console.log(`[Audio] Suppressed duplicate invite chime for ID: ${inviteId}`);
+        return;
+      }
+      lastPlayedInviteChimesRef.current.set(inviteId, now);
+      // Clean old entries
+      if (lastPlayedInviteChimesRef.current.size > 50) {
+        for (const [k, ts] of lastPlayedInviteChimesRef.current.entries()) {
+          if (now - ts > 30000) lastPlayedInviteChimesRef.current.delete(k);
+        }
+      }
+    }
+    lastPlayedInviteChimesRef.current.set("__global__", now);
     try {
       const audioCtx = getAudioCtx();
       if (!audioCtx) return;
@@ -5735,88 +6901,8 @@ useEffect(() => {
       console.error("Audio Number Completion Sound Error:", e);
     }
   };
-  
-  // Advanced Preference Variables (representing Jetpack DataStore states)
-  const [isNumberFirstInputMode, setIsNumberFirstInputMode] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("sudoku_isNumberFirstInputMode");
-      return saved !== null ? saved === "true" : false;
-    } catch {
-      return false;
-    }
-  });
-  const [autoSwitchCompletedNumber, setAutoSwitchCompletedNumber] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("sudoku_autoSwitchCompletedNumber");
-      return saved !== null ? saved === "true" : true;
-    } catch {
-      return true;
-    }
-  });
-  const [isAutoRemoveNotesEnabled, setIsAutoRemoveNotesEnabled] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("sudoku_isAutoRemoveNotesEnabled");
-      return saved !== null ? saved === "true" : true;
-    } catch {
-      return true;
-    }
-  });
-  const [isPreventMistakeNotesEnabled, setIsPreventMistakeNotesEnabled] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("sudoku_isPreventMistakeNotesEnabled");
-      return saved !== null ? saved === "true" : true;
-    } catch {
-      return true;
-    }
-  });
-  const [hintInventory, setHintInventory] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem("sudoku_hintInventory");
-      return saved !== null ? parseInt(saved, 10) : 3;
-    } catch {
-      return 3;
-    }
-  });
+  // Note: Advanced Preference Variables (isNumberFirstInputMode, isAutoRemoveNotesEnabled, etc.) are declared at top with other settings
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("sudoku_isNumberFirstInputMode", String(isNumberFirstInputMode));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [isNumberFirstInputMode]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("sudoku_autoSwitchCompletedNumber", String(autoSwitchCompletedNumber));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [autoSwitchCompletedNumber]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("sudoku_isAutoRemoveNotesEnabled", String(isAutoRemoveNotesEnabled));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [isAutoRemoveNotesEnabled]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("sudoku_isPreventMistakeNotesEnabled", String(isPreventMistakeNotesEnabled));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [isPreventMistakeNotesEnabled]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("sudoku_hintInventory", String(hintInventory));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [hintInventory]);
 
   // Locked number for Number-First input mode
   const [lockedNum, setLockedNum] = useState<number | null>(null);
@@ -6028,7 +7114,6 @@ useEffect(() => {
       }
     } else {
       hasTriggeredGameOverRef.current = false;
-      setShowGameOverModal(false);
     }
   }, [boardState?.isGameOver, challengeMode, isOnline, syncedLeaderboard, userProfile?.id]);
 
@@ -6719,7 +7804,11 @@ useEffect(() => {
       status: isFailed ? "mistake_game_over" : "completed"
     }]);
 
-    // Submit result to Firestore so friends joining will sync against it
+    // Transition cleanly to the exact Same Game Invite modal (Step 2 of End Game flow) immediately
+    setEndGameStep(2);
+    setShowGameOverModal(true);
+
+    // Submit result to Firestore so friends joining will sync against it in the background
     if (isOnline) {
       const rBody = {
         challengeId: roomCode,
@@ -6735,40 +7824,47 @@ useEffect(() => {
       };
       submitGameResult(rBody);
 
-      try {
-        await setDoc(doc(db, "rooms", roomCode), {
-          roomCode: roomCode,
-          seed: seed,
-          difficulty: difficulty,
-          mistakesLimit: mistakeLimitEnabled ? (boardState.maxMistakesLimit || 3) : 999,
-          hintsLimit: boardState.hintsRemaining !== undefined ? boardState.hintsRemaining : 3,
-          timerEnabled: timerEnabled,
-          isLocked: isRoomLocked,
-          pin: isRoomLocked ? roomPin : "",
-          status: "active",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
-        }, { merge: true });
+      (async () => {
+        try {
+          const puzzleFlat = (boardState as any)?.initialGrid
+            ? (boardState as any).initialGrid.flat()
+            : (boardState.grid ? boardState.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)).flat() : null);
+          const solutionFlat = (boardState as any)?.solutionGrid
+            ? (boardState as any).solutionGrid.flat()
+            : (solutionGrid && solutionGrid.length === 9 ? solutionGrid.flat() : null);
 
-        await setDoc(doc(db, "rooms", roomCode, "players", uId), {
-          id: uId,
-          name: pName,
-          status: isFailed ? "mistake_game_over" : "completed",
-          isWon: !isFailed,
-          timeSec: userTime,
-          elapsedTime: sessionSeconds,
-          mistakes: boardState.currentMistakesCount || 0,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-      } catch (err) {
-        console.error("[Firestore] Failed to initialize room for Solo challenge:", err);
-      }
+          await setDoc(doc(db, "rooms", roomCode), {
+            roomCode: roomCode,
+            seed: seed,
+            difficulty: difficulty,
+            ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
+            ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
+            mistakesLimit: mistakeLimitEnabled ? (boardState.maxMistakesLimit || 3) : 999,
+            hintsLimit: boardState.hintsRemaining !== undefined ? boardState.hintsRemaining : 3,
+            timerEnabled: timerEnabled,
+            isLocked: isRoomLocked,
+            pin: isRoomLocked ? roomPin : "",
+            status: "active",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
+          }, { merge: true });
+
+          await setDoc(doc(db, "rooms", roomCode, "players", uId), {
+            id: uId,
+            name: pName,
+            status: isFailed ? "mistake_game_over" : "completed",
+            isWon: !isFailed,
+            timeSec: userTime,
+            elapsedTime: sessionSeconds,
+            mistakes: boardState.currentMistakesCount || 0,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (err) {
+          console.error("[Firestore] Failed to initialize room for Solo challenge:", err);
+        }
+      })();
     }
-
-    // Transition cleanly to the exact Same Game Invite modal (Step 2 of End Game flow)
-    setEndGameStep(2);
-    setShowGameOverModal(true);
   };
 
   const executeStartGameAction = () => {
@@ -6831,6 +7927,14 @@ useEffect(() => {
 
   // Standardized invite cooldown helper with strict safety caps (30s sent / 60s declined / 60s left)
   const getInviteCooldownState = (playerId: string) => {
+    let priorGuestId: string | null = null;
+    try {
+      priorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
+    } catch {}
+    if (!playerId || playerId === userProfile?.id || (priorGuestId && playerId === priorGuestId)) {
+      return { isJoined: false, isPendingSent: false, isDeclined: false, isLeft: false, remainingSeconds: 0, joinedAt: undefined };
+    }
+
     const inviteState = rematchInviteStates[playerId];
     const isJoined = inviteState?.status === "joined" || lobbyAcceptedUserIds.has(playerId);
     if (isJoined) {
@@ -7020,7 +8124,7 @@ useEffect(() => {
   };
 
   // Save played games (won or lost/terminated) into history list
-  const saveGameToHistory = (isWon: boolean, mistakesOverride?: number) => {
+  const saveGameToHistory = async (isWon: boolean, mistakesOverride?: number) => {
     const gameSeed = boardState?.seed || challengeSeed || (Math.floor(Math.random() * 900000) + 100000);
     const finalGameId = activeGameId || `SUDOKU-${gameSeed}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-H${challengeHintLimit}-T${timerEnabled ? 1 : 0}`;
     
@@ -7109,21 +8213,26 @@ useEffect(() => {
     // Check if duplicate record exists or update with participants
     const pName = getActiveDisplayName();
     const isMultiplayerMatch = challengeMode || Boolean(activeGameId) || Boolean(rematchGameId);
-    const resolvedParts = isMultiplayerMatch ? resolveParticipantsForSave({ id: finalGameId, seed: gameSeed } as CompletedGame) : undefined;
+    const resolvedParts = isMultiplayerMatch ? (resolveParticipantsForSave({ id: finalGameId, seed: gameSeed } as CompletedGame) || []) : [];
 
     // Requirement 4: Unconditionally increment decoupled cumulative statistics on every completed match
+    let calculatedNextTotalGames = 0;
     setTotalGamesPlayed(prev => {
       const next = Math.max(prev, completedGames.length) + 1;
+      calculatedNextTotalGames = next;
       try {
         localStorage.setItem("sudoku_total_games_played", String(next));
         localStorage.setItem("sudoku_gamesPlayed", String(next));
       } catch {}
       return next;
     });
+
+    let calculatedNextTotalWins = 0;
     if (isWon) {
       setTotalWinsCount(prev => {
         const winsInHistory = completedGames.filter(g => g.isWon).length;
         const next = Math.max(prev, winsInHistory) + 1;
+        calculatedNextTotalWins = next;
         try {
           localStorage.setItem("sudoku_total_wins_count", String(next));
           localStorage.setItem("sudoku_winsCount", String(next));
@@ -7132,6 +8241,39 @@ useEffect(() => {
       });
     }
 
+    let calculatedNextStreak = winStreak;
+    if (isWon) {
+      calculatedNextStreak = winStreak + 1;
+      setWinStreak(calculatedNextStreak);
+      try {
+        localStorage.setItem("sudoku_winStreak", String(calculatedNextStreak));
+      } catch {}
+    } else {
+      calculatedNextStreak = 0;
+      setWinStreak(0);
+      try {
+        localStorage.setItem("sudoku_winStreak", "0");
+      } catch {}
+    }
+
+    const completedGameRecord: CompletedGame = {
+      id: finalGameId,
+      difficulty: difficulty,
+      timeSec: sessionSeconds,
+      mistakes: finalMistakes,
+      maxMistakes: boardState ? boardState.maxMistakesLimit : (mistakeLimitEnabled ? 3 : 999),
+      hints: hintsUsed,
+      maxHints: maxHintsLimit,
+      isWon: isWon,
+      date: new Date().toISOString(),
+      isChallenge: isMultiplayerMatch,
+      seed: gameSeed,
+      userId: userProfile?.id || "GUEST_ANON",
+      playerName: pName,
+      participants: resolvedParts
+    };
+
+    let finalCompletedList: CompletedGame[] = [];
     setCompletedGames(prev => {
       const existsIndex = prev.findIndex(r => r.id === finalGameId || (gameSeed && r.seed === gameSeed));
       if (existsIndex !== -1) {
@@ -7167,12 +8309,13 @@ useEffect(() => {
             hints: hintsUsed,
             isWon: newIsWon,
             date: new Date().toISOString(),
-            participants: (resolvedParts && resolvedParts.length > 0) ? resolvedParts : oldRecord.participants,
+            participants: (resolvedParts && resolvedParts.length > 0) ? resolvedParts : (oldRecord.participants || []),
             isChallenge: isMultiplayerMatch
           };
           try {
             localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
           } catch {}
+          finalCompletedList = updated;
           return updated;
         } else {
           if (resolvedParts && resolvedParts.length > (oldRecord.participants?.length || 0)) {
@@ -7181,33 +8324,19 @@ useEffect(() => {
             try {
               localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
             } catch {}
+            finalCompletedList = updated;
             return updated;
           }
+          finalCompletedList = prev;
           return prev;
         }
       }
 
-      const newRecord: CompletedGame = {
-        id: finalGameId,
-        difficulty: difficulty,
-        timeSec: sessionSeconds,
-        mistakes: finalMistakes,
-        maxMistakes: boardState ? boardState.maxMistakesLimit : 3,
-        hints: hintsUsed,
-        maxHints: maxHintsLimit,
-        isWon: isWon,
-        date: new Date().toISOString(),
-        isChallenge: isMultiplayerMatch,
-        seed: gameSeed,
-        userId: userProfile?.id || "GUEST_ANON",
-        playerName: pName,
-        participants: resolvedParts
-      };
-
-      const updated = [newRecord, ...prev].slice(0, 10);
+      const updated = [completedGameRecord, ...prev].slice(0, 10);
       try {
         localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
       } catch {}
+      finalCompletedList = updated;
       return updated;
     });
 
@@ -7231,6 +8360,31 @@ useEffect(() => {
     };
 
     submitGameResult(rBody);
+
+    // Continuous stats persistence: Sync updated career stats directly to Firestore for authenticated users
+    const authUser = auth.currentUser;
+    if (authUser && !authUser.isAnonymous) {
+      const currentUid = authUser.uid;
+      const userDocRef = doc(db, "users", currentUid);
+      const safeRecord = JSON.parse(JSON.stringify(completedGameRecord));
+      try {
+        await updateDoc(userDocRef, {
+          completedGames: arrayUnion(safeRecord),
+          totalGamesPlayed: increment(1),
+          totalWinsCount: isWon ? increment(1) : increment(0),
+          lastUpdated: serverTimestamp()
+        });
+      } catch (err) {
+        await setDoc(userDocRef, {
+          completedGames: arrayUnion(safeRecord),
+          totalGamesPlayed: increment(1),
+          totalWinsCount: isWon ? increment(1) : increment(0),
+          lastUpdated: serverTimestamp()
+        }, { merge: true }).catch(syncErr => {
+          console.warn("[Firestore] Failed to persist career stats during gameplay:", syncErr);
+        });
+      }
+    }
 
     // Purge active session persistence so completed puzzle is never re-opened via Resume
     try {
@@ -7745,7 +8899,18 @@ useEffect(() => {
       const docId = getSeedDocId(challengeId);
       const participantRef = doc(db, "challenge_results", docId, "participants", userId);
       const existing = await getDoc(participantRef);
-      if (!existing.exists() || existing.data()?.status === "left" || existing.data()?.status === "abandoned" || existing.data()?.status === "disconnected") {
+      const existingData = existing.exists() ? existing.data() : null;
+      const isTerminal = existingData && (
+        existingData.status === "completed" ||
+        existingData.status === "won" ||
+        existingData.status === "victory" ||
+        existingData.status === "mistake_game_over" ||
+        existingData.status === "failed" ||
+        Boolean(existingData.isWon) ||
+        (!existingData.isPending && existingData.timeSec !== undefined && Number(existingData.timeSec) > 0 && Number(existingData.timeSec) < 9999)
+      );
+
+      if (!existing.exists() || (!isTerminal && (existingData?.status === "left" || existingData?.status === "abandoned" || existingData?.status === "disconnected"))) {
         await setDoc(participantRef, {
           challengeId,
           userId,
@@ -7769,9 +8934,10 @@ useEffect(() => {
         playerSnap.data()?.status === "won" ||
         playerSnap.data()?.status === "victory" ||
         playerSnap.data()?.status === "mistake_game_over" ||
-        playerSnap.data()?.status === "failed"
+        playerSnap.data()?.status === "failed" ||
+        Boolean(playerSnap.data()?.isWon)
       );
-      if (!isAlreadyFinished) {
+      if (!isAlreadyFinished && !isTerminal) {
         await setDoc(playerRef, {
           id: userId,
           name: pName,
@@ -7808,20 +8974,75 @@ useEffect(() => {
     const syncCombinedLeaderboard = () => {
       const mergedMap = new Map<string, any>();
 
+      // 0. Pre-populate with existing verified terminal results from previously syncedLeaderboard
+      // to ensure no network jitter, stale room player snapshot, or late navigation overwrites a terminal score
+      const previousLeaderboard = syncedLeaderboardRef.current || [];
+      previousLeaderboard.forEach(prevEntry => {
+        const uId = prevEntry.userId || prevEntry.id;
+        const isPrevTerminal = prevEntry.status === "completed" || 
+                               prevEntry.status === "won" || 
+                               prevEntry.status === "victory" || 
+                               prevEntry.status === "mistake_game_over" || 
+                               prevEntry.status === "failed" || 
+                               Boolean(prevEntry.isWon) || 
+                               Boolean(prevEntry.failed) ||
+                               (!prevEntry.isPending && Number(prevEntry.timeSec) > 0 && Number(prevEntry.timeSec) < 9999);
+        if (uId && isPrevTerminal) {
+          mergedMap.set(uId, { ...prevEntry, isPending: false });
+        }
+      });
+
       // 1. Seed with room players presence (gives instant visibility to all joined opponents)
       latestRoomPlayers.forEach(p => {
         const uId = p.id || p.userId;
         if (uId) {
-          const isLeft = p.status === "left" || p.status === "abandoned" || p.status === "disconnected" || p.status === "forfeited";
-          const isFinished = p.status === "completed" || p.status === "victory" || p.status === "mistake_game_over" || p.status === "won" || p.status === "failed";
+          const existing = mergedMap.get(uId);
+          const isExistingTerminal = existing && (
+            existing.status === "completed" || 
+            existing.status === "won" || 
+            existing.status === "victory" || 
+            existing.status === "mistake_game_over" || 
+            existing.status === "failed" || 
+            Boolean(existing.isWon) ||
+            Boolean(existing.failed)
+          );
+
+          // If a player has mistakes >= 3 OR status === "mistake_game_over" OR status === "failed":
+          // Force isPending: false, failed: true, and map status: "mistake_game_over"
+          const isMistakeGameOver = (Number(p.mistakes) >= 3) || p.status === "mistake_game_over" || p.status === "failed";
+          const isIncomingTerminal = p.status === "completed" || 
+                                     p.status === "won" || 
+                                     p.status === "victory" || 
+                                     p.status === "mistake_game_over" || 
+                                     p.status === "failed" || 
+                                     Boolean(p.isWon) ||
+                                     isMistakeGameOver;
+
+          // If a player's state is already terminal, NEVER allow an incoming stale snapshot with status: "solving" or isPending: true to overwrite it!
+          if (isExistingTerminal && !isIncomingTerminal) {
+            return;
+          }
+
+          const isLeft = p.status === "left" || p.status === "abandoned" || p.status === "disconnected" || p.status === "forfeited" || Boolean(p.isAbandoned) || Boolean(p.abandoned);
+          const isWonFinished = p.status === "won" || p.status === "completed" || p.status === "victory" || Boolean(p.isWon);
+          const mappedStatus = isMistakeGameOver 
+            ? "mistake_game_over" 
+            : (isWonFinished)
+              ? "completed"
+              : (isLeft ? "left" : (p.status || "active"));
+          const isTerminalStatus = isIncomingTerminal || mappedStatus === "completed" || mappedStatus === "mistake_game_over" || mappedStatus === "failed";
+
           mergedMap.set(uId, {
             userId: uId,
             playerName: p.name || p.playerName || "Player",
-            status: p.status || "active",
-            isPending: !isLeft && !isFinished,
-            mistakes: p.mistakes !== undefined ? Number(p.mistakes) : 0,
+            status: mappedStatus,
+            failed: isMistakeGameOver ? true : (p.failed !== undefined ? Boolean(p.failed) : (mappedStatus === "mistake_game_over" || mappedStatus === "failed")),
+            isAbandoned: isLeft,
+            isPending: (isTerminalStatus || isLeft) ? false : true,
+            mistakes: p.mistakes !== undefined ? Number(p.mistakes) : (isMistakeGameOver ? 3 : 0),
             timeSec: p.timeSec !== undefined ? Number(p.timeSec) : (p.elapsedTime !== undefined ? Number(p.elapsedTime) : 0),
-            isWon: p.status === "won" || p.status === "completed" || p.status === "victory" || Boolean(p.isWon),
+            isWon: !isMistakeGameOver && isWonFinished,
+            progress: p.progress !== undefined ? Number(p.progress) : (existing?.progress || 0),
             updatedAt: p.updatedAt
           });
         }
@@ -7832,8 +9053,37 @@ useEffect(() => {
         const uId = r.userId || r.id;
         if (uId) {
           const existing = mergedMap.get(uId);
-          const rFinished = r.status === "completed" || r.status === "won" || r.status === "victory" || r.status === "mistake_game_over" || r.status === "failed" || (!r.isPending && (r.isWon !== undefined || r.timeSec !== undefined));
-          const rWon = r.status === "won" || r.status === "completed" || r.status === "victory" || Boolean(r.isWon) || Boolean(existing?.isWon);
+          const isExistingTerminal = existing && (
+            existing.status === "completed" || 
+            existing.status === "won" || 
+            existing.status === "victory" || 
+            existing.status === "mistake_game_over" || 
+            existing.status === "failed" || 
+            Boolean(existing.isWon) ||
+            Boolean(existing.failed)
+          );
+
+          // If a player has mistakes >= 3 OR status === "mistake_game_over" OR status === "failed":
+          // Force isPending: false, failed: true, and map status: "mistake_game_over"
+          const isRMistakeGameOver = (Number(r.mistakes) >= 3) || r.status === "mistake_game_over" || r.status === "failed";
+          const rFinished = r.status === "completed" || r.status === "won" || r.status === "victory" || r.status === "mistake_game_over" || r.status === "failed" || isRMistakeGameOver || (!r.isPending && (r.isWon !== undefined || (r.timeSec !== undefined && Number(r.timeSec) > 0)));
+          const rWon = r.status === "won" || r.status === "completed" || r.status === "victory" || Boolean(r.isWon);
+
+          // If existing is already terminal and r is NOT terminal (e.g. stale "left" or "solving" or isPending=true), keep pinned terminal score!
+          if (isExistingTerminal && !rFinished) {
+            return;
+          }
+
+          const isRLeft = r.status === "left" || r.status === "abandoned" || r.status === "disconnected" || r.status === "forfeited" || Boolean(r.isAbandoned) || Boolean(r.abandoned);
+          const finalWon = !isRMistakeGameOver && !isRLeft && (rWon || (existing && existing.status !== "mistake_game_over" && !existing.isAbandoned && Boolean(existing.isWon)));
+          const finalFinished = rFinished || isExistingTerminal;
+          const finalStatus = isRMistakeGameOver 
+            ? "mistake_game_over" 
+            : finalWon 
+              ? "completed" 
+              : (isRLeft ? "left" : (rFinished ? (r.status || "mistake_game_over") : (existing?.status || r.status || "active")));
+          const isFinalTerminal = finalFinished || finalStatus === "completed" || finalStatus === "mistake_game_over" || finalStatus === "failed" || finalWon;
+
           mergedMap.set(uId, {
             ...existing,
             ...r,
@@ -7841,11 +9091,13 @@ useEffect(() => {
             playerName: r.playerName || existing?.playerName || "Player",
             timeSec: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.timeSec || 0),
             elapsedTime: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.elapsedTime || 0),
-            mistakes: r.mistakes !== undefined ? Number(r.mistakes) : (existing?.mistakes || 0),
+            mistakes: r.mistakes !== undefined ? Number(r.mistakes) : (isRMistakeGameOver ? 3 : (existing?.mistakes || 0)),
             hints: r.hints !== undefined ? Number(r.hints) : (existing?.hints || 0),
-            isWon: rWon,
-            status: r.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
-            isPending: rFinished ? false : (r.isPending !== undefined ? Boolean(r.isPending) : (existing ? existing.isPending : true))
+            isWon: finalWon,
+            failed: isRMistakeGameOver ? true : (finalStatus === "mistake_game_over" || finalStatus === "failed" || Boolean(existing?.failed)),
+            isAbandoned: isRLeft || Boolean(existing?.isAbandoned),
+            status: finalStatus,
+            isPending: (isFinalTerminal || isRLeft || Boolean(existing?.isAbandoned)) ? false : (r.isPending !== undefined ? Boolean(r.isPending) : (existing ? existing.isPending : true))
           });
         }
       });
@@ -8382,7 +9634,7 @@ useEffect(() => {
       const sanitizedPw = queryPw ? sanitizePassword(queryPw) : undefined;
       const sanitizedSender = senderParam ? sanitizeSenderName(senderParam) : undefined;
       if (viewParam === "results" && sanitizedChallenge) {
-        handleViewChallengeResults(sanitizedChallenge);
+        handleViewChallengeResults(sanitizedChallenge, true);
       } else if (sanitizedChallenge) {
         handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true);
       } else {
@@ -8435,7 +9687,7 @@ useEffect(() => {
               const sanitizedPw = queryPw ? sanitizePassword(queryPw) : undefined;
               const sanitizedSender = senderParam ? sanitizeSenderName(senderParam) : undefined;
               if (viewParam === "results" && sanitizedChallenge) {
-                handleViewChallengeResults(sanitizedChallenge);
+                handleViewChallengeResults(sanitizedChallenge, true);
               } else if (sanitizedChallenge) {
                 handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true);
               }
@@ -8618,6 +9870,13 @@ useEffect(() => {
       ? isChallengeModeOverride 
       : false;
 
+    if (!isChallengeSession) {
+      setChallengeSeed(null);
+      setChallengeMode(false);
+      setActiveGameId(null);
+      setRematchGameId(null);
+    }
+
     // If in an active multiplayer match and player explicitly starts a new game (solo or different match), mark previous match left/forfeited
     if (challengeMode && activeGameId && (!isChallengeSession || (seedOverride && String(seedOverride).padStart(6, '0').slice(-6) !== activeGameId))) {
       markCurrentMultiplayerForfeit(activeGameId);
@@ -8745,6 +10004,8 @@ useEffect(() => {
 
     setBoardState({
       grid: finishedGrid,
+      initialGrid: puzzle,
+      solutionGrid: solved,
       selectedRow: null,
       selectedCol: null,
       currentMistakesCount: 0,
@@ -8864,13 +10125,17 @@ useEffect(() => {
       return;
     }
 
-    const liveSeed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : Math.floor(100000 + Math.random() * 900000));
+    const liveSeed = boardState?.seed ? Number(String(boardState.seed).slice(-6)) : Math.floor(100000 + Math.random() * 900000);
     const liveRoomCode = String(liveSeed).padStart(6, '0').slice(-6);
 
-    const basePuzzleGrid = boardState ? boardState.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)) : null;
-    let solvedGrid = solutionGrid && solutionGrid.length === 9 ? solutionGrid : null;
+    const basePuzzleGrid = (boardState as any)?.initialGrid
+      ? (boardState as any).initialGrid
+      : (boardState ? boardState.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)) : null);
+    let solvedGrid = (boardState as any)?.solutionGrid
+      ? (boardState as any).solutionGrid
+      : (solutionGrid && solutionGrid.length === 9 ? solutionGrid : null);
     if (!solvedGrid && basePuzzleGrid) {
-      const copy = basePuzzleGrid.map(r => [...r]);
+      const copy = basePuzzleGrid.map((r: any) => [...r]);
       if (solveSudokuRecursive(copy)) {
         solvedGrid = copy;
         setSolutionGrid(copy);
@@ -9017,6 +10282,124 @@ useEffect(() => {
     navigateToScreen("game");
   };
 
+  const handleFactoryReset = async () => {
+    playClickSound();
+
+    const currentUid = userProfile?.id;
+    const cachedFcmToken = localStorage.getItem("sudoku_fcm_token");
+
+    // 1. Prune current hardware token from Firestore users/{userProfile.id}.fcmTokens via arrayRemove
+    // and explicitly broadcast status: "offline"
+    if (currentUid) {
+      try {
+        const userRef = doc(db, "users", currentUid);
+        const updateData: any = {
+          status: "offline",
+          lastActive: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        if (cachedFcmToken) {
+          updateData.fcmTokens = arrayRemove(cachedFcmToken);
+          updateData.fcmToken = "";
+        }
+        await setDoc(userRef, updateData, { merge: true });
+      } catch (err) {
+        console.warn("[FactoryReset] Error updating user presence/token in Firestore:", err);
+      }
+    }
+
+    // Explicitly call signOut(auth)
+    if (auth.currentUser) {
+      await signOut(auth).catch((err) => {
+        console.warn("[FactoryReset] Error signing out of auth:", err);
+      });
+    }
+
+    // 2. Wipe all local and session storage completely
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // 3. Completely purge in-memory hook states
+    setPendingChallenges([]);
+    setActiveInviteNotification(null);
+    setMultiplayerPlayers([]);
+    setRematchInviteStates({});
+    setActiveGameId(null);
+    setChallengeMode(false);
+    setChallengeSeed(null);
+    setRematchGameId("");
+    setIsHost(true);
+    setIsRoomLocked(false);
+    setRoomPin("");
+    setLobbyAcceptedUserIds(new Set());
+    setRematchParticipants([]);
+    setIsDockingToBell(false);
+    setInviteQueue([]);
+    setShowInviteModal(false);
+
+    // 4. Immediately purge all best scores & record states from in-memory React state
+    const emptyBestTimes: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
+    setPersonalBestTimes(emptyBestTimes);
+    personalBestTimesRef.current = emptyBestTimes;
+    setPreviousRecordTime(null);
+    setIsNewRecordAchieved(false);
+    setPbStage("idle");
+
+    // 5. Reset all stats & match counters
+    setTotalGamesPlayed(0);
+    setTotalWinsCount(0);
+    setSavedGames([]);
+    setCompletedGames([]);
+    setHistory([]);
+    setWinStreak(0);
+
+    // 6. Reset preferences & gameplay settings to factory defaults
+    setDarkMode(false);
+    setActiveTheme("Original");
+    setSoundEffects(true);
+    setVibrations(true);
+    setTimerEnabled(true);
+    setDisplayScores(true);
+    setMistakeLimitEnabled(true);
+    setHighlightIdentical(true);
+    setHighlightAreas(true);
+    setShowRemainingNumbers(true);
+    setAutoComplete(false);
+    setLightningMode(false);
+    setMagicNote(false);
+    setHideUsedNumber(false);
+    setNotificationsEnabled(true);
+    setIsAutoRemoveNotesEnabled(true);
+    setIsPreventMistakeNotesEnabled(true);
+    setIsNumberFirstInputMode(false);
+    setAutoSwitchCompletedNumber(true);
+    setDifficulty("EASY");
+
+    // 7. Generate fresh guest profile
+    const newGuestId = "GUEST_" + Math.floor(10000 + Math.random() * 90000);
+    const newProfile = {
+      id: newGuestId,
+      name: "Guest Voyager",
+      avatarColor: "#6B7280",
+      isSynced: false
+    };
+    setUserProfile(newProfile);
+    userProfileRef.current = newProfile;
+    try {
+      localStorage.setItem("sudoku_userProfile", JSON.stringify(newProfile));
+    } catch {}
+
+    // 8. CRITICAL FIX FOR DESKTOP: Immediately call generateAndSetNewPuzzle("EASY") instead of leaving boardState as null.
+    // This prevents SudokuBoard.tsx from locking in an infinite "Entering Match..." spinner on desktop viewports.
+    await generateAndSetNewPuzzle("EASY");
+
+    // 9. Cleanly navigate back to home screen and close modals without manual page refresh
+    setCurrentScreen("home");
+    setIsConfirmingFactoryReset(false);
+    setShowResetSettingsModal(false);
+    showToast("Factory reset complete");
+  };
+
   const handleUndo = () => {
     if (!boardState || boardState.isGameOver) return;
     if (history.length === 0) {
@@ -9159,7 +10542,40 @@ useEffect(() => {
             selectedCol
           };
           saveCurrentGameToLocal(terminalState, sessionSeconds, difficulty);
+
+          // Immediate terminal write on 3 mistakes to room players (zero secondary dependency)
+          const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
+          const currentUid = userProfile?.id || auth.currentUser?.uid;
+          if (liveRoomId && currentUid) {
+            try {
+              setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
+                status: "mistake_game_over",
+                failed: true,
+                isPending: false,
+                mistakes: 3,
+                completedAt: serverTimestamp()
+              }, { merge: true }).catch(err => {
+                console.warn("[Multiplayer] Immediate mistake_game_over write notice:", err);
+              });
+            } catch (err) {
+              console.warn("[Multiplayer] Immediate mistake_game_over dispatch error:", err);
+            }
+          }
+
           saveGameToHistory(false, newMistakes);
+        } else {
+          // Synchronous live mistake updates to /rooms/{roomId}/players/{uid}
+          const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
+          const currentUid = userProfile?.id || auth.currentUser?.uid;
+          if (liveRoomId && currentUid) {
+            try {
+              setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
+                mistakes: newMistakes,
+                status: "active",
+                updatedAt: serverTimestamp()
+              }, { merge: true }).catch(() => {});
+            } catch (err) {}
+          }
         }
       } else {
         // Valid placed number: check if this digit is now completely placed (all 9 instances)
@@ -9183,9 +10599,54 @@ useEffect(() => {
           };
           setBoardState(terminalWinState);
           saveCurrentGameToLocal(terminalWinState, sessionSeconds, difficulty);
+
+          // Immediate terminal write on completion/victory to room players (zero secondary dependency)
+          const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
+          const currentUid = userProfile?.id || auth.currentUser?.uid;
+          if (liveRoomId && currentUid) {
+            try {
+              setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
+                status: "completed",
+                isWon: true,
+                failed: false,
+                isPending: false,
+                timeSec: sessionSeconds,
+                mistakes: boardState ? boardState.currentMistakesCount : 0,
+                completedAt: serverTimestamp()
+              }, { merge: true }).catch(err => {
+                console.warn("[Multiplayer] Immediate victory write notice:", err);
+              });
+            } catch (err) {
+              console.warn("[Multiplayer] Immediate victory dispatch error:", err);
+            }
+          }
+
           addLog("⭐ Victory! All sudoku square criteria satisfied uniquely!");
           saveGameToHistory(true, boardState ? boardState.currentMistakesCount : 0);
-        } else if (isNumCompleted) {
+        } else {
+          // Live progression update for ongoing multiplayer game
+          const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
+          const currentUid = userProfile?.id || auth.currentUser?.uid;
+          if (liveRoomId && currentUid && !isOver) {
+            try {
+              let filledCount = 0;
+              for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                  if (finalGrid[r][c].value !== 0) filledCount++;
+                }
+              }
+              const progressPct = Math.round((filledCount / 81) * 100);
+              setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
+                progress: progressPct,
+                mistakes: newMistakes,
+                status: "active",
+                updatedAt: serverTimestamp()
+              }, { merge: true }).catch(() => {});
+            } catch (err) {}
+          }
+        }
+
+        if (!currentProgress && isNumCompleted) {
           // Requirement 6: Number Completion Audio & Haptic Feedback
           playNumberCompletionSound();
           triggerHapticCompletion(vibrations);
@@ -9235,7 +10696,7 @@ useEffect(() => {
               setActiveKeypadNum(null);
             }
           }
-        } else {
+        } else if (!currentProgress) {
           // Valid placement, not yet completed: keep this number active in normal mode
           if (!isNumberFirstInputMode) {
             setActiveKeypadNum(num);
@@ -9805,6 +11266,9 @@ useEffect(() => {
 
   return (
     <div className={`min-h-screen ${darkMode ? "bg-[#18181B] text-[#E5E5E5] selection:bg-[#312E81]" : "bg-[#F3EFE9] text-[#1E1E1E] selection:bg-[#E0F2FE]"} flex flex-col font-sans overflow-hidden pb-[env(safe-area-inset-bottom,0px)]`}>
+      {/* Studio Splash Transition */}
+      <StudioSplash duration={1000} />
+
       {/* Toast Notification */}
       <AnimatePresence>
         {copiedText && (
@@ -10889,10 +12353,19 @@ useEffect(() => {
 
                   if (isOnline) {
                     try {
+                      const puzzleFlat = (boardState as any)?.initialGrid
+                        ? (boardState as any).initialGrid.flat()
+                        : (boardState?.grid ? boardState.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)).flat() : null);
+                      const solutionFlat = (boardState as any)?.solutionGrid
+                        ? (boardState as any).solutionGrid.flat()
+                        : (solutionGrid && solutionGrid.length === 9 ? solutionGrid.flat() : null);
+
                       await setDoc(doc(db, "rooms", roomCode), {
                         roomCode: roomCode,
                         seed: seed,
                         difficulty: challengeDifficulty,
+                        ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
+                        ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
                         mistakesLimit: challengeMistakeLimit,
                         hintsLimit: challengeHintLimit,
                         timerEnabled: challengeTimerEnabled,
@@ -11386,6 +12859,7 @@ useEffect(() => {
               handleToggleFriend={handleToggleFriend}
               handleAddRecentFriend={handleAddRecentFriend}
               formatTimer={formatTimer}
+              isAuthHydrating={isAuthHydrating}
             />
           )}
 
@@ -11618,7 +13092,15 @@ useEffect(() => {
 
                   {/* Dynamic Tab Panel Content */}
                   <div className="p-4 flex flex-col gap-3 max-h-[300px] overflow-y-auto custom-scrollbar text-left font-sans">
-                    {activeHistoryTab === "completed" ? (
+                    {isAuthHydrating ? (
+                      <div className="py-8 flex flex-col items-center justify-center gap-3 animate-pulse select-none">
+                        <RefreshCw className="w-6 h-6 animate-spin text-stone-400" />
+                        <div className="flex flex-col gap-2 w-full max-w-[200px] items-center">
+                          <div className={`w-32 h-2.5 rounded-full ${darkMode ? "bg-zinc-800" : "bg-stone-200"}`} />
+                          <div className={`w-20 h-2 rounded-full ${darkMode ? "bg-zinc-800/60" : "bg-stone-200/60"}`} />
+                        </div>
+                      </div>
+                    ) : activeHistoryTab === "completed" ? (
                       completedGames.length === 0 ? (
                         <div className="py-8 text-center text-stone-500 font-sans text-xs">
                           No completed games yet.
@@ -12006,20 +13488,39 @@ useEffect(() => {
                   {/* Active Google Sync Action States */}
                   <div className="flex flex-col gap-1.5 w-full select-none">
                     <button
-                      disabled
-                      className={`w-full flex items-center justify-center gap-2 font-sans text-xs font-black uppercase tracking-wider py-3.5 px-6 rounded-full transition-all text-center border-none opacity-50 cursor-not-allowed ${darkMode ? "bg-zinc-800 text-stone-500" : "bg-stone-100 text-stone-400"}`}
+                      type="button"
+                      disabled={isConnectingGoogle}
+                      onClick={() => {
+                        if (isConnectingGoogle) return;
+                        playClickSound();
+                        handleConnectGoogle();
+                      }}
+                      className={`w-full min-h-[46px] flex items-center justify-center gap-2 font-sans text-xs font-black uppercase tracking-wider py-3.5 px-6 rounded-full transition-all text-center border-none ${
+                        isConnectingGoogle
+                          ? "opacity-75 cursor-wait"
+                          : "cursor-pointer active:scale-[0.98]"
+                      } ${
+                        darkMode
+                          ? "bg-white text-stone-900 hover:bg-stone-100"
+                          : "bg-white text-stone-850 hover:bg-stone-50 border border-stone-200 shadow-sm"
+                      }`}
                     >
-                      <svg className="w-4 h-4 shrink-0 opacity-40 grayscale" viewBox="0 0 24 24">
-                        <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                        <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                        <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                        <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                       </svg>
-                      <span>Connect with Google</span>
+                      {isConnectingGoogle ? (
+                        <div className="flex items-center justify-center gap-1.5 h-4 px-2" aria-label="Loading">
+                          <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "0ms" }} />
+                          <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "160ms" }} />
+                          <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "320ms" }} />
+                        </div>
+                      ) : (
+                        <span>Connect with Google</span>
+                      )}
                     </button>
-                    <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 mt-1 font-sans text-center max-w-[210px]">
-                      Cloud synchronization across devices will be available in a future update.
-                    </p>
                   </div>
                 </div>
 
@@ -12662,11 +14163,8 @@ useEffect(() => {
                 isOpen={showCreateChallengeModal}
                 onClose={() => {
                   setShowCreateChallengeModal(false);
-                  if (openedCreateFromMultiplayerResult) {
-                    setOpenedCreateFromMultiplayerResult(false);
-                    setShowGameOverModal(true);
-                    setEndGameStep(1);
-                  }
+                  setOpenedCreateFromMultiplayerResult(false);
+                  setShowGameOverModal(false);
                 }}
                 onBack={openedCreateFromMultiplayerResult ? () => {
                   setShowCreateChallengeModal(false);
@@ -13817,62 +15315,7 @@ useEffect(() => {
 
                   <div className="flex flex-col gap-2.5 w-full mt-1">
                     <button 
-                      onClick={() => {
-                        playClickSound();
-                        
-                        // 1. Wipe all local and session storage completely
-                        localStorage.clear();
-                        sessionStorage.clear();
-
-                        // 2. Immediately purge all best scores & record states from in-memory React state
-                        const emptyBestTimes: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
-                        setPersonalBestTimes(emptyBestTimes);
-                        personalBestTimesRef.current = emptyBestTimes;
-                        setPreviousRecordTime(null);
-                        setIsNewRecordAchieved(false);
-                        setPbStage("idle");
-
-                        // 3. Reset all stats & match counters
-                        setTotalGamesPlayed(0);
-                        setTotalWinsCount(0);
-                        setSavedGames([]);
-                        setCompletedGames([]);
-                        setHistory([]);
-                        setBoardState(null);
-
-                        // 4. Reset preferences & gameplay settings to factory defaults
-                        setDarkMode(false);
-                        setSoundEffects(true);
-                        setVibrations(true);
-                        setTimerEnabled(true);
-                        setMistakeLimitEnabled(true);
-                        setHighlightIdentical(true);
-                        setHighlightAreas(true);
-                        setShowRemainingNumbers(true);
-                        setAutoComplete(false);
-                        setLightningMode(false);
-                        setMagicNote(false);
-                        setHideUsedNumber(false);
-                        setNotificationsEnabled(true);
-                        setIsAutoRemoveNotesEnabled(true);
-                        setIsNumberFirstInputMode(false);
-                        setAutoSwitchCompletedNumber(false);
-                        setDifficulty("EASY");
-
-                        // 5. Generate fresh guest profile
-                        setUserProfile({
-                          id: "GUEST_" + Math.floor(10000 + Math.random() * 90000),
-                          name: "Guest Voyager",
-                          avatarColor: "#6B7280",
-                          isSynced: false
-                        });
-
-                        // 6. Cleanly navigate back to home screen and close modals without manual page refresh
-                        setCurrentScreen("home");
-                        setIsConfirmingFactoryReset(false);
-                        setShowResetSettingsModal(false);
-                        showToast("Factory reset complete");
-                      }}
+                      onClick={handleFactoryReset}
                       className={`w-full py-3.5 px-4 rounded-xl border-0 cursor-pointer font-sans text-xs font-black uppercase tracking-wider transition-all active:translate-y-px ${
                         darkMode ? "bg-[#7f1d1d] text-[#fecaca] hover:bg-[#991b1b]" : "bg-[#FEE2E2] text-[#DC2626] hover:bg-[#FECACA]"
                       }`}
@@ -14666,20 +16109,39 @@ useEffect(() => {
                         {/* Google Sign-in (Disabled) */}
                         <div className="flex flex-col gap-1 w-full select-none">
                           <button
-                            disabled
-                            className="w-full bg-[#E0F2FE]/40 text-stone-400 border border-stone-200/50 py-3 px-4 rounded-xl font-sans text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 opacity-50 cursor-not-allowed"
+                            type="button"
+                            disabled={isConnectingGoogle}
+                            onClick={() => {
+                              if (isConnectingGoogle) return;
+                              playClickSound();
+                              handleConnectGoogle();
+                            }}
+                            className={`w-full min-h-[44px] py-3 px-4 rounded-xl font-sans text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 border transition-all ${
+                              isConnectingGoogle
+                                ? "opacity-75 cursor-wait"
+                                : "cursor-pointer active:scale-[0.98]"
+                            } ${
+                              darkMode
+                                ? "bg-white text-stone-900 border-stone-200 hover:bg-stone-100"
+                                : "bg-white text-stone-850 border-stone-200 hover:bg-stone-50 shadow-sm"
+                            }`}
                           >
-                            <svg className="w-4.5 h-4.5 shrink-0 opacity-40 grayscale" viewBox="0 0 24 24">
-                              <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                              <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                              <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                              <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                            <svg className="w-4.5 h-4.5 shrink-0" viewBox="0 0 24 24">
+                              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                             </svg>
-                            <span>Connect with Google</span>
+                            {isConnectingGoogle ? (
+                              <div className="flex items-center justify-center gap-1.5 h-4 px-2" aria-label="Loading">
+                                <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "0ms" }} />
+                                <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "160ms" }} />
+                                <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "320ms" }} />
+                              </div>
+                            ) : (
+                              <span>Connect with Google</span>
+                            )}
                           </button>
-                          <p className="text-[11px] font-normal leading-relaxed text-stone-500 dark:text-zinc-400 mt-1 font-sans text-center">
-                            Cloud synchronization across devices will be available in a future update.
-                          </p>
                         </div>
 
                         {/* Mobile OTP option */}
@@ -15099,7 +16561,7 @@ useEffect(() => {
                                   return updated;
                                 });
                                 setShowBellInvitesModal(false);
-                                handleViewChallengeResults(targetCode);
+                                handleViewChallengeResults(targetCode, true);
                               }}
                               className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border-none transition-all active:scale-95 text-white flex items-center justify-center gap-1.5 cursor-pointer bg-emerald-600 hover:bg-emerald-500"
                             >
@@ -15274,7 +16736,7 @@ useEffect(() => {
                             return updated;
                           });
                           setActiveInviteNotification(null);
-                          handleViewChallengeResults(targetCode);
+                          handleViewChallengeResults(targetCode, true);
                         }}
                         className="px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 text-white cursor-pointer bg-emerald-600 hover:bg-emerald-500"
                       >

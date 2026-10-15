@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, X, Plus } from "lucide-react";
+import { Check, X, Plus, RefreshCw } from "lucide-react";
 import { formatMatchTimestamp, formatActiveStatus } from "../../utils/formatTimestamp";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
@@ -40,6 +40,7 @@ export interface StatsModalProps {
   handleToggleFriend: (friendId: string, name: string) => void;
   handleAddRecentFriend: (player: any) => void;
   formatTimer: (seconds: number) => string;
+  isAuthHydrating?: boolean;
 }
 
 export const StatsModal: React.FC<StatsModalProps> = ({
@@ -58,7 +59,8 @@ export const StatsModal: React.FC<StatsModalProps> = ({
   handleOpenRankings,
   handleToggleFriend,
   handleAddRecentFriend,
-  formatTimer
+  formatTimer,
+  isAuthHydrating = false
 }) => {
   const { t } = useTranslation();
   const [activePlayersTab, setActivePlayersTab] = React.useState<"recent" | "friends">("recent");
@@ -75,8 +77,59 @@ export const StatsModal: React.FC<StatsModalProps> = ({
         className="flex-1 w-full max-w-sm mx-auto flex flex-col gap-6 justify-center items-center pb-6"
         id="status-screen-inner-container"
       >
-        {/* 📊 Player Statistics Bento-Grid (All visual, beautifully crafted!) */}
-        <div className="w-full grid grid-cols-2 gap-4 shrink-0">
+        {isAuthHydrating ? (
+          <div className="w-full flex flex-col gap-6 animate-pulse select-none py-2">
+            {/* Bento-Grid Skeletons */}
+            <div className="w-full grid grid-cols-2 gap-4 shrink-0">
+              <div
+                className={`p-5 flex flex-col items-center justify-center text-center rounded-2xl h-48 transition-all ${
+                  darkMode ? "bg-zinc-900/60 border border-zinc-800" : "bg-stone-200/60 border border-stone-200"
+                }`}
+              >
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-3 ${darkMode ? "bg-zinc-800/80" : "bg-stone-300/80"}`}>
+                  <RefreshCw className="w-6 h-6 animate-spin text-stone-400" />
+                </div>
+                <div className={`w-20 h-3 rounded-md ${darkMode ? "bg-zinc-700/60" : "bg-stone-300/70"}`} />
+              </div>
+
+              <div
+                className={`p-5 flex flex-col justify-between rounded-2xl h-48 transition-all ${
+                  darkMode ? "bg-zinc-900/60 border border-zinc-800" : "bg-stone-200/60 border border-stone-200"
+                }`}
+              >
+                <div className={`w-24 h-3.5 rounded-md self-center ${darkMode ? "bg-zinc-700/60" : "bg-stone-300/70"} mb-3`} />
+                <div className="flex flex-col gap-3">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex justify-between items-center">
+                      <div className={`w-12 h-2.5 rounded ${darkMode ? "bg-zinc-700/50" : "bg-stone-300/60"}`} />
+                      <div className={`w-10 h-2.5 rounded ${darkMode ? "bg-zinc-700/50" : "bg-stone-300/60"}`} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* History Module Skeleton */}
+            <div
+              className={`w-full rounded-2xl p-4 flex flex-col gap-3 transition-all ${
+                darkMode ? "bg-zinc-900/40 border border-zinc-800/80" : "bg-stone-200/40 border border-stone-200/60"
+              }`}
+            >
+              <div className="grid grid-cols-3 gap-2 p-1">
+                <div className={`h-8 rounded-xl ${darkMode ? "bg-zinc-700/50" : "bg-stone-300/60"}`} />
+                <div className={`h-8 rounded-xl ${darkMode ? "bg-zinc-700/50" : "bg-stone-300/60"}`} />
+                <div className={`h-8 rounded-xl ${darkMode ? "bg-zinc-700/50" : "bg-stone-300/60"}`} />
+              </div>
+              <div className="flex flex-col gap-2.5 mt-2">
+                <div className={`h-16 rounded-xl ${darkMode ? "bg-zinc-700/30" : "bg-stone-300/40"}`} />
+                <div className={`h-16 rounded-xl ${darkMode ? "bg-zinc-700/30" : "bg-stone-300/40"}`} />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* 📊 Player Statistics Bento-Grid (All visual, beautifully crafted!) */}
+            <div className="w-full grid grid-cols-2 gap-4 shrink-0">
           {/* Gauge Card: Win Rate */}
           <div
             className={`p-5 flex flex-col items-center justify-center text-center relative rounded-2xl border-none transition-all duration-300 ${
@@ -721,6 +774,8 @@ export const StatsModal: React.FC<StatsModalProps> = ({
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   );

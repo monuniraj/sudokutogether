@@ -55,8 +55,31 @@ export function useFriendPresence(
   const [friendLastActiveMap, setFriendLastActiveMap] = useState<Record<string, any>>({});
 
   const userId = explicitUserId || getStoredUserId();
+  const prevUserIdRef = useRef<string | null>(userId || null);
   const isIncognitoRef = useRef(isIncognito);
   isIncognitoRef.current = isIncognito;
+
+  // Cleanup tracking: When userId transitions (e.g., from GUEST_XXXX to Google UID),
+  // immediately broadcast status: "offline" to users/{prevUserId}
+  useEffect(() => {
+    const prevId = prevUserIdRef.current;
+    if (prevId && prevId !== userId) {
+      console.log(`[useFriendPresence] User ID transitioned from ${prevId} to ${userId || "none"}. Broadcasting offline for ${prevId}.`);
+      const prevRef = doc(db, "users", prevId);
+      setDoc(
+        prevRef,
+        {
+          status: "offline",
+          lastActive: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      ).catch((err) => {
+        console.warn("[useFriendPresence] Failed to broadcast offline for previous user ID:", err);
+      });
+    }
+    prevUserIdRef.current = userId || null;
+  }, [userId]);
 
   // Broadcast presence to Firestore
   const broadcastStatus = useCallback(async (status: "online" | "offline") => {
@@ -228,7 +251,12 @@ export function useFriendPresence(
   const getFriendStatus = useCallback(
     (friendId: string, fallbackStatus?: "online" | "offline"): "online" | "offline" => {
       const currentId = userId || getStoredUserId();
-      if (friendId === currentId) {
+      let priorGuestId: string | null = null;
+      try {
+        priorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
+      } catch {}
+
+      if (friendId === currentId || (priorGuestId && friendId === priorGuestId)) {
         return isIncognito ? "offline" : "online";
       }
 

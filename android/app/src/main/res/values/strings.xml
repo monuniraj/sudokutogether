@@ -4,4 +4,5 @@
     <string name="title_activity_main">SudokuSync</string>
     <string name="package_name">com.mologic.sudokusync</string>
     <string name="custom_url_scheme">com.mologic.sudokusync</string>
+    <string name="server_client_id">116330285995-aiaskr693anl3bkhapd6vdu3kiieaphc.apps.googleusercontent.com</string>
 </resources>

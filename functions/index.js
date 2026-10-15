@@ -204,7 +204,8 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
             defaultSound: true,
             defaultVibrateTimings: true,
             priority: "max",
-            visibility: "public"
+            visibility: "public",
+            tag: "sudoku_result_" + roomCode
           }
         },
         webpush: {
@@ -254,20 +255,21 @@ exports.onChallengeCompleted = onDocumentWritten("rooms/{roomCode}/players/{uid}
 });
 
 /**
- * Trigger B fallback: onParticipantCompleted (challenge_results/{roomCode}/participants/{uid})
+ * Trigger B fallback: onParticipantCompleted (DEPRECATED - deduplicated to prevent dual chimes)
+ * Retain strictly onChallengeCompleted listening on rooms/{roomCode}/players/{uid}.
  */
-exports.onParticipantCompleted = onDocumentWritten("challenge_results/{roomCode}/participants/{uid}", async (event) => {
-  const before = event.data?.before?.data() || {};
-  const after = event.data?.after?.data() || {};
-
-  const wasFinished = before.status === "completed" || before.status === "won" || before.status === "victory" || before.isWon === true || (before.timeTaken !== undefined && before.timeTaken > 0) || (before.timeSec !== undefined && before.timeSec > 0);
-  const isFinished = after.status === "completed" || after.status === "won" || after.status === "victory" || after.isWon === true || (after.timeTaken !== undefined && after.timeTaken > 0) || (after.timeSec !== undefined && after.timeSec > 0);
-
-  if (!isFinished || wasFinished) return null;
-
-  const finisherUid = event.params.uid;
-  const finisherName = after.playerName || after.name || "Opponent";
-  const roomCode = String(event.params.roomCode);
-
-  return processChallengeCompleted(roomCode, finisherUid, finisherName);
-});
+// exports.onParticipantCompleted = onDocumentWritten("challenge_results/{roomCode}/participants/{uid}", async (event) => {
+//   const before = event.data?.before?.data() || {};
+//   const after = event.data?.after?.data() || {};
+//
+//   const wasFinished = before.status === "completed" || before.status === "won" || before.status === "victory" || before.isWon === true || (before.timeTaken !== undefined && before.timeTaken > 0) || (before.timeSec !== undefined && before.timeSec > 0);
+//   const isFinished = after.status === "completed" || after.status === "won" || after.status === "victory" || after.isWon === true || (after.timeTaken !== undefined && after.timeTaken > 0) || (after.timeSec !== undefined && after.timeSec > 0);
+//
+//   if (!isFinished || wasFinished) return null;
+//
+//   const finisherUid = event.params.uid;
+//   const finisherName = after.playerName || after.name || "Opponent";
+//   const roomCode = String(event.params.roomCode);
+//
+//   return processChallengeCompleted(roomCode, finisherUid, finisherName);
+// });

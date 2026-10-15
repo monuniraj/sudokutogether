@@ -243,17 +243,26 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         Boolean(item.forfeited) ||
         Boolean(item.isAbandoned);
 
-      const isWon = !isAbandoned && (
-        item.isWon !== undefined
-          ? Boolean(item.isWon)
-          : item.failed !== undefined
-          ? !item.failed
-          : !item.isPending
-      );
+      const isExplicitFailure =
+        item.status === "mistake_game_over" ||
+        item.status === "failed" ||
+        (Number(item.mistakes) >= 3) ||
+        Boolean(item.failed) ||
+        item.status === "abandoned" ||
+        item.status === "forfeited" ||
+        isAbandoned;
+      const isExplicitWon =
+        !isExplicitFailure &&
+        (item.status === "completed" ||
+         item.status === "won" ||
+         item.status === "victory" ||
+         Boolean(item.isWon));
+      const isPending = !isCurrentUser && !isExplicitFailure && !isExplicitWon && !isAbandoned;
+      const isFailed = !isCurrentUser ? isExplicitFailure : (!isExplicitWon || isAbandoned);
+      const isWon = !isAbandoned && isExplicitWon;
 
-      const isPending = !isCurrentUser && !isAbandoned && (item.isPending ?? false);
       const rawTime = Number(item.timeSec ?? item.time ?? item.elapsedTime ?? 0);
-      const pTime = isAbandoned ? 99999 : !isWon ? 9999 : rawTime;
+      const pTime = isAbandoned ? 99999 : isPending ? 9999 : !isWon ? 9999 : rawTime;
       const elapsedTime = rawTime > 0 && rawTime < 9999 ? rawTime : (Number(item.elapsedTime) || 0);
 
       // Smart Replay preservation: if existing entry is already a superior win, do not downgrade it
@@ -277,9 +286,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         elapsedTime: elapsedTime,
         mistakes: item.mistakes !== undefined ? Number(item.mistakes) : 0,
         hints: item.hints !== undefined ? Number(item.hints) : ((item as any).hintsUsed ?? 0),
-        failed: (!isWon && !isPending) || isAbandoned,
+        failed: isFailed,
         isAbandoned: isAbandoned,
-        status: item.status,
+        status: isExplicitFailure ? "mistake_game_over" : (isExplicitWon ? "completed" : item.status),
         isMe: isCurrentUser,
         isReal: true,
         isPending: isPending,
@@ -306,11 +315,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
     // 3. STRICT RANKING & TIE-BREAKER LOGIC
     const list = Array.from(resultsMap.values());
     list.sort((a, b) => {
-      // 1. Status: Completed/Won > Pending > Failed/Abandoned/Left
+      // 1. Status: Completed/Won (0) > Failed (1) > Pending (2) > Abandoned/Left (3)
       const getStatusPriority = (p: any) => {
-        if (p.isAbandoned || p.failed) return 2;
-        if (p.isPending) return 1;
-        return 0; // Completed / Won
+        if (p.isAbandoned) return 3;
+        if (p.isPending) return 2;   // Opponents still solving MUST rank BELOW completed players
+        if (p.failed) return 1;      // Finished with errors / mistake-out
+        return 0;                    // Completed / Won
       };
 
       const priorityA = getStatusPriority(a);
@@ -319,7 +329,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         return priorityA - priorityB;
       }
 
-      // If both are Completed/Won:
+      // If both are Completed/Won (0):
       if (priorityA === 0) {
         // 2. Completion Time: Ascending (lower time = higher rank)
         if (a.time !== b.time) {
@@ -338,18 +348,29 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         return (a.elapsedTime || 0) - (b.elapsedTime || 0);
       }
 
-      // If both are Pending:
+      // If both are Failed (1):
       if (priorityA === 1) {
+        // Sort by most progress / least time before fault
+        if (a.mistakes !== b.mistakes) {
+          return a.mistakes - b.mistakes;
+        }
+        const timeA = a.time > 0 && a.time < 9999 ? a.time : (a.elapsedTime || 0);
+        const timeB = b.time > 0 && b.time < 9999 ? b.time : (b.elapsedTime || 0);
+        if (timeA !== timeB) {
+          return timeA - timeB;
+        }
+        return (a.elapsedTime || 0) - (b.elapsedTime || 0);
+      }
+
+      // If both are Pending (2):
+      if (priorityA === 2) {
         if (a.mistakes !== b.mistakes) {
           return a.mistakes - b.mistakes;
         }
         return (a.elapsedTime || 0) - (b.elapsedTime || 0);
       }
 
-      // If both are Failed / Abandoned:
-      if (a.isAbandoned !== b.isAbandoned) {
-        return a.isAbandoned ? 1 : -1;
-      }
+      // If both are Abandoned (3):
       if (a.mistakes !== b.mistakes) {
         return a.mistakes - b.mistakes;
       }
