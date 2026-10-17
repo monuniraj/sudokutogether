@@ -33,6 +33,7 @@ import {
   where,
   updateDoc,
   deleteDoc,
+  writeBatch,
   arrayUnion,
   arrayRemove,
   increment
@@ -1502,9 +1503,7 @@ useEffect(() => {
   }, []);
 
   const [activeTab, setActiveTab] = useState<"sudoku" | "sandbox" | "kotlin-code" | "spec-docs">("sudoku");
-  const [currentScreen, setCurrentScreen] = useState<"home" | "status" | "settings" | "game" | "login" | "together">(
-    typeof window !== "undefined" && window.innerWidth >= 1024 ? "game" : "home"
-  );
+  const [currentScreen, setCurrentScreen] = useState<"home" | "status" | "settings" | "game" | "login" | "together">("home");
   const [fromGameplaySettings, setFromGameplaySettings] = useState<boolean>(false);
   const [activeAppInviteTab, setActiveAppInviteTab] = useState<"recent" | "friends">("recent");
 
@@ -1969,6 +1968,9 @@ useEffect(() => {
   const [showHowToPlayModal, setShowHowToPlayModal] = useState<boolean>(false);
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState<boolean>(false);
   const [showResetSettingsModal, setShowResetSettingsModal] = useState<boolean>(false);
+  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
   const [isConfirmingFactoryReset, setIsConfirmingFactoryReset] = useState<boolean>(false);
 
   // Issue 7: Friend System Identity states
@@ -2320,13 +2322,6 @@ useEffect(() => {
       return null;
     }
   };
-
-  useEffect(() => {
-    if (currentScreen === "home" && typeof window !== "undefined" && window.innerWidth >= 1024) {
-      setCurrentScreen("game");
-      setNavigationHistory(["game"]);
-    }
-  }, [currentScreen]);
 
   // On Screen transitions to Home, update Saved state presence
   useEffect(() => {
@@ -3564,6 +3559,9 @@ useEffect(() => {
           grantOfflineAccess: false
         });
 
+        // Flush cached Play Services credentials to guarantee account picker bottom-sheet
+        await GoogleAuth.signOut().catch(() => {});
+
         const googleUser = await GoogleAuth.signIn();
         const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
 
@@ -3921,7 +3919,7 @@ useEffect(() => {
       const currentUid = auth.currentUser?.uid || userProfile?.id;
       const cachedFcmToken = typeof window !== "undefined" ? localStorage.getItem("sudoku_fcm_token") : null;
 
-      // 1. Prune device push token from Firestore users/{userProfile.id}.fcmTokens via arrayRemove(cachedFcmToken)
+      // 1. Prune device push token from Firestore users/{userProfile.id}.fcmTokens via arrayRemove(cachedFcmToken) (non-blocking)
       if (currentUid && currentUid !== "GUEST" && !currentUid.startsWith("GUEST_")) {
         try {
           const userRef = doc(db, "users", currentUid);
@@ -3934,25 +3932,27 @@ useEffect(() => {
             updateData.fcmTokens = arrayRemove(cachedFcmToken);
             updateData.fcmToken = "";
           }
-          await setDoc(userRef, updateData, { merge: true });
+          await setDoc(userRef, updateData, { merge: true }).catch(() => {});
         } catch (err) {
           console.warn("[Auth] Error updating user presence/token in Firestore on logout:", err);
         }
       }
 
-      // 2. Broadcast { status: "offline", lastActive: serverTimestamp() } and call await signOut(auth)
+      // 2. Broadcast { status: "offline", lastActive: serverTimestamp() } (non-blocking)
       if (currentUid) {
         try {
           await setDoc(doc(db, "presence", currentUid), {
             status: "offline",
             lastActive: serverTimestamp()
-          }, { merge: true });
+          }, { merge: true }).catch(() => {});
         } catch {}
       }
-      currentHydratedUidRef.current = null;
-      await signOut(auth);
 
-      // 3. Wipe all local storage session items
+      // 3. Revoke Firebase Auth session
+      currentHydratedUidRef.current = null;
+      await signOut(auth).catch((err) => console.warn("[Auth] Firebase signout notice:", err));
+
+      // 4. Wipe all local storage session items
       const sessionKeysToWipe = [
         "sudoku_completed_games",
         "sudoku_total_games_played",
@@ -3960,6 +3960,8 @@ useEffect(() => {
         "sudoku_total_wins_count",
         "sudoku_winsCount",
         "sudoku_saved_games",
+        "sudoku_savedSession",
+        "sudoku_lastCompletedSession",
         "sudoku_history",
         "sudoku_best_times",
         "sudoku_pending_challenges",
@@ -3974,7 +3976,7 @@ useEffect(() => {
         } catch {}
       });
 
-      // 4. Deterministically apply INITIAL_GUEST_STATE to all relevant in-memory states in a single synchronous pass
+      // 5. Deterministically apply INITIAL_GUEST_STATE to all relevant in-memory states in a single synchronous pass
       const freshGuestId = "GUEST_" + Math.random().toString(36).substring(2, 9);
       const cleanGuestProfile = {
         ...INITIAL_GUEST_STATE.userProfile,
@@ -4009,13 +4011,30 @@ useEffect(() => {
         bestTimes: INITIAL_GUEST_STATE.personalBestTimes
       });
 
-      // 5. Call await generateAndSetNewPuzzle("EASY") to mount a fresh unseeded solo board
+      // 6. Enforce zero-state: Clear boardState, savedSessionInfo, lastCompletedSession; DO NOT generate background puzzle
       setActiveGameId(null);
       setChallengeMode(false);
       setChallengeSeed(null);
       setRematchGameId("");
       setIsHost(true);
-      await generateAndSetNewPuzzle("EASY");
+      setBoardState(null);
+      setSavedSessionInfo(null);
+      setLastCompletedSession(null);
+      setSolutionGrid([]);
+      setHistory([]);
+      setSessionSeconds(0);
+      setIsTimerPaused(false);
+      hasTriggeredGameOverRef.current = false;
+      try {
+        localStorage.removeItem("sudoku_savedSession");
+        localStorage.removeItem("sudoku_lastCompletedSession");
+      } catch {}
+
+      // 7. Clear notifications state & reset navigation smoothly in-memory
+      setNotifications([]);
+      setUnreadNotificationsCount(0);
+      setCurrentScreen("home");
+      setShowSettingsModal(false);
 
       addLog("👤 Returned to clean local guest session.");
       showToast("Logged out successfully.");
@@ -4040,54 +4059,83 @@ useEffect(() => {
       const liveRoomCode = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
       if (liveRoomCode && currentUid) {
         try {
-          await deleteDoc(doc(db, "rooms", liveRoomCode, "players", currentUid));
+          await deleteDoc(doc(db, "rooms", liveRoomCode, "players", currentUid)).catch(() => {});
         } catch (roomErr) {
           console.warn("[Auth] Live room player cleanup warning:", roomErr);
         }
       }
 
-      // 2. Complete Cloud Purge: Safely delete users/{uid} and presence/{uid} in Firestore
-      if (currentUser && !currentUser.isAnonymous) {
-        if (currentUid) {
-          try {
-            await deleteDoc(doc(db, "users", currentUid));
-          } catch (docErr) {
-            console.warn("[Auth] Cloud user doc purge warning:", docErr);
+      // 2. Subcollection Cleanup: Purge users/{uid}/past_players via writeBatch before deleting user doc
+      if (currentUid && currentUid !== "GUEST" && !currentUid.startsWith("GUEST_")) {
+        try {
+          const pastPlayersSnap = await getDocs(collection(db, "users", currentUid, "past_players"));
+          if (!pastPlayersSnap.empty) {
+            const batch = writeBatch(db);
+            pastPlayersSnap.forEach((d) => {
+              batch.delete(d.ref);
+            });
+            await batch.commit();
           }
-          try {
-            await deleteDoc(doc(db, "presence", currentUid));
-          } catch (presenceErr) {
-            // Non-blocking if presence path does not exist
-          }
+        } catch (subErr) {
+          console.warn("[Auth] Subcollection past_players cleanup notice:", subErr);
         }
+      }
 
+      // 3. Complete Cloud Purge: Safely delete users/{uid} and presence/{uid} in Firestore
+      if (currentUid && currentUid !== "GUEST" && !currentUid.startsWith("GUEST_")) {
+        try {
+          await deleteDoc(doc(db, "users", currentUid)).catch(() => {});
+        } catch (docErr) {
+          console.warn("[Auth] Cloud user doc purge warning:", docErr);
+        }
+        try {
+          await deleteDoc(doc(db, "presence", currentUid)).catch(() => {});
+        } catch {}
+      }
+
+      // 4. Delete Firebase Auth User with requires-recent-login guard
+      if (currentUser && !currentUser.isAnonymous) {
         try {
           await deleteUser(currentUser);
         } catch (authErr: any) {
           if (authErr?.code === "auth/requires-recent-login") {
-            showToast("For security, please log in again before deleting your account.");
+            showToast("Security check: Please log in again to confirm account deletion.");
             setShowDeleteAccountModal(false);
             return;
           }
           throw authErr;
         }
-      } else if (currentUid) {
+      } else if (currentUser) {
         try {
-          await deleteDoc(doc(db, "users", currentUid));
-        } catch (docErr) {}
-        try {
-          await deleteDoc(doc(db, "presence", currentUid));
-        } catch (presenceErr) {}
-        if (currentUser) {
-          try {
-            await deleteUser(currentUser);
-          } catch (anonAuthErr) {
-            console.warn("[Auth] Anonymous deleteUser warning:", anonAuthErr);
-          }
+          await deleteUser(currentUser).catch(() => {});
+        } catch (anonAuthErr) {
+          console.warn("[Auth] Anonymous deleteUser warning:", anonAuthErr);
         }
       }
 
-      // 3. Complete Storage Purge: Execute localStorage.clear() and sessionStorage.clear()
+      // 5. Complete Storage & Session Key Purge: Wipe all 15 session keys and clear storage
+      const sessionKeysToWipe = [
+        "sudoku_completed_games",
+        "sudoku_total_games_played",
+        "sudoku_gamesPlayed",
+        "sudoku_total_wins_count",
+        "sudoku_winsCount",
+        "sudoku_saved_games",
+        "sudoku_savedSession",
+        "sudoku_lastCompletedSession",
+        "sudoku_history",
+        "sudoku_best_times",
+        "sudoku_pending_challenges",
+        "sudoku_active_invite",
+        "sudoku_past_players",
+        "sudoku_winStreak",
+        "sudoku_prior_guest_id"
+      ];
+      sessionKeysToWipe.forEach((key) => {
+        try {
+          localStorage.removeItem(key);
+        } catch {}
+      });
       try {
         localStorage.clear();
       } catch {}
@@ -4095,18 +4143,77 @@ useEffect(() => {
         sessionStorage.clear();
       } catch {}
 
-      addLog("🗑️ Account and all data permanently deleted.");
+      // 6. Smooth In-Memory Factory Reset (prevents killing Capacitor Android WebView)
+      const freshGuestId = "GUEST_" + Math.random().toString(36).substring(2, 9);
+      const cleanGuestProfile = {
+        ...INITIAL_GUEST_STATE.userProfile,
+        id: freshGuestId
+      };
+
+      setUserProfile(cleanGuestProfile);
+      userProfileRef.current = cleanGuestProfile;
+      try {
+        localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuestProfile));
+      } catch {}
+
+      setCompletedGames(INITIAL_GUEST_STATE.completedGames);
+      setTotalGamesPlayed(INITIAL_GUEST_STATE.totalGamesPlayed);
+      setTotalWinsCount(INITIAL_GUEST_STATE.totalWinsCount);
+      setPersonalBestTimes(INITIAL_GUEST_STATE.personalBestTimes);
+      personalBestTimesRef.current = INITIAL_GUEST_STATE.personalBestTimes;
+      setSavedGames(INITIAL_GUEST_STATE.savedGames);
+      setMultiplayerPlayers(INITIAL_GUEST_STATE.multiplayerPlayers);
+      setPendingChallenges(INITIAL_GUEST_STATE.pendingChallenges);
+      setActiveInviteNotification(null);
+      setIsDockingToBell(false);
+      setWinStreak(0);
+      setHistory([]);
+      setPreviousRecordTime(null);
+      setIsNewRecordAchieved(false);
+      setPbStage("idle");
+      setNotifications([]);
+      setUnreadNotificationsCount(0);
+      setCurrentScreen("home");
       setShowDeleteAccountModal(false);
+      setShowSettingsModal(false);
+      setStats({
+        totalGamesPlayed: INITIAL_GUEST_STATE.totalGamesPlayed,
+        totalWinsCount: INITIAL_GUEST_STATE.totalWinsCount,
+        winStreak: 0,
+        bestTimes: INITIAL_GUEST_STATE.personalBestTimes
+      });
+
+      // Zero-state: Clear boardState, savedSessionInfo, lastCompletedSession; DO NOT generate background puzzle
+      setActiveGameId(null);
+      setChallengeMode(false);
+      setChallengeSeed(null);
+      setRematchGameId("");
+      setIsHost(true);
+      setBoardState(null);
+      setSavedSessionInfo(null);
+      setLastCompletedSession(null);
+      setSolutionGrid([]);
+      setHistory([]);
+      setSessionSeconds(0);
+      setIsTimerPaused(false);
+      hasTriggeredGameOverRef.current = false;
+      try {
+        localStorage.removeItem("sudoku_savedSession");
+        localStorage.removeItem("sudoku_lastCompletedSession");
+      } catch {}
+
+      addLog("🗑️ Account and all data permanently deleted.");
       showToast("Account and data deleted.");
 
-      // 4. Hard Refresh: Perform window.location.href = window.location.origin; so browser RAM/React memory completely flushes
-      setTimeout(() => {
-        window.location.href = window.location.origin;
-      }, 150);
+      if (!Capacitor.isNativePlatform()) {
+        setTimeout(() => {
+          window.location.href = window.location.origin;
+        }, 150);
+      }
     } catch (err: any) {
       console.warn("[Auth] Delete account error:", err?.code || "unknown");
       const friendlyMsg = err?.code === "auth/requires-recent-login"
-        ? "For security, please log in again before deleting your account."
+        ? "Security check: Please log in again to confirm account deletion."
         : "Failed to delete account. Please try again.";
       showToast(friendlyMsg);
     } finally {
@@ -5668,7 +5775,7 @@ useEffect(() => {
               try {
                 const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
                 const token = await getToken(messaging, { 
-                  vapidKey: 'BFJRNRY4LO8dVenQpZLSzz8UOrMqorhwrsxX35MDzeifpZiQXsueOtgoc',
+                  vapidKey: 'BFJRNRY4LO8dVenQpZLSzz8UOrMqorhwrsxX35MDzeifpZxJv271sxvr5Z14hCVdTGOmK4uaTlPZiQXsueOtgoc',
                   serviceWorkerRegistration: registration
                 });
                 if (token) {
@@ -6051,12 +6158,25 @@ useEffect(() => {
     };
   }, [userProfile?.id, notificationsEnabled]);
 
-  // Trigger push registration when setting is enabled
+  // Trigger push registration when setting is enabled or active user profile changes
   useEffect(() => {
-    if (notificationsEnabled) {
+    if (notificationsEnabled && userProfile?.id) {
       registerPushNotifications();
+
+      // Immediate reconciliation: if a cached native FCM token exists in localStorage,
+      // write it to the active profile in Firestore right away.
+      const cachedToken = localStorage.getItem("sudoku_fcm_token");
+      if (cachedToken) {
+        const userRef = doc(db, "users", userProfile.id);
+        setDoc(userRef, {
+          notificationsEnabled: true,
+          fcmToken: cachedToken,
+          fcmTokens: arrayUnion(cachedToken),
+          updatedAt: serverTimestamp()
+        }, { merge: true }).catch(err => console.error("Token sync error:", err));
+      }
     }
-  }, [notificationsEnabled]);
+  }, [notificationsEnabled, userProfile?.id]);
 
   // Click sound generator (tactile crisp feedback)
   const playClickSound = () => {
@@ -8273,70 +8393,24 @@ useEffect(() => {
       participants: resolvedParts
     };
 
-    let finalCompletedList: CompletedGame[] = [];
     setCompletedGames(prev => {
-      const existsIndex = prev.findIndex(r => r.id === finalGameId || (gameSeed && r.seed === gameSeed));
+      const existsIndex = prev.findIndex(r => r.id === finalGameId);
       if (existsIndex !== -1) {
-        const oldRecord = prev[existsIndex];
-        const oldIsWon = Boolean(oldRecord.isWon);
-        const newIsWon = Boolean(isWon);
-        const oldTimeSec = Number(oldRecord.timeSec) > 0 ? Number(oldRecord.timeSec) : Infinity;
-        const newTimeSec = Number(sessionSeconds) > 0 ? Number(sessionSeconds) : Infinity;
-        const oldMistakes = Number(oldRecord.mistakes || 0);
-        const newMistakes = Number(finalMistakes || 0);
-
-        // 2. RESTORE SMART BEST-SCORE REPLAY SYNC:
-        // - If prior record was a WIN and new run is FAILED/ABANDONED -> NEVER overwrite the WIN.
-        // - If both runs are WINS -> Overwrite ONLY if newTimeSec < oldTimeSec OR (newTimeSec === oldTimeSec AND newMistakes < oldMistakes).
-        // - If new run is slower or worse -> Preserve previous superior record intact.
-        let shouldOverwrite = false;
-        if (!oldIsWon && newIsWon) {
-          shouldOverwrite = true;
-        } else if (oldIsWon && !newIsWon) {
-          shouldOverwrite = false;
-        } else if (oldIsWon && newIsWon) {
-          shouldOverwrite = newTimeSec < oldTimeSec || (newTimeSec === oldTimeSec && newMistakes < oldMistakes);
-        } else {
-          shouldOverwrite = newMistakes < oldMistakes;
-        }
-
-        if (shouldOverwrite) {
+        if (resolvedParts && resolvedParts.length > (prev[existsIndex].participants?.length || 0)) {
           const updated = [...prev];
-          updated[existsIndex] = {
-            ...oldRecord,
-            timeSec: sessionSeconds,
-            mistakes: finalMistakes,
-            hints: hintsUsed,
-            isWon: newIsWon,
-            date: new Date().toISOString(),
-            participants: (resolvedParts && resolvedParts.length > 0) ? resolvedParts : (oldRecord.participants || []),
-            isChallenge: isMultiplayerMatch
-          };
+          updated[existsIndex] = { ...updated[existsIndex], participants: resolvedParts, isChallenge: isMultiplayerMatch };
           try {
             localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
           } catch {}
-          finalCompletedList = updated;
           return updated;
-        } else {
-          if (resolvedParts && resolvedParts.length > (oldRecord.participants?.length || 0)) {
-            const updated = [...prev];
-            updated[existsIndex] = { ...oldRecord, participants: resolvedParts, isChallenge: isMultiplayerMatch };
-            try {
-              localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
-            } catch {}
-            finalCompletedList = updated;
-            return updated;
-          }
-          finalCompletedList = prev;
-          return prev;
         }
+        return prev;
       }
 
       const updated = [completedGameRecord, ...prev].slice(0, 10);
       try {
         localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
       } catch {}
-      finalCompletedList = updated;
       return updated;
     });
 
@@ -8722,10 +8796,6 @@ useEffect(() => {
       const docId = getSeedDocId(rBody.challengeId);
       const participantRef = doc(db, "challenge_results", docId, "participants", rBody.userId);
 
-      // Read existing to enforce "best result wins" logic
-      const existing = await getDoc(participantRef);
-      const existingData = existing.exists() ? existing.data() : null;
-
       const newRecord = {
         challengeId: rBody.challengeId,
         userId: rBody.userId,
@@ -8739,47 +8809,20 @@ useEffect(() => {
         timestamp: serverTimestamp()
       };
 
-      // 2. RESTORE SMART BEST-SCORE REPLAY SYNC:
-      const oldIsWon = existingData ? Boolean(existingData.isWon) : false;
-      const newIsWon = Boolean(newRecord.isWon);
-      const oldTimeSec = (existingData && Number(existingData.timeSec) > 0) ? Number(existingData.timeSec) : Infinity;
-      const newTimeSec = Number(newRecord.timeSec) > 0 ? Number(newRecord.timeSec) : Infinity;
-      const oldMistakes = existingData ? Number(existingData.mistakes ?? Infinity) : Infinity;
-      const newMistakes = Number(newRecord.mistakes ?? Infinity);
-
-      let shouldUpdate = false;
-      if (!existingData || existingData.isPending) {
-        shouldUpdate = true;
-      } else if (!oldIsWon && newIsWon) {
-        shouldUpdate = true;
-      } else if (oldIsWon && !newIsWon) {
-        // Prior was WIN and new run is FAILED/ABANDONED -> NEVER overwrite the WIN
-        shouldUpdate = false;
-      } else if (oldIsWon && newIsWon) {
-        // Overwrite ONLY if newTimeSec < oldTimeSec OR (newTimeSec === oldTimeSec AND newMistakes < oldMistakes)
-        shouldUpdate = newTimeSec < oldTimeSec || (newTimeSec === oldTimeSec && newMistakes < oldMistakes);
-      } else {
-        shouldUpdate = newMistakes < oldMistakes;
-      }
-
-      if (shouldUpdate) {
-        await setDoc(participantRef, newRecord);
-        try {
-          const roomPlayerRef = doc(db, "rooms", rBody.challengeId, "players", rBody.userId);
-          await setDoc(roomPlayerRef, {
-            id: rBody.userId,
-            name: rBody.playerName,
-            status: rBody.status || (rBody.isWon ? "completed" : "mistake_game_over"),
-            timeSec: Number(rBody.timeSec),
-            mistakes: Number(rBody.mistakes),
-            isWon: !!rBody.isWon,
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-        } catch (err) {}
-        console.log(`[Firestore] Result saved for ID ${rBody.challengeId}`);
-      } else {
-        console.log(`[Firestore] Existing result is better, skipping update.`);
-      }
+      await setDoc(participantRef, newRecord);
+      try {
+        const roomPlayerRef = doc(db, "rooms", rBody.challengeId, "players", rBody.userId);
+        await setDoc(roomPlayerRef, {
+          id: rBody.userId,
+          name: rBody.playerName,
+          status: rBody.status || (rBody.isWon ? "completed" : "mistake_game_over"),
+          timeSec: Number(rBody.timeSec),
+          mistakes: Number(rBody.mistakes),
+          isWon: !!rBody.isWon,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (err) {}
+      console.log(`[Firestore] Result saved for ID ${rBody.challengeId}`);
       addLog(`✓ Game completion synced with Firestore!`);
 
       try {
@@ -8899,18 +8942,7 @@ useEffect(() => {
       const docId = getSeedDocId(challengeId);
       const participantRef = doc(db, "challenge_results", docId, "participants", userId);
       const existing = await getDoc(participantRef);
-      const existingData = existing.exists() ? existing.data() : null;
-      const isTerminal = existingData && (
-        existingData.status === "completed" ||
-        existingData.status === "won" ||
-        existingData.status === "victory" ||
-        existingData.status === "mistake_game_over" ||
-        existingData.status === "failed" ||
-        Boolean(existingData.isWon) ||
-        (!existingData.isPending && existingData.timeSec !== undefined && Number(existingData.timeSec) > 0 && Number(existingData.timeSec) < 9999)
-      );
-
-      if (!existing.exists() || (!isTerminal && (existingData?.status === "left" || existingData?.status === "abandoned" || existingData?.status === "disconnected"))) {
+      if (!existing.exists() || existing.data()?.status === "left" || existing.data()?.status === "abandoned" || existing.data()?.status === "disconnected") {
         await setDoc(participantRef, {
           challengeId,
           userId,
@@ -8926,25 +8958,14 @@ useEffect(() => {
         console.log(`[Firestore] Registered join for ${userId} (${pName}) on ${challengeId}`);
       }
 
-      // Also register active presence in room players collection if not already finished
+      // Also register active presence in room players collection
       const playerRef = doc(db, "rooms", challengeId, "players", userId);
-      const playerSnap = await getDoc(playerRef);
-      const isAlreadyFinished = playerSnap.exists() && (
-        playerSnap.data()?.status === "completed" ||
-        playerSnap.data()?.status === "won" ||
-        playerSnap.data()?.status === "victory" ||
-        playerSnap.data()?.status === "mistake_game_over" ||
-        playerSnap.data()?.status === "failed" ||
-        Boolean(playerSnap.data()?.isWon)
-      );
-      if (!isAlreadyFinished && !isTerminal) {
-        await setDoc(playerRef, {
-          id: userId,
-          name: pName,
-          status: "active",
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-      }
+      await setDoc(playerRef, {
+        id: userId,
+        name: pName,
+        status: "active",
+        updatedAt: serverTimestamp()
+      }, { merge: true });
     } catch (err) {
       console.error("[Firestore] Failed to register join:", err);
     }
@@ -8974,75 +8995,20 @@ useEffect(() => {
     const syncCombinedLeaderboard = () => {
       const mergedMap = new Map<string, any>();
 
-      // 0. Pre-populate with existing verified terminal results from previously syncedLeaderboard
-      // to ensure no network jitter, stale room player snapshot, or late navigation overwrites a terminal score
-      const previousLeaderboard = syncedLeaderboardRef.current || [];
-      previousLeaderboard.forEach(prevEntry => {
-        const uId = prevEntry.userId || prevEntry.id;
-        const isPrevTerminal = prevEntry.status === "completed" || 
-                               prevEntry.status === "won" || 
-                               prevEntry.status === "victory" || 
-                               prevEntry.status === "mistake_game_over" || 
-                               prevEntry.status === "failed" || 
-                               Boolean(prevEntry.isWon) || 
-                               Boolean(prevEntry.failed) ||
-                               (!prevEntry.isPending && Number(prevEntry.timeSec) > 0 && Number(prevEntry.timeSec) < 9999);
-        if (uId && isPrevTerminal) {
-          mergedMap.set(uId, { ...prevEntry, isPending: false });
-        }
-      });
-
       // 1. Seed with room players presence (gives instant visibility to all joined opponents)
       latestRoomPlayers.forEach(p => {
         const uId = p.id || p.userId;
         if (uId) {
-          const existing = mergedMap.get(uId);
-          const isExistingTerminal = existing && (
-            existing.status === "completed" || 
-            existing.status === "won" || 
-            existing.status === "victory" || 
-            existing.status === "mistake_game_over" || 
-            existing.status === "failed" || 
-            Boolean(existing.isWon) ||
-            Boolean(existing.failed)
-          );
-
-          // If a player has mistakes >= 3 OR status === "mistake_game_over" OR status === "failed":
-          // Force isPending: false, failed: true, and map status: "mistake_game_over"
-          const isMistakeGameOver = (Number(p.mistakes) >= 3) || p.status === "mistake_game_over" || p.status === "failed";
-          const isIncomingTerminal = p.status === "completed" || 
-                                     p.status === "won" || 
-                                     p.status === "victory" || 
-                                     p.status === "mistake_game_over" || 
-                                     p.status === "failed" || 
-                                     Boolean(p.isWon) ||
-                                     isMistakeGameOver;
-
-          // If a player's state is already terminal, NEVER allow an incoming stale snapshot with status: "solving" or isPending: true to overwrite it!
-          if (isExistingTerminal && !isIncomingTerminal) {
-            return;
-          }
-
-          const isLeft = p.status === "left" || p.status === "abandoned" || p.status === "disconnected" || p.status === "forfeited" || Boolean(p.isAbandoned) || Boolean(p.abandoned);
-          const isWonFinished = p.status === "won" || p.status === "completed" || p.status === "victory" || Boolean(p.isWon);
-          const mappedStatus = isMistakeGameOver 
-            ? "mistake_game_over" 
-            : (isWonFinished)
-              ? "completed"
-              : (isLeft ? "left" : (p.status || "active"));
-          const isTerminalStatus = isIncomingTerminal || mappedStatus === "completed" || mappedStatus === "mistake_game_over" || mappedStatus === "failed";
-
+          const isLeft = p.status === "left" || p.status === "abandoned" || p.status === "disconnected" || p.status === "forfeited";
+          const isFinished = p.status === "completed" || p.status === "victory" || p.status === "mistake_game_over";
           mergedMap.set(uId, {
             userId: uId,
             playerName: p.name || p.playerName || "Player",
-            status: mappedStatus,
-            failed: isMistakeGameOver ? true : (p.failed !== undefined ? Boolean(p.failed) : (mappedStatus === "mistake_game_over" || mappedStatus === "failed")),
-            isAbandoned: isLeft,
-            isPending: (isTerminalStatus || isLeft) ? false : true,
-            mistakes: p.mistakes !== undefined ? Number(p.mistakes) : (isMistakeGameOver ? 3 : 0),
+            status: p.status || "active",
+            isPending: !isLeft && !isFinished,
+            mistakes: p.mistakes !== undefined ? Number(p.mistakes) : 0,
             timeSec: p.timeSec !== undefined ? Number(p.timeSec) : (p.elapsedTime !== undefined ? Number(p.elapsedTime) : 0),
-            isWon: !isMistakeGameOver && isWonFinished,
-            progress: p.progress !== undefined ? Number(p.progress) : (existing?.progress || 0),
+            isWon: p.status === "won" || p.status === "completed" || p.status === "victory" || Boolean(p.isWon),
             updatedAt: p.updatedAt
           });
         }
@@ -9053,51 +9019,12 @@ useEffect(() => {
         const uId = r.userId || r.id;
         if (uId) {
           const existing = mergedMap.get(uId);
-          const isExistingTerminal = existing && (
-            existing.status === "completed" || 
-            existing.status === "won" || 
-            existing.status === "victory" || 
-            existing.status === "mistake_game_over" || 
-            existing.status === "failed" || 
-            Boolean(existing.isWon) ||
-            Boolean(existing.failed)
-          );
-
-          // If a player has mistakes >= 3 OR status === "mistake_game_over" OR status === "failed":
-          // Force isPending: false, failed: true, and map status: "mistake_game_over"
-          const isRMistakeGameOver = (Number(r.mistakes) >= 3) || r.status === "mistake_game_over" || r.status === "failed";
-          const rFinished = r.status === "completed" || r.status === "won" || r.status === "victory" || r.status === "mistake_game_over" || r.status === "failed" || isRMistakeGameOver || (!r.isPending && (r.isWon !== undefined || (r.timeSec !== undefined && Number(r.timeSec) > 0)));
-          const rWon = r.status === "won" || r.status === "completed" || r.status === "victory" || Boolean(r.isWon);
-
-          // If existing is already terminal and r is NOT terminal (e.g. stale "left" or "solving" or isPending=true), keep pinned terminal score!
-          if (isExistingTerminal && !rFinished) {
-            return;
-          }
-
-          const isRLeft = r.status === "left" || r.status === "abandoned" || r.status === "disconnected" || r.status === "forfeited" || Boolean(r.isAbandoned) || Boolean(r.abandoned);
-          const finalWon = !isRMistakeGameOver && !isRLeft && (rWon || (existing && existing.status !== "mistake_game_over" && !existing.isAbandoned && Boolean(existing.isWon)));
-          const finalFinished = rFinished || isExistingTerminal;
-          const finalStatus = isRMistakeGameOver 
-            ? "mistake_game_over" 
-            : finalWon 
-              ? "completed" 
-              : (isRLeft ? "left" : (rFinished ? (r.status || "mistake_game_over") : (existing?.status || r.status || "active")));
-          const isFinalTerminal = finalFinished || finalStatus === "completed" || finalStatus === "mistake_game_over" || finalStatus === "failed" || finalWon;
-
           mergedMap.set(uId, {
             ...existing,
             ...r,
             userId: uId,
             playerName: r.playerName || existing?.playerName || "Player",
-            timeSec: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.timeSec || 0),
-            elapsedTime: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.elapsedTime || 0),
-            mistakes: r.mistakes !== undefined ? Number(r.mistakes) : (isRMistakeGameOver ? 3 : (existing?.mistakes || 0)),
-            hints: r.hints !== undefined ? Number(r.hints) : (existing?.hints || 0),
-            isWon: finalWon,
-            failed: isRMistakeGameOver ? true : (finalStatus === "mistake_game_over" || finalStatus === "failed" || Boolean(existing?.failed)),
-            isAbandoned: isRLeft || Boolean(existing?.isAbandoned),
-            status: finalStatus,
-            isPending: (isFinalTerminal || isRLeft || Boolean(existing?.isAbandoned)) ? false : (r.isPending !== undefined ? Boolean(r.isPending) : (existing ? existing.isPending : true))
+            status: r.status || existing?.status || (r.isWon ? "completed" : (!r.isPending ? "mistake_game_over" : "active"))
           });
         }
       });
@@ -9637,12 +9564,9 @@ useEffect(() => {
         handleViewChallengeResults(sanitizedChallenge, true);
       } else if (sanitizedChallenge) {
         handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true);
-      } else {
-        generateAndSetNewPuzzle(difficulty);
       }
-    } else {
-      generateAndSetNewPuzzle(difficulty);
     }
+    // Zero-state on startup: Do NOT auto-generate a background puzzle.
   }, []);
 
   // Handle Capacitor native deep links (appUrlOpen events)
@@ -10282,6 +10206,35 @@ useEffect(() => {
     navigateToScreen("game");
   };
 
+  const desktopAutoStartedRef = useRef<boolean>(false);
+
+  // Desktop Viewport Auto-Start on initial mount
+  useEffect(() => {
+    if (desktopAutoStartedRef.current) return;
+    if (typeof window !== "undefined" && window.innerWidth >= 1024) {
+      desktopAutoStartedRef.current = true;
+      const saved = loadCurrentGameFromLocal();
+      if (saved && !saved.state.isGameOver) {
+        const loaded = resumeSavedSession();
+        if (loaded) {
+          setDifficulty(loaded.difficulty);
+          setIsTimerPaused(false);
+          navigateToScreen("game");
+          setCurrentScreen("game");
+          setNavigationHistory(["game"]);
+          try { window.history.replaceState({ view: "game" }, "", window.location.href); } catch (e) {}
+          return;
+        }
+      }
+      generateAndSetNewPuzzle(difficulty || "EASY");
+      setIsTimerPaused(false);
+      navigateToScreen("game");
+      setCurrentScreen("game");
+      setNavigationHistory(["game"]);
+      try { window.history.replaceState({ view: "game" }, "", window.location.href); } catch (e) {}
+    }
+  }, []);
+
   const handleFactoryReset = async () => {
     playClickSound();
 
@@ -10389,9 +10342,19 @@ useEffect(() => {
       localStorage.setItem("sudoku_userProfile", JSON.stringify(newProfile));
     } catch {}
 
-    // 8. CRITICAL FIX FOR DESKTOP: Immediately call generateAndSetNewPuzzle("EASY") instead of leaving boardState as null.
-    // This prevents SudokuBoard.tsx from locking in an infinite "Entering Match..." spinner on desktop viewports.
-    await generateAndSetNewPuzzle("EASY");
+    // 8. Zero-state: Reset game state and DO NOT call generateAndSetNewPuzzle on factory reset
+    setBoardState(null);
+    setSavedSessionInfo(null);
+    setLastCompletedSession(null);
+    setSolutionGrid([]);
+    setHistory([]);
+    setSessionSeconds(0);
+    setIsTimerPaused(false);
+    hasTriggeredGameOverRef.current = false;
+    try {
+      localStorage.removeItem("sudoku_savedSession");
+      localStorage.removeItem("sudoku_lastCompletedSession");
+    } catch {}
 
     // 9. Cleanly navigate back to home screen and close modals without manual page refresh
     setCurrentScreen("home");
@@ -10549,14 +10512,35 @@ useEffect(() => {
           if (liveRoomId && currentUid) {
             try {
               setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
+                id: currentUid,
+                name: getActiveDisplayName(),
                 status: "mistake_game_over",
                 failed: true,
                 isPending: false,
-                mistakes: 3,
+                mistakes: newMistakes,
+                timeSec: sessionSeconds,
+                updatedAt: serverTimestamp(),
                 completedAt: serverTimestamp()
               }, { merge: true }).catch(err => {
                 console.warn("[Multiplayer] Immediate mistake_game_over write notice:", err);
               });
+
+              try {
+                const docId = getSeedDocId(liveRoomId);
+                setDoc(doc(db, "challenge_results", docId, "participants", currentUid), {
+                  challengeId: liveRoomId,
+                  userId: currentUid,
+                  playerName: getActiveDisplayName(),
+                  status: "mistake_game_over",
+                  failed: true,
+                  isWon: false,
+                  isPending: false,
+                  mistakes: newMistakes,
+                  timeSec: sessionSeconds,
+                  updatedAt: serverTimestamp(),
+                  completedAt: serverTimestamp()
+                }, { merge: true }).catch(() => {});
+              } catch (e) {}
             } catch (err) {
               console.warn("[Multiplayer] Immediate mistake_game_over dispatch error:", err);
             }
@@ -11265,9 +11249,9 @@ useEffect(() => {
   };
 
   return (
-    <div className={`min-h-screen ${darkMode ? "bg-[#18181B] text-[#E5E5E5] selection:bg-[#312E81]" : "bg-[#F3EFE9] text-[#1E1E1E] selection:bg-[#E0F2FE]"} flex flex-col font-sans overflow-hidden pb-[env(safe-area-inset-bottom,0px)]`}>
+    <div className={`min-h-screen ${darkMode ? "bg-[#121212] text-[#E5E5E5] selection:bg-[#312E81]" : "bg-[#F3EFE9] text-[#1E1E1E] selection:bg-[#E0F2FE]"} flex flex-col font-sans overflow-hidden pb-[env(safe-area-inset-bottom,0px)]`}>
       {/* Studio Splash Transition */}
-      <StudioSplash duration={1000} />
+      <StudioSplash duration={3000} />
 
       {/* Toast Notification */}
       <AnimatePresence>
@@ -11317,17 +11301,12 @@ useEffect(() => {
               onClick={() => {
                 playClickSound();
                 triggerHapticTap(vibrations);
-                const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
                 if (currentScreen === "game") {
                   // Requirement 3: Navigating to Home or Status via Back button must NOT forfeit; session remains intact for Resume
                   saveCurrentGameToLocal(boardState, sessionSeconds, difficulty);
-                  if (isDesktop) {
-                    navigateToScreen("status");
-                  } else {
-                    setCurrentScreen("home");
-                    setNavigationHistory(["home"]);
-                    window.history.pushState({ view: "home" }, "", window.location.href);
-                  }
+                  setCurrentScreen("home");
+                  setNavigationHistory(["home"]);
+                  window.history.pushState({ view: "home" }, "", window.location.href);
                 } else if (currentScreen !== "home") {
                   navigatorPop();
                 } else {
@@ -11336,11 +11315,11 @@ useEffect(() => {
                 }
               }}
               className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs shrink-0 ${darkMode ? "bg-zinc-900 hover:bg-zinc-800 text-white" : "bg-white text-stone-700"}`}
-              title={(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? "Statistics" : "Back"}
-              aria-label={(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? "Statistics" : "Back"}
+              title={currentScreen === "home" ? "Statistics" : "Back"}
+              aria-label={currentScreen === "home" ? "Statistics" : "Back"}
               id="global-top-left-back-button"
             >
-              {(currentScreen === "home" || (currentScreen === "game" && typeof window !== "undefined" && window.innerWidth >= 1024)) ? (
+              {currentScreen === "home" ? (
                 <BarChart2 className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] ${darkMode ? "text-white" : "text-stone-700"}`} />
               ) : (
                 <ArrowLeft className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] font-bold ${darkMode ? "text-white" : "text-stone-700"}`} />
@@ -11448,7 +11427,7 @@ useEffect(() => {
 
         {/* PANE 1: HOME DASHBOARD */}
         {currentScreen === "home" && (
-          <div className="flex-1 w-full lg:hidden flex flex-col items-center justify-start overflow-y-auto select-none pt-[calc(70px+env(safe-area-inset-top,0px))]">
+          <div className="flex-1 w-full flex flex-col items-center justify-start overflow-y-auto select-none pt-[calc(70px+env(safe-area-inset-top,0px))]">
 
             {/* Inner Wrapper spanning 100vh minus header to center elements vertically and push AdSense below the fold */}
             <div className="w-full min-h-[calc(100vh-70px)] flex flex-col justify-center items-center p-3 md:p-6 shrink-0" id="home-screen-inner-wrapper">
@@ -11541,16 +11520,23 @@ useEffect(() => {
  
                 {/* 🔄 RESUME SOLO & MULTIPLAYER SIDE-BY-SIDE GRID - Adhering to the 'Zen' Design System */}
                 <div className="w-full grid grid-cols-2 gap-3.5 select-none shrink-0" id="solo-multiplayer-split-container">
-                  {/* Left Button ('Resume' when active session exists, 'Review' when completed, or fallback to 'Play') */}
+                  {/* Left Button ('Resume' when active session exists, 'Review' when completed, or strictly disabled 'Resume' in zero state) */}
                   {(() => {
-                    const isGameInProgress = Boolean(savedSessionInfo) || Boolean(boardState && !boardState.isGameOver);
-                    const isGameCompleted = !isGameInProgress && (Boolean(boardState?.isGameOver) || Boolean(lastCompletedSession));
+                    const hasActiveGame = (Boolean(savedSessionInfo) || Boolean(boardState && !boardState.isGameOver)) && !boardState?.isGameOver;
+                    const hasReviewGame = !hasActiveGame && (Boolean(boardState?.isGameOver) || Boolean(lastCompletedSession));
+                    const isActionDisabled = !hasActiveGame && !hasReviewGame;
+                    const actionButtonText = hasReviewGame ? (t("reviewGame") || "Review") : (t("resumeGame") || "Resume");
 
                     return (
                       <button
+                        type="button"
+                        id="home-resume-review-action-button"
+                        disabled={isActionDisabled}
+                        aria-disabled={isActionDisabled}
                         onClick={() => {
+                          if (isActionDisabled) return;
                           playClickSound();
-                          if (isGameCompleted) {
+                          if (hasReviewGame) {
                             if (!boardState && lastCompletedSession) {
                               setBoardState(lastCompletedSession.state);
                               setSessionSeconds(lastCompletedSession.seconds);
@@ -11559,7 +11545,7 @@ useEffect(() => {
                             setIsTimerPaused(false);
                             setShowGameOverModal(false);
                             navigateToScreen("game");
-                          } else if (isGameInProgress) {
+                          } else if (hasActiveGame) {
                             if (savedSessionInfo) {
                               const loaded = resumeSavedSession();
                               if (loaded) {
@@ -11571,41 +11557,34 @@ useEffect(() => {
                               setIsTimerPaused(false);
                               navigateToScreen("game");
                             }
-                          } else {
-                            generateAndSetNewPuzzle(difficulty);
-                            setIsTimerPaused(false);
-                            navigateToScreen("game");
                           }
                         }}
-                        className={`border-none outline-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${
-                          isGameCompleted
+                        className={`border-none outline-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 shadow-md ${
+                          isActionDisabled
+                            ? (darkMode
+                                ? "bg-zinc-800/40 text-zinc-600 opacity-40 cursor-not-allowed pointer-events-none shadow-none"
+                                : "bg-stone-200/50 text-stone-400 opacity-40 cursor-not-allowed pointer-events-none shadow-none")
+                            : hasReviewGame
                             ? (darkMode 
-                                ? "border-none bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 dark:border-none dark:bg-amber-500/10 dark:text-amber-400" 
-                                : "border-none bg-[#FFF99D] hover:bg-[#FDE047] active:bg-[#FDE047] text-[#854D0E] shadow-[0_8px_30px_rgba(133,77,14,0.06)]")
-                            : isGameInProgress
-                            ? (darkMode ? "border-none bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc]" : "border-none bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)]")
-                            : (darkMode ? "border-none bg-[#022c22]/30 hover:bg-[#022c22]/50 text-[#a7f3d0]" : "border-none bg-[#D1FAE5]/70 hover:bg-[#D1FAE5]/90 active:bg-[#A7F3D0]/70 text-[#065F46] shadow-[0_8px_30px_rgba(6,95,70,0.04)]")
+                                ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 cursor-pointer active:scale-[0.98] active:translate-y-px" 
+                                : "bg-[#FFF99D] hover:bg-[#FDE047] active:bg-[#FDE047] text-[#854D0E] shadow-[0_8px_30px_rgba(133,77,14,0.06)] cursor-pointer active:scale-[0.98] active:translate-y-px")
+                            : (darkMode 
+                                ? "bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc] cursor-pointer active:scale-[0.98] active:translate-y-px" 
+                                : "bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)] cursor-pointer active:scale-[0.98] active:translate-y-px")
                         }`}
                       >
-                        {isGameCompleted ? (
+                        {hasReviewGame ? (
                           <>
                             <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5] shrink-0" />
                             <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
-                              {t("reviewGame")}
-                            </span>
-                          </>
-                        ) : isGameInProgress ? (
-                          <>
-                            <RotateCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0 animate-pulse" />
-                            <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
-                              {t("resumeGame")}
+                              {actionButtonText}
                             </span>
                           </>
                         ) : (
                           <>
-                            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current shrink-0" />
+                            <RotateCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0 ${hasActiveGame ? "animate-pulse" : "opacity-40"}`} />
                             <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
-                              Play
+                              {actionButtonText}
                             </span>
                           </>
                         )}
@@ -12837,6 +12816,7 @@ useEffect(() => {
               onOpenResetSettingsModal={() => setShowResetSettingsModal(true)}
               onConnectGoogle={handleConnectGoogle}
               isConnectingGoogle={isConnectingGoogle}
+              onLogout={handleLogout}
             />
           )}
 
@@ -16987,7 +16967,7 @@ useEffect(() => {
                     </p>
                     <div className="p-3 rounded-xl bg-stone-500/5 dark:bg-zinc-800/60 border border-stone-200/60 dark:border-zinc-700/60 space-y-1 my-2">
                       <p className="text-xs font-bold text-stone-700 dark:text-stone-300 leading-normal overflow-visible">
-                        {t("versionLabel")}: <span className="font-mono text-sky-500 dark:text-sky-400">2.4.0</span>
+                        {t("versionLabel")}: <span className="font-mono text-sky-500 dark:text-sky-400">v1.0.1 (15)</span>
                       </p>
                       <p className="text-xs text-stone-500 dark:text-stone-400 leading-normal overflow-visible">
                         {t("creditsLabel")}
