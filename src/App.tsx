@@ -11248,6 +11248,15 @@ useEffect(() => {
     );
   };
 
+  // Gate multiplayer vs solo end-game modal based on active participant count (>= 2)
+  const participantCount = Array.isArray(syncedLeaderboard) ? syncedLeaderboard.length : 0;
+  const hasJoinedOpponents = Boolean(
+    syncedLeaderboard && syncedLeaderboard.some(r => r.userId && r.userId !== userProfile?.id)
+  );
+  const isTrueMultiplayer = Boolean(
+    challengeMode && isOnline && (participantCount >= 2 || hasJoinedOpponents || endGameStep === 2)
+  );
+
   return (
     <div className={`min-h-screen ${darkMode ? "bg-[#121212] text-[#E5E5E5] selection:bg-[#312E81]" : "bg-[#F3EFE9] text-[#1E1E1E] selection:bg-[#E0F2FE]"} flex flex-col font-sans overflow-hidden pb-[env(safe-area-inset-bottom,0px)]`}>
       {/* Studio Splash Transition */}
@@ -12256,10 +12265,10 @@ useEffect(() => {
 
               {/* GAME OVER AND VICTORY OVERLAYS */}
 
-              {/* 1. MULTIPLAYER LEADERBOARD MODAL (when challengeMode is true AND isOnline is true) */}
-              {Boolean(challengeMode && isOnline) && (
+              {/* 1. MULTIPLAYER LEADERBOARD MODAL (when isTrueMultiplayer is true) */}
+              {Boolean(isTrueMultiplayer) && (
                 <GameOverModal
-                  isOpen={Boolean(showGameOverModal && challengeMode && isOnline)}
+                  isOpen={Boolean(showGameOverModal && isTrueMultiplayer)}
                 isMultiplayer={Boolean(challengeMode)}
                 completedGames={completedGames}
                 onClose={() => {
@@ -12420,7 +12429,7 @@ useEffect(() => {
               )}
 
               {/* 2. SOLO GAME OVER AND VICTORY OVERLAY (when challengeMode is false OR offline fallback) */}
-              {boardState && showGameOverModal && (!challengeMode || !isOnline) && (
+              {boardState && showGameOverModal && (!isTrueMultiplayer) && (
                 <div className="fixed inset-0 z-50 bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm flex items-center justify-center p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
                   {/* Backdrop click dismisser — closes overlay and reveals the completed board */}
                   <div
