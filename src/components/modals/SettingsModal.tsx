@@ -56,6 +56,7 @@ export interface SettingsModalProps {
   isConnectingGoogle?: boolean;
   onCancelConnectGoogle?: () => void;
   onLogout?: () => void;
+  onLanguageChange?: (lang: Language) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -100,7 +101,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onConnectGoogle,
   isConnectingGoogle,
   onCancelConnectGoogle,
-  onLogout
+  onLogout,
+  onLanguageChange
 }) => {
   const { t, language, setLanguage, languages } = useTranslation();
   const { isIncognito, toggleIncognito } = useFriendPresence(userProfile?.id);
@@ -437,7 +439,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     value={language}
                     onChange={(e) => {
                       playClickSound();
-                      setLanguage(e.target.value as Language);
+                      const newLang = e.target.value as Language;
+                      setLanguage(newLang);
+                      if (onLanguageChange) {
+                        onLanguageChange(newLang);
+                      }
                     }}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     aria-label={t("selectLanguage")}

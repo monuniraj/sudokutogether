@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { useTranslation } from "./i18n/useTranslation";
-import type { TranslationKey } from "./i18n/translations";
+import { useTranslation, getCurrentLanguage, setGlobalLanguage } from "./i18n/useTranslation";
+import type { TranslationKey, Language } from "./i18n/translations";
 import { db, auth, GoogleAuthProvider } from "./firebase";
 import { signInAnonymously, linkWithPopup, signInWithPopup, signInWithCredential, linkWithCredential, onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
 import { RulesModal } from "./components/modals/RulesModal";
@@ -187,6 +187,27 @@ interface BoardState {
 }
 
 type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
+
+export const DEFAULT_SETTINGS = {
+  // General Preferences
+  language: 'en',
+  darkMode: false,
+  soundEffects: true,
+  hapticVibrations: true,
+  pushNotifications: true,
+  // Smart Assistants
+  highlightIdenticalNumbers: true,
+  showRemainingNumbers: true,
+  highlightRelatedArea: true,
+  autoRemoveNotes: true,
+  fastFill: false,
+  autoSwitchCompletedNumbers: false,
+  // Gameplay Rules
+  activeTimerClock: true,
+  strictMistakeLimit: true,
+};
+
+export type UserSettings = typeof DEFAULT_SETTINGS;
 
 // Fast in-memory cache to eliminate redundant backtracking CPU locks on repeated seeds and joins
 const puzzleCache = new Map<string, { solved: number[][]; puzzle: number[][] }>();
@@ -2479,7 +2500,7 @@ useEffect(() => {
     return Math.max(0, sortedBellInvites.length);
   }, [sortedBellInvites]);
 
-  // New settings toggles
+  // Settings state initialized from localStorage with DEFAULT_SETTINGS fallbacks
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("sudoku_darkMode");
@@ -2489,34 +2510,34 @@ useEffect(() => {
       if (typeof window !== "undefined" && window.matchMedia) {
         return window.matchMedia("(prefers-color-scheme: dark)").matches;
       }
-      return false;
+      return DEFAULT_SETTINGS.darkMode;
     } catch {
-      return false;
+      return DEFAULT_SETTINGS.darkMode;
     }
   });
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [soundEffects, setSoundEffects] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("sudoku_soundEffects");
-      return saved !== null ? saved === "true" : true;
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.soundEffects;
     } catch {
-      return true;
+      return DEFAULT_SETTINGS.soundEffects;
     }
   });
   const [vibrations, setVibrations] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("sudoku_vibrations");
-      return saved !== null ? saved === "true" : true;
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.hapticVibrations;
     } catch {
-      return true;
+      return DEFAULT_SETTINGS.hapticVibrations;
     }
   });
   const [timerEnabled, setTimerEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("sudoku_timerEnabled");
-      return saved !== null ? saved === "true" : true;
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.activeTimerClock;
     } catch {
-      return true;
+      return DEFAULT_SETTINGS.activeTimerClock;
     }
   });
   const [displayScores, setDisplayScores] = useState<boolean>(() => {
@@ -2530,25 +2551,46 @@ useEffect(() => {
   const [mistakeLimitEnabled, setMistakeLimitEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("sudoku_mistakeLimitEnabled");
-      return saved !== null ? saved === "true" : true;
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.strictMistakeLimit;
     } catch {
-      return true;
+      return DEFAULT_SETTINGS.strictMistakeLimit;
     }
   });
 
   const [lightningMode, setLightningMode] = useState<boolean>(false);
   const [magicNote, setMagicNote] = useState<boolean>(false);
   const [hideUsedNumber, setHideUsedNumber] = useState<boolean>(false);
-  const [highlightAreas, setHighlightAreas] = useState<boolean>(true);
-  const [highlightIdentical, setHighlightIdentical] = useState<boolean>(true);
-  const [showRemainingNumbers, setShowRemainingNumbers] = useState<boolean>(true);
+  const [highlightAreas, setHighlightAreas] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_highlightAreas");
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.highlightRelatedArea;
+    } catch {
+      return DEFAULT_SETTINGS.highlightRelatedArea;
+    }
+  });
+  const [highlightIdentical, setHighlightIdentical] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_highlightIdentical");
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.highlightIdenticalNumbers;
+    } catch {
+      return DEFAULT_SETTINGS.highlightIdenticalNumbers;
+    }
+  });
+  const [showRemainingNumbers, setShowRemainingNumbers] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("sudoku_showRemainingNumbers");
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.showRemainingNumbers;
+    } catch {
+      return DEFAULT_SETTINGS.showRemainingNumbers;
+    }
+  });
   const [autoComplete, setAutoComplete] = useState<boolean>(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("sudoku_notificationsEnabled");
-      return saved !== null ? saved === "true" : true;
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.pushNotifications;
     } catch {
-      return true;
+      return DEFAULT_SETTINGS.pushNotifications;
     }
   });
 
@@ -2556,25 +2598,25 @@ useEffect(() => {
   const [isNumberFirstInputMode, setIsNumberFirstInputMode] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("sudoku_isNumberFirstInputMode");
-      return saved !== null ? saved === "true" : false;
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.fastFill;
     } catch {
-      return false;
+      return DEFAULT_SETTINGS.fastFill;
     }
   });
   const [autoSwitchCompletedNumber, setAutoSwitchCompletedNumber] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("sudoku_autoSwitchCompletedNumber");
-      return saved !== null ? saved === "true" : true;
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.autoSwitchCompletedNumbers;
     } catch {
-      return true;
+      return DEFAULT_SETTINGS.autoSwitchCompletedNumbers;
     }
   });
   const [isAutoRemoveNotesEnabled, setIsAutoRemoveNotesEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem("sudoku_isAutoRemoveNotesEnabled");
-      return saved !== null ? saved === "true" : true;
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.autoRemoveNotes;
     } catch {
-      return true;
+      return DEFAULT_SETTINGS.autoRemoveNotes;
     }
   });
   const [isPreventMistakeNotesEnabled, setIsPreventMistakeNotesEnabled] = useState<boolean>(() => {
@@ -3578,15 +3620,21 @@ useEffect(() => {
           // 4. Settings Cloud Sync: Read cloudDocData.settings and apply preferences
           if (cloudDocData?.settings && typeof cloudDocData.settings === "object") {
             const s = cloudDocData.settings;
+            // Language
+            if (typeof s.language === "string" && s.language) {
+              setGlobalLanguage(s.language as Language);
+            }
             // Fast Fill
-            if (typeof s.isNumberFirstInputMode === "boolean") {
-              setIsNumberFirstInputMode(s.isNumberFirstInputMode);
-              try { localStorage.setItem("sudoku_isNumberFirstInputMode", String(s.isNumberFirstInputMode)); } catch {}
+            const fastFillVal = s.fastFill ?? s.isNumberFirstInputMode;
+            if (typeof fastFillVal === "boolean") {
+              setIsNumberFirstInputMode(fastFillVal);
+              try { localStorage.setItem("sudoku_isNumberFirstInputMode", String(fastFillVal)); } catch {}
             }
             // Notes Auto-Remove
-            if (typeof s.isAutoRemoveNotesEnabled === "boolean") {
-              setIsAutoRemoveNotesEnabled(s.isAutoRemoveNotesEnabled);
-              try { localStorage.setItem("sudoku_isAutoRemoveNotesEnabled", String(s.isAutoRemoveNotesEnabled)); } catch {}
+            const autoRemoveVal = s.autoRemoveNotes ?? s.isAutoRemoveNotesEnabled;
+            if (typeof autoRemoveVal === "boolean") {
+              setIsAutoRemoveNotesEnabled(autoRemoveVal);
+              try { localStorage.setItem("sudoku_isAutoRemoveNotesEnabled", String(autoRemoveVal)); } catch {}
             }
             // Sound
             if (typeof s.soundEffects === "boolean") {
@@ -3603,46 +3651,60 @@ useEffect(() => {
               try { localStorage.setItem("sudoku_darkMode", String(s.darkMode)); } catch {}
             }
             // Duplicates Highlight
-            if (typeof s.highlightIdentical === "boolean") {
-              setHighlightIdentical(s.highlightIdentical);
-              try { localStorage.setItem("sudoku_highlightIdentical", String(s.highlightIdentical)); } catch {}
+            const highlightIdenticalVal = s.highlightIdenticalNumbers ?? s.highlightIdentical;
+            if (typeof highlightIdenticalVal === "boolean") {
+              setHighlightIdentical(highlightIdenticalVal);
+              try { localStorage.setItem("sudoku_highlightIdentical", String(highlightIdenticalVal)); } catch {}
             }
-            // Additional gameplay preferences
-            if (typeof s.autoSwitchCompletedNumber === "boolean") {
-              setAutoSwitchCompletedNumber(s.autoSwitchCompletedNumber);
-              try { localStorage.setItem("sudoku_autoSwitchCompletedNumber", String(s.autoSwitchCompletedNumber)); } catch {}
+            // Highlight Areas
+            const highlightAreasVal = s.highlightRelatedArea ?? s.highlightAreas;
+            if (typeof highlightAreasVal === "boolean") {
+              setHighlightAreas(highlightAreasVal);
+              try { localStorage.setItem("sudoku_highlightAreas", String(highlightAreasVal)); } catch {}
+            }
+            // Remaining Numbers
+            if (typeof s.showRemainingNumbers === "boolean") {
+              setShowRemainingNumbers(s.showRemainingNumbers);
+              try { localStorage.setItem("sudoku_showRemainingNumbers", String(s.showRemainingNumbers)); } catch {}
+            }
+            // Auto-Switch Completed Numbers
+            const autoSwitchVal = s.autoSwitchCompletedNumbers ?? s.autoSwitchCompletedNumber;
+            if (typeof autoSwitchVal === "boolean") {
+              setAutoSwitchCompletedNumber(autoSwitchVal);
+              try { localStorage.setItem("sudoku_autoSwitchCompletedNumber", String(autoSwitchVal)); } catch {}
+            }
+            // Vibrations
+            const vibrationsVal = s.hapticVibrations ?? s.vibrations;
+            if (typeof vibrationsVal === "boolean") {
+              setVibrations(vibrationsVal);
+              setGlobalHapticsEnabled(vibrationsVal);
+              try { localStorage.setItem("sudoku_vibrations", String(vibrationsVal)); } catch {}
+            }
+            // Timer Enabled
+            const timerVal = s.activeTimerClock ?? s.timerEnabled;
+            if (typeof timerVal === "boolean") {
+              setTimerEnabled(timerVal);
+              try { localStorage.setItem("sudoku_timerEnabled", String(timerVal)); } catch {}
+            }
+            // Mistake Limit
+            const mistakeVal = s.strictMistakeLimit ?? s.mistakeLimitEnabled;
+            if (typeof mistakeVal === "boolean") {
+              setMistakeLimitEnabled(mistakeVal);
+              try { localStorage.setItem("sudoku_mistakeLimitEnabled", String(mistakeVal)); } catch {}
+            }
+            // Notifications
+            const notifsVal = s.pushNotifications ?? s.notificationsEnabled;
+            if (typeof notifsVal === "boolean") {
+              setNotificationsEnabled(notifsVal);
+              try { localStorage.setItem("sudoku_notificationsEnabled", String(notifsVal)); } catch {}
             }
             if (typeof s.isPreventMistakeNotesEnabled === "boolean") {
               setIsPreventMistakeNotesEnabled(s.isPreventMistakeNotesEnabled);
               try { localStorage.setItem("sudoku_isPreventMistakeNotesEnabled", String(s.isPreventMistakeNotesEnabled)); } catch {}
             }
-            if (typeof s.vibrations === "boolean") {
-              setVibrations(s.vibrations);
-              try { localStorage.setItem("sudoku_vibrations", String(s.vibrations)); } catch {}
-            }
-            if (typeof s.timerEnabled === "boolean") {
-              setTimerEnabled(s.timerEnabled);
-              try { localStorage.setItem("sudoku_timerEnabled", String(s.timerEnabled)); } catch {}
-            }
             if (typeof s.displayScores === "boolean") {
               setDisplayScores(s.displayScores);
               try { localStorage.setItem("sudoku_displayScores", String(s.displayScores)); } catch {}
-            }
-            if (typeof s.mistakeLimitEnabled === "boolean") {
-              setMistakeLimitEnabled(s.mistakeLimitEnabled);
-              try { localStorage.setItem("sudoku_mistakeLimitEnabled", String(s.mistakeLimitEnabled)); } catch {}
-            }
-            if (typeof s.highlightAreas === "boolean") {
-              setHighlightAreas(s.highlightAreas);
-              try { localStorage.setItem("sudoku_highlightAreas", String(s.highlightAreas)); } catch {}
-            }
-            if (typeof s.showRemainingNumbers === "boolean") {
-              setShowRemainingNumbers(s.showRemainingNumbers);
-              try { localStorage.setItem("sudoku_showRemainingNumbers", String(s.showRemainingNumbers)); } catch {}
-            }
-            if (typeof s.notificationsEnabled === "boolean") {
-              setNotificationsEnabled(s.notificationsEnabled);
-              try { localStorage.setItem("sudoku_notificationsEnabled", String(s.notificationsEnabled)); } catch {}
             }
           }
 
@@ -3715,21 +3777,32 @@ useEffect(() => {
           } catch {}
 
           const currentSettingsPayload = {
-            isNumberFirstInputMode,
-            autoSwitchCompletedNumber,
-            isAutoRemoveNotesEnabled,
-            isPreventMistakeNotesEnabled,
-            soundEffects,
-            vibrations,
-            timerEnabled,
-            displayScores,
-            mistakeLimitEnabled,
+            language: getCurrentLanguage(),
             darkMode,
-            activeTheme,
+            soundEffects,
+            hapticVibrations: vibrations,
+            pushNotifications: notificationsEnabled,
+            highlightIdenticalNumbers: highlightIdentical,
+            showRemainingNumbers,
+            highlightRelatedArea: highlightAreas,
+            autoRemoveNotes: isAutoRemoveNotesEnabled,
+            fastFill: isNumberFirstInputMode,
+            autoSwitchCompletedNumbers: autoSwitchCompletedNumber,
+            activeTimerClock: timerEnabled,
+            strictMistakeLimit: mistakeLimitEnabled,
+            // backward-compatible aliases
+            vibrations,
+            notificationsEnabled,
             highlightIdentical,
             highlightAreas,
-            showRemainingNumbers,
-            notificationsEnabled,
+            isAutoRemoveNotesEnabled,
+            isNumberFirstInputMode,
+            autoSwitchCompletedNumber,
+            timerEnabled,
+            mistakeLimitEnabled,
+            isPreventMistakeNotesEnabled,
+            displayScores,
+            activeTheme
           };
 
           const safeCompleted = JSON.parse(JSON.stringify(localCompleted.slice(0, 50)));
@@ -3800,64 +3873,206 @@ useEffect(() => {
     return () => unsubscribe();
   }, []);
 
-  // 1s Debounced Cloud Sync for user settings/preferences
-  const isSettingsInitialMountRef = useRef<boolean>(true);
+  // Reference for push notifications trigger (to decouple before declaration)
+  const registerPushNotificationsRef = useRef<(isUserGesture?: boolean) => Promise<any>>(() => Promise.resolve());
+
+  // In-memory reference of current settings state for zero-waste event-driven cloud syncing
+  const settingsStateRef = useRef<UserSettings>({
+    language: getCurrentLanguage(),
+    darkMode,
+    soundEffects,
+    hapticVibrations: vibrations,
+    pushNotifications: notificationsEnabled,
+    highlightIdenticalNumbers: highlightIdentical,
+    showRemainingNumbers,
+    highlightRelatedArea: highlightAreas,
+    autoRemoveNotes: isAutoRemoveNotesEnabled,
+    fastFill: isNumberFirstInputMode,
+    autoSwitchCompletedNumbers: autoSwitchCompletedNumber,
+    activeTimerClock: timerEnabled,
+    strictMistakeLimit: mistakeLimitEnabled,
+  });
+
   useEffect(() => {
-    if (isSettingsInitialMountRef.current) {
-      isSettingsInitialMountRef.current = false;
-      return;
-    }
-    if (isAuthHydrating) return;
-    const currentUid = auth.currentUser?.uid;
-    if (!currentUid || auth.currentUser?.isAnonymous || !userProfile?.isSynced) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      const settingsPayload = {
-        isNumberFirstInputMode,
-        autoSwitchCompletedNumber,
-        isAutoRemoveNotesEnabled,
-        isPreventMistakeNotesEnabled,
-        soundEffects,
-        vibrations,
-        timerEnabled,
-        displayScores,
-        mistakeLimitEnabled,
-        darkMode,
-        activeTheme,
-        highlightIdentical,
-        highlightAreas,
-        showRemainingNumbers,
-        notificationsEnabled,
-      };
-      const userDocRef = doc(db, "users", currentUid);
-      setDoc(userDocRef, { settings: settingsPayload, updatedAt: serverTimestamp() }, { merge: true })
-        .catch((err) => {
-          console.warn("[Settings] Debounced Firestore settings sync notice:", err);
-        });
-    }, 1000);
-
-    return () => clearTimeout(timer);
+    settingsStateRef.current = {
+      language: getCurrentLanguage(),
+      darkMode,
+      soundEffects,
+      hapticVibrations: vibrations,
+      pushNotifications: notificationsEnabled,
+      highlightIdenticalNumbers: highlightIdentical,
+      showRemainingNumbers,
+      highlightRelatedArea: highlightAreas,
+      autoRemoveNotes: isAutoRemoveNotesEnabled,
+      fastFill: isNumberFirstInputMode,
+      autoSwitchCompletedNumbers: autoSwitchCompletedNumber,
+      activeTimerClock: timerEnabled,
+      strictMistakeLimit: mistakeLimitEnabled,
+    };
   }, [
-    isNumberFirstInputMode,
-    autoSwitchCompletedNumber,
-    isAutoRemoveNotesEnabled,
-    isPreventMistakeNotesEnabled,
+    darkMode,
     soundEffects,
     vibrations,
-    timerEnabled,
-    displayScores,
-    mistakeLimitEnabled,
-    darkMode,
-    activeTheme,
-    highlightIdentical,
-    highlightAreas,
-    showRemainingNumbers,
     notificationsEnabled,
-    userProfile?.isSynced,
-    isAuthHydrating
+    highlightIdentical,
+    showRemainingNumbers,
+    highlightAreas,
+    isAutoRemoveNotesEnabled,
+    isNumberFirstInputMode,
+    autoSwitchCompletedNumber,
+    timerEnabled,
+    mistakeLimitEnabled,
   ]);
+
+  // Non-blocking zero-waste event-driven Firestore settings writer
+  const syncSettingsToCloud = useCallback((updatedPartial: Partial<UserSettings> & Record<string, any>) => {
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid || auth.currentUser?.isAnonymous) {
+      return;
+    }
+
+    const mergedSettings = {
+      ...settingsStateRef.current,
+      ...updatedPartial,
+    };
+
+    // Include canonical schema and legacy aliases with merge: true
+    const settingsPayload = {
+      ...mergedSettings,
+      // Legacy backward-compatibility aliases
+      isNumberFirstInputMode: mergedSettings.fastFill,
+      autoSwitchCompletedNumber: mergedSettings.autoSwitchCompletedNumbers,
+      isAutoRemoveNotesEnabled: mergedSettings.autoRemoveNotes,
+      vibrations: mergedSettings.hapticVibrations,
+      timerEnabled: mergedSettings.activeTimerClock,
+      mistakeLimitEnabled: mergedSettings.strictMistakeLimit,
+      highlightAreas: mergedSettings.highlightRelatedArea,
+      highlightIdentical: mergedSettings.highlightIdenticalNumbers,
+      notificationsEnabled: mergedSettings.pushNotifications,
+    };
+
+    const userDocRef = doc(db, "users", currentUid);
+    setDoc(userDocRef, { settings: settingsPayload, updatedAt: serverTimestamp() }, { merge: true })
+      .catch((err) => {
+        console.warn("[Settings] Event-driven Firestore settings sync error:", err);
+      });
+  }, []);
+
+  // Event-driven preference toggle handlers
+  const handleToggleDarkMode = useCallback((valOrFn: boolean | ((prev: boolean) => boolean)) => {
+    setDarkMode(prev => {
+      const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+      try {
+        localStorage.setItem("sudoku_darkMode", String(next));
+      } catch {}
+      syncSettingsToCloud({ darkMode: next });
+      return next;
+    });
+  }, [syncSettingsToCloud]);
+
+  const handleQuickToggleDarkMode = useCallback(() => {
+    applyThemeToggle(!darkMode, handleToggleDarkMode, soundEffects, vibrations);
+  }, [darkMode, handleToggleDarkMode, soundEffects, vibrations]);
+
+  const handleToggleSoundEffects = useCallback((val: boolean) => {
+    setSoundEffects(val);
+    try {
+      localStorage.setItem("sudoku_soundEffects", String(val));
+    } catch {}
+    syncSettingsToCloud({ soundEffects: val });
+  }, [syncSettingsToCloud]);
+
+  const handleToggleVibrations = useCallback((val: boolean) => {
+    setVibrations(val);
+    setGlobalHapticsEnabled(val);
+    try {
+      localStorage.setItem("sudoku_vibrations", String(val));
+    } catch {}
+    if (val) {
+      triggerHapticTap(true);
+    }
+    syncSettingsToCloud({ hapticVibrations: val, vibrations: val });
+  }, [syncSettingsToCloud]);
+
+  const handleToggleNotifications = useCallback((val: boolean) => {
+    setNotificationsEnabled(val);
+    try {
+      localStorage.setItem("sudoku_notificationsEnabled", String(val));
+    } catch {}
+    if (val) {
+      registerPushNotificationsRef.current(true);
+    }
+    syncSettingsToCloud({ pushNotifications: val, notificationsEnabled: val });
+  }, [syncSettingsToCloud]);
+
+  const handleToggleHighlightIdentical = useCallback((val: boolean) => {
+    setHighlightIdentical(val);
+    try {
+      localStorage.setItem("sudoku_highlightIdentical", String(val));
+    } catch {}
+    syncSettingsToCloud({ highlightIdenticalNumbers: val, highlightIdentical: val });
+  }, [syncSettingsToCloud]);
+
+  const handleToggleShowRemainingNumbers = useCallback((val: boolean) => {
+    setShowRemainingNumbers(val);
+    try {
+      localStorage.setItem("sudoku_showRemainingNumbers", String(val));
+    } catch {}
+    syncSettingsToCloud({ showRemainingNumbers: val });
+  }, [syncSettingsToCloud]);
+
+  const handleToggleHighlightAreas = useCallback((val: boolean) => {
+    setHighlightAreas(val);
+    try {
+      localStorage.setItem("sudoku_highlightAreas", String(val));
+    } catch {}
+    syncSettingsToCloud({ highlightRelatedArea: val, highlightAreas: val });
+  }, [syncSettingsToCloud]);
+
+  const handleToggleAutoRemoveNotes = useCallback((val: boolean) => {
+    setIsAutoRemoveNotesEnabled(val);
+    try {
+      localStorage.setItem("sudoku_isAutoRemoveNotesEnabled", String(val));
+    } catch {}
+    syncSettingsToCloud({ autoRemoveNotes: val, isAutoRemoveNotesEnabled: val });
+  }, [syncSettingsToCloud]);
+
+  const handleToggleFastFill = useCallback((val: boolean) => {
+    setIsNumberFirstInputMode(val);
+    try {
+      localStorage.setItem("sudoku_isNumberFirstInputMode", String(val));
+    } catch {}
+    syncSettingsToCloud({ fastFill: val, isNumberFirstInputMode: val });
+  }, [syncSettingsToCloud]);
+
+  const handleToggleAutoSwitchCompleted = useCallback((val: boolean) => {
+    setAutoSwitchCompletedNumber(val);
+    try {
+      localStorage.setItem("sudoku_autoSwitchCompletedNumber", String(val));
+    } catch {}
+    syncSettingsToCloud({ autoSwitchCompletedNumbers: val, autoSwitchCompletedNumber: val });
+  }, [syncSettingsToCloud]);
+
+  const handleToggleTimer = useCallback((val: boolean) => {
+    setTimerEnabled(val);
+    try {
+      localStorage.setItem("sudoku_timerEnabled", String(val));
+    } catch {}
+    syncSettingsToCloud({ activeTimerClock: val, timerEnabled: val });
+  }, [syncSettingsToCloud]);
+
+  const handleToggleMistakeLimit = useCallback((val: boolean) => {
+    setMistakeLimitEnabled(val);
+    try {
+      localStorage.setItem("sudoku_mistakeLimitEnabled", String(val));
+    } catch {}
+    syncSettingsToCloud({ strictMistakeLimit: val, mistakeLimitEnabled: val });
+  }, [syncSettingsToCloud]);
+
+  const handleLanguageChange = useCallback((lang: Language) => {
+    setGlobalLanguage(lang);
+    syncSettingsToCloud({ language: lang });
+  }, [syncSettingsToCloud]);
 
   const handleCancelGoogleLogin = useCallback(() => {
     loginCancelledRef.current = true;
@@ -5949,6 +6164,10 @@ useEffect(() => {
     }
   };
 
+  useEffect(() => {
+    registerPushNotificationsRef.current = registerPushNotifications;
+  });
+
   const triggerBackgroundNotification = async (inviteData: any) => {
     const title = "Sudoku Challenge Invite";
     const body = `${inviteData.fromName} invited you to play Sudoku!`;
@@ -7276,6 +7495,7 @@ useEffect(() => {
       try {
         localStorage.setItem("sudoku_isNumberFirstInputMode", String(next));
       } catch {}
+      syncSettingsToCloud({ fastFill: next });
 
       if (next) {
         // Step 2.2: Digit inheritance when toggling Paint Mode ON
@@ -11673,7 +11893,7 @@ useEffect(() => {
             {/* Button 2: Theme Indicator & Quick Toggle */}
             <button
               onClick={() => {
-                applyThemeToggle(!darkMode, setDarkMode, soundEffects, vibrations);
+                handleQuickToggleDarkMode();
               }}
               className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-150 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs relative overflow-hidden shrink-0 ${darkMode ? "bg-zinc-900 hover:bg-zinc-800 text-white" : "bg-white text-stone-700"}`}
               title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -12158,10 +12378,7 @@ useEffect(() => {
                                   }
                                 } catch {}
                               }
-                              setSoundEffects(nextSound);
-                              try {
-                                localStorage.setItem("sudoku_soundEffects", String(nextSound));
-                              } catch {}
+                              handleToggleSoundEffects(nextSound);
                             }}
                             className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${
                               darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900"
@@ -12569,7 +12786,7 @@ useEffect(() => {
                     isNumberFirstInputMode={isNumberFirstInputMode}
                     onToggleNumberFirstMode={() => {
                       const next = !isNumberFirstInputMode;
-                      setIsNumberFirstInputMode(next);
+                      handleToggleFastFill(next);
                       setLockedNum(null);
                       setActiveKeypadNum(null);
                       showToast(next ? t("fastFillToastOn") : t("fastFillToastOff"), next ? "fastFillOn" : "fastFillOff");
@@ -13161,34 +13378,30 @@ useEffect(() => {
             <SettingsModal
               fromGameplaySettings={fromGameplaySettings}
               darkMode={darkMode}
-              setDarkMode={setDarkMode}
+              setDarkMode={handleToggleDarkMode}
               soundEffects={soundEffects}
-              setSoundEffects={setSoundEffects}
+              setSoundEffects={handleToggleSoundEffects}
               vibrations={vibrations}
-              setVibrations={setVibrations}
+              setVibrations={handleToggleVibrations}
               notificationsEnabled={notificationsEnabled}
-              setNotificationsEnabled={(val: boolean) => {
-                setNotificationsEnabled(val);
-                if (val) {
-                  registerPushNotifications(true);
-                }
-              }}
+              setNotificationsEnabled={handleToggleNotifications}
               highlightIdentical={highlightIdentical}
-              setHighlightIdentical={setHighlightIdentical}
+              setHighlightIdentical={handleToggleHighlightIdentical}
               showRemainingNumbers={showRemainingNumbers}
-              setShowRemainingNumbers={setShowRemainingNumbers}
+              setShowRemainingNumbers={handleToggleShowRemainingNumbers}
               highlightAreas={highlightAreas}
-              setHighlightAreas={setHighlightAreas}
+              setHighlightAreas={handleToggleHighlightAreas}
               isAutoRemoveNotesEnabled={isAutoRemoveNotesEnabled}
-              setIsAutoRemoveNotesEnabled={setIsAutoRemoveNotesEnabled}
+              setIsAutoRemoveNotesEnabled={handleToggleAutoRemoveNotes}
               isNumberFirstInputMode={isNumberFirstInputMode}
-              setIsNumberFirstInputMode={setIsNumberFirstInputMode}
+              setIsNumberFirstInputMode={handleToggleFastFill}
               autoSwitchCompletedNumber={autoSwitchCompletedNumber}
-              setAutoSwitchCompletedNumber={setAutoSwitchCompletedNumber}
+              setAutoSwitchCompletedNumber={handleToggleAutoSwitchCompleted}
               timerEnabled={timerEnabled}
-              setTimerEnabled={setTimerEnabled}
+              setTimerEnabled={handleToggleTimer}
               mistakeLimitEnabled={mistakeLimitEnabled}
-              setMistakeLimitEnabled={setMistakeLimitEnabled}
+              setMistakeLimitEnabled={handleToggleMistakeLimit}
+              onLanguageChange={handleLanguageChange}
               challengeMode={challengeMode}
               boardState={boardState}
               challengeMistakeLimit={challengeMistakeLimit}
@@ -15662,19 +15875,26 @@ useEffect(() => {
                       onClick={() => { 
                         playClickSound();
                         
-                        setDarkMode(false);
-                        setSoundEffects(true);
-                        setVibrations(true);
-                        setTimerEnabled(true);
-                        setMistakeLimitEnabled(true);
-                        setHighlightIdentical(true);
-                        setHighlightAreas(true);
-                        setShowRemainingNumbers(true);
+                        handleToggleDarkMode(DEFAULT_SETTINGS.darkMode);
+                        handleToggleSoundEffects(DEFAULT_SETTINGS.soundEffects);
+                        handleToggleVibrations(DEFAULT_SETTINGS.hapticVibrations);
+                        handleToggleNotifications(DEFAULT_SETTINGS.pushNotifications);
+                        handleToggleHighlightIdentical(DEFAULT_SETTINGS.highlightIdenticalNumbers);
+                        handleToggleShowRemainingNumbers(DEFAULT_SETTINGS.showRemainingNumbers);
+                        handleToggleHighlightAreas(DEFAULT_SETTINGS.highlightRelatedArea);
+                        handleToggleAutoRemoveNotes(DEFAULT_SETTINGS.autoRemoveNotes);
+                        handleToggleFastFill(DEFAULT_SETTINGS.fastFill);
+                        handleToggleAutoSwitchCompleted(DEFAULT_SETTINGS.autoSwitchCompletedNumbers);
+                        handleToggleTimer(DEFAULT_SETTINGS.activeTimerClock);
+                        handleToggleMistakeLimit(DEFAULT_SETTINGS.strictMistakeLimit);
+                        handleLanguageChange(DEFAULT_SETTINGS.language as Language);
+                        
                         setAutoComplete(false);
                         setLightningMode(false);
                         setMagicNote(false);
                         setHideUsedNumber(false);
-                        setNotificationsEnabled(true);
+
+                        syncSettingsToCloud(DEFAULT_SETTINGS);
                         
                         setShowResetSettingsModal(false);
                         showToast(t("preferencesResetToast"));
