@@ -3391,6 +3391,10 @@ useEffect(() => {
         if (userSnap.exists()) {
           const cloudDocData = userSnap.data();
 
+          const cloudCompleted: CompletedGame[] = Array.isArray(cloudDocData?.completedGames)
+            ? cloudDocData.completedGames
+            : [];
+
           const cloudGames = typeof cloudDocData?.totalGamesPlayed === "number" 
             ? cloudDocData.totalGamesPlayed 
             : (typeof cloudDocData?.gamesPlayed === "number" ? cloudDocData.gamesPlayed : 0);
@@ -3403,9 +3407,9 @@ useEffect(() => {
 
           const cloudStreak = typeof cloudDocData?.winStreak === "number" ? cloudDocData.winStreak : 0;
 
-          // Returning User: If users/{finalUser.uid} already exists, strictly hydrate from cloudDocData.completedGames and cloud counters without merging stale guest memory
-          const finalTotalGames = cloudGames;
-          const finalTotalWins = cloudWins;
+          // Normalize counters: Ensure career statistics never drop below the actual match history records
+          const finalTotalGames = Math.max(cloudGames, cloudCompleted.length);
+          const finalTotalWins = Math.max(cloudWins, cloudCompleted.filter((g: any) => g && g.isWon).length);
           const finalWinStreak = cloudStreak;
 
           // 1. Career stats via setStats
@@ -3427,11 +3431,20 @@ useEffect(() => {
           } catch {}
 
           // 2. Match history (recent games) and saved boards: strictly from cloudDocData.completedGames
-          if (Array.isArray(cloudDocData?.completedGames) && cloudDocData.completedGames.length > 0) {
-            setCompletedGames(cloudDocData.completedGames);
+          if (cloudCompleted.length > 0) {
+            setCompletedGames(cloudCompleted);
             try {
-              localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudDocData.completedGames));
+              localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudCompleted));
             } catch {}
+          }
+
+          // Self-heal Firestore document if counters were missing or desynchronized from completedGames length
+          if (cloudGames < finalTotalGames || cloudWins < finalTotalWins) {
+            setDoc(userDocRef, {
+              totalGamesPlayed: finalTotalGames,
+              totalWinsCount: finalTotalWins,
+              lastUpdated: serverTimestamp()
+            }, { merge: true }).catch(() => {});
           }
 
           if (Array.isArray(cloudDocData?.savedGames)) {
@@ -3968,12 +3981,38 @@ useEffect(() => {
           if (userExists) {
             // Returning User: If users/{finalUser.uid} already exists, strictly hydrate from cloudDocData.completedGames and cloud counters without merging stale guest memory
             console.log(`[Auth] Returning user detected for UID ${finalUser.uid}. Hydrating directly from cloud without merging guest memory.`);
-            if (Array.isArray(cloudData?.completedGames) && cloudData.completedGames.length > 0) {
-              setCompletedGames(cloudData.completedGames);
+            const cloudGamesList: CompletedGame[] = Array.isArray(cloudData?.completedGames) ? cloudData.completedGames : [];
+            if (cloudGamesList.length > 0) {
+              setCompletedGames(cloudGamesList);
               try {
-                localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudData.completedGames));
+                localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudGamesList));
               } catch {}
             }
+            const preGames = typeof cloudData?.totalGamesPlayed === "number" 
+              ? cloudData.totalGamesPlayed 
+              : (typeof cloudData?.gamesPlayed === "number" ? cloudData.gamesPlayed : 0);
+            const preWins = typeof cloudData?.totalWinsCount === "number" 
+              ? cloudData.totalWinsCount 
+              : (typeof cloudData?.gamesWon === "number" ? cloudData.gamesWon : (typeof cloudData?.winsCount === "number" ? cloudData.winsCount : 0));
+            
+            const normalizedGames = Math.max(preGames, cloudGamesList.length);
+            const normalizedWins = Math.max(preWins, cloudGamesList.filter((g: any) => g && g.isWon).length);
+            
+            if (normalizedGames > 0) {
+              setTotalGamesPlayed(normalizedGames);
+              try {
+                localStorage.setItem("sudoku_total_games_played", String(normalizedGames));
+                localStorage.setItem("sudoku_gamesPlayed", String(normalizedGames));
+              } catch {}
+            }
+            if (normalizedWins > 0) {
+              setTotalWinsCount(normalizedWins);
+              try {
+                localStorage.setItem("sudoku_total_wins_count", String(normalizedWins));
+                localStorage.setItem("sudoku_winsCount", String(normalizedWins));
+              } catch {}
+            }
+
             await hydrateUserFromCloud(finalUser.uid, finalUser, true);
           } else {
             // First-Time Onboarding: If Firestore document users/{finalUser.uid} does NOT exist, merge initial guest games into the profile so new users do not lose their first played games.
@@ -4825,11 +4864,15 @@ useEffect(() => {
     "bg-[#FFE4E6]/60 text-[#9D174D] shadow-2xs font-extrabold"
   );
 
-  // Sync settings states to localStorage
+  // Sync settings states to localStorage (guarded against clearing during unhydrated initial mount)
   useEffect(() => {
-    localStorage.setItem("sudoku_winsCount", String(winsCount));
-    localStorage.setItem("sudoku_gamesPlayed", String(gamesPlayed));
-  }, [winsCount, gamesPlayed]);
+    if (isAuthHydrating) return;
+    if (completedGames.length === 0 && (totalGamesPlayed > 0 || totalWinsCount > 0)) return;
+    try {
+      localStorage.setItem("sudoku_winsCount", String(winsCount));
+      localStorage.setItem("sudoku_gamesPlayed", String(gamesPlayed));
+    } catch {}
+  }, [winsCount, gamesPlayed, isAuthHydrating, totalGamesPlayed, totalWinsCount, completedGames.length]);
 
   useEffect(() => {
     localStorage.setItem("sudoku_darkMode", String(darkMode));
