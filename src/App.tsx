@@ -2178,6 +2178,8 @@ useEffect(() => {
 
   const [isConnectingGoogle, setIsConnectingGoogle] = useState<boolean>(false);
   const isConnectingRef = useRef<boolean>(false);
+  const loginCancelledRef = useRef<boolean>(false);
+  const loginTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // --- DYNAMIC RESUME GAME STATE LOOP ---
   const [savedSessionInfo, setSavedSessionInfo] = useState<{ difficulty: Difficulty; seconds: number; isMultiplayer?: boolean; roomCode?: string } | null>(null);
@@ -3787,8 +3789,11 @@ useEffect(() => {
         currentHydratedUidRef.current = user.uid;
         setIsAuthHydrating(false);
       } else if (user && !user.isAnonymous) {
-        if (!isConnectingRef.current) {
-          await hydrateUserFromCloudRef.current(user.uid, user);
+        // Unified Cloud Data Hydration: onAuthStateChanged is the single driver of cloud-to-local hydration
+        try {
+          await hydrateUserFromCloudRef.current(user.uid, user, true);
+        } catch (err) {
+          console.warn("[Auth] Unified hydration error in onAuthStateChanged:", err);
         }
       }
     });
@@ -3854,6 +3859,17 @@ useEffect(() => {
     isAuthHydrating
   ]);
 
+  const handleCancelGoogleLogin = useCallback(() => {
+    loginCancelledRef.current = true;
+    if (loginTimeoutRef.current) {
+      clearTimeout(loginTimeoutRef.current);
+      loginTimeoutRef.current = null;
+    }
+    isConnectingRef.current = false;
+    setIsConnectingGoogle(false);
+    console.log("[Auth] Google sign-in cancelled by user.");
+  }, []);
+
   const handleConnectGoogle = async () => {
     if (isConnectingRef.current || isConnectingGoogle) {
       console.warn("[Auth] Connect Google already in flight. Aborting duplicate trigger.");
@@ -3861,6 +3877,20 @@ useEffect(() => {
     }
     isConnectingRef.current = true;
     setIsConnectingGoogle(true);
+    loginCancelledRef.current = false;
+
+    if (loginTimeoutRef.current) {
+      clearTimeout(loginTimeoutRef.current);
+    }
+    // 12-second safety timeout guard
+    loginTimeoutRef.current = setTimeout(() => {
+      if (isConnectingRef.current) {
+        console.warn("[Auth] Google Sign-In 12s safety timeout reached. Resetting connecting state.");
+        loginCancelledRef.current = true;
+        isConnectingRef.current = false;
+        setIsConnectingGoogle(false);
+      }
+    }, 12000);
 
     try {
       let credentialUser = auth.currentUser;
@@ -3869,65 +3899,13 @@ useEffect(() => {
       const isPriorGuest = wasAnonymous || Boolean(priorProfileId && (priorProfileId.startsWith("GUEST_") || !userProfile?.isSynced));
       const priorGuestId = isPriorGuest ? (priorProfileId || (credentialUser?.isAnonymous ? credentialUser.uid : null)) : null;
 
-      // 1. Read current local guest state snapshot before completing switch to authenticated UID
-      let guestCompleted = [...completedGames];
-      if (guestCompleted.length === 0) {
-        try {
-          const stored = localStorage.getItem("sudoku_completed_games");
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed)) guestCompleted = parsed;
-          }
-        } catch {}
-      }
-
-      let guestSaved = [...savedGames];
-      if (guestSaved.length === 0) {
-        try {
-          const stored = localStorage.getItem("sudoku_saved_games");
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed)) guestSaved = parsed;
-          }
-        } catch {}
-      }
-
-      let guestFriends = [...multiplayerPlayers];
-      if (guestFriends.length === 0) {
-        try {
-          const stored = localStorage.getItem("sudoku_past_players");
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed)) guestFriends = parsed;
-          }
-        } catch {}
-      }
-
-      const guestSnapshot = wasAnonymous ? {
-        totalGamesPlayed: Math.max(
-          totalGamesPlayed,
-          Number(localStorage.getItem("sudoku_total_games_played") || 0),
-          Number(localStorage.getItem("sudoku_gamesPlayed") || 0),
-          guestCompleted.length
-        ),
-        totalWinsCount: Math.max(
-          totalWinsCount,
-          Number(localStorage.getItem("sudoku_total_wins_count") || 0),
-          Number(localStorage.getItem("sudoku_winsCount") || 0),
-          guestCompleted.filter(g => g.isWon).length
-        ),
-        winStreak: Math.max(
-          winStreak,
-          Number(localStorage.getItem("sudoku_winStreak") || 0)
-        ),
-        personalBestTimes: { ...personalBestTimesRef.current },
-        completedGames: guestCompleted,
-        savedGames: guestSaved,
-        multiplayerPlayers: guestFriends
-      } : null;
-
       if (!credentialUser) {
         credentialUser = (await signInAnonymously(auth)).user;
+      }
+
+      if (loginCancelledRef.current) {
+        console.log("[Auth] Google Sign-In was cancelled prior to auth trigger.");
+        return;
       }
 
       let finalUser = credentialUser;
@@ -3942,7 +3920,11 @@ useEffect(() => {
         // Flush cached Play Services credentials to guarantee account picker bottom-sheet
         await GoogleAuth.signOut().catch(() => {});
 
+        if (loginCancelledRef.current) return;
+
         const googleUser = await GoogleAuth.signIn();
+        if (loginCancelledRef.current) return;
+
         const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
 
         if (credentialUser.isAnonymous) {
@@ -3977,378 +3959,73 @@ useEffect(() => {
         finalUser = signInResult.user;
       }
 
+      if (loginCancelledRef.current) {
+        console.log("[Auth] Google Sign-In completed after cancel/timeout. Discarding result.");
+        return;
+      }
+
+      // Clear the safety timeout
+      if (loginTimeoutRef.current) {
+        clearTimeout(loginTimeoutRef.current);
+        loginTimeoutRef.current = null;
+      }
+
+      // Promptly unblock UI as soon as Google authentication is verified
+      isConnectingRef.current = false;
+      setIsConnectingGoogle(false);
+
       if (finalUser && finalUser.email) {
-        // GUEST-TO-GMAIL IDENTITY MIGRATION & GHOST CLEANUP:
-        // If the previous session was a guest, write { status: "migrated", lastActive: serverTimestamp() } to users/{guestId}
-        if (priorGuestId && priorGuestId !== finalUser.uid) {
-          try {
-            localStorage.setItem("sudoku_prior_guest_id", priorGuestId);
-            const guestDocRef = doc(db, "users", priorGuestId);
-            await setDoc(guestDocRef, {
-              status: "migrated",
-              lastActive: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              migratedTo: finalUser.uid
-            }, { merge: true });
-            console.log(`[Auth] Prior guest ID ${priorGuestId} marked as migrated to ${finalUser.uid}`);
-          } catch (migErr) {
-            console.warn("[Auth] Failed to mark prior guest as migrated in Firestore:", migErr);
-          }
-
-          // Clean up prior guest ID and current UID from past_players subcollection in Firestore
-          try {
-            await deleteDoc(doc(db, "users", finalUser.uid, "past_players", priorGuestId));
-            await deleteDoc(doc(db, "users", finalUser.uid, "past_players", finalUser.uid));
-          } catch {}
-
-          // Remove prior guest ID from local rematchInviteStates to prevent ghost 60s cooldowns
-          setRematchInviteStates(prev => {
-            if (!prev[priorGuestId]) return prev;
-            const next = { ...prev };
-            delete next[priorGuestId];
-            return next;
-          });
-        }
-
-        if (guestSnapshot) {
-          // Fetch existing cloud profile at users/{finalUser.uid} (if it already exists)
-          const userDocRef = doc(db, "users", finalUser.uid);
-          let cloudData: any = null;
-          let userExists = false;
-          try {
-            const userSnap = await getDoc(userDocRef);
-            if (userSnap.exists()) {
-              cloudData = userSnap.data();
-              userExists = true;
-            }
-          } catch (fetchErr) {
-            console.warn("[Auth] Failed to fetch existing cloud profile:", fetchErr);
-          }
-
-          if (userExists) {
-            // Returning User: If users/{finalUser.uid} already exists, strictly hydrate from cloudDocData.completedGames and cloud counters without merging stale guest memory
-            console.log(`[Auth] Returning user detected for UID ${finalUser.uid}. Hydrating directly from cloud without merging guest memory.`);
-            const cloudGamesList: CompletedGame[] = Array.isArray(cloudData?.completedGames) ? cloudData.completedGames : [];
-            if (cloudGamesList.length > 0) {
-              setCompletedGames(cloudGamesList);
-              try {
-                localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudGamesList));
-              } catch {}
-            }
-            const preGames = typeof cloudData?.totalGamesPlayed === "number" 
-              ? cloudData.totalGamesPlayed 
-              : (typeof cloudData?.gamesPlayed === "number" ? cloudData.gamesPlayed : 0);
-            const preWins = typeof cloudData?.totalWinsCount === "number" 
-              ? cloudData.totalWinsCount 
-              : (typeof cloudData?.gamesWon === "number" ? cloudData.gamesWon : (typeof cloudData?.winsCount === "number" ? cloudData.winsCount : 0));
-            
-            const normalizedGames = Math.max(preGames, cloudGamesList.length);
-            const normalizedWins = Math.max(preWins, cloudGamesList.filter((g: any) => g && g.isWon).length);
-            
-            if (normalizedGames > 0) {
-              setTotalGamesPlayed(normalizedGames);
-              try {
-                localStorage.setItem("sudoku_total_games_played", String(normalizedGames));
-                localStorage.setItem("sudoku_gamesPlayed", String(normalizedGames));
-              } catch {}
-            }
-            if (normalizedWins > 0) {
-              setTotalWinsCount(normalizedWins);
-              try {
-                localStorage.setItem("sudoku_total_wins_count", String(normalizedWins));
-                localStorage.setItem("sudoku_winsCount", String(normalizedWins));
-              } catch {}
-            }
-
-            // Pre-seed personal best times immediately from cloudData or completedGames history
-            const preBestTimes: Record<string, number | null> = {
-              EASY: Number(cloudData?.bestTimes?.EASY ?? cloudData?.bestTimes?.easy) || null,
-              MEDIUM: Number(cloudData?.bestTimes?.MEDIUM ?? cloudData?.bestTimes?.medium) || null,
-              HARD: Number(cloudData?.bestTimes?.HARD ?? cloudData?.bestTimes?.hard) || null,
-              EXPERT: Number(cloudData?.bestTimes?.EXPERT ?? cloudData?.bestTimes?.expert) || null,
-              MASTER: Number(cloudData?.bestTimes?.MASTER ?? cloudData?.bestTimes?.master) || null,
-            };
-
-            cloudGamesList.forEach((g: any) => {
-              if (!g || !g.isWon) return;
-              const diffUpper = String(g.difficulty || "").toUpperCase();
-              if (!["EASY", "MEDIUM", "HARD", "EXPERT"].includes(diffUpper)) return;
-              const diffKey = diffUpper;
-
-              const maxMistakes = Number(g.maxMistakes);
-              const mistakes = Number(g.mistakes ?? 0);
-              const isUnlimited = !isNaN(maxMistakes) && maxMistakes >= 999;
-              const isAbove3 = !isNaN(maxMistakes) && maxMistakes > 3;
-              const withinLimit = mistakes < 3;
-
-              const hintsUsed = Number(g.hints ?? g.hintsCount ?? 0);
-              const maxHints = Number(g.maxHints ?? g.maxHintsLimit ?? 3);
-              const isHintsDisqualified = hintsUsed > 3 || maxHints > 3;
-
-              if (isUnlimited || isAbove3 || !withinLimit || isHintsDisqualified) return;
-
-              const timeSec = parseTimeToSeconds(g.timeSec ?? g.time);
-              if (timeSec > 0) {
-                const current = preBestTimes[diffKey];
-                if (!current || timeSec < current) {
-                  preBestTimes[diffKey] = timeSec;
-                }
-              }
-            });
-
-            const hasAnyPreBest = Object.values(preBestTimes).some(v => v !== null && v > 0);
-            if (hasAnyPreBest) {
-              setPersonalBestTimes(preBestTimes);
-              personalBestTimesRef.current = preBestTimes;
-              try {
-                localStorage.setItem("sudoku_best_times", JSON.stringify(preBestTimes));
-              } catch {}
-            }
-
-            await hydrateUserFromCloud(finalUser.uid, finalUser, true);
-          } else {
-            // First-Time Onboarding: If Firestore document users/{finalUser.uid} does NOT exist, merge initial guest games into the profile so new users do not lose their first played games.
-
-          // 1. Stats merge
-          const cloudGames = typeof cloudData?.totalGamesPlayed === "number"
-            ? cloudData.totalGamesPlayed
-            : (typeof cloudData?.gamesPlayed === "number" ? cloudData.gamesPlayed : 0);
-          const mergedTotalGames = cloudGames + guestSnapshot.totalGamesPlayed;
-
-          const cloudWins = typeof cloudData?.totalWinsCount === "number"
-            ? cloudData.totalWinsCount
-            : (typeof cloudData?.gamesWon === "number"
-              ? cloudData.gamesWon
-              : (typeof cloudData?.winsCount === "number" ? cloudData.winsCount : 0));
-          const mergedTotalWins = cloudWins + guestSnapshot.totalWinsCount;
-
-          const cloudStreak = typeof cloudData?.winStreak === "number" ? cloudData.winStreak : 0;
-          const mergedWinStreak = Math.max(cloudStreak, guestSnapshot.winStreak);
-
-          const diffKeys: Difficulty[] = ["EASY", "MEDIUM", "HARD", "EXPERT"];
-          const mergedBestTimes: Record<Difficulty, number> = { EASY: 0, MEDIUM: 0, HARD: 0, EXPERT: 0 };
-          diffKeys.forEach((diff) => {
-            const cloudRaw = cloudData?.bestTimes?.[diff] ?? cloudData?.bestTimes?.[diff.toLowerCase()] ?? 0;
-            const cloudSec = Number(cloudRaw) || 0;
-            const guestSec = Number(guestSnapshot.personalBestTimes[diff]) || 0;
-            if (cloudSec > 0 && guestSec > 0) {
-              mergedBestTimes[diff] = Math.min(cloudSec, guestSec);
-            } else {
-              mergedBestTimes[diff] = cloudSec > 0 ? cloudSec : (guestSec > 0 ? guestSec : 0);
-            }
-          });
-
-          // Helper for sorting game records by timestamp descending
-          const getGameTimestamp = (g: any): number => {
-            if (!g) return 0;
-            if (typeof g.timestamp === "number") return g.timestamp;
-            if (g.timestamp?.toMillis) return g.timestamp.toMillis();
-            if (g.date) {
-              const parsed = Date.parse(g.date);
-              if (!isNaN(parsed)) return parsed;
-            }
-            return 0;
-          };
-
-          // 2. Match History (completedGames) merge
-          const cloudCompleted: CompletedGame[] = Array.isArray(cloudData?.completedGames) ? cloudData.completedGames : [];
-          const combinedCompleted = [...guestSnapshot.completedGames, ...cloudCompleted];
-          const seenCompletedIds = new Set<string>();
-          const deduplicatedCompleted: CompletedGame[] = [];
-          for (const g of combinedCompleted) {
-            if (!g) continue;
-            const id = String(g.id || (g.seed ? `seed_${g.seed}` : ""));
-            if (id && !seenCompletedIds.has(id)) {
-              seenCompletedIds.add(id);
-              deduplicatedCompleted.push(g);
-            }
-          }
-          deduplicatedCompleted.sort((a, b) => getGameTimestamp(b) - getGameTimestamp(a));
-          const mergedCompleted = deduplicatedCompleted.slice(0, 20);
-
-          // 3. Saved Boards (savedGames) merge
-          const cloudSaved: CompletedGame[] = Array.isArray(cloudData?.savedGames) ? cloudData.savedGames : [];
-          const combinedSaved = [...guestSnapshot.savedGames, ...cloudSaved];
-          const seenSavedIds = new Set<string>();
-          const deduplicatedSaved: CompletedGame[] = [];
-          for (const g of combinedSaved) {
-            if (!g) continue;
-            const id = String(g.id || (g.seed ? `seed_${g.seed}` : ""));
-            if (id && !seenSavedIds.has(id)) {
-              seenSavedIds.add(id);
-              deduplicatedSaved.push(g);
-            }
-          }
-          deduplicatedSaved.sort((a, b) => getGameTimestamp(b) - getGameTimestamp(a));
-          const mergedSaved = deduplicatedSaved.slice(0, 20);
-
-          // 4. Friends List merge
-          const cloudFriendsMap = new Map<string, any>();
-          try {
-            const pastSnap = await getDocs(collection(db, "users", finalUser.uid, "past_players"));
-            pastSnap.forEach((d) => {
-              const dData = d.data();
-              if (
-                d.id !== "USER_88201" && 
-                d.id !== "GUEST_99210" && 
-                d.id !== "USER_33104" && 
-                d.id !== finalUser.uid &&
-                (!priorGuestId || d.id !== priorGuestId)
-              ) {
-                cloudFriendsMap.set(d.id, {
-                  id: d.id,
-                  name: dData.name || "Player",
-                  isFriend: !!dData.isFriend,
-                  status: "offline",
-                  inviteStatus: "idle",
-                  lastPlayedAt: dData.timestamp?.toMillis ? dData.timestamp.toMillis() : (dData.lastPlayedAt || undefined)
-                });
-              }
-            });
-          } catch (pastErr) {
-            console.warn("[Auth] Cloud past_players fetch notice:", pastErr);
-          }
-
-          const docFriends = cloudData?.pastPlayers || cloudData?.friends;
-          if (Array.isArray(docFriends)) {
-            for (const p of docFriends) {
-              if (
-                p && 
-                p.id && 
-                !cloudFriendsMap.has(p.id) && 
-                p.id !== "USER_88201" && 
-                p.id !== "GUEST_99210" && 
-                p.id !== "USER_33104" &&
-                p.id !== finalUser.uid &&
-                (!priorGuestId || p.id !== priorGuestId)
-              ) {
-                cloudFriendsMap.set(p.id, {
-                  id: p.id,
-                  name: p.name || "Player",
-                  isFriend: !!p.isFriend,
-                  status: "offline",
-                  inviteStatus: "idle",
-                  lastPlayedAt: p.lastPlayedAt
-                });
-              }
-            }
-          }
-
-          // Preserve existing cloud friends and append guest friends
-          const mergedFriendsList: any[] = Array.from(cloudFriendsMap.values());
-          for (const gf of guestSnapshot.multiplayerPlayers) {
-            if (
-              gf && 
-              gf.id && 
-              !cloudFriendsMap.has(gf.id) && 
-              gf.id !== "USER_88201" && 
-              gf.id !== "GUEST_99210" && 
-              gf.id !== "USER_33104" &&
-              gf.id !== finalUser.uid &&
-              (!priorGuestId || gf.id !== priorGuestId)
-            ) {
-              cloudFriendsMap.set(gf.id, gf);
-              mergedFriendsList.push({
-                id: gf.id,
-                name: gf.name || "Player",
-                isFriend: !!gf.isFriend,
-                status: "offline",
-                inviteStatus: "idle",
-                lastPlayedAt: gf.lastPlayedAt || Date.now()
-              });
-            }
-          }
-
-          const clampedFriends = mergedFriendsList.slice(0, 50);
-
-          // Write merged friends to past_players subcollection
-          for (const fr of clampedFriends) {
-            try {
-              const frRef = doc(db, "users", finalUser.uid, "past_players", fr.id);
-              await setDoc(frRef, {
-                id: fr.id,
-                name: fr.name || "Player",
-                isFriend: !!fr.isFriend,
-                timestamp: serverTimestamp()
-              }, { merge: true });
-            } catch (frErr) {
-              console.warn("[Auth] Failed to sync merged friend to subcollection:", frErr);
-            }
-          }
-
-          // 5. Display Name Resolution
-          let resolvedDisplayName = userProfile?.name || "";
-          const googleDisplayName = (finalUser.displayName?.trim() || "").slice(0, 15);
-          if (isDefaultOrEmptyPlayerName(userProfile?.name)) {
-            if (cloudData?.name && !isDefaultOrEmptyPlayerName(cloudData.name)) {
-              resolvedDisplayName = cloudData.name.trim().slice(0, 15);
-            } else {
-              resolvedDisplayName = googleDisplayName || "Pro_Player";
-            }
-          } else {
-            resolvedDisplayName = userProfile!.name;
-          }
-
-          // 6. Settings Cloud Sync: Merge preferences
-          const currentLocalSettings = {
-            isNumberFirstInputMode,
-            autoSwitchCompletedNumber,
-            isAutoRemoveNotesEnabled,
-            isPreventMistakeNotesEnabled,
-            soundEffects,
-            vibrations,
-            timerEnabled,
-            displayScores,
-            mistakeLimitEnabled,
-            darkMode,
-            activeTheme,
-            highlightIdentical,
-            highlightAreas,
-            showRemainingNumbers,
-            notificationsEnabled,
-          };
-          const mergedSettings = cloudData?.settings && typeof cloudData.settings === "object"
-            ? { ...currentLocalSettings, ...cloudData.settings }
-            : currentLocalSettings;
-
-          // Write merged payload to users/{finalUser.uid} using { merge: true }
-          const rawMergePayload = {
-            name: resolvedDisplayName,
-            email: finalUser.email,
-            authUid: finalUser.uid,
-            isSynced: true,
-            avatarColor: cloudData?.avatarColor || userProfile?.avatarColor || "#8B5CF6",
-            totalGamesPlayed: mergedTotalGames,
-            totalWinsCount: mergedTotalWins,
-            winStreak: mergedWinStreak,
-            bestTimes: mergedBestTimes,
-            completedGames: mergedCompleted,
-            savedGames: mergedSaved,
-            pastPlayers: clampedFriends,
-            friends: clampedFriends,
-            settings: mergedSettings
-          };
-          // Deep sanitize payload to strip any undefined values that cause Firestore setDoc to throw
-          const safeMergePayload = JSON.parse(JSON.stringify(rawMergePayload));
-
-          await setDoc(userDocRef, {
-            ...safeMergePayload,
-            updatedAt: serverTimestamp(),
-            createdAt: serverTimestamp()
-          }, { merge: true });
-
-          // 7. Update in-memory app state and local storage with merged record
-          await hydrateUserFromCloud(finalUser.uid, finalUser, true);
-          }
-        } else {
-          // If already signed in on another account or no guest data to merge, hydrate directly
-          await hydrateUserFromCloud(finalUser.uid, finalUser, true);
-        }
-
         addLog(`🔒 Connected Google Account: ${finalUser.email}`);
         showToast(t("connectedGoogleToast"));
+
+        // GUEST-TO-GMAIL IDENTITY MIGRATION & GHOST CLEANUP (non-blocking)
+        if (priorGuestId && priorGuestId !== finalUser.uid) {
+          (async () => {
+            try {
+              localStorage.setItem("sudoku_prior_guest_id", priorGuestId);
+              const guestDocRef = doc(db, "users", priorGuestId);
+              await setDoc(guestDocRef, {
+                status: "migrated",
+                lastActive: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                migratedTo: finalUser.uid
+              }, { merge: true });
+              console.log(`[Auth] Prior guest ID ${priorGuestId} marked as migrated to ${finalUser.uid}`);
+            } catch (migErr) {
+              console.warn("[Auth] Failed to mark prior guest as migrated in Firestore:", migErr);
+            }
+
+            // Clean up prior guest ID and current UID from past_players subcollection in Firestore
+            try {
+              await deleteDoc(doc(db, "users", finalUser.uid, "past_players", priorGuestId));
+              await deleteDoc(doc(db, "users", finalUser.uid, "past_players", finalUser.uid));
+            } catch {}
+
+            // Remove prior guest ID from local rematchInviteStates to prevent ghost 60s cooldowns
+            setRematchInviteStates(prev => {
+              if (!prev[priorGuestId]) return prev;
+              const next = { ...prev };
+              delete next[priorGuestId];
+              return next;
+            });
+          })().catch((err) => console.warn("[Auth] Background guest migration notice:", err));
+        }
+
+        // Trigger non-blocking cloud hydration (onAuthStateChanged will also drive this as single source of truth)
+        hydrateUserFromCloudRef.current(finalUser.uid, finalUser, true).catch((hydErr) => {
+          console.warn("[Auth] Cloud hydration notice:", hydErr);
+        });
       }
     } catch (err: any) {
+      if (loginCancelledRef.current) {
+        console.log("[Auth] Error ignored because login was cancelled or timed out:", err);
+        return;
+      }
+      const code = err?.code || "";
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request" || code === "12501" || code === "SIGN_IN_CANCELLED") {
+        console.log("[Auth] User dismissed Google Sign-In dialog.");
+        return;
+      }
       console.error("[Auth] Google Sign-In error:", {
         code: err?.code,
         message: err?.message,
@@ -4357,6 +4034,10 @@ useEffect(() => {
       });
       showToast(`${err?.code || 'ERROR'}: ${err?.message || 'Unknown'}`);
     } finally {
+      if (loginTimeoutRef.current) {
+        clearTimeout(loginTimeoutRef.current);
+        loginTimeoutRef.current = null;
+      }
       isConnectingRef.current = false;
       setIsConnectingGoogle(false);
     }
@@ -13531,6 +13212,7 @@ useEffect(() => {
               onOpenResetSettingsModal={() => setShowResetSettingsModal(true)}
               onConnectGoogle={handleConnectGoogle}
               isConnectingGoogle={isConnectingGoogle}
+              onCancelConnectGoogle={handleCancelGoogleLogin}
               onLogout={handleLogout}
             />
           )}
@@ -14186,40 +13868,67 @@ useEffect(() => {
 
                   {/* Active Google Sync Action States */}
                   <div className="flex flex-col gap-1.5 w-full select-none">
-                    <button
-                      type="button"
-                      disabled={isConnectingGoogle}
-                      onClick={() => {
-                        if (isConnectingGoogle) return;
-                        playClickSound();
-                        handleConnectGoogle();
-                      }}
-                      className={`w-full min-h-[46px] flex items-center justify-center gap-2 font-sans text-xs font-black uppercase tracking-wider py-3.5 px-6 rounded-full transition-all text-center border-none ${
-                        isConnectingGoogle
-                          ? "opacity-75 cursor-wait"
-                          : "cursor-pointer active:scale-[0.98]"
-                      } ${
-                        darkMode
-                          ? "bg-white text-stone-900 hover:bg-stone-100"
-                          : "bg-white text-stone-850 hover:bg-stone-50 border border-stone-200 shadow-sm"
-                      }`}
-                    >
-                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                      </svg>
-                      {isConnectingGoogle ? (
-                        <div className="flex items-center justify-center gap-1.5 h-4 px-2" aria-label="Loading">
-                          <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "0ms" }} />
-                          <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "160ms" }} />
-                          <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "320ms" }} />
-                        </div>
-                      ) : (
+                    {isConnectingGoogle ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <button
+                          type="button"
+                          disabled
+                          className={`flex-1 min-h-[46px] flex items-center justify-center gap-2 font-sans text-xs font-black uppercase tracking-wider py-3.5 px-4 rounded-full transition-all text-center border-none opacity-75 cursor-wait ${
+                            darkMode
+                              ? "bg-white text-stone-900"
+                              : "bg-white text-stone-850 border border-stone-200 shadow-sm"
+                          }`}
+                        >
+                          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                          </svg>
+                          <div className="flex items-center justify-center gap-1.5 h-4 px-2" aria-label="Loading">
+                            <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "0ms" }} />
+                            <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "160ms" }} />
+                            <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "320ms" }} />
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playClickSound();
+                            handleCancelGoogleLogin();
+                          }}
+                          className={`min-h-[46px] px-4 rounded-full font-sans text-xs font-black uppercase tracking-wider flex items-center justify-center border-none transition-all cursor-pointer active:scale-95 shadow-xs shrink-0 ${
+                            darkMode
+                              ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]"
+                              : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
+                          }`}
+                        >
+                          {t("cancel")}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playClickSound();
+                          handleConnectGoogle();
+                        }}
+                        className={`w-full min-h-[46px] flex items-center justify-center gap-2 font-sans text-xs font-black uppercase tracking-wider py-3.5 px-6 rounded-full transition-all text-center border-none cursor-pointer active:scale-[0.98] ${
+                          darkMode
+                            ? "bg-white text-stone-900 hover:bg-stone-100"
+                            : "bg-white text-stone-850 hover:bg-stone-50 border border-stone-200 shadow-sm"
+                        }`}
+                      >
+                        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                        </svg>
                         <span>Connect with Google</span>
-                      )}
-                    </button>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -16810,42 +16519,69 @@ useEffect(() => {
                       </p>
 
                       <div className="flex flex-col gap-3.5 pt-1">
-                        {/* Google Sign-in (Disabled) */}
+                        {/* Google Sign-in */}
                         <div className="flex flex-col gap-1 w-full select-none">
-                          <button
-                            type="button"
-                            disabled={isConnectingGoogle}
-                            onClick={() => {
-                              if (isConnectingGoogle) return;
-                              playClickSound();
-                              handleConnectGoogle();
-                            }}
-                            className={`w-full min-h-[44px] py-3 px-4 rounded-xl font-sans text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 border transition-all ${
-                              isConnectingGoogle
-                                ? "opacity-75 cursor-wait"
-                                : "cursor-pointer active:scale-[0.98]"
-                            } ${
-                              darkMode
-                                ? "bg-white text-stone-900 border-stone-200 hover:bg-stone-100"
-                                : "bg-white text-stone-850 border-stone-200 hover:bg-stone-50 shadow-sm"
-                            }`}
-                          >
-                            <svg className="w-4.5 h-4.5 shrink-0" viewBox="0 0 24 24">
-                              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                            </svg>
-                            {isConnectingGoogle ? (
-                              <div className="flex items-center justify-center gap-1.5 h-4 px-2" aria-label="Loading">
-                                <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "0ms" }} />
-                                <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "160ms" }} />
-                                <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "320ms" }} />
-                              </div>
-                            ) : (
+                          {isConnectingGoogle ? (
+                            <div className="flex items-center gap-2 w-full">
+                              <button
+                                type="button"
+                                disabled
+                                className={`flex-1 min-h-[44px] py-3 px-4 rounded-xl font-sans text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 border opacity-75 cursor-wait ${
+                                  darkMode
+                                    ? "bg-white text-stone-900 border-stone-200"
+                                    : "bg-white text-stone-850 border-stone-200 shadow-sm"
+                                }`}
+                              >
+                                <svg className="w-4.5 h-4.5 shrink-0" viewBox="0 0 24 24">
+                                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                                </svg>
+                                <div className="flex items-center justify-center gap-1.5 h-4 px-2" aria-label="Loading">
+                                  <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "0ms" }} />
+                                  <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "160ms" }} />
+                                  <span className="w-2 h-2 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "320ms" }} />
+                                </div>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  playClickSound();
+                                  handleCancelGoogleLogin();
+                                }}
+                                className={`min-h-[44px] px-3.5 rounded-xl font-sans text-xs font-black uppercase tracking-wider flex items-center justify-center border-none transition-all cursor-pointer active:scale-95 shadow-xs shrink-0 ${
+                                  darkMode
+                                    ? "bg-[#4c0519] hover:bg-[#831843] text-[#fecdd3]"
+                                    : "bg-[#FFE4E6] hover:bg-[#FBCFE8] text-[#9D174D]"
+                                }`}
+                              >
+                                {t("cancel")}
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playClickSound();
+                                handleConnectGoogle();
+                              }}
+                              className={`w-full min-h-[44px] py-3 px-4 rounded-xl font-sans text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 border transition-all cursor-pointer active:scale-[0.98] ${
+                                darkMode
+                                  ? "bg-white text-stone-900 border-stone-200 hover:bg-stone-100"
+                                  : "bg-white text-stone-850 border-stone-200 hover:bg-stone-50 shadow-sm"
+                              }`}
+                            >
+                              <svg className="w-4.5 h-4.5 shrink-0" viewBox="0 0 24 24">
+                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                              </svg>
                               <span>Connect with Google</span>
-                            )}
-                          </button>
+                            </button>
+                          )}
                         </div>
 
                         {/* Mobile OTP option */}
