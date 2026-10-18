@@ -1704,7 +1704,7 @@ useEffect(() => {
     if (auth.currentUser && !auth.currentUser.isAnonymous) {
       const userDocRef = doc(db, "users", auth.currentUser.uid);
       setDoc(userDocRef, { name: finalName }, { merge: true }).catch(err => {
-        console.warn("[Profile] Failed to sync name from invite modal to Firestore:", err);
+        console.warn("[Profile] Non-blocking name sync from invite failed:", err);
       });
     }
     
@@ -16590,7 +16590,7 @@ useEffect(() => {
                         if (auth.currentUser && !auth.currentUser.isAnonymous) {
                           const userDocRef = doc(db, "users", auth.currentUser.uid);
                           setDoc(userDocRef, { name: finalName }, { merge: true }).catch(err => {
-                            console.warn("[Profile] Failed to sync name from settings modal to Firestore:", err);
+                            console.warn("[Profile] Non-blocking name sync from settings modal failed:", err);
                           });
                         }
 
