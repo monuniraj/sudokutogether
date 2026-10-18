@@ -985,7 +985,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 no-scrollbar flex flex-col gap-4 max-h-[190px] my-1.5 py-0.5">
                       {(multiplayerPlayers || []).length === 0 ? (
                         <span className="text-xs italic text-stone-500 py-4 text-center">
-                          No past players yet. Share the link below to invite someone.
+                          {t("noPastPlayersNotice")}
                         </span>
                       ) : (
                         <>
@@ -1049,7 +1049,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 <button
                   onClick={async () => {
                     playClickSound();
-                    await shareChallengeLink(activeRematchRoomCode, "Play Sudoku with me! Let's see who finishes first:");
+                    await shareChallengeLink(activeRematchRoomCode, t("shareInviteMessage"));
                   }}
                   style={{ animationDelay: "0.4s" }}
                   className={`animate-shimmer-sweep w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs leading-normal overflow-visible ${
@@ -1074,7 +1074,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   className={`p-3 rounded-2xl flex items-center justify-center transition-all shadow-xs active:scale-95 border-none cursor-pointer shrink-0 ${
                     darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
                   }`}
-                  title="Back to Leaderboard"
+                  title={t("backToLeaderboardTooltip")}
                 >
                   <ArrowLeft className="w-5 h-5" strokeWidth={2} />
                 </button>

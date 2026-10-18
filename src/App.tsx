@@ -2162,7 +2162,7 @@ useEffect(() => {
     const updated = { ...newProfile, isSynced: true };
     setUserProfile(updated);
     localStorage.setItem("sudoku_userProfile", JSON.stringify(updated));
-    showToast("Journal stats merged into database successfully!");
+    showToast(t("journalStatsMergedToast"));
   };
 
   // Auth hydration status guard
@@ -4215,7 +4215,7 @@ useEffect(() => {
         }
 
         addLog(`🔒 Connected Google Account: ${finalUser.email}`);
-        showToast("Connected to Google Account!");
+        showToast(t("connectedGoogleToast"));
       }
     } catch (err: any) {
       console.error("[Auth] Google Sign-In error:", {
@@ -4357,7 +4357,7 @@ useEffect(() => {
       setShowSettingsModal(false);
 
       addLog("👤 Returned to clean local guest session.");
-      showToast("Logged out successfully.");
+      showToast(t("loggedOutToast"));
     } catch (err: any) {
       const friendlyMsg = getSanitizedAuthErrorMessage(err);
       console.warn("[Auth] Logout notice:", err?.code || "unknown_error");
@@ -4419,7 +4419,7 @@ useEffect(() => {
           await deleteUser(currentUser);
         } catch (authErr: any) {
           if (authErr?.code === "auth/requires-recent-login") {
-            showToast("Security check: Please log in again to confirm account deletion.");
+            showToast(t("securityCheckDeleteToast"));
             setShowDeleteAccountModal(false);
             return;
           }
@@ -4523,7 +4523,7 @@ useEffect(() => {
       } catch {}
 
       addLog("🗑️ Account and all data permanently deleted.");
-      showToast("Account and data deleted.");
+      showToast(t("accountDeletedToast"));
 
       if (!Capacitor.isNativePlatform()) {
         setTimeout(() => {
@@ -4533,7 +4533,7 @@ useEffect(() => {
     } catch (err: any) {
       console.warn("[Auth] Delete account error:", err?.code || "unknown");
       const friendlyMsg = err?.code === "auth/requires-recent-login"
-        ? "Security check: Please log in again to confirm account deletion."
+        ? t("securityCheckDeleteToast")
         : "Failed to delete account. Please try again.";
       showToast(friendlyMsg);
     } finally {
@@ -5451,7 +5451,7 @@ useEffect(() => {
           // Remove friend
           const updated = prev.map(p => p.id === playerId ? { ...p, isFriend: false } : p);
           addLog(`✓ ${player.name} removed from Friends list.`);
-          showToast(`Removed ${player.name} from friends.`);
+          showToast(t("friendRemovedToast", { name: player.name }));
 
           // Async sync to Firestore
           const currentUserId = userProfile?.id;
@@ -5467,7 +5467,7 @@ useEffect(() => {
           // Enforce 50-friend cap
           const currentFriendsCount = prev.filter(p => p.isFriend).length;
           if (currentFriendsCount >= 50) {
-            showToast("Friend limit reached (Max 50 friends).");
+            showToast(t("friendLimitReachedToast"));
             addLog("⚠️ Attempted to add friend but limit of 50 has been reached.");
             return prev;
           }
@@ -5475,7 +5475,7 @@ useEffect(() => {
           // Add friend
           const updated = prev.map(p => p.id === playerId ? { ...p, isFriend: true } : p);
           addLog(`✓ ${player.name} connected and added to Friends list.`);
-          showToast(`✓ Added ${player.name} as a persistent friend!`);
+          showToast(t("friendAddedToast", { name: player.name }));
 
           // Async sync to Firestore
           const currentUserId = userProfile?.id;
@@ -5492,7 +5492,7 @@ useEffect(() => {
         // Enforce 50-friend cap
         const currentFriendsCount = prev.filter(p => p.isFriend).length;
         if (currentFriendsCount >= 50) {
-          showToast("Friend limit reached (Max 50 friends).");
+          showToast(t("friendLimitReachedToast"));
           addLog("⚠️ Attempted to add friend but limit of 50 has been reached.");
           return prev;
         }
@@ -5508,7 +5508,7 @@ useEffect(() => {
         };
         const updated = [...prev, newPlayer];
         addLog(`✓ ${name} added to past players and Friends list.`);
-        showToast(`✓ Added ${name} as a persistent friend!`);
+        showToast(t("friendAddedToast", { name }));
 
         // Async sync to Firestore
         const currentUserId = userProfile?.id;
@@ -5630,7 +5630,7 @@ useEffect(() => {
     }
 
     if (rData.status === "closed" || rData.isClosed) {
-      return { success: false, error: "This room session is closed." };
+      return { success: false, error: t("roomSessionClosedToast") };
     }
 
     // 4. Security check for locked rooms if PIN is set (Bypassed if direct in-game invite)
@@ -5787,7 +5787,7 @@ useEffect(() => {
 
     // Navigate to game view immediately
     navigateToScreen("game");
-    showToast(`✓ Joined Room ${roomCode}!`);
+    showToast(t("roomJoinedToast", { code: roomCode }));
     addLog(`✓ Joined canonical room #${roomCode}! Entering game arena...`);
     return { success: true };
     } catch (err: any) {
@@ -5847,7 +5847,7 @@ useEffect(() => {
       } catch (e) {}
       return updated;
     });
-    showToast("Challenge invitation declined.");
+    showToast(t("challengeDeclinedToast"));
   };
 
   const handleViewChallengeResults = async (roomCode: string, forceOpenModal = false) => {
@@ -5874,7 +5874,7 @@ useEffect(() => {
 
     if (!cleanRoomCode || cleanRoomCode.startsWith("sw-completed-") || cleanRoomCode.startsWith("push-")) {
       console.warn("[Results] Cannot view results: invalid or non-numeric roomCode", roomCode);
-      showToast("Match room not found.");
+      showToast(t("matchRoomNotFoundToast"));
       return;
     }
 
@@ -7775,7 +7775,7 @@ useEffect(() => {
         if (roomSnap.exists()) {
           const rData = roomSnap.data();
           if (rData.status === "closed" || rData.isClosed) {
-            showToast("❌ This room session is closed.");
+            showToast(t("roomSessionClosedToast"));
             return;
           }
           const rSeed = rData.seed !== undefined ? Number(rData.seed) : parseInt(code, 10);
@@ -7829,12 +7829,12 @@ useEffect(() => {
           return;
         } else {
           addLog(`⚠️ Room #${code} not found in Firestore.`);
-          showToast(`❌ Room #${code} does not exist or expired.`);
+          showToast(t("roomNotFoundToast", { code }));
           return; // CRITICAL: NEVER fallback to local board generation!
         }
       } catch (err) {
         console.error("Could not query room from Firestore:", err);
-        showToast(`❌ Error connecting to room #${code}.`);
+        showToast(t("roomErrorConnectToast", { code }));
         return; // CRITICAL: NEVER fallback to local board generation!
       }
     }
@@ -7922,7 +7922,7 @@ useEffect(() => {
         return updated;
       });
       addLog(`📥 Challenge ${incomingChallengeId} postponed to Pending folder. Visual alert indicator active.`);
-      showToast("Saved to Pending! Muted for 1 hour.");
+      showToast(t("savedPendingMuted1hToast"));
     }
 
     const silenceUntil = Date.now() + 1 * 60 * 60 * 1000;
@@ -7958,7 +7958,7 @@ useEffect(() => {
         return updated;
       });
       addLog(`📥 Challenge ${incomingChallengeId} postcode silenced. DND activated for 24 hours.`);
-      showToast("Saved to Pending! Muted for 24 hours.");
+      showToast(t("savedPendingMuted24hToast"));
     }
 
     const silenceUntil = Date.now() + 24 * 60 * 60 * 1000;
@@ -7978,7 +7978,7 @@ useEffect(() => {
     const activeRoomCode = String(targetSeed).padStart(6, '0').slice(-6);
     const currentProfileName = getActiveDisplayName();
     const chalUrl = `${getChallengeBaseUrl()}?room=${activeRoomCode}&sender=${encodeURIComponent(currentProfileName)}`;
-    const shareText = `Play Sudoku with me! Let's see who finishes first:`;
+    const shareText = t("shareInviteMessage");
 
     await shareOrCopyContent("SudokuSync", shareText, chalUrl, showCopiedToast, showCopiedToast);
   };
@@ -8083,7 +8083,7 @@ useEffect(() => {
     }
     
     const chalUrl = `${getChallengeBaseUrl()}?room=${roomCode}&sender=${encodeURIComponent(currentProfileName)}`;
-    const shareText = `Play Sudoku with me! Let's see who finishes first:`;
+    const shareText = customText || t("shareInviteMessage");
 
     await shareAppContent("SudokuSync", shareText, chalUrl);
   };
@@ -8096,7 +8096,7 @@ useEffect(() => {
     const currentProfileName = getActiveDisplayName();
 
     const chalUrl = `${getChallengeBaseUrl()}?challenge=${baseId}${finalCard.password ? `&pw=${encodePass(finalCard.password)}` : ""}&sender=${encodeURIComponent(currentProfileName)}`;
-    const shareText = `Play Sudoku with me! Let's see who finishes first:`;
+    const shareText = t("shareInviteMessage");
     
     await shareAppContent("SudokuSync", shareText, chalUrl);
     setSharingPendingChallenge(null);
@@ -8382,7 +8382,7 @@ useEffect(() => {
       generateAndSetNewPuzzle(challengeDifficulty, canonicalSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit, undefined, false);
       setShowCreateChallengeModal(false);
       setIsTimerPaused(false);
-      showToast("You are offline. Starting in Solo mode.");
+      showToast(t("offlineSoloToast"));
       navigateToScreen("game");
       return;
     }
@@ -8611,7 +8611,7 @@ useEffect(() => {
       return p;
     }));
     addLog(`✓ ${player.name} connected and added to Friends list.`);
-    showToast(`✓ Added ${player.name} as a persistent friend!`);
+    showToast(t("friendAddedToast", { name: player.name }));
   };
 
   // Save played games (won or lost/terminated) into history list
@@ -8926,12 +8926,12 @@ useEffect(() => {
       if (exists) {
         const filtered = prev.filter(r => r.id !== game.id);
         localStorage.setItem("sudoku_saved_games", JSON.stringify(filtered));
-        showToast("Removed puzzle from Saved list.");
+        showToast(t("puzzleRemovedSavedToast"));
         addLog(`📌 Puzzle #${game.seed || game.id} unsaved.`);
         return filtered;
       } else {
         if (prev.length >= 20) {
-          showToast("Storage full. Please unsave an older match to save this one.");
+          showToast(t("storageFullSavedToast"));
           addLog(`⚠️ Attempted save failed: Saved list reached hard cap limit of 20 entries.`);
           return prev;
         }
@@ -8942,7 +8942,7 @@ useEffect(() => {
         
         const updated = [enrichedGame, ...prev];
         localStorage.setItem("sudoku_saved_games", JSON.stringify(updated));
-        showToast("Added puzzle to Saved list!");
+        showToast(t("puzzleAddedSavedToast"));
         addLog(`📌 Puzzle #${game.seed || game.id} saved to Saved folder.`);
         
         if (!finalParticipants) {
@@ -10641,7 +10641,7 @@ useEffect(() => {
           }
         }
         if (count >= 9) {
-          showToast(`Number ${val} is already completed.`);
+          showToast(t("numberAlreadyCompletedToast", { val }));
           return;
         }
 
@@ -10878,7 +10878,7 @@ useEffect(() => {
     setCurrentScreen("home");
     setIsConfirmingFactoryReset(false);
     setShowResetSettingsModal(false);
-    showToast("Factory reset complete");
+    showToast(t("factoryResetCompleteToast"));
   };
 
   const handleUndo = () => {
@@ -10913,7 +10913,7 @@ useEffect(() => {
     // The user must explicitly erase the existing number first using the Erase tool.
     if (cell.value !== 0 && cell.value !== num) {
       triggerHapticError(vibrations);
-      showToast("🔒 Erase the existing number first.");
+      showToast(t("eraseExistingNumberToast"));
       addLog(`🔒 Erase-First Protection: Cell at (Row ${selectedRow + 1}, Col ${selectedCol + 1}) contains ${cell.value}. Erase it before entering a new number.`);
       return;
     }
@@ -10921,7 +10921,7 @@ useEffect(() => {
     // In pencil mode, prevent adding candidate notes to a filled cell
     if (pencilMode && cell.value !== 0) {
       triggerHapticError(vibrations);
-      showToast("🔒 Erase the number first to add notes.");
+      showToast(t("eraseNumberForNotesToast"));
       return;
     }
 
@@ -11240,8 +11240,8 @@ useEffect(() => {
     if (!boardState || boardState.isGameOver) return;
     const { selectedRow, selectedCol } = boardState;
     if (selectedRow === null || selectedCol === null) {
-      addLog("💡 Tip: Select a cell first to receive hint.");
-      showToast("💡 Tip: Select a cell first to receive hint.");
+      addLog(t("tipSelectCellHintToast"));
+      showToast(t("tipSelectCellHintToast"));
       return;
     }
 
@@ -11249,8 +11249,8 @@ useEffect(() => {
     const solvedNum = solutionGrid[selectedRow][selectedCol];
 
     if (cell.isOriginalClue) {
-      addLog("💡 This is a system-generated number. It is already correct!");
-      showToast("This is a system-generated number. It is already correct!");
+      addLog(t("systemNumberCorrectToast"));
+      showToast(t("systemNumberCorrectToast"));
       return;
     }
 
@@ -11259,14 +11259,14 @@ useEffect(() => {
 
     if (hintsLeft <= 0) {
       if (isChallengeGame) {
-        showToast("⚠️ You have reached the hint limit for this challenge!");
+        showToast(t("hintLimitReachedToast"));
       }
       return;
     }
 
     if (cell.value !== 0 && cell.value === solvedNum) {
-      addLog("💡 Right! This is the correct number.");
-      showToast("Right! This is the correct number.");
+      addLog(t("correctNumberToast"));
+      showToast(t("correctNumberToast"));
       return;
     }
 
@@ -12504,7 +12504,7 @@ useEffect(() => {
                             if (count >= 9) {
                               playClickSound();
                               triggerHapticTap(vibrations);
-                              showToast(`Number ${cell.value} is already completed.`);
+                              showToast(t("numberAlreadyCompletedToast", { val: cell.value }));
                               addLog(`ℹ️ Number ${cell.value} is completed (9/9).`);
                               setLockedNum(null);
                               setActiveKeypadNum(null);
@@ -12688,7 +12688,7 @@ useEffect(() => {
 
                       if (isNumberFirstInputMode) {
                         if (isCompleted) {
-                          showToast(`Number ${num} is already completed.`);
+                          showToast(t("numberAlreadyCompletedToast", { val: num }));
                           return;
                         }
 
@@ -12730,7 +12730,7 @@ useEffect(() => {
                         } else if (hasCellSelected && selectedCell && selectedCell.value !== 0) {
                           if (selectedCell.value !== num) {
                             triggerHapticError(vibrations);
-                            showToast(`🔒 Erase ${selectedCell.value} first to change it.`);
+                            showToast(t("eraseToChangeToast", { val: selectedCell.value }));
                             addLog(`🔒 Erase-First Protection: Cell already filled. Erase it first.`);
                             setActiveKeypadNum(num);
                             setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
@@ -12949,7 +12949,7 @@ useEffect(() => {
                   setEndGameStep(1);
                   navigateToScreen("game");
                   try { window.history.replaceState({ view: "game" }, "", window.location.pathname); } catch (e) {}
-                  showToast("🚀 Match started!");
+                  showToast(t("matchStartedToast"));
                 }}
               />
               )}
@@ -15832,7 +15832,7 @@ useEffect(() => {
                         setNotificationsEnabled(true);
                         
                         setShowResetSettingsModal(false);
-                        showToast("Preferences reset to defaults");
+                        showToast(t("preferencesResetToast"));
                       }}
                       className={`w-full py-3.5 px-4 rounded-xl border-0 cursor-pointer font-sans text-xs font-black uppercase tracking-wider transition-all active:translate-y-px ${
                         darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-200 text-stone-700 hover:bg-stone-300"
@@ -16055,7 +16055,7 @@ useEffect(() => {
                   <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 no-scrollbar flex flex-col gap-4 max-h-[260px]">
                     {multiplayerPlayers.length === 0 ? (
                       <span className="text-xs italic text-stone-500 py-6 text-center">
-                        No past players yet. Share the link below to invite someone to this game!
+                        {t("noPastPlayersNotice")}
                       </span>
                     ) : (
                       <>
@@ -16403,7 +16403,7 @@ useEffect(() => {
                 <input
                   type="text"
                   maxLength={15}
-                  placeholder="Enter your name..."
+                  placeholder={t("enterNamePlaceholder")}
                   value={enteredDisplayName}
                   onChange={(e) => {
                     setDisplayNameError(null);
@@ -16478,7 +16478,7 @@ useEffect(() => {
                   }`}
                 >
                   <Check className="w-4 h-4" />
-                  <span>{isValidatingDisplayName ? "Verifying..." : "OK"}</span>
+                  <span>{isValidatingDisplayName ? t("verifyingAction") : t("confirmOkAction")}</span>
                 </button>
               </div>
             </motion.div>
@@ -16507,10 +16507,10 @@ useEffect(() => {
               <div className="flex justify-between items-start select-none shrink-0">
                 <div className="flex flex-col gap-1">
                   <h4 className={`text-xl font-sans font-black uppercase tracking-tight ${darkMode ? "text-amber-200" : "text-amber-800"}`}>
-                    Choose Your Display Name
+                    {t("chooseDisplayNameTitle")}
                   </h4>
                   <div className={`text-xs font-sans font-semibold tracking-wide ${darkMode ? "text-stone-300" : "text-stone-600"} mt-0.5`}>
-                    This name will appear on results, rankings, and active participant boards when you join.
+                    {t("chooseDisplayNameSubtitle")}
                   </div>
                 </div>
                 <button 
@@ -16532,7 +16532,7 @@ useEffect(() => {
                 <input
                   type="text"
                   maxLength={15}
-                  placeholder="Enter your name..."
+                  placeholder={t("enterNamePlaceholder")}
                   value={inviteJoinName}
                   onChange={(e) => {
                     setInviteJoinError(null);
@@ -16570,7 +16570,7 @@ useEffect(() => {
                   }`}
                 >
                   <Check className="w-4 h-4" />
-                  <span>{isVerifyingInviteJoinName ? "Verifying..." : "OK"}</span>
+                  <span>{isVerifyingInviteJoinName ? t("verifyingAction") : t("confirmOkAction")}</span>
                 </button>
               </div>
             </motion.div>
@@ -16732,7 +16732,7 @@ useEffect(() => {
                       <button
                         onClick={async () => {
                           playClickSound();
-                          if (window.confirm("Disconnect security identity and return to offline Guest mode?")) {
+                          if (window.confirm(t("confirmGuestModePrompt"))) {
                             await handleLogout();
                           }
                         }}
@@ -16815,7 +16815,7 @@ useEffect(() => {
                         onClick={() => {
                           playClickSound();
                           if (!emailInput || !emailInput.trim() || !emailInput.includes("@")) {
-                            alert("Please supply your correct personal Gmail address to register.");
+                            alert(t("validEmailAlert"));
                             return;
                           }
                           const finalEmail = emailInput.trim();
@@ -16873,7 +16873,7 @@ useEffect(() => {
                       onClick={() => {
                         playClickSound();
                         if (!phoneInput.trim()) {
-                          alert("Please fill in a valid phone number.");
+                          alert(t("validPhoneAlert"));
                           return;
                         }
                         const randomCode = Math.floor(1000 + Math.random() * 9000).toString();
