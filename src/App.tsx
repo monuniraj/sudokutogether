@@ -3460,20 +3460,32 @@ useEffect(() => {
 
           const cloudStreak = typeof cloudDocData?.winStreak === "number" ? cloudDocData.winStreak : 0;
 
-          // Normalize counters: Ensure career statistics never drop below the actual match history records
-          const finalTotalGames = Math.max(cloudGames, cloudCompleted.length);
-          const finalTotalWins = Math.max(cloudWins, cloudCompleted.filter((g: any) => g && g.isWon).length);
-          const finalWinStreak = cloudStreak;
+          // Normalize counters: Ensure career statistics never drop below the actual match history records or local cache
+          const finalTotalGames = Math.max(cloudGames, cloudCompleted.length, localTotalGames);
+          const finalTotalWins = Math.max(cloudWins, cloudCompleted.filter((g: any) => g && g.isWon).length, localTotalWins);
+          const finalWinStreak = Math.max(cloudStreak, localWinStreak);
 
+          const localBestTimes = personalBestTimesRef.current || {};
           const resolvedBestTimes: Record<string, number | null> = {
-            EASY: Number(cloudDocData?.bestTimes?.EASY ?? cloudDocData?.bestTimes?.easy) || null,
-            MEDIUM: Number(cloudDocData?.bestTimes?.MEDIUM ?? cloudDocData?.bestTimes?.medium) || null,
-            HARD: Number(cloudDocData?.bestTimes?.HARD ?? cloudDocData?.bestTimes?.hard) || null,
-            EXPERT: Number(cloudDocData?.bestTimes?.EXPERT ?? cloudDocData?.bestTimes?.expert) || null,
-            MASTER: Number(cloudDocData?.bestTimes?.MASTER ?? cloudDocData?.bestTimes?.master) || null,
+            EASY: Number(cloudDocData?.bestTimes?.EASY ?? cloudDocData?.bestTimes?.easy) || localBestTimes.EASY || null,
+            MEDIUM: Number(cloudDocData?.bestTimes?.MEDIUM ?? cloudDocData?.bestTimes?.medium) || localBestTimes.MEDIUM || null,
+            HARD: Number(cloudDocData?.bestTimes?.HARD ?? cloudDocData?.bestTimes?.hard) || localBestTimes.HARD || null,
+            EXPERT: Number(cloudDocData?.bestTimes?.EXPERT ?? cloudDocData?.bestTimes?.expert) || localBestTimes.EXPERT || null,
+            MASTER: Number(cloudDocData?.bestTimes?.MASTER ?? cloudDocData?.bestTimes?.master) || localBestTimes.MASTER || null,
           };
 
-          cloudCompleted.forEach((g: any) => {
+          (["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"] as const).forEach(diff => {
+            const cloudVal = Number(cloudDocData?.bestTimes?.[diff] ?? cloudDocData?.bestTimes?.[diff.toLowerCase()]);
+            const localVal = localBestTimes[diff];
+            if (cloudVal > 0 && localVal && localVal > 0) {
+              resolvedBestTimes[diff] = Math.min(cloudVal, localVal);
+            } else if (localVal && localVal > 0 && (!cloudVal || isNaN(cloudVal))) {
+              resolvedBestTimes[diff] = localVal;
+            }
+          });
+
+          // Scan both cloud and local completed games for fastest qualifying times
+          [...cloudCompleted, ...localCompleted].forEach((g: any) => {
             if (!g || !g.isWon) return;
             const diffUpper = String(g.difficulty || "").toUpperCase();
             if (!["EASY", "MEDIUM", "HARD", "EXPERT"].includes(diffUpper)) return;
@@ -3529,11 +3541,19 @@ useEffect(() => {
             } catch {}
           }
 
-          // Self-heal Firestore document if counters were missing or desynchronized from completedGames length
-          if (cloudGames < finalTotalGames || cloudWins < finalTotalWins) {
+          // Self-heal Firestore document if counters, streak, or bestTimes were missing or desynchronized
+          const hasBetterBestTimes = (["EASY", "MEDIUM", "HARD", "EXPERT"] as const).some(diff => {
+            const cloudVal = Number(cloudDocData?.bestTimes?.[diff] ?? cloudDocData?.bestTimes?.[diff.toLowerCase()]) || 0;
+            const resVal = resolvedBestTimes[diff] || 0;
+            return resVal > 0 && (cloudVal === 0 || resVal < cloudVal);
+          });
+
+          if (cloudGames < finalTotalGames || cloudWins < finalTotalWins || cloudStreak < finalWinStreak || hasBetterBestTimes) {
             setDoc(userDocRef, {
               totalGamesPlayed: finalTotalGames,
               totalWinsCount: finalTotalWins,
+              winStreak: finalWinStreak,
+              bestTimes: resolvedBestTimes,
               lastUpdated: serverTimestamp()
             }, { merge: true }).catch(() => {});
           }
@@ -8850,20 +8870,18 @@ useEffect(() => {
       const currentUid = authUser.uid;
       const userDocRef = doc(db, "users", currentUid);
       const safeRecord = JSON.parse(JSON.stringify(completedGameRecord));
+      const updatePayload: Record<string, any> = {
+        completedGames: arrayUnion(safeRecord),
+        totalGamesPlayed: increment(1),
+        totalWinsCount: isWon ? increment(1) : increment(0),
+        bestTimes: personalBestTimesRef.current,
+        winStreak: calculatedNextStreak,
+        lastUpdated: serverTimestamp()
+      };
       try {
-        await updateDoc(userDocRef, {
-          completedGames: arrayUnion(safeRecord),
-          totalGamesPlayed: increment(1),
-          totalWinsCount: isWon ? increment(1) : increment(0),
-          lastUpdated: serverTimestamp()
-        });
+        await updateDoc(userDocRef, updatePayload);
       } catch (err) {
-        await setDoc(userDocRef, {
-          completedGames: arrayUnion(safeRecord),
-          totalGamesPlayed: increment(1),
-          totalWinsCount: isWon ? increment(1) : increment(0),
-          lastUpdated: serverTimestamp()
-        }, { merge: true }).catch(syncErr => {
+        await setDoc(userDocRef, updatePayload, { merge: true }).catch(syncErr => {
           console.warn("[Firestore] Failed to persist career stats during gameplay:", syncErr);
         });
       }
