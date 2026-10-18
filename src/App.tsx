@@ -248,6 +248,7 @@ interface PendingChallenge {
   password?: string;
   senderName?: string;
   fromName?: string;
+  fromUserId?: string;
   sentAt?: number;
   type?: 'invite' | 'challenge_completed';
   roomCode?: string;
@@ -1699,6 +1700,13 @@ useEffect(() => {
     setUserProfile(updatedProfile);
     localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
     localStorage.setItem("sudoku_is_display_name_configured", "true");
+
+    if (auth.currentUser && !auth.currentUser.isAnonymous) {
+      const userDocRef = doc(db, "users", auth.currentUser.uid);
+      setDoc(userDocRef, { name: finalName }, { merge: true }).catch(err => {
+        console.warn("[Profile] Failed to sync name from invite modal to Firestore:", err);
+      });
+    }
     
     setShowInviteJoinNamePopup(false);
     
@@ -3236,9 +3244,6 @@ useEffect(() => {
     const trimmed = name.trim();
     if (!trimmed) return true;
 
-    const isManuallyConfigured = localStorage.getItem("sudoku_is_display_name_configured") === "true";
-    if (isManuallyConfigured) return false;
-
     const defaultExact = [
       "Anonymous Voyager",
       "Guest Voyager",
@@ -3263,6 +3268,10 @@ useEffect(() => {
     if (parts.length === 3 && adjectivesList.includes(parts[0]) && nounsList.includes(parts[1]) && /^\d+$/.test(parts[2])) {
       return true;
     }
+
+    const isManuallyConfigured = localStorage.getItem("sudoku_is_display_name_configured") === "true";
+    if (isManuallyConfigured) return false;
+
     return false;
   };
 
@@ -4410,7 +4419,8 @@ useEffect(() => {
         "sudoku_active_invite",
         "sudoku_past_players",
         "sudoku_winStreak",
-        "sudoku_prior_guest_id"
+        "sudoku_prior_guest_id",
+        "sudoku_is_display_name_configured"
       ];
       sessionKeysToWipe.forEach(key => {
         try {
@@ -16576,6 +16586,13 @@ useEffect(() => {
                         setUserProfile(updatedProfile);
                         localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
                         localStorage.setItem("sudoku_is_display_name_configured", "true");
+
+                        if (auth.currentUser && !auth.currentUser.isAnonymous) {
+                          const userDocRef = doc(db, "users", auth.currentUser.uid);
+                          setDoc(userDocRef, { name: finalName }, { merge: true }).catch(err => {
+                            console.warn("[Profile] Failed to sync name from settings modal to Firestore:", err);
+                          });
+                        }
 
                         setShowDisplayNameModal(false);
 
