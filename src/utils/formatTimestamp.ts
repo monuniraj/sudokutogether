@@ -1,3 +1,49 @@
+export const PRESENCE_TIMEOUT_MS = 15 * 60 * 1000; // 15-minute sliding presence cutoff
+
+/**
+ * Robust utility to extract epoch milliseconds from any Firestore Timestamp,
+ * Date object, Unix seconds/milliseconds number, or ISO date string.
+ */
+export const getTimestampMillis = (val?: any): number | null => {
+  if (!val) return null;
+  if (typeof val === "number") {
+    // If it's a small number like < 10000000 (e.g. raw seconds duration), ignore safely
+    if (val < 10000000) return null;
+    return val < 1e11 ? val * 1000 : val;
+  }
+  if (val instanceof Date) {
+    const t = val.getTime();
+    return isNaN(t) ? null : t;
+  }
+  if (typeof val?.toMillis === "function") {
+    try {
+      const ms = val.toMillis();
+      return typeof ms === "number" && !isNaN(ms) ? ms : null;
+    } catch {}
+  }
+  if (typeof val?.toDate === "function") {
+    try {
+      const d = val.toDate();
+      const t = d?.getTime();
+      return typeof t === "number" && !isNaN(t) ? t : null;
+    } catch {}
+  }
+  if (typeof val?.seconds === "number") {
+    return val.seconds * 1000 + Math.floor((val.nanoseconds || 0) / 1000000);
+  }
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+    const parsedTime = Date.parse(trimmed);
+    if (!isNaN(parsedTime)) return parsedTime;
+    const num = Number(trimmed);
+    if (!isNaN(num) && num > 10000000) {
+      return num < 1e11 ? num * 1000 : num;
+    }
+  }
+  return null;
+};
+
 /**
  * Standardized timestamp formatter for Match History, Notifications, and Activity Logs.
  * - Under 1m: "Just now"
@@ -9,38 +55,12 @@
 export const formatMatchTimestamp = (dateStrOrTimestamp?: any, fallback = "Saved Config", locale?: string): string => {
   if (!dateStrOrTimestamp) return fallback;
 
-  let d: Date;
-  if (typeof dateStrOrTimestamp === "number") {
-    // If it's a small number like < 10000000 (e.g. raw seconds duration), fallback safely
-    if (dateStrOrTimestamp < 10000000) {
-      return fallback;
-    }
-    // Check if seconds instead of milliseconds (10-digit unix epoch vs 13-digit ms)
-    d = new Date(dateStrOrTimestamp < 1e11 ? dateStrOrTimestamp * 1000 : dateStrOrTimestamp);
-  } else if (dateStrOrTimestamp instanceof Date) {
-    d = dateStrOrTimestamp;
-  } else if (dateStrOrTimestamp?.toMillis && typeof dateStrOrTimestamp.toMillis === "function") {
-    d = new Date(dateStrOrTimestamp.toMillis());
-  } else if (dateStrOrTimestamp?.toDate && typeof dateStrOrTimestamp.toDate === "function") {
-    d = dateStrOrTimestamp.toDate();
-  } else if (typeof dateStrOrTimestamp === "string") {
-    const trimmed = dateStrOrTimestamp.trim();
-    if (!trimmed) return fallback;
-    const parsedTime = Date.parse(trimmed);
-    if (!isNaN(parsedTime)) {
-      d = new Date(parsedTime);
-    } else {
-      const numParsed = Number(trimmed);
-      if (!isNaN(numParsed) && numParsed > 10000000) {
-        d = new Date(numParsed < 1e11 ? numParsed * 1000 : numParsed);
-      } else {
-        return fallback;
-      }
-    }
-  } else {
-    return fallback;
+  const ms = getTimestampMillis(dateStrOrTimestamp);
+  if (ms === null) {
+    return typeof dateStrOrTimestamp === "string" ? dateStrOrTimestamp : fallback;
   }
 
+  const d = new Date(ms);
   if (isNaN(d.getTime())) {
     return typeof dateStrOrTimestamp === "string" ? dateStrOrTimestamp : fallback;
   }
@@ -89,19 +109,25 @@ export const formatInviteTimestamp = (timestamp?: any, locale?: string): string 
 
 /**
  * Standardized user presence subtext formatter.
- * Strict Rule: When online, strictly returns "Active now".
- * When offline, returns relative time ("Active 10m ago", "Active 2h ago", etc.) or "Offline".
+ * Strict Rule: When online AND active within PRESENCE_TIMEOUT_MS (15m), returns "Active now".
+ * When inactive > 15m or offline, returns relative time ("Active 25m ago", "Active 2h ago", etc.) or "Offline".
  */
 export const formatActiveStatus = (
   status?: string,
   lastSeenOrPlayed?: any,
   locale?: string
 ): string => {
-  if (status === "online") {
+  const timestampMs = getTimestampMillis(lastSeenOrPlayed);
+  const now = Date.now();
+  const isRecent = timestampMs !== null && now - timestampMs <= PRESENCE_TIMEOUT_MS;
+
+  // A user is ONLY "Active now" if marked online AND has verified activity within 15 minutes
+  if (status === "online" && isRecent) {
     return "Active now";
   }
 
-  if (!lastSeenOrPlayed) {
+  // If no timestamp is present or cannot be parsed, fallback to "Offline"
+  if (!lastSeenOrPlayed || timestampMs === null) {
     return "Offline";
   }
 

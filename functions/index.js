@@ -5,6 +5,90 @@ admin.initializeApp();
 const db = admin.firestore();
 const messaging = admin.messaging();
 
+const PUSH_TRANSLATIONS = {
+  en: {
+    duelInviteTitle: "Sudoku Duel Challenge!",
+    duelInviteBody: (from) => `${from} challenged you to a Sudoku duel!`,
+    duelCompleteTitle: "🏆 Duel Completed!",
+    duelCompleteBody: (name) => `${name} finished your challenge! Tap to see who won.`,
+    defaultPlayer: "A player"
+  },
+  hi: {
+    duelInviteTitle: "सुडोकू मुकाबला!",
+    duelInviteBody: (from) => `${from} ने आपको सुडोकू मुकाबले का चैलेंज भेजा है!`,
+    duelCompleteTitle: "🏆 मुकाबला खत्म हुआ!",
+    duelCompleteBody: (name) => `${name} ने चैलेंज पूरा कर लिया! देखें कौन जीता।`,
+    defaultPlayer: "एक खिलाड़ी"
+  },
+  de: {
+    duelInviteTitle: "Sudoku-Duell!",
+    duelInviteBody: (from) => `${from} fordert dich zu einem Sudoku-Duell heraus!`,
+    duelCompleteTitle: "🏆 Duell beendet!",
+    duelCompleteBody: (name) => `${name} hat die Challenge beendet! Tippe, um das Ergebnis zu sehen.`,
+    defaultPlayer: "Ein Spieler"
+  },
+  ja: {
+    duelInviteTitle: "数独の対戦リクエスト！",
+    duelInviteBody: (from) => `${from}さんから数独の対戦を挑まれました！`,
+    duelCompleteTitle: "🏆 対戦完了！",
+    duelCompleteBody: (name) => `${name}さんがパズルを解き終えました！結果を確認しましょう。`,
+    defaultPlayer: "プレイヤー"
+  },
+  ko: {
+    duelInviteTitle: "스도쿠 대결 신청!",
+    duelInviteBody: (from) => `${from}님이 스도쿠 대결을 신청했습니다!`,
+    duelCompleteTitle: "🏆 대결 완료!",
+    duelCompleteBody: (name) => `${name}님이 퍼즐을 완료했습니다! 승자를 확인해 보세요.`,
+    defaultPlayer: "플레이어"
+  },
+  es: {
+    duelInviteTitle: "¡Duelo de Sudoku!",
+    duelInviteBody: (from) => `¡${from} te ha desafiado a un duelo de Sudoku!`,
+    duelCompleteTitle: "🏆 ¡Duelo finalizado!",
+    duelCompleteBody: (name) => `¡${name} terminó el desafío! Toca para ver quién ganó.`,
+    defaultPlayer: "Un jugador"
+  },
+  fr: {
+    duelInviteTitle: "Duel de Sudoku !",
+    duelInviteBody: (from) => `${from} vous a défié en duel de Sudoku !`,
+    duelCompleteTitle: "🏆 Duel terminé !",
+    duelCompleteBody: (name) => `${name} a terminé le défi ! Appuyez pour voir le vainqueur.`,
+    defaultPlayer: "Un joueur"
+  },
+  it: {
+    duelInviteTitle: "Sfida a Sudoku!",
+    duelInviteBody: (from) => `${from} ti ha sfidato a un duello di Sudoku!`,
+    duelCompleteTitle: "🏆 Duello terminato!",
+    duelCompleteBody: (name) => `${name} ha completato la sfida! Tocca per scoprire chi ha vinto.`,
+    defaultPlayer: "Un giocatore"
+  },
+  "pt-BR": {
+    duelInviteTitle: "Duelo de Sudoku!",
+    duelInviteBody: (from) => `${from} desafiou você para um duelo de Sudoku!`,
+    duelCompleteTitle: "🏆 Duelo finalizado!",
+    duelCompleteBody: (name) => `${name} concluiu o desafio! Toque para ver quem venceu.`,
+    defaultPlayer: "Um jogador"
+  }
+};
+
+/**
+ * Resolve language code with graceful fallbacks
+ */
+function resolveLanguage(lang) {
+  if (!lang || typeof lang !== "string") return "en";
+  const normalized = lang.toLowerCase().trim();
+  if (normalized.startsWith("hi")) return "hi";
+  if (normalized.startsWith("de")) return "de";
+  if (normalized.startsWith("ja")) return "ja";
+  if (normalized.startsWith("ko")) return "ko";
+  if (normalized.startsWith("es")) return "es";
+  if (normalized.startsWith("fr")) return "fr";
+  if (normalized.startsWith("it")) return "it";
+  if (normalized === "pt-br" || normalized.startsWith("pt")) return "pt-BR";
+  if (PUSH_TRANSLATIONS[lang]) return lang;
+  return "en";
+}
+
 /**
  * Extract valid FCM tokens from a user document
  */
@@ -84,20 +168,31 @@ exports.onInviteCreated = onDocumentCreated("invites/{inviteId}", async (event) 
 
     const roomCode = String(invite.roomCode || invite.gameId || "");
     const inviteId = String(event.params.inviteId);
-    const fromName = String(invite.fromName || "A friend");
+
+    // Resolve recipient language preference
+    const userData = userDoc.data() || {};
+    const targetLang = resolveLanguage(userData.language || userData.lang || userData.locale || invite.language || invite.lang);
+    const t = PUSH_TRANSLATIONS[targetLang] || PUSH_TRANSLATIONS.en;
+    const fromName = String(invite.fromName || t.defaultPlayer);
+
+    const notifTitle = t.duelInviteTitle;
+    const notifBody = t.duelInviteBody(fromName);
 
     const message = {
       tokens: tokens,
       notification: {
-        title: "Sudoku Duel Challenge!",
-        body: `${fromName} challenged you to a Sudoku duel!`
+        title: notifTitle,
+        body: notifBody
       },
       data: {
         type: "new_invite",
         roomCode: roomCode,
         gameId: roomCode,
         inviteId: inviteId,
-        fromName: fromName
+        fromName: fromName,
+        title: notifTitle,
+        body: notifBody,
+        lang: targetLang
       },
       android: {
         priority: "high",
@@ -181,19 +276,31 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
       const userDoc = await db.collection("users").doc(recipientId).get();
       if (!userDoc.exists) continue;
 
-      const tokens = extractTokens(userDoc.data());
+      const userData = userDoc.data() || {};
+      const tokens = extractTokens(userData);
       if (tokens.length === 0) continue;
+
+      // Resolve recipient language preference
+      const targetLang = resolveLanguage(userData.language || userData.lang || userData.locale);
+      const t = PUSH_TRANSLATIONS[targetLang] || PUSH_TRANSLATIONS.en;
+      const cleanFinisher = String(finisherName || t.defaultPlayer);
+
+      const notifTitle = t.duelCompleteTitle;
+      const notifBody = t.duelCompleteBody(cleanFinisher);
 
       const message = {
         tokens: tokens,
         notification: {
-          title: "🏆 Duel Completed!",
-          body: `${finisherName} finished your challenge! Tap to see who won.`
+          title: notifTitle,
+          body: notifBody
         },
         data: {
           type: "challenge_completed",
           roomCode: String(roomCode),
-          finisherName: String(finisherName)
+          finisherName: cleanFinisher,
+          title: notifTitle,
+          body: notifBody,
+          lang: targetLang
         },
         android: {
           priority: "high",
@@ -242,8 +349,9 @@ exports.onChallengeCompleted = onDocumentWritten("rooms/{roomCode}/players/{uid}
   const before = event.data?.before?.data() || {};
   const after = event.data?.after?.data() || {};
 
-  const wasFinished = before.status === "completed" || before.status === "won" || before.status === "victory" || before.isWon === true || (before.timeTaken !== undefined && before.timeTaken > 0) || (before.timeSec !== undefined && before.timeSec > 0);
-  const isFinished = after.status === "completed" || after.status === "won" || after.status === "victory" || after.isWon === true || (after.timeTaken !== undefined && after.timeTaken > 0) || (after.timeSec !== undefined && after.timeSec > 0);
+  const isTerminalStatus = (st) => st === "completed" || st === "won" || st === "victory" || st === "mistake_game_over" || st === "failed";
+  const wasFinished = isTerminalStatus(before.status) || before.isWon === true || (before.timeTaken !== undefined && before.timeTaken > 0) || (before.timeSec !== undefined && before.timeSec > 0);
+  const isFinished = isTerminalStatus(after.status) || after.isWon === true || (after.timeTaken !== undefined && after.timeTaken > 0) || (after.timeSec !== undefined && after.timeSec > 0);
 
   if (!isFinished || wasFinished) return null;
 

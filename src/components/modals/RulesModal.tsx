@@ -111,74 +111,54 @@ export const RulesModal: React.FC<RulesModalProps> = ({
     };
   }, [isOpen, stopAudio]);
 
-  const handleToggleAudio = () => {
-    playClickSound();
+const handleToggleAudio = () => {
+  playClickSound();
 
-    if (isPlaying) {
-      stopAudio();
-      return;
+  // If already playing, stop and exit
+  if (isPlaying) {
+    // Cancel any ongoing speech synthesis
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
     }
+    setIsPlaying(false);
+    return;
+  }
 
-    const narrationText = `${t("duelRulesTitle")}. ${t("duelRulesDesc")} ${t("classicRulesTitle")}. ${t("classicRulesDesc")} ${t("proTipsTitle")}. ${t("tip1Title")}: ${t("tip1Desc")} ${t("tip2Title")}: ${t("tip2Desc")} ${t("tip3Title")}: ${t("tip3Desc")} ${t("tip4Title")}: ${t("tip4Desc")}`;
-    const audioPath = `/audio/rules/rules_${language}.mp3`;
+  // Build the narration text
+  const narrationText = `${t("duelRulesTitle")}. ${t("duelRulesDesc")} ${t("classicRulesTitle")}. ${t("classicRulesDesc")} ${t("proTipsTitle")} . ${t("tip1Title")} : ${t("tip1Desc")} ${t("tip2Title")} : ${t("tip2Desc")} ${t("tip3Title")} : ${t("tip3Desc")} ${t("tip4Title")} : ${t("tip4Desc")}`;
 
-    const audio = new Audio(audioPath);
-    audioRef.current = audio;
+  // Ensure speech synthesis is available
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    // No TTS support – nothing to play
+    return;
+  }
 
-    let fallbackAttempted = false;
+  // Cancel any previous utterances to respect user-activation gesture window
+  window.speechSynthesis.cancel();
 
-    const runSpeechSynthesisFallback = () => {
-      if (fallbackAttempted) return;
-      fallbackAttempted = true;
-      if (audioRef.current === audio) {
-        audioRef.current = null;
-      }
+  const utterance = new SpeechSynthesisUtterance(narrationText);
+  const targetBcp47 = BCP47_TAGS[language] || "en-US";
+  utterance.lang = targetBcp47;
 
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(narrationText);
-        const targetBcp47 = BCP47_TAGS[language] || "en-US";
-        utterance.lang = targetBcp47;
+  // Acoustic tuning (Happy & Enthusiastic vibe)
+  utterance.rate = 1.02;
+  utterance.pitch = 1.08;
+  utterance.volume = 1.0;
 
-        // Acoustic Tuning (Happy & Enthusiastic Vibe)
-        utterance.rate = 1.02;   // Snappy, energetic pace
-        utterance.pitch = 1.08;  // Bright, uplifting cadence
-        utterance.volume = 1.0;
+  // Voice selection – may return null/undefined which is fine
+  const bestVoice = getBestVoiceForLocale(targetBcp47);
+  if (bestVoice) {
+    utterance.voice = bestVoice;
+  }
 
-        // Smart Neural Voice Selector
-        const bestVoice = getBestVoiceForLocale(targetBcp47);
-        if (bestVoice) {
-          utterance.voice = bestVoice;
-        }
+  // State handling
+  utterance.onstart = () => setIsPlaying(true);
+  utterance.onend = () => setIsPlaying(false);
+  utterance.onerror = () => setIsPlaying(false);
 
-        utterance.onend = () => setIsPlaying(false);
-        utterance.onerror = () => setIsPlaying(false);
-
-        setIsPlaying(true);
-        window.speechSynthesis.speak(utterance);
-      } else {
-        setIsPlaying(false);
-      }
-    };
-
-    audio.onended = () => {
-      setIsPlaying(false);
-      audioRef.current = null;
-    };
-
-    audio.onerror = () => {
-      runSpeechSynthesisFallback();
-    };
-
-    audio
-      .play()
-      .then(() => {
-        setIsPlaying(true);
-      })
-      .catch(() => {
-        runSpeechSynthesisFallback();
-      });
-  };
+  // Speak immediately
+  window.speechSynthesis.speak(utterance);
+};
 
   const handleClose = () => {
     playClickSound();

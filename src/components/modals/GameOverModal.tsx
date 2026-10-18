@@ -21,7 +21,6 @@ import {
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { formatActiveStatus } from "../../utils/formatTimestamp";
-import { usePodiumAudio } from "../../hooks/usePodiumAudio";
 import { IncognitoIcon } from "../common/IncognitoIcon";
 
 export interface GameOverModalProps {
@@ -206,23 +205,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   ]);
 
   const isMultiplayerCompetitive = isMultiplayer ?? (challengeSeed !== undefined || results.length >= 2);
-  const { playPodiumSequence } = usePodiumAudio();
-  const podiumAudioTriggeredRef = useRef<boolean>(false);
   const localLowerRankRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!isOpen || endGameStep !== 1) {
-      podiumAudioTriggeredRef.current = false;
-      return;
-    }
-
-    if (!isMultiplayerCompetitive || podiumAudioTriggeredRef.current) return;
-
-    podiumAudioTriggeredRef.current = true;
-    const isWinner = Boolean(results[0]?.isMe && !results[0]?.failed && !results[0]?.isAbandoned && !results[0]?.isPending);
-    const isPB = Boolean(isNewRecordAchieved && results.find((p) => p.isMe && !p.failed && !p.isPending));
-    playPodiumSequence(isWinner, isPB);
-  }, [isOpen, endGameStep, isMultiplayerCompetitive, results, isNewRecordAchieved, playPodiumSequence]);
 
   useEffect(() => {
     if (isOpen && endGameStep === 1 && localLowerRankRef.current) {
@@ -331,7 +314,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   className={`p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 ${
                     darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
                   }`}
-                  title="Close"
+                  title={t("closeTooltip")}
                 >
                   <X className="w-4 h-4" strokeWidth={2.5} />
                 </button>
@@ -532,7 +515,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                         {player.isMe && isNewRecordAchieved && !player.failed && (
                           <span className="text-[8.5px] bg-amber-400/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-sans font-medium uppercase tracking-wider flex items-center gap-1 shrink-0 animate-pulse">
                             <Sparkles className="w-2.5 h-2.5 text-amber-500" />
-                            <span>New PB</span>
+                            <span>{t("newPersonalBestBadge")}</span>
                           </span>
                         )}
                       </div>
@@ -543,18 +526,18 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                       {player.isAbandoned ? (
                         <div className="flex flex-col items-end">
                           <span className="font-mono text-xs font-semibold text-rose-500">
-                            {player.status === "left" ? "Left" : "Abandoned"}
+                            {t("statusLeft")}
                           </span>
                           {player.mistakes > 0 && (
                             <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400">
-                              {player.mistakes} errors
+                              {player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
                             </span>
                           )}
                         </div>
                       ) : isPending ? (
                         <div className="flex flex-col items-end">
                           <span className="font-mono text-xs sm:text-sm text-amber-500 dark:text-amber-400 flex items-center gap-1 font-bold">
-                            <span>Solving</span>
+                            <span>{t("statusSolving")}</span>
                             <span className="inline-flex items-center gap-0.5 ml-0.5">
                               <span
                                 className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-pulse-dots"
@@ -572,15 +555,15 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                           </span>
                           {player.mistakes > 0 && (
                             <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400">
-                              {player.mistakes} errors
+                              {player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
                             </span>
                           )}
                         </div>
                       ) : player.failed ? (
                         <>
-                          <span className="font-mono font-semibold text-xs sm:text-sm text-rose-500">Failed</span>
+                          <span className="font-mono font-semibold text-xs sm:text-sm text-rose-500">{t("statusFailed")}</span>
                           <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400">
-                            {player.mistakes} errors
+                            {player.mistakes === 0 ? t("zeroErrorsCount") : player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
                           </span>
                         </>
                       ) : (
@@ -647,8 +630,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                             }`}
                           >
                             {player.mistakes === 0
-                              ? "0 errors"
-                              : `${player.mistakes} ${player.mistakes === 1 ? "error" : "errors"}`}
+                              ? t("zeroErrorsCount")
+                              : player.mistakes === 1
+                              ? t("singleErrorCount")
+                              : t("multiErrorsCount", { count: player.mistakes })}
                           </span>
                         </>
                       )}
@@ -777,7 +762,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                       className={`p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 shrink-0 ${
                         darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
                       }`}
-                      title="Close"
+                      title={t("closeTooltip")}
                     >
                       <X className="w-4 h-4 stroke-[2.5]" />
                     </button>

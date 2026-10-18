@@ -252,6 +252,10 @@ interface PendingChallenge {
   type?: 'invite' | 'challenge_completed';
   roomCode?: string;
   gameId?: string;
+  isGrouped?: boolean;
+  finisherNames?: string[];
+  finisherCount?: number;
+  groupedIds?: string[];
 }
 
 const INITIAL_GUEST_STATE = {
@@ -1504,6 +1508,10 @@ useEffect(() => {
 
   const [activeTab, setActiveTab] = useState<"sudoku" | "sandbox" | "kotlin-code" | "spec-docs">("sudoku");
   const [currentScreen, setCurrentScreen] = useState<"home" | "status" | "settings" | "game" | "login" | "together">("home");
+  const currentScreenRef = useRef(currentScreen);
+  useEffect(() => {
+    currentScreenRef.current = currentScreen;
+  }, [currentScreen]);
   const [fromGameplaySettings, setFromGameplaySettings] = useState<boolean>(false);
   const [activeAppInviteTab, setActiveAppInviteTab] = useState<"recent" | "friends">("recent");
 
@@ -2355,38 +2363,111 @@ useEffect(() => {
     }
   }, [currentScreen]);
 
-  // Memoized top-10 sorted bell invites to avoid recalculation churn on active Firestore events
+  // Helper to extract 6-digit canonical room code from any challenge object
+  const extractRoomCodeFromChallenge = useCallback((item: any): string => {
+    if (!item) return "";
+    const rawCode = String(item.roomCode || item.gameId || item.id || "").trim();
+    const match6 = rawCode.match(/\b\d{6}\b/);
+    if (match6) return match6[0];
+    if (/^\d{1,6}$/.test(rawCode)) return rawCode.padStart(6, '0');
+    const prefix = rawCode.split('_')[0];
+    const prefixMatch = prefix.match(/\b\d{6}\b/);
+    if (prefixMatch) return prefixMatch[0];
+    if (/^\d{1,6}$/.test(prefix.trim())) return prefix.trim().padStart(6, '0');
+    return rawCode;
+  }, []);
+
+  // Helper to get milliseconds timestamp for sorting
+  const getInviteTimestampMs = useCallback((inv: any): number => {
+    if (!inv) return 0;
+    if (typeof inv.sentAt === "number" && !isNaN(inv.sentAt)) return inv.sentAt;
+    if (typeof inv.timestamp === "number" && !isNaN(inv.timestamp)) return inv.timestamp;
+    if (inv.timestamp?.toMillis && typeof inv.timestamp.toMillis === "function") return inv.timestamp.toMillis();
+    if (inv.timestamp?.toDate && typeof inv.timestamp.toDate === "function") return inv.timestamp.toDate().getTime();
+    if (inv.createdAt?.toMillis && typeof inv.createdAt.toMillis === "function") return inv.createdAt.toMillis();
+    if (inv.createdAt?.toDate && typeof inv.createdAt.toDate === "function") return inv.createdAt.toDate().getTime();
+    if (inv.sentAt) {
+      const p = Date.parse(inv.sentAt);
+      if (!isNaN(p)) return p;
+    }
+    if (inv.receivedAt) {
+      const p = Date.parse(inv.receivedAt);
+      if (!isNaN(p)) return p;
+    }
+    return 0;
+  }, []);
+
+  // Memoized top-10 sorted bell invites with room-level grouping for completed duels
   const sortedBellInvites = useMemo(() => {
-    return [...pendingChallenges]
-      .filter((invite: any) => {
-        if (!invite) return false;
-        const hasId = Boolean(invite.id || invite.inviteId || invite.roomCode || invite.gameId);
-        const hasSender = Boolean(invite.senderName || invite.fromName || invite.hostName);
-        return hasId || hasSender;
-      })
-      .sort((a: any, b: any) => {
-        const getMs = (inv: any) => {
-          if (!inv) return 0;
-          if (typeof inv.sentAt === "number") return inv.sentAt;
-          if (typeof inv.timestamp === "number") return inv.timestamp;
-          if (inv.timestamp?.toMillis && typeof inv.timestamp.toMillis === "function") return inv.timestamp.toMillis();
-          if (inv.timestamp?.toDate && typeof inv.timestamp.toDate === "function") return inv.timestamp.toDate().getTime();
-          if (inv.createdAt?.toMillis && typeof inv.createdAt.toMillis === "function") return inv.createdAt.toMillis();
-          if (inv.createdAt?.toDate && typeof inv.createdAt.toDate === "function") return inv.createdAt.toDate().getTime();
-          if (inv.sentAt) {
-            const p = Date.parse(inv.sentAt);
-            if (!isNaN(p)) return p;
-          }
-          if (inv.receivedAt) {
-            const p = Date.parse(inv.receivedAt);
-            if (!isNaN(p)) return p;
-          }
-          return 0;
-        };
-        return getMs(b) - getMs(a);
-      })
+    const validInvites = pendingChallenges.filter((invite: any) => {
+      if (!invite) return false;
+      const hasId = Boolean(invite.id || invite.inviteId || invite.roomCode || invite.gameId);
+      const hasSender = Boolean(invite.senderName || invite.fromName || invite.hostName);
+      return hasId || hasSender;
+    });
+
+    const standardInvites: PendingChallenge[] = [];
+    const completedByRoom = new Map<string, PendingChallenge[]>();
+
+    for (const item of validInvites) {
+      if (item.type === 'challenge_completed') {
+        const room = extractRoomCodeFromChallenge(item) || item.id || "duel";
+        const existing = completedByRoom.get(room) || [];
+        existing.push(item);
+        completedByRoom.set(room, existing);
+      } else {
+        standardInvites.push(item);
+      }
+    }
+
+    const groupedCompletedCards: PendingChallenge[] = [];
+
+    completedByRoom.forEach((items, roomCode) => {
+      const namesSet = new Set<string>();
+      let latestMs = 0;
+      const allIds: string[] = [];
+
+      for (const it of items) {
+        const name = (it.fromName || it.senderName || "").trim();
+        if (name && name !== "Opponent") {
+          namesSet.add(name);
+        }
+        const ms = getInviteTimestampMs(it);
+        if (ms > latestMs) latestMs = ms;
+        if (it.id) allIds.push(it.id);
+        if (it.inviteId && it.inviteId !== it.id) allIds.push(it.inviteId);
+      }
+
+      const finisherNames = Array.from(namesSet);
+      if (finisherNames.length === 0) {
+        finisherNames.push("Opponent");
+      }
+
+      groupedCompletedCards.push({
+        id: `grouped_completed_${roomCode}`,
+        inviteId: `grouped_completed_${roomCode}`,
+        type: 'challenge_completed',
+        isGrouped: true,
+        roomCode: roomCode,
+        gameId: roomCode,
+        finisherNames: finisherNames,
+        finisherCount: finisherNames.length,
+        groupedIds: allIds,
+        senderName: finisherNames[0],
+        fromName: finisherNames[0],
+        sentAt: latestMs || Date.now()
+      });
+    });
+
+    return [...standardInvites, ...groupedCompletedCards]
+      .sort((a, b) => getInviteTimestampMs(b) - getInviteTimestampMs(a))
       .slice(0, 10);
-  }, [pendingChallenges]);
+  }, [pendingChallenges, extractRoomCodeFromChallenge, getInviteTimestampMs]);
+
+  // Synchronized distinct unread notification count
+  const unreadNotificationCount = useMemo(() => {
+    return Math.max(0, sortedBellInvites.length);
+  }, [sortedBellInvites]);
 
   // New settings toggles
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -2548,7 +2629,237 @@ useEffect(() => {
   const [inviteCountdown, setInviteCountdown] = useState<number>(5);
   const [isDockingToBell, setIsDockingToBell] = useState<boolean>(false);
   const [bellPing, setBellPing] = useState<boolean>(false);
+  const [isBellWiggling, setIsBellWiggling] = useState<boolean>(false);
+  const bellWiggleTimerRef = useRef<any>(null);
   const preservedSoloBoardRef = useRef<any | null>(null);
+
+  // Reference to current active board state across the app
+  const boardStateRef = useRef<BoardState | null>(null);
+  const challengeModeRef = useRef(challengeMode);
+  challengeModeRef.current = challengeMode;
+  const activeGameIdRef = useRef(activeGameId);
+  activeGameIdRef.current = activeGameId;
+  const showGameOverModalRef = useRef(showGameOverModal);
+  showGameOverModalRef.current = showGameOverModal;
+  const rematchGameIdRef = useRef(rematchGameId);
+  rematchGameIdRef.current = rematchGameId;
+  const challengeSeedRef = useRef(challengeSeed);
+  challengeSeedRef.current = challengeSeed;
+
+  useEffect(() => {
+    challengeModeRef.current = challengeMode;
+    activeGameIdRef.current = activeGameId;
+    showGameOverModalRef.current = showGameOverModal;
+    rematchGameIdRef.current = rematchGameId;
+    challengeSeedRef.current = challengeSeed;
+  }, [challengeMode, activeGameId, showGameOverModal, rematchGameId, challengeSeed]);
+
+  // Check if a target roomId matches the active match or results modal
+  const isMatchingRoom = useCallback((targetRoomId?: string | null) => {
+    if (!targetRoomId) return false;
+    const cleanTarget = String(targetRoomId).trim().toUpperCase();
+    const t6 = cleanTarget.length >= 6 ? cleanTarget.slice(-6) : cleanTarget;
+
+    const checkMatch = (val?: string | number | null) => {
+      if (!val) return false;
+      const cleanVal = String(val).trim().toUpperCase();
+      if (cleanVal === cleanTarget) return true;
+      const v6 = cleanVal.length >= 6 ? cleanVal.slice(-6) : cleanVal;
+      return v6 === t6;
+    };
+
+    return Boolean(
+      checkMatch(activeGameIdRef.current) ||
+      checkMatch(rematchGameIdRef.current) ||
+      checkMatch(challengeSeedRef.current)
+    );
+  }, []);
+
+  // Condition to suppress intrusive floating toast banners:
+  // If user is currently on the Game Screen OR has the End-Game / "View Results" modal open for matching roomId
+  const shouldSuppressToastForRoom = useCallback((targetRoomId?: string | null) => {
+    const onGameScreen = currentScreenRef.current === "game";
+    const hasMatchingResultsModal = Boolean(showGameOverModalRef.current && isMatchingRoom(targetRoomId));
+    return onGameScreen || hasMatchingResultsModal;
+  }, [isMatchingRoom]);
+
+  // Transient in-game decline guard set (muted senders during an active game session)
+  const mutedSendersInGameRef = useRef<Set<string>>(new Set());
+
+  // Transient per-room completion dismiss guard (muted toast banners for dismissed rooms)
+  const dismissedCompletionRoomsRef = useRef<Set<string>>(new Set());
+
+  // Check if player is actively inside a game (solo or duel)
+  const isActivelyInGame = useCallback(() => {
+    return currentScreenRef.current === "game" && Boolean(boardStateRef.current && !boardStateRef.current.isGameOver);
+  }, []);
+
+  // Clear in-game decline guard when returning to main menu
+  useEffect(() => {
+    if (currentScreen === "home") {
+      if (mutedSendersInGameRef.current.size > 0) {
+        console.log("[Invite Guard] Returned to main menu. Cleared mutedSendersInGame.");
+        mutedSendersInGameRef.current.clear();
+      }
+    }
+  }, [currentScreen]);
+
+  const lastPlayedInviteChimesRef = useRef<Map<string, number>>(new Map());
+
+  // Play a pleasant ascending invitation chime (C5 -> E5) using Web Audio API
+  const playInviteChime = useCallback((inviteId?: string) => {
+    if (!notificationsEnabled) return; // settings guard cond
+    const now = Date.now();
+    const lastGlobalChime = lastPlayedInviteChimesRef.current.get("__global__") || 0;
+    if (now - lastGlobalChime < 1200) {
+      console.log("[Audio] Suppressed rapid repeated invite chime (<1.2s)");
+      return;
+    }
+    if (inviteId) {
+      const lastIdChime = lastPlayedInviteChimesRef.current.get(inviteId) || 0;
+      if (now - lastIdChime < 10000) {
+        console.log(`[Audio] Suppressed duplicate invite chime for ID: ${inviteId}`);
+        return;
+      }
+      lastPlayedInviteChimesRef.current.set(inviteId, now);
+      // Clean old entries
+      if (lastPlayedInviteChimesRef.current.size > 50) {
+        for (const [k, ts] of lastPlayedInviteChimesRef.current.entries()) {
+          if (now - ts > 30000) lastPlayedInviteChimesRef.current.delete(k);
+        }
+      }
+    }
+    lastPlayedInviteChimesRef.current.set("__global__", now);
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const playNote = (freq: number, start: number, duration: number) => {
+        try {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.11, start);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+          osc.start(start);
+          osc.stop(start + duration);
+        } catch (noteErr) {
+          console.warn("Audio chime note play blocked:", noteErr);
+        }
+      };
+
+      const currentTime = audioCtx.currentTime;
+      playNote(523.25, currentTime, 0.15); // C5
+      playNote(659.25, currentTime + 0.10, 0.25); // E5
+    } catch (e) {
+      console.error("Audio Chime Error:", e);
+    }
+  }, [notificationsEnabled]);
+
+  // Synthesize a subtle, luxury harmonic glass chime (~1400Hz with smooth 350ms exponential decay)
+  const playBellChime = useCallback(() => {
+    if (!soundEffects) return; // Respects sound settings
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+
+      const t = audioCtx.currentTime;
+
+      // Layer 1: Pure fundamental glass tone around 1400 Hz (F6 ~ 1396.91 Hz)
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(1396.91, t);
+
+      // Initial swing envelope: 4ms linear attack, smooth 350ms exponential decay
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.09, t + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.36);
+      osc.onended = () => {
+        try {
+          osc.disconnect();
+          gain.disconnect();
+        } catch {}
+      };
+
+      // Layer 2: Shimmer overtone (2nd harmonic at 2793.82 Hz) for crystal-glass luxury
+      const overtone = audioCtx.createOscillator();
+      const overtoneGain = audioCtx.createGain();
+      overtone.type = "sine";
+      overtone.frequency.setValueAtTime(2793.82, t);
+
+      overtoneGain.gain.setValueAtTime(0.0001, t);
+      overtoneGain.gain.linearRampToValueAtTime(0.022, t + 0.003);
+      overtoneGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+
+      overtone.connect(overtoneGain);
+      overtoneGain.connect(audioCtx.destination);
+
+      overtone.start(t);
+      overtone.stop(t + 0.23);
+      overtone.onended = () => {
+        try {
+          overtone.disconnect();
+          overtoneGain.disconnect();
+        } catch {}
+      };
+    } catch (err) {
+      console.warn("[Audio] Bell chime error:", err);
+    }
+  }, [soundEffects]);
+
+  // Trigger top header bell wiggle animation and synchronous luxury chime
+  const triggerBellWiggle = useCallback((options?: { playSound?: boolean } | boolean) => {
+    const shouldPlaySound = typeof options === "boolean" ? options : (options?.playSound ?? true);
+    if (shouldPlaySound) {
+      playBellChime();
+    }
+    setIsBellWiggling(true);
+    setBellPing(true);
+
+    if (bellWiggleTimerRef.current) {
+      clearTimeout(bellWiggleTimerRef.current);
+    }
+
+    bellWiggleTimerRef.current = setTimeout(() => {
+      setIsBellWiggling(false);
+      setBellPing(false);
+      bellWiggleTimerRef.current = null;
+    }, 1800);
+  }, [playBellChime]);
+
+  // Route incoming invites: if actively in-game and sender is muted, route silently to Bell
+  const routeInviteNotification = useCallback((payload: any) => {
+    if (!payload) return;
+    const senderId = String(payload.fromUserId || payload.senderId || payload.fromName || "").trim();
+    const inGame = isActivelyInGame();
+    const isMuted = inGame && Boolean(senderId && (
+      mutedSendersInGameRef.current.has(senderId) ||
+      (payload.fromName && mutedSendersInGameRef.current.has(String(payload.fromName).trim())) ||
+      (payload.fromUserId && mutedSendersInGameRef.current.has(String(payload.fromUserId).trim()))
+    ));
+
+    if (isMuted) {
+      console.log(`[Invite Guard] In-game suppressed invite from muted sender '${senderId}'. Routing to Bell quietly.`);
+      triggerBellWiggle(true);
+      return;
+    }
+
+    playInviteChime(payload.id);
+    setActiveInviteNotification(payload);
+  }, [isActivelyInGame, triggerBellWiggle, playInviteChime]);
 
   const activeInviteNotificationRef = useRef<any | null>(activeInviteNotification);
   activeInviteNotificationRef.current = activeInviteNotification;
@@ -2558,20 +2869,30 @@ useEffect(() => {
 
     const currentNotif = activeInviteNotificationRef.current;
     if (currentNotif) {
+      const notifId = currentNotif.id || currentNotif.inviteId;
+      const targetCode = currentNotif.roomCode || currentNotif.gameId || notifId;
+      const isCompleted = currentNotif.type === 'challenge_completed';
+
+      if (isCompleted && targetCode) {
+        const clean = String(targetCode).trim().toUpperCase();
+        dismissedCompletionRoomsRef.current.add(String(targetCode).trim());
+        dismissedCompletionRoomsRef.current.add(clean);
+        dismissedCompletionRoomsRef.current.add(clean.slice(-6));
+      }
+
       setPendingChallenges(prev => {
-        const notifId = currentNotif.id || currentNotif.inviteId;
-        const targetCode = currentNotif.roomCode || currentNotif.gameId || notifId;
-        if (prev.some(p => p.id === targetCode || p.inviteId === notifId || (currentNotif.id && p.id === currentNotif.id))) {
+        const uniqueId = isCompleted ? `${targetCode}_completed_${notifId || Date.now()}` : targetCode;
+        if (prev.some(p => p.id === uniqueId || p.inviteId === notifId || (currentNotif.id && p.id === currentNotif.id))) {
           return prev;
         }
 
-        const isCompleted = currentNotif.type === 'challenge_completed';
         const pendingItem: PendingChallenge = {
-          id: targetCode,
+          id: uniqueId,
           inviteId: notifId,
           type: isCompleted ? 'challenge_completed' : 'invite',
           senderName: currentNotif.fromName || currentNotif.senderName || "Player",
           fromName: currentNotif.fromName || currentNotif.senderName || "Player",
+          fromUserId: currentNotif.fromUserId || currentNotif.senderId,
           roomCode: currentNotif.roomCode || targetCode,
           gameId: currentNotif.gameId || targetCode,
           difficulty: currentNotif.difficulty || "MEDIUM",
@@ -2592,14 +2913,13 @@ useEffect(() => {
     }
 
     setTimeout(() => {
-      setBellPing(true);
-      setTimeout(() => setBellPing(false), 1200);
+      triggerBellWiggle(false); // Completely silent when docking/dismissing toast into bell
     }, 280);
     setTimeout(() => {
       setActiveInviteNotification(null);
       setIsDockingToBell(false);
     }, 500);
-  }, []);
+  }, [triggerBellWiggle]);
 
   useEffect(() => {
     if (!activeInviteNotification) return;
@@ -4638,6 +4958,8 @@ useEffect(() => {
             id: roomCode || gameId,
             inviteId: inviteId,
             senderName: inviteData.fromName || "Player",
+            fromName: inviteData.fromName || "Player",
+            fromUserId: inviteData.fromUserId || inviteData.senderId,
             difficulty,
             seed,
             maxMistakes,
@@ -4663,16 +4985,21 @@ useEffect(() => {
               if (document.visibilityState === "hidden") {
                 triggerBackgroundNotification(inviteData);
               } else {
-                playInviteChime(inviteId);
-                setActiveInviteNotification({
+                routeInviteNotification({
                   id: inviteId,
+                  fromUserId: inviteData.fromUserId || inviteData.senderId,
                   fromName: inviteData.fromName || "Player",
                   gameId: roomCode || gameId,
                   roomCode: roomCode,
                   password: inviteData.password || "",
                   recipientId: inviteData.recipientId || inviteData.toUserId || user.uid,
                   toUserId: inviteData.toUserId || inviteData.recipientId || user.uid,
-                  status: inviteData.status || "pending"
+                  status: inviteData.status || "pending",
+                  difficulty,
+                  seed,
+                  maxMistakes,
+                  hintLimit,
+                  timerEnabled
                 });
               }
             }
@@ -4709,13 +5036,6 @@ useEffect(() => {
       unsubscribe();
     };
   }, [userProfile?.id, notificationsEnabled, sessionStartTime]);
-
-  const challengeModeRef = useRef(challengeMode);
-  const activeGameIdRef = useRef(activeGameId);
-  useEffect(() => {
-    challengeModeRef.current = challengeMode;
-    activeGameIdRef.current = activeGameId;
-  }, [challengeMode, activeGameId]);
 
   // Dynamically update friends & past players to "online/live" if another app instance/tab is open in the browser
   useEffect(() => {
@@ -4815,11 +5135,6 @@ useEffect(() => {
   }, [showInviteModal, muteUntil, inviteQueue]);
 
   // Topmost modal closer for Android system back button & popstate handling
-  const currentScreenRef = useRef(currentScreen);
-  useEffect(() => {
-    currentScreenRef.current = currentScreen;
-  }, [currentScreen]);
-
   const closeTopmostModal = (): boolean => {
     if (openDropdown) { setOpenDropdown(null); return true; }
     if (playerToUnfriend) { setPlayerToUnfriend(null); return true; }
@@ -5510,6 +5825,14 @@ useEffect(() => {
 
   const handleDeclineBellInvite = async (challenge: PendingChallenge) => {
     playClickSound();
+    const senderId = (challenge as any).fromUserId || (challenge as any).senderId || challenge.fromName || challenge.senderName;
+    if (isActivelyInGame() && senderId) {
+      mutedSendersInGameRef.current.add(String(senderId).trim());
+      if (challenge.fromName) {
+        mutedSendersInGameRef.current.add(String(challenge.fromName).trim());
+      }
+      console.log(`[Invite Guard] In-game bell invite declined. Muted sender '${senderId}' for this match.`);
+    }
     if (challenge.inviteId) {
       try {
         await updateDoc(doc(db, "invites", challenge.inviteId), { status: "declined" });
@@ -5588,7 +5911,7 @@ useEffect(() => {
 
       setBellPing(true);
       setTimeout(() => setBellPing(false), 1200);
-      showToast(t("matchCompletedNotice") || "Challenge results ready in notifications!");
+      showToast(t("matchCompletedNotice"));
       return;
     }
 
@@ -5726,7 +6049,7 @@ useEffect(() => {
     })();
   };
 
-  const registerPushNotifications = async () => {
+  const registerPushNotifications = async (isUserGesture = false) => {
     const user = userProfile ? { uid: userProfile.id } : null;
     if (!user?.uid) return;
     if (!notificationsEnabled) return;
@@ -5766,19 +6089,33 @@ useEffect(() => {
           console.warn("[Push] Native push permission denied.");
         }
       } else {
-        if (typeof window !== "undefined" && "Notification" in window) {
-          console.log("[Push] Requesting web push permissions...");
-          const permission = await Notification.requestPermission();
+        if (typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator) {
+          let permission = Notification.permission;
+
+          // Prevent unprompted Chromium permission block on page load without user gesture
+          if (permission === "default") {
+            if (isUserGesture) {
+              console.log("[Push] User gesture detected. Requesting web push permissions...");
+              permission = await Notification.requestPermission();
+            } else {
+              console.log("[Push] Web push permission prompt deferred until user gesture or settings toggle.");
+              return;
+            }
+          }
+
           if (permission === "granted") {
-            console.log("[Push] Web push permission granted.");
+            console.log("[Push] Web push permission granted. Awaiting active Service Worker ready state...");
             if (messaging) {
               try {
-                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                const registration = await navigator.serviceWorker.ready;
+                console.log("[Push] Service Worker active and ready. Fetching FCM token...");
                 const token = await getToken(messaging, { 
                   vapidKey: 'BFJRNRY4LO8dVenQpZLSzz8UOrMqorhwrsxX35MDzeifpZxJv271sxvr5Z14hCVdTGOmK4uaTlPZiQXsueOtgoc',
                   serviceWorkerRegistration: registration
                 });
                 if (token) {
+                  console.log("[Push] Successfully acquired web push token.");
                   saveFcmToken(token);
                 }
               } catch (err) {
@@ -5786,7 +6123,7 @@ useEffect(() => {
               }
             }
           } else {
-            console.warn("[Push] Web push permission denied.");
+            console.warn("[Push] Web push permission not granted:", permission);
           }
         }
       }
@@ -5874,19 +6211,13 @@ useEffect(() => {
               const { gameId, password, senderName, type, roomCode, fromName } = notification.data || {};
               const targetCode = roomCode || gameId || "";
 
-              // Suppress foreground audio chime & duplicate banner if user is actively playing this duel
-              const isPlayingThisMatch = Boolean(
-                currentScreenRef.current === "game" &&
-                challengeModeRef.current &&
-                activeGameIdRef.current &&
-                targetCode &&
-                (activeGameIdRef.current === targetCode || activeGameIdRef.current.slice(-6) === targetCode.slice(-6))
-              );
+              // Suppress foreground audio chime & duplicate banner if user is on Game Screen or results modal is open for matching room
+              const isSuppressed = shouldSuppressToastForRoom(targetCode);
 
               if (type === 'challenge_completed') {
                 const notifId = notification.id || `push-${Date.now()}`;
                 const completedItem: PendingChallenge = {
-                  id: targetCode || notifId,
+                  id: `${targetCode}_completed_${notifId || Date.now()}`,
                   inviteId: notifId,
                   type: 'challenge_completed',
                   fromName: fromName || senderName || "Opponent",
@@ -5905,36 +6236,48 @@ useEffect(() => {
                   return updated;
                 });
 
-                if (isPlayingThisMatch) {
-                  console.log(`[Push] Suppressed foreground push chime & toast banner for active duel: ${targetCode}`);
+                if (isSuppressed) {
+                  console.log(`[Push] Suppressed intrusive toast banner for room: ${targetCode} (on game screen or results open). Subtle bell reaction.`);
+                  triggerBellWiggle(true);
                   return;
                 }
 
-                playInviteChime(notifId);
-                setActiveInviteNotification({
-                  id: notifId,
-                  type: 'challenge_completed',
-                  fromName: fromName || senderName || "Opponent",
-                  roomCode: targetCode,
-                  gameId: targetCode
-                });
+                const cleanCode = (targetCode || "").toUpperCase().trim();
+                const isMuted = cleanCode && (
+                  dismissedCompletionRoomsRef.current.has(cleanCode) ||
+                  dismissedCompletionRoomsRef.current.has(targetCode) ||
+                  dismissedCompletionRoomsRef.current.has(cleanCode.slice(-6))
+                );
+                if (!isMuted) {
+                  playInviteChime(notifId);
+                  setActiveInviteNotification({
+                    id: notifId,
+                    type: 'challenge_completed',
+                    fromName: fromName || senderName || "Opponent",
+                    roomCode: targetCode,
+                    gameId: targetCode
+                  });
+                } else {
+                  console.log(`[Push] Room ${targetCode} toast banner muted on non-game screen.`);
+                  triggerBellWiggle(true);
+                }
                 return;
               }
 
-              if (isPlayingThisMatch) {
+              if (isSuppressed) {
                 console.log(`[Push] Suppressed foreground push chime for active duel: ${targetCode}`);
                 return;
               }
 
               const inviteCode = roomCode || gameId;
               const inviteId = (notification.data as any)?.inviteId || notification.id || (inviteCode ? `invite-${inviteCode}` : `push-${Date.now()}`);
-              playInviteChime(inviteId);
               if (gameId || roomCode) {
                 const inviteObj = {
                   id: inviteCode,
                   inviteId: inviteId,
                   senderName: senderName || "Player",
                   fromName: senderName || "Player",
+                  fromUserId: (notification.data as any)?.fromUserId || (notification.data as any)?.senderId,
                   gameId: inviteCode,
                   roomCode: inviteCode,
                   password: password || "",
@@ -5948,8 +6291,9 @@ useEffect(() => {
                   } catch (e) {}
                   return updated;
                 });
-                setActiveInviteNotification({
+                routeInviteNotification({
                   id: inviteId,
+                  fromUserId: (notification.data as any)?.fromUserId || (notification.data as any)?.senderId,
                   fromName: senderName || "Player",
                   gameId: inviteCode,
                   roomCode: inviteCode,
@@ -5996,7 +6340,7 @@ useEffect(() => {
               const targetCode = roomCode || gameId || "";
               const notifId = `sw-completed-${Date.now()}`;
               const completedItem: PendingChallenge = {
-                id: targetCode || notifId,
+                id: `${targetCode}_completed_${notifId || Date.now()}`,
                 inviteId: notifId,
                 type: 'challenge_completed',
                 fromName: fromName || senderName || "Opponent",
@@ -6015,26 +6359,33 @@ useEffect(() => {
                 return updated;
               });
 
-              const isPlayingThisMatch = Boolean(
-                currentScreenRef.current === "game" &&
-                challengeModeRef.current &&
-                activeGameIdRef.current &&
-                targetCode &&
-                (activeGameIdRef.current === targetCode || activeGameIdRef.current.slice(-6) === targetCode.slice(-6))
-              );
+              const isSuppressed = shouldSuppressToastForRoom(targetCode);
 
-              if (isPlayingThisMatch) {
-                console.log(`[Push] Suppressed SW banner for active duel: ${targetCode}`);
+              if (isSuppressed) {
+                console.log(`[Push] Suppressed intrusive SW banner for room: ${targetCode} (on game screen or results open). Subtle bell reaction.`);
+                triggerBellWiggle(true);
                 return;
               }
 
-              setActiveInviteNotification({
-                id: notifId,
-                type: 'challenge_completed',
-                fromName: fromName || senderName || "Opponent",
-                roomCode: targetCode,
-                gameId: targetCode
-              });
+              const cleanCode = (targetCode || "").toUpperCase().trim();
+              const isMuted = cleanCode && (
+                dismissedCompletionRoomsRef.current.has(cleanCode) ||
+                dismissedCompletionRoomsRef.current.has(targetCode) ||
+                dismissedCompletionRoomsRef.current.has(cleanCode.slice(-6))
+              );
+              if (!isMuted) {
+                playInviteChime(notifId);
+                setActiveInviteNotification({
+                  id: notifId,
+                  type: 'challenge_completed',
+                  fromName: fromName || senderName || "Opponent",
+                  roomCode: targetCode,
+                  gameId: targetCode
+                });
+              } else {
+                console.log(`[Push] Room ${targetCode} SW toast banner muted on non-game screen.`);
+                triggerBellWiggle(true);
+              }
             }
           };
 
@@ -6059,7 +6410,7 @@ useEffect(() => {
                 if (type === 'challenge_completed') {
                   const notifId = `fcm-completed-${Date.now()}`;
                   const completedItem: PendingChallenge = {
-                    id: roomCode || notifId,
+                    id: `${roomCode}_completed_${notifId || Date.now()}`,
                     inviteId: notifId,
                     type: 'challenge_completed',
                     fromName: finisherName,
@@ -6078,27 +6429,34 @@ useEffect(() => {
                     return updated;
                   });
 
-                  const isPlayingThisMatch = Boolean(
-                    currentScreenRef.current === "game" &&
-                    challengeModeRef.current &&
-                    activeGameIdRef.current &&
-                    roomCode &&
-                    (activeGameIdRef.current === roomCode || activeGameIdRef.current.slice(-6) === roomCode.slice(-6))
-                  );
+                  const isSuppressed = shouldSuppressToastForRoom(roomCode);
 
-                  if (isPlayingThisMatch) {
-                    console.log(`[Push] Suppressed foreground FCM banner for active duel: ${roomCode}`);
+                  if (isSuppressed) {
+                    console.log(`[Push] Suppressed intrusive FCM banner for room: ${roomCode} (on game screen or results open). Subtle bell reaction.`);
+                    triggerBellWiggle(true);
                     return;
                   }
 
-                  playInviteChime(notifId);
-                  setActiveInviteNotification({
-                    id: notifId,
-                    type: 'challenge_completed',
-                    fromName: finisherName,
-                    roomCode: roomCode,
-                    gameId: roomCode
-                  });
+                  const cleanCode = (roomCode || "").toUpperCase().trim();
+                  const isMuted = cleanCode && (
+                    dismissedCompletionRoomsRef.current.has(cleanCode) ||
+                    dismissedCompletionRoomsRef.current.has(roomCode) ||
+                    dismissedCompletionRoomsRef.current.has(cleanCode.slice(-6))
+                  );
+
+                  if (!isMuted) {
+                    playInviteChime(notifId);
+                    setActiveInviteNotification({
+                      id: notifId,
+                      type: 'challenge_completed',
+                      fromName: finisherName,
+                      roomCode: roomCode,
+                      gameId: roomCode
+                    });
+                  } else {
+                    console.log(`[Push] Room ${cleanCode} FCM toast banner muted on non-game screen.`);
+                    triggerBellWiggle(true);
+                  }
                 } else if (type === 'new_invite') {
                   const fromName = data.fromName || "Player";
                   const inviteCode = roomCode || data.gameId;
@@ -6108,6 +6466,7 @@ useEffect(() => {
                     inviteId: inviteId,
                     senderName: fromName,
                     fromName: fromName,
+                    fromUserId: data.fromUserId || data.senderId,
                     gameId: inviteCode,
                     roomCode: inviteCode,
                     password: data.password || "",
@@ -6121,9 +6480,9 @@ useEffect(() => {
                     } catch (e) {}
                     return updated;
                   });
-                  playInviteChime(inviteId);
-                  setActiveInviteNotification({
+                  routeInviteNotification({
                     id: inviteId,
+                    fromUserId: data.fromUserId || data.senderId,
                     fromName: fromName,
                     gameId: inviteCode,
                     roomCode: inviteCode,
@@ -6172,11 +6531,20 @@ useEffect(() => {
           notificationsEnabled: true,
           fcmToken: cachedToken,
           fcmTokens: arrayUnion(cachedToken),
+          language: language,
           updatedAt: serverTimestamp()
         }, { merge: true }).catch(err => console.error("Token sync error:", err));
       }
     }
-  }, [notificationsEnabled, userProfile?.id]);
+  }, [notificationsEnabled, userProfile?.id, language]);
+
+  // Sync active language preference to Firestore user document for localized push notifications
+  useEffect(() => {
+    if (userProfile?.id && language) {
+      const userRef = doc(db, "users", userProfile.id);
+      setDoc(userRef, { language }, { merge: true }).catch(() => {});
+    }
+  }, [language, userProfile?.id]);
 
   // Click sound generator (tactile crisp feedback)
   const playClickSound = () => {
@@ -6266,61 +6634,6 @@ useEffect(() => {
     }
   };
   const playErrorSound = playMistakeSound;
-
-  const lastPlayedInviteChimesRef = useRef<Map<string, number>>(new Map());
-
-  // Play a pleasant ascending invitation chime (C5 -> E5) using Web Audio API
-  const playInviteChime = (inviteId?: string) => {
-    if (!notificationsEnabled) return; // settings guard cond
-    const now = Date.now();
-    const lastGlobalChime = lastPlayedInviteChimesRef.current.get("__global__") || 0;
-    if (now - lastGlobalChime < 1200) {
-      console.log("[Audio] Suppressed rapid repeated invite chime (<1.2s)");
-      return;
-    }
-    if (inviteId) {
-      const lastIdChime = lastPlayedInviteChimesRef.current.get(inviteId) || 0;
-      if (now - lastIdChime < 10000) {
-        console.log(`[Audio] Suppressed duplicate invite chime for ID: ${inviteId}`);
-        return;
-      }
-      lastPlayedInviteChimesRef.current.set(inviteId, now);
-      // Clean old entries
-      if (lastPlayedInviteChimesRef.current.size > 50) {
-        for (const [k, ts] of lastPlayedInviteChimesRef.current.entries()) {
-          if (now - ts > 30000) lastPlayedInviteChimesRef.current.delete(k);
-        }
-      }
-    }
-    lastPlayedInviteChimesRef.current.set("__global__", now);
-    try {
-      const audioCtx = getAudioCtx();
-      if (!audioCtx) return;
-
-      const playNote = (freq: number, start: number, duration: number) => {
-        try {
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
-          osc.connect(gain);
-          gain.connect(audioCtx.destination);
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(freq, start);
-          gain.gain.setValueAtTime(0.11, start);
-          gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
-          osc.start(start);
-          osc.stop(start + duration);
-        } catch (noteErr) {
-          console.warn("Audio chime note play blocked:", noteErr);
-        }
-      };
-
-      const now = audioCtx.currentTime;
-      playNote(523.25, now, 0.15); // C5
-      playNote(659.25, now + 0.10, 0.25); // E5
-    } catch (e) {
-      console.error("Audio Chime Error:", e);
-    }
-  };
 
   // Standard puzzle completion chime (warm, pleasant major chord arpeggio)
   const playStandardWinSound = () => {
@@ -7021,6 +7334,55 @@ useEffect(() => {
       console.error("Audio Number Completion Sound Error:", e);
     }
   };
+
+  // Subtle, high-frequency crystal shimmer / victory chime when the solo victory trophy settles
+  const playTrophyShimmerSound = useCallback(() => {
+    if (!soundEffects) return;
+    try {
+      const audioCtx = getAudioCtx();
+      if (!audioCtx) return;
+
+      const scheduleShimmer = (ctx: AudioContext) => {
+        const now = ctx.currentTime;
+
+        // Subtle 4-note ascending crystal sparkle: E6 (1318.51Hz) -> A6 (1760Hz) -> E7 (2637.02Hz) + celestial harmonic (3520Hz)
+        const notes = [
+          { freq: 1318.51, start: now + 0.00, dur: 0.35, vol: 0.07 },
+          { freq: 1760.00, start: now + 0.07, dur: 0.45, vol: 0.08 },
+          { freq: 2637.02, start: now + 0.15, dur: 0.65, vol: 0.09 },
+          { freq: 3520.00, start: now + 0.17, dur: 0.50, vol: 0.035 }
+        ];
+
+        notes.forEach(({ freq, start, dur, vol }) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, start);
+
+          gain.gain.setValueAtTime(0.0001, start);
+          gain.gain.linearRampToValueAtTime(vol, start + 0.006);
+          gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc.start(start);
+          osc.stop(start + dur);
+          osc.onended = () => {
+            try { osc.disconnect(); gain.disconnect(); } catch {}
+          };
+        });
+      };
+
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().then(() => scheduleShimmer(audioCtx)).catch(() => {});
+      } else {
+        scheduleShimmer(audioCtx);
+      }
+    } catch (e) {
+      console.warn("Audio Trophy Shimmer Error:", e);
+    }
+  }, [soundEffects]);
   // Note: Advanced Preference Variables (isNumberFirstInputMode, isAutoRemoveNotesEnabled, etc.) are declared at top with other settings
 
 
@@ -7202,8 +7564,17 @@ useEffect(() => {
 
   // Sudoku state variables
   const [boardState, setBoardState] = useState<BoardState | null>(null);
-  const boardStateRef = useRef<BoardState | null>(boardState);
   boardStateRef.current = boardState;
+
+  // Clear in-game decline guard when match completes
+  useEffect(() => {
+    if (boardState?.isGameOver) {
+      if (mutedSendersInGameRef.current.size > 0) {
+        console.log("[Invite Guard] Game over detected. Cleared mutedSendersInGame.");
+        mutedSendersInGameRef.current.clear();
+      }
+    }
+  }, [boardState?.isGameOver]);
 
   const hasTriggeredGameOverRef = useRef(false);
 
@@ -8245,6 +8616,7 @@ useEffect(() => {
 
   // Save played games (won or lost/terminated) into history list
   const saveGameToHistory = async (isWon: boolean, mistakesOverride?: number) => {
+    mutedSendersInGameRef.current.clear();
     const gameSeed = boardState?.seed || challengeSeed || (Math.floor(Math.random() * 900000) + 100000);
     const finalGameId = activeGameId || `SUDOKU-${gameSeed}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-H${challengeHintLimit}-T${timerEnabled ? 1 : 0}`;
     
@@ -8821,6 +9193,15 @@ useEffect(() => {
           isWon: !!rBody.isWon,
           updatedAt: serverTimestamp()
         }, { merge: true });
+
+        // Synchronize canonical room document so room listeners receive instant real-time completion signal
+        const roomDocRef = doc(db, "rooms", rBody.challengeId);
+        await setDoc(roomDocRef, {
+          lastCompletedUid: rBody.userId,
+          lastCompletedBy: rBody.playerName,
+          lastCompletedTime: Number(rBody.timeSec) || 0,
+          lastCompletedAt: serverTimestamp()
+        }, { merge: true });
       } catch (err) {}
       console.log(`[Firestore] Result saved for ID ${rBody.challengeId}`);
       addLog(`✓ Game completion synced with Firestore!`);
@@ -9090,6 +9471,143 @@ useEffect(() => {
       unsubRoomPlayers();
     };
   }, [challengeMode, activeGameId, multiplayerSyncTrigger]);
+
+  // Real-time Firestore duel completion listener: detects opponent completion instantly during active matches
+  useEffect(() => {
+    if (!challengeMode || !activeGameId) return;
+
+    const currentUid = userProfile?.id || auth.currentUser?.uid || "";
+    const currentAuthUid = auth.currentUser?.uid || "";
+    const currentUserProfileId = userProfile?.id || "";
+    const currentDisplayName = (getActiveDisplayName() || userProfile?.name || "").trim().toLowerCase();
+
+    const isSelfUser = (uid?: string, name?: string) => {
+      if (!uid && !name) return true;
+      const cleanUid = String(uid || "").trim();
+      if (cleanUid && (
+        cleanUid === currentUid ||
+        cleanUid === currentAuthUid ||
+        cleanUid === currentUserProfileId
+      )) {
+        return true;
+      }
+      const cleanName = String(name || "").trim().toLowerCase();
+      if (cleanName && currentDisplayName && cleanName === currentDisplayName) {
+        return true;
+      }
+      return false;
+    };
+
+    const cleanRoomCode = activeGameId.trim();
+    const roomDocRef = doc(db, "rooms", cleanRoomCode);
+    const roomPlayersCol = collection(db, "rooms", cleanRoomCode, "players");
+
+    const notifiedOpponents = new Set<string>();
+
+    const recordOpponentCompletion = (oppUid: string, oppName: string) => {
+      if (!oppUid || isSelfUser(oppUid, oppName)) return;
+      if (notifiedOpponents.has(oppUid)) return;
+      notifiedOpponents.add(oppUid);
+
+      const notifId = `realtime-${oppUid}-${Date.now()}`;
+      const completedItem: PendingChallenge = {
+        id: `${cleanRoomCode}_completed_${oppUid}`,
+        inviteId: notifId,
+        type: 'challenge_completed',
+        fromName: oppName || "Opponent",
+        senderName: oppName || "Opponent",
+        roomCode: cleanRoomCode,
+        gameId: cleanRoomCode,
+        sentAt: Date.now()
+      };
+
+      // 1. ALWAYS add to pending challenges list (updates unread count badge & bell drawer)
+      setPendingChallenges(prev => {
+        if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId)) return prev;
+        const updated = [completedItem, ...prev].slice(0, 10);
+        try {
+          localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
+
+      const isSuppressed = shouldSuppressToastForRoom(cleanRoomCode);
+      if (isSuppressed) {
+        // Suppressed mode: In-game or results open for this room:
+        // Update bell indicator/drawer completely silently without audio chime
+        console.log(`[Firestore Realtime] Opponent ${oppName} (${oppUid}) completed duel ${cleanRoomCode} while on game screen or results open. Silent drawer/badge update triggered.`);
+        triggerBellWiggle(false);
+      } else {
+        // Global non-game screen (Home, Stats, Settings)
+        const cleanUpper = cleanRoomCode.toUpperCase().trim();
+        const isMuted = cleanUpper && (
+          dismissedCompletionRoomsRef.current.has(cleanUpper) ||
+          dismissedCompletionRoomsRef.current.has(cleanRoomCode) ||
+          dismissedCompletionRoomsRef.current.has(cleanUpper.slice(-6))
+        );
+
+        if (!isMuted) {
+          console.log(`[Firestore Realtime] Opponent ${oppName} completed duel ${cleanRoomCode} on screen '${currentScreenRef.current}'. Triggering toast banner.`);
+          playInviteChime(notifId);
+          setActiveInviteNotification({
+            id: notifId,
+            type: 'challenge_completed',
+            fromName: oppName || "Opponent",
+            roomCode: cleanRoomCode,
+            gameId: cleanRoomCode
+          });
+        } else {
+          console.log(`[Firestore Realtime] Opponent ${oppName} completed duel ${cleanRoomCode}, but room toast is muted by user dismiss.`);
+          triggerBellWiggle(true);
+        }
+      }
+    };
+
+    // 1. Lightweight real-time listener on canonical room document
+    const unsubRoom = onSnapshot(roomDocRef, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      if (!data) return;
+
+      const finisherUid = data.lastCompletedUid || data.winner || data.completedBy;
+      const finisherName = data.lastCompletedBy || data.winnerName || data.completedByName || "Opponent";
+      if (finisherUid && !isSelfUser(finisherUid, finisherName)) {
+        recordOpponentCompletion(finisherUid, finisherName);
+      }
+
+      if (data.players && typeof data.players === 'object') {
+        Object.entries(data.players).forEach(([pId, pData]: [string, any]) => {
+          if (!isSelfUser(pId, pData?.name || pData?.playerName) && (pData?.status === "completed" || pData?.status === "victory" || pData?.isWon)) {
+            recordOpponentCompletion(pId, pData?.name || pData?.playerName || "Opponent");
+          }
+        });
+      }
+    }, (err) => {
+      console.warn(`[Firestore Realtime] Room completion listener warning for ${cleanRoomCode}:`, err);
+    });
+
+    // 2. Real-time listener on room players subcollection for instant status changes
+    const unsubRoomPlayers = onSnapshot(roomPlayersCol, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added" || change.type === "modified") {
+          const pData = change.doc.data();
+          const pId = change.doc.id || pData.id || pData.userId;
+          const isFinished = pData.status === "completed" || pData.status === "victory" || pData.status === "mistake_game_over" || pData.isWon === true;
+          if (isFinished && pId && !isSelfUser(pId, pData.name || pData.playerName)) {
+            recordOpponentCompletion(pId, pData.name || pData.playerName || "Opponent");
+          }
+        }
+      });
+    }, (err) => {
+      console.warn(`[Firestore Realtime] Room players listener warning for ${cleanRoomCode}:`, err);
+    });
+
+    return () => {
+      console.log(`[Firestore Realtime] Cleaning up duel completion listener for ${cleanRoomCode}`);
+      unsubRoom();
+      unsubRoomPlayers();
+    };
+  }, [challengeMode, activeGameId, userProfile?.id, shouldSuppressToastForRoom, triggerBellWiggle, playInviteChime]);
 
   // Real-time synchronization of canonical room document (Lock badge, PIN) while in-game invite modal is open
   useEffect(() => {
@@ -11396,7 +11914,7 @@ useEffect(() => {
                 setShowBellInvitesModal(true);
               }}
               className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all duration-300 cursor-pointer select-none active:translate-y-[2px] flex items-center justify-center border-none shadow-xs shrink-0 ${
-                bellPing ? "scale-110 ring-2 ring-purple-400" : ""
+                isBellWiggling || bellPing ? "scale-110 ring-2 ring-purple-400" : ""
               } ${
                 darkMode ? "bg-zinc-900 hover:bg-zinc-800 text-white" : "bg-white text-stone-700"
               }`}
@@ -11404,10 +11922,18 @@ useEffect(() => {
               aria-label="Notifications"
               id="global-top-right-bell-button"
             >
-              <Bell className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] transition-transform duration-300 ${bellPing ? "scale-125 text-purple-400 rotate-12" : ""} ${darkMode ? "text-white" : "text-stone-700"}`} />
-              {pendingChallenges.length > 0 && (
-                <span className={`absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-black text-white shadow-sm font-mono pointer-events-none transition-transform duration-300 ${bellPing ? "scale-125 animate-pulse bg-purple-500" : "scale-100"}`}>
-                  {pendingChallenges.length > 9 ? "9+" : pendingChallenges.length}
+              <Bell className={`w-4.5 h-4.5 sm:w-5 sm:h-5 stroke-[2] transition-transform duration-300 ${
+                isBellWiggling
+                  ? "animate-bell-wiggle text-purple-400"
+                  : bellPing
+                    ? "scale-125 text-purple-400 rotate-12"
+                    : ""
+              } ${darkMode ? "text-white" : "text-stone-700"}`} />
+              {unreadNotificationCount > 0 && (
+                <span className={`absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-red-500 text-[8.5px] font-black text-white shadow-sm font-mono pointer-events-none transition-transform duration-300 ${
+                  isBellWiggling || bellPing ? "scale-125 animate-pulse bg-purple-500" : "scale-100"
+                }`}>
+                  {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
                 </span>
               )}
             </button>
@@ -12463,7 +12989,7 @@ useEffect(() => {
                         setActiveKeypadNum(null);
                       }}
                       className={`absolute top-4 right-4 p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 z-50 ${darkMode ? "bg-zinc-700/60 hover:bg-zinc-600 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-500"}`}
-                      title="Close"
+                      title={t("closeTooltip")}
                     >
                       <X className="w-4 h-4" strokeWidth={2.5} />
                     </button>
@@ -12525,26 +13051,65 @@ useEffect(() => {
                                 </motion.div>
                               </div>
                             ) : (
-                              <div className="h-8 min-h-[32px] mt-1.5 flex items-center justify-center">
-                                <AnimatePresence mode="wait">
+                              <div className="h-12 min-h-[48px] w-full mt-2 relative flex items-center justify-center select-none overflow-visible">
+                                <AnimatePresence>
                                   {!soloVictoryClappingComplete ? (
                                     <motion.div
                                       key="clapping-hands"
-                                      exit={{ opacity: 0, scale: 0.95 }}
-                                      transition={{ duration: 0.2 }}
-                                      className="flex items-center justify-center"
+                                      initial={{ opacity: 1, scale: 1, y: 0 }}
+                                      exit={{ 
+                                        opacity: 0, 
+                                        scale: 0.95, 
+                                        y: -8,
+                                        transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] }
+                                      }}
+                                      className="absolute inset-0 flex items-center justify-center pointer-events-none"
                                     >
                                       <ClappingHands 
                                         tier="champion" 
                                         darkMode={darkMode} 
                                         size="md" 
-                                        onComplete={() => setSoloVictoryClappingComplete(true)}
+                                        onComplete={() => {
+                                          setSoloVictoryClappingComplete(true);
+                                          playTrophyShimmerSound();
+                                        }}
                                       />
                                     </motion.div>
                                   ) : (
-                                    <div className="w-12 h-12 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.2)]">
-                                      <Trophy className="w-6 h-6 text-amber-500 fill-amber-500/20" strokeWidth={2}/>
-                                    </div>
+                                    <motion.div
+                                      key="victory-trophy"
+                                      initial={{ opacity: 0, scale: 0.8, y: 6 }}
+                                      animate={{ 
+                                        opacity: 1, 
+                                        scale: 1.0, 
+                                        y: 0,
+                                        transition: { 
+                                          scale: { type: "spring", damping: 14, stiffness: 220, mass: 0.8 },
+                                          opacity: { duration: 0.4, ease: [0.16, 1, 0.3, 1] },
+                                          y: { duration: 0.4, ease: [0.16, 1, 0.3, 1] }
+                                        }
+                                      }}
+                                      className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                                    >
+                                      {/* Radiant golden/amber ambient glow pulse */}
+                                      <motion.div
+                                        animate={{
+                                          scale: [0.92, 1.18, 0.95],
+                                          opacity: [0.35, 0.8, 0.5]
+                                        }}
+                                        transition={{
+                                          duration: 2.4,
+                                          repeat: Infinity,
+                                          ease: "easeInOut"
+                                        }}
+                                        className="absolute w-14 h-14 rounded-full bg-amber-400/25 dark:bg-amber-400/30 blur-md pointer-events-none"
+                                      />
+
+                                      {/* Trophy icon capsule */}
+                                      <div className="relative w-12 h-12 rounded-full bg-gradient-to-br from-amber-400/20 to-amber-600/10 dark:from-amber-400/25 dark:to-amber-500/15 border border-amber-400/40 dark:border-amber-400/50 flex items-center justify-center shadow-[0_0_24px_rgba(245,158,11,0.28)] dark:shadow-[0_0_28px_rgba(251,191,36,0.35)]">
+                                        <Trophy className="w-6 h-6 text-amber-500 dark:text-amber-400 fill-amber-500/20 dark:fill-amber-400/25 drop-shadow-[0_2px_8px_rgba(245,158,11,0.3)]" strokeWidth={2.2} />
+                                      </div>
+                                    </motion.div>
                                   )}
                                 </AnimatePresence>
                               </div>
@@ -12726,7 +13291,7 @@ useEffect(() => {
                           navigateToScreen("home");
                         }}
                         className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-700"}`}
-                        title="Back to Home"
+                        title={t("backHomeTooltip")}
                       >
                          <ArrowLeft className="w-7 h-7" strokeWidth={1.5} />
                       </button>
@@ -12741,7 +13306,7 @@ useEffect(() => {
                           setWasDisconnectedMultiplayer(false);
                         }}
                         className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-[#D1FAE5]/10 hover:bg-[#D1FAE5]/20 text-[#a7f3d0]" : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"}`}
-                        title="Replay Same Board"
+                        title={t("replayBoardTooltip")}
                       >
                          <RotateCcw className="w-7 h-7" strokeWidth={1.5} />
                       </button>
@@ -12756,7 +13321,7 @@ useEffect(() => {
                           setWasDisconnectedMultiplayer(false);
                         }}
                         className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none cursor-pointer ${darkMode ? "bg-purple-900/40 hover:bg-purple-900/60 text-purple-200" : "bg-purple-100 hover:bg-purple-200 text-purple-900"}`}
-                        title="Start New Puzzle"
+                        title={t("newPuzzleTooltip")}
                       >
                          <Shuffle className="w-7 h-7" strokeWidth={1.5} />
                       </button>
@@ -12785,7 +13350,12 @@ useEffect(() => {
               vibrations={vibrations}
               setVibrations={setVibrations}
               notificationsEnabled={notificationsEnabled}
-              setNotificationsEnabled={setNotificationsEnabled}
+              setNotificationsEnabled={(val: boolean) => {
+                setNotificationsEnabled(val);
+                if (val) {
+                  registerPushNotifications(true);
+                }
+              }}
               highlightIdentical={highlightIdentical}
               setHighlightIdentical={setHighlightIdentical}
               showRemainingNumbers={showRemainingNumbers}
@@ -12961,7 +13531,7 @@ useEffect(() => {
                       }
 
                       return activeFriends.map(friend => {
-                        const isOnline = friend.status === "online";
+                        const isOnline = getDrawerFriendStatus(friend.id, friend.status) === "online";
                         return (
                           <div 
                             key={friend.id}
@@ -13002,7 +13572,7 @@ useEffect(() => {
                                     : "bg-purple-100 text-[#6B21A8] hover:bg-[#E8D5FF]"
                                 }`}
                               >
-                                Duel
+                                Race
                               </button>
                               <button
                                 onClick={() => handleToggleFriend(friend.id)}
@@ -13290,13 +13860,15 @@ useEffect(() => {
                           ) : (
                             [...multiplayerPlayers.filter(p => p.isFriend)]
                               .sort((a, b) => {
-                                const isOnlineA = a.status === "online";
-                                const isOnlineB = b.status === "online";
+                                const isOnlineA = getDrawerFriendStatus(a.id, a.status) === "online";
+                                const isOnlineB = getDrawerFriendStatus(b.id, b.status) === "online";
                                 if (isOnlineA !== isOnlineB) return isOnlineA ? -1 : 1;
                                 return (a.name || "").localeCompare(b.name || "");
                               })
                               .map((friend, index) => {
                                 const isAnimated = index < 5;
+                                const effectiveStatus = getDrawerFriendStatus(friend.id, friend.status);
+                                const effectiveLastActive = getDrawerFriendLastActive(friend.id, (friend as any).lastActive || friend.lastPlayedAt);
                                 const card = (
                                   <div 
                                     className={`p-2.5 rounded-xl border flex items-center justify-between transition-all w-full shrink-0 ${
@@ -13310,7 +13882,7 @@ useEffect(() => {
                                         }`}>
                                           {getPlayerInitials(friend.name)}
                                         </div>
-                                        {friend.status === "online" && (
+                                        {effectiveStatus === "online" && (
                                           <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 bg-emerald-400 animate-pulse-gentle ${
                                             darkMode ? "border-zinc-900" : "border-white"
                                           }`} />
@@ -13318,7 +13890,7 @@ useEffect(() => {
                                       </div>
                                       <div className="flex flex-col min-w-0">
                                         <span className="font-sans font-bold text-xs truncate">{friend.name}</span>
-                                        <span className="text-[9.5px] text-stone-400 capitalize">{formatActiveStatus(friend.status, (friend as any).lastActive || friend.lastPlayedAt, language)}</span>
+                                        <span className="text-[9.5px] text-stone-400 capitalize">{formatActiveStatus(effectiveStatus, effectiveLastActive, language)}</span>
                                       </div>
                                     </div>
                                     <button
@@ -13365,14 +13937,16 @@ useEffect(() => {
                           ) : (
                             [...multiplayerPlayers.filter(p => !p.isFriend)]
                               .sort((a, b) => {
-                                const isOnlineA = a.status === "online";
-                                const isOnlineB = b.status === "online";
+                                const isOnlineA = getDrawerFriendStatus(a.id, a.status) === "online";
+                                const isOnlineB = getDrawerFriendStatus(b.id, b.status) === "online";
                                 if (isOnlineA !== isOnlineB) return isOnlineA ? -1 : 1;
                                 return (a.name || "").localeCompare(b.name || "");
                               })
                               .map((player, index) => {
                                 const isRequested = requestedFriendIds.includes(player.id);
                                 const isAnimated = index < 5;
+                                const effectiveStatus = getDrawerFriendStatus(player.id, player.status);
+                                const effectiveLastActive = getDrawerFriendLastActive(player.id, (player as any).lastActive || player.lastPlayedAt);
                                 const card = (
                                   <div 
                                     className={`p-2.5 rounded-xl border flex items-center justify-between transition-all w-full shrink-0 ${
@@ -13386,7 +13960,7 @@ useEffect(() => {
                                         }`}>
                                           {getPlayerInitials(player.name)}
                                         </div>
-                                        {player.status === "online" && (
+                                        {effectiveStatus === "online" && (
                                           <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 bg-emerald-400 animate-pulse-gentle ${
                                             darkMode ? "border-zinc-900" : "border-white"
                                           }`} />
@@ -13394,7 +13968,7 @@ useEffect(() => {
                                       </div>
                                       <div className="flex flex-col">
                                         <span className="font-sans font-bold text-xs">{player.name}</span>
-                                        <span className="text-[9.5px] text-stone-400 capitalize">{formatActiveStatus(player.status, (player as any).lastActive || player.lastPlayedAt, language)}</span>
+                                        <span className="text-[9.5px] text-stone-400 capitalize">{formatActiveStatus(effectiveStatus, effectiveLastActive, language)}</span>
                                       </div>
                                     </div>
                                     <button
@@ -14200,18 +14774,7 @@ useEffect(() => {
                   }
                 }}
                 onStartGame={() => {
-                  const isConfigured = checkIsDisplayNameConfigured();
-                  if (!isConfigured) {
-                    const current = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 15 && !userProfile.name.includes("Voyager")) 
-                      ? userProfile.name.trim() 
-                      : getActiveDisplayName();
-                    setEnteredDisplayName(current);
-                    setDisplayNameError(null);
-                    setDisplayNameCallbackAction("START");
-                    setShowDisplayNameModal(true);
-                  } else {
-                    executeStartGameAction();
-                  }
+                  executeStartGameAction();
                 }}
                 copyToClipboard={copyToClipboard}
                 showCopiedToast={showCopiedToast}
@@ -14323,13 +14886,17 @@ useEffect(() => {
                   <div className="flex flex-col gap-1.5 max-h-[150px] overflow-y-auto pr-1 no-scrollbar-y">
                     {[...multiplayerPlayers]
                       .sort((a, b) => {
-                        if (a.status === 'online' && b.status !== 'online') return -1;
-                        if (a.status !== 'online' && b.status === 'online') return 1;
+                        const isOnlineA = getDrawerFriendStatus(a.id, a.status) === 'online';
+                        const isOnlineB = getDrawerFriendStatus(b.id, b.status) === 'online';
+                        if (isOnlineA && !isOnlineB) return -1;
+                        if (!isOnlineA && isOnlineB) return 1;
                         return 0;
                       })
                       .map((player, idx) => {
                         const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
                         const isAnimated = idx < 5;
+                        const effectiveStatus = getDrawerFriendStatus(player.id, player.status);
+                        const effectiveLastActive = getDrawerFriendLastActive(player.id, (player as any).lastActive || player.lastPlayedAt);
                         const rowBgClass = isJoined
                           ? (darkMode ? "bg-[#064e3b]/30 text-[#a7f3d0]" : "bg-[#E8F5E9] text-[#1B5E20]")
                           : (darkMode ? "bg-zinc-900/40 text-stone-300" : "bg-white/60 text-stone-800");
@@ -14339,7 +14906,7 @@ useEffect(() => {
                             className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all duration-300 w-full shrink-0 ${rowBgClass}`}
                           >
                             <div className="flex items-center gap-2 min-w-0 flex-1">
-                              {player.status === 'online' && (
+                              {effectiveStatus === 'online' && (
                                 <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-400 animate-pulse-gentle" />
                               )}
                               <div className="flex flex-col min-w-0">
@@ -14347,7 +14914,7 @@ useEffect(() => {
                                   {player.name}
                                 </span>
                                 <span className="text-[9px] text-stone-400 capitalize">
-                                  {formatActiveStatus(player.status, (player as any).lastActive || player.lastPlayedAt, language)}
+                                  {formatActiveStatus(effectiveStatus, effectiveLastActive, language)}
                                 </span>
                               </div>
                             </div>
@@ -14817,6 +15384,7 @@ useEffect(() => {
                   <div className="flex flex-col gap-2">
                     {rematchParticipants.map((p) => {
                       const hasInvited = rematchInvitedPlayers.has(p.id);
+                      const isOnline = getDrawerFriendStatus(p.id, (p as any).status) === 'online';
                       return (
                         <div 
                           key={p.id}
@@ -14827,7 +15395,11 @@ useEffect(() => {
                           }`}
                         >
                           <div className="flex items-center gap-2.5">
-                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                            {isOnline ? (
+                              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                            ) : (
+                              <div className="w-2.5 h-2.5 rounded-full bg-stone-300 dark:bg-zinc-700" />
+                            )}
                             <div className="flex flex-col">
                               <span className="font-sans font-bold text-sm text-stone-850 dark:text-stone-150">
                                 {p.name}
@@ -15433,7 +16005,7 @@ useEffect(() => {
                         className={`p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 shrink-0 ${
                           darkMode ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
                         }`}
-                        title="Close"
+                        title={t("closeTooltip")}
                       >
                         <X className="w-4 h-4 stroke-[2.5]" />
                       </button>
@@ -16490,8 +17062,58 @@ useEffect(() => {
                     const timestampVal = challenge.sentAt ?? (challenge as any).timestamp ?? (challenge as any).createdAt ?? challenge.receivedAt;
 
                     if (challenge.type === 'challenge_completed') {
-                      const finisherName = challenge.fromName || challenge.senderName || "Opponent";
-                      const targetCode = challenge.roomCode || challenge.gameId || challenge.id;
+                      const targetCode = challenge.roomCode || extractRoomCodeFromChallenge(challenge) || challenge.gameId || challenge.id;
+                      const names = challenge.finisherNames && challenge.finisherNames.length > 0
+                        ? challenge.finisherNames
+                        : [challenge.fromName || challenge.senderName || "Opponent"];
+
+                      const handleDismissCompletionCard = () => {
+                        playClickSound();
+                        if (targetCode) {
+                          const cleanCode = String(targetCode).trim().toUpperCase();
+                          dismissedCompletionRoomsRef.current.add(String(targetCode).trim());
+                          dismissedCompletionRoomsRef.current.add(cleanCode);
+                          dismissedCompletionRoomsRef.current.add(cleanCode.slice(-6));
+                        }
+                        const idsToRemove = new Set(challenge.groupedIds || [challenge.id, challenge.inviteId]);
+                        setPendingChallenges(prev => {
+                          const updated = prev.filter(c => {
+                            if (idsToRemove.has(c.id) || (c.inviteId && idsToRemove.has(c.inviteId))) return false;
+                            const cRoom = extractRoomCodeFromChallenge(c);
+                            if (targetCode && cRoom === targetCode && c.type === 'challenge_completed') return false;
+                            return true;
+                          });
+                          try {
+                            localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+                          } catch (e) {}
+                          return updated;
+                        });
+                      };
+
+                      const handleViewCompletionResults = () => {
+                        playClickSound();
+                        if (targetCode) {
+                          const cleanCode = String(targetCode).trim().toUpperCase();
+                          dismissedCompletionRoomsRef.current.add(String(targetCode).trim());
+                          dismissedCompletionRoomsRef.current.add(cleanCode);
+                          dismissedCompletionRoomsRef.current.add(cleanCode.slice(-6));
+                        }
+                        const idsToRemove = new Set(challenge.groupedIds || [challenge.id, challenge.inviteId]);
+                        setPendingChallenges(prev => {
+                          const updated = prev.filter(c => {
+                            if (idsToRemove.has(c.id) || (c.inviteId && idsToRemove.has(c.inviteId))) return false;
+                            const cRoom = extractRoomCodeFromChallenge(c);
+                            if (targetCode && cRoom === targetCode && c.type === 'challenge_completed') return false;
+                            return true;
+                          });
+                          try {
+                            localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+                          } catch (e) {}
+                          return updated;
+                        });
+                        setShowBellInvitesModal(false);
+                        handleViewChallengeResults(targetCode, true);
+                      };
 
                       return (
                         <div 
@@ -16506,55 +17128,52 @@ useEffect(() => {
                                 <Trophy className="w-4 h-4 shrink-0" strokeWidth={2.5} />
                               </div>
                               <div className="flex flex-col text-left">
-                                <span className={`text-[10px] font-black uppercase tracking-wider ${
-                                  darkMode ? "text-emerald-400" : "text-emerald-700"
-                                }`}>
-                                  CHALLENGE COMPLETED
-                                </span>
-                                <span className="font-sans text-xs font-bold mt-0.5">
-                                  <strong className="font-extrabold">{finisherName}</strong> completed the duel!
-                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                                    darkMode ? "bg-emerald-950/80 text-emerald-300 border border-emerald-800/50" : "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                  }`}>
+                                    {t("raceFinishedBadge")}
+                                  </span>
+                                  {targetCode && (
+                                    <span className="text-[9px] font-mono opacity-60">
+                                      #{targetCode}
+                                    </span>
+                                  )}
+                                </div>
+                                {names.length === 1 ? (
+                                  <span className="font-sans text-xs font-bold mt-1">
+                                    {t("playerFinishedRace", { name: names[0] })}
+                                  </span>
+                                ) : names.length === 2 ? (
+                                  <span className="font-sans text-xs font-bold mt-1">
+                                    {t("twoPlayersFinished", { name1: names[0], name2: names[1] })}
+                                  </span>
+                                ) : (
+                                  <span className="font-sans text-xs font-bold mt-1">
+                                    {t("multiPlayersFinished", { name1: names[0], name2: names[1], count: names.length - 2 })}
+                                  </span>
+                                )}
                               </div>
                             </div>
-                            <span className="text-[9px] font-mono opacity-70">
+                            <span className="text-[9px] font-mono opacity-70 shrink-0">
                               {formatInviteTimestamp(timestampVal)}
                             </span>
                           </div>
 
                           <div className="flex gap-2 w-full mt-0.5">
                             <button
-                              onClick={() => {
-                                playClickSound();
-                                setPendingChallenges(prev => {
-                                  const updated = prev.filter(c => c.id !== challenge.id && c.inviteId !== challenge.inviteId);
-                                  try {
-                                    localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
-                                  } catch (e) {}
-                                  return updated;
-                                });
-                              }}
+                              onClick={handleDismissCompletionCard}
                               className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 cursor-pointer ${
                                 darkMode ? "bg-zinc-800 hover:bg-zinc-750 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
                               }`}
                             >
-                              DISMISS
+                              {t("dismissAction")}
                             </button>
                             <button
-                              onClick={() => {
-                                playClickSound();
-                                setPendingChallenges(prev => {
-                                  const updated = prev.filter(c => c.id !== challenge.id && c.inviteId !== challenge.inviteId && c.id !== targetCode && c.roomCode !== targetCode);
-                                  try {
-                                    localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
-                                  } catch (e) {}
-                                  return updated;
-                                });
-                                setShowBellInvitesModal(false);
-                                handleViewChallengeResults(targetCode, true);
-                              }}
-                              className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border-none transition-all active:scale-95 text-white flex items-center justify-center gap-1.5 cursor-pointer bg-emerald-600 hover:bg-emerald-500"
+                              onClick={handleViewCompletionResults}
+                              className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border-none transition-all active:scale-95 text-white flex items-center justify-center gap-1.5 cursor-pointer bg-emerald-600 hover:bg-emerald-500 shadow-sm"
                             >
-                              VIEW RESULTS
+                              {t("viewResultsAction")}
                             </button>
                           </div>
                         </div>
@@ -16700,14 +17319,14 @@ useEffect(() => {
                       <div className="flex flex-col text-left">
                         <div className="flex items-center gap-1.5">
                           <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
-                            CHALLENGE COMPLETED
+                            {t("challengeCompletedBadge")}
                           </span>
                           <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-500">
                             {inviteCountdown}s
                           </span>
                         </div>
                         <span className="font-sans text-xs font-semibold mt-0.5">
-                          {activeInviteNotification.fromName || 'Opponent'} completed the duel!
+                          {t("playerFinishedRace", { name: activeInviteNotification.fromName || 'Opponent' })}
                         </span>
                       </div>
                     </div>
@@ -16717,6 +17336,31 @@ useEffect(() => {
                           e.stopPropagation();
                           playClickSound();
                           const targetCode = activeInviteNotification.roomCode || activeInviteNotification.gameId;
+                          if (targetCode) {
+                            const cleanCode = String(targetCode).trim().toUpperCase();
+                            dismissedCompletionRoomsRef.current.add(String(targetCode).trim());
+                            dismissedCompletionRoomsRef.current.add(cleanCode);
+                            dismissedCompletionRoomsRef.current.add(cleanCode.slice(-6));
+                          }
+                          dockInviteToBell();
+                        }}
+                        className={`px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 cursor-pointer ${
+                          darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-200 text-stone-700 hover:bg-stone-300"
+                        }`}
+                      >
+                        {t("dismissAction")}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playClickSound();
+                          const targetCode = activeInviteNotification.roomCode || activeInviteNotification.gameId;
+                          if (targetCode) {
+                            const cleanCode = String(targetCode).trim().toUpperCase();
+                            dismissedCompletionRoomsRef.current.add(String(targetCode).trim());
+                            dismissedCompletionRoomsRef.current.add(cleanCode);
+                            dismissedCompletionRoomsRef.current.add(cleanCode.slice(-6));
+                          }
                           setPendingChallenges(prev => {
                             const updated = prev.filter(c => c.id !== activeInviteNotification.id && c.inviteId !== activeInviteNotification.id && c.id !== targetCode && c.roomCode !== targetCode);
                             try {
@@ -16729,7 +17373,7 @@ useEffect(() => {
                         }}
                         className="px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 text-white cursor-pointer bg-emerald-600 hover:bg-emerald-500"
                       >
-                        VIEW RESULTS
+                        {t("viewResultsAction")}
                       </button>
                     </div>
                   </>
@@ -16771,6 +17415,14 @@ useEffect(() => {
                         onClick={async (e) => {
                           e.stopPropagation();
                           playClickSound();
+                          const senderId = activeInviteNotification?.fromUserId || activeInviteNotification?.senderId || activeInviteNotification?.fromName;
+                          if (isActivelyInGame() && senderId) {
+                            mutedSendersInGameRef.current.add(String(senderId).trim());
+                            if (activeInviteNotification?.fromName) {
+                              mutedSendersInGameRef.current.add(String(activeInviteNotification.fromName).trim());
+                            }
+                            console.log(`[Invite Guard] In-game invite declined. Muted sender '${senderId}' for this match.`);
+                          }
                           try {
                             await updateDoc(doc(db, "invites", activeInviteNotification.id), { status: "declined" });
                           } catch (e) {

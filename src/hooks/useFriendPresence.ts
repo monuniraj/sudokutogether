@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { doc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
+import { getTimestampMillis, PRESENCE_TIMEOUT_MS } from "../utils/formatTimestamp";
 
 const INCOGNITO_STORAGE_KEY = "sudoku_is_incognito";
 const INCOGNITO_EVENT = "sudoku_incognito_change";
-const HEARTBEAT_INTERVAL_MS = 30000; // 30s heartbeat for active sessions
+const HEARTBEAT_INTERVAL_MS = 10 * 60 * 1000; // 10-minute heartbeat throttle for active sessions
+
+export { PRESENCE_TIMEOUT_MS };
 
 export interface FriendPresenceState {
   isIncognito: boolean;
@@ -12,7 +15,11 @@ export interface FriendPresenceState {
   toggleIncognito: () => void;
   friendPresenceMap: Record<string, "online" | "offline">;
   friendLastActiveMap: Record<string, any>;
-  getFriendStatus: (friendId: string, fallbackStatus?: "online" | "offline") => "online" | "offline";
+  getFriendStatus: (
+    friendId: string,
+    fallbackStatus?: "online" | "offline",
+    fallbackLastActive?: any
+  ) => "online" | "offline";
   getFriendLastActive: (friendId: string, fallbackLastActive?: any) => any;
 }
 
@@ -35,6 +42,9 @@ function getStoredUserId(): string | null {
  * 
  * Features:
  * - Dynamic broadcast lifecycle (online on active, offline on incognito/hidden/unload)
+ * - 10-minute throttled heartbeat while visible and active
+ * - Immediate presence ping when app/tab becomes visible
+ * - 15-minute sliding presence cutoff (offline if lastActive > 15m or missing)
  * - Multi-tab storage sync via `storage` event & custom in-tab broadcast
  * - Real-time friend status subscriptions via Firestore onSnapshot
  * - 0 impact on incoming invite receipt (invites flow through independent Firestore paths)
@@ -163,13 +173,32 @@ export function useFriendPresence(
   useEffect(() => {
     if (!userId) return;
 
+    let heartbeatTimer: any = null;
+
+    const startHeartbeat = () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      heartbeatTimer = setInterval(() => {
+        if (
+          !isIncognitoRef.current &&
+          typeof document !== "undefined" &&
+          document.visibilityState === "visible"
+        ) {
+          broadcastStatus("online");
+        }
+      }, HEARTBEAT_INTERVAL_MS);
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         broadcastStatus("offline");
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
       } else if (document.visibilityState === "visible") {
+        // Immediate ping when tab/app becomes visible
         if (!isIncognitoRef.current) {
           broadcastStatus("online");
         }
+        // Throttle subsequent continuous pings to every 10 minutes
+        startHeartbeat();
       }
     };
 
@@ -181,22 +210,16 @@ export function useFriendPresence(
     window.addEventListener("beforeunload", handleUnload);
     window.addEventListener("pagehide", handleUnload);
 
-    // Heartbeat: keep timestamp fresh while active and visible
-    const heartbeatTimer = setInterval(() => {
-      if (
-        !isIncognitoRef.current &&
-        typeof document !== "undefined" &&
-        document.visibilityState === "visible"
-      ) {
-        broadcastStatus("online");
-      }
-    }, HEARTBEAT_INTERVAL_MS);
+    // Initial heartbeat start if visible
+    if (typeof document !== "undefined" && document.visibilityState === "visible") {
+      startHeartbeat();
+    }
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleUnload);
       window.removeEventListener("pagehide", handleUnload);
-      clearInterval(heartbeatTimer);
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
     };
   }, [userId, broadcastStatus]);
 
@@ -216,12 +239,19 @@ export function useFriendPresence(
           (snap) => {
             if (snap.exists()) {
               const data = snap.data();
-              const status = data?.status === "online" ? "online" : "offline";
+              const rawStatus = data?.status === "online" ? "online" : "offline";
               const lastActive = data?.lastActive || data?.updatedAt || null;
+              const lastActiveMs = getTimestampMillis(lastActive);
+
+              // 15-minute sliding cutoff: only online if rawStatus is online AND lastActive is within 15 minutes
+              const isRecent =
+                lastActiveMs !== null && Date.now() - lastActiveMs <= PRESENCE_TIMEOUT_MS;
+              const effectiveStatus: "online" | "offline" =
+                rawStatus === "online" && isRecent ? "online" : "offline";
 
               setFriendPresenceMap((prev) => {
-                if (prev[friendId] === status) return prev;
-                return { ...prev, [friendId]: status };
+                if (prev[friendId] === effectiveStatus) return prev;
+                return { ...prev, [friendId]: effectiveStatus };
               });
 
               if (lastActive) {
@@ -247,9 +277,37 @@ export function useFriendPresence(
     };
   }, [trackedFriendIds.join(",")]);
 
-  // Helper to resolve a friend's status, accounting for incognito and presence map
+  // Periodic in-memory check to invalidate stale online statuses without extra network queries
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setFriendPresenceMap((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        const now = Date.now();
+        for (const [fId, status] of Object.entries(next)) {
+          if (status === "online") {
+            const lastActive = friendLastActiveMap[fId];
+            const ms = getTimestampMillis(lastActive);
+            if (!ms || now - ms > PRESENCE_TIMEOUT_MS) {
+              next[fId] = "offline";
+              changed = true;
+            }
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 30000); // Check locally every 30s
+
+    return () => clearInterval(timer);
+  }, [friendLastActiveMap]);
+
+  // Helper to resolve a friend's status, accounting for incognito, cutoff, and presence map
   const getFriendStatus = useCallback(
-    (friendId: string, fallbackStatus?: "online" | "offline"): "online" | "offline" => {
+    (
+      friendId: string,
+      fallbackStatus?: "online" | "offline",
+      fallbackLastActive?: any
+    ): "online" | "offline" => {
       const currentId = userId || getStoredUserId();
       let priorGuestId: string | null = null;
       try {
@@ -260,13 +318,24 @@ export function useFriendPresence(
         return isIncognito ? "offline" : "online";
       }
 
-      if (friendPresenceMap[friendId]) {
-        return friendPresenceMap[friendId];
+      // Check raw status from real-time presence map or fallback
+      const rawStatus = friendPresenceMap[friendId] || fallbackStatus;
+      if (rawStatus !== "online") {
+        return "offline";
       }
 
-      return fallbackStatus || "offline";
+      // If marked online, enforce 15-minute sliding presence cutoff
+      const targetLastActive = friendLastActiveMap[friendId] ?? fallbackLastActive;
+      const lastActiveMs = getTimestampMillis(targetLastActive);
+
+      if (lastActiveMs !== null && Date.now() - lastActiveMs <= PRESENCE_TIMEOUT_MS) {
+        return "online";
+      }
+
+      // If lastActiveMs is missing or older than 15 minutes, evaluate status as "offline"
+      return "offline";
     },
-    [userId, isIncognito, friendPresenceMap]
+    [userId, isIncognito, friendPresenceMap, friendLastActiveMap]
   );
 
   // Helper to resolve a friend's lastActive timestamp
