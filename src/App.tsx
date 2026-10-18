@@ -3412,17 +3412,55 @@ useEffect(() => {
           const finalTotalWins = Math.max(cloudWins, cloudCompleted.filter((g: any) => g && g.isWon).length);
           const finalWinStreak = cloudStreak;
 
+          const resolvedBestTimes: Record<string, number | null> = {
+            EASY: Number(cloudDocData?.bestTimes?.EASY ?? cloudDocData?.bestTimes?.easy) || null,
+            MEDIUM: Number(cloudDocData?.bestTimes?.MEDIUM ?? cloudDocData?.bestTimes?.medium) || null,
+            HARD: Number(cloudDocData?.bestTimes?.HARD ?? cloudDocData?.bestTimes?.hard) || null,
+            EXPERT: Number(cloudDocData?.bestTimes?.EXPERT ?? cloudDocData?.bestTimes?.expert) || null,
+            MASTER: Number(cloudDocData?.bestTimes?.MASTER ?? cloudDocData?.bestTimes?.master) || null,
+          };
+
+          cloudCompleted.forEach((g: any) => {
+            if (!g || !g.isWon) return;
+            const diffUpper = String(g.difficulty || "").toUpperCase();
+            if (!["EASY", "MEDIUM", "HARD", "EXPERT"].includes(diffUpper)) return;
+            const diffKey = diffUpper;
+
+            const maxMistakes = Number(g.maxMistakes);
+            const mistakes = Number(g.mistakes ?? 0);
+            const isUnlimited = !isNaN(maxMistakes) && maxMistakes >= 999;
+            const isAbove3 = !isNaN(maxMistakes) && maxMistakes > 3;
+            const withinLimit = mistakes < 3;
+
+            const hintsUsed = Number(g.hints ?? g.hintsCount ?? 0);
+            const maxHints = Number(g.maxHints ?? g.maxHintsLimit ?? 3);
+            const isHintsDisqualified = hintsUsed > 3 || maxHints > 3;
+
+            if (isUnlimited || isAbove3 || !withinLimit || isHintsDisqualified) return;
+
+            const timeSec = parseTimeToSeconds(g.timeSec ?? g.time);
+            if (timeSec > 0) {
+              const current = resolvedBestTimes[diffKey];
+              if (!current || timeSec < current) {
+                resolvedBestTimes[diffKey] = timeSec;
+              }
+            }
+          });
+
           // 1. Career stats via setStats
           setStats({
             totalGamesPlayed: finalTotalGames,
             totalWinsCount: finalTotalWins,
-            bestTimes: cloudDocData?.bestTimes && typeof cloudDocData.bestTimes === "object" ? cloudDocData.bestTimes : undefined,
+            bestTimes: resolvedBestTimes,
             winStreak: finalWinStreak
           });
           setTotalGamesPlayed(finalTotalGames);
           setTotalWinsCount(finalTotalWins);
           setWinStreak(finalWinStreak);
+          setPersonalBestTimes(resolvedBestTimes);
+          personalBestTimesRef.current = resolvedBestTimes;
           try {
+            localStorage.setItem("sudoku_best_times", JSON.stringify(resolvedBestTimes));
             localStorage.setItem("sudoku_total_games_played", String(finalTotalGames));
             localStorage.setItem("sudoku_gamesPlayed", String(finalTotalGames));
             localStorage.setItem("sudoku_total_wins_count", String(finalTotalWins));
@@ -4010,6 +4048,51 @@ useEffect(() => {
               try {
                 localStorage.setItem("sudoku_total_wins_count", String(normalizedWins));
                 localStorage.setItem("sudoku_winsCount", String(normalizedWins));
+              } catch {}
+            }
+
+            // Pre-seed personal best times immediately from cloudData or completedGames history
+            const preBestTimes: Record<string, number | null> = {
+              EASY: Number(cloudData?.bestTimes?.EASY ?? cloudData?.bestTimes?.easy) || null,
+              MEDIUM: Number(cloudData?.bestTimes?.MEDIUM ?? cloudData?.bestTimes?.medium) || null,
+              HARD: Number(cloudData?.bestTimes?.HARD ?? cloudData?.bestTimes?.hard) || null,
+              EXPERT: Number(cloudData?.bestTimes?.EXPERT ?? cloudData?.bestTimes?.expert) || null,
+              MASTER: Number(cloudData?.bestTimes?.MASTER ?? cloudData?.bestTimes?.master) || null,
+            };
+
+            cloudGamesList.forEach((g: any) => {
+              if (!g || !g.isWon) return;
+              const diffUpper = String(g.difficulty || "").toUpperCase();
+              if (!["EASY", "MEDIUM", "HARD", "EXPERT"].includes(diffUpper)) return;
+              const diffKey = diffUpper;
+
+              const maxMistakes = Number(g.maxMistakes);
+              const mistakes = Number(g.mistakes ?? 0);
+              const isUnlimited = !isNaN(maxMistakes) && maxMistakes >= 999;
+              const isAbove3 = !isNaN(maxMistakes) && maxMistakes > 3;
+              const withinLimit = mistakes < 3;
+
+              const hintsUsed = Number(g.hints ?? g.hintsCount ?? 0);
+              const maxHints = Number(g.maxHints ?? g.maxHintsLimit ?? 3);
+              const isHintsDisqualified = hintsUsed > 3 || maxHints > 3;
+
+              if (isUnlimited || isAbove3 || !withinLimit || isHintsDisqualified) return;
+
+              const timeSec = parseTimeToSeconds(g.timeSec ?? g.time);
+              if (timeSec > 0) {
+                const current = preBestTimes[diffKey];
+                if (!current || timeSec < current) {
+                  preBestTimes[diffKey] = timeSec;
+                }
+              }
+            });
+
+            const hasAnyPreBest = Object.values(preBestTimes).some(v => v !== null && v > 0);
+            if (hasAnyPreBest) {
+              setPersonalBestTimes(preBestTimes);
+              personalBestTimesRef.current = preBestTimes;
+              try {
+                localStorage.setItem("sudoku_best_times", JSON.stringify(preBestTimes));
               } catch {}
             }
 
