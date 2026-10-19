@@ -2235,6 +2235,7 @@ useEffect(() => {
   const isConnectingRef = useRef<boolean>(false);
   const loginCancelledRef = useRef<boolean>(false);
   const loginTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isLoggingOutRef = useRef<boolean>(false);
 
   // --- DYNAMIC RESUME GAME STATE LOOP ---
   const [savedSessionInfo, setSavedSessionInfo] = useState<{ difficulty: Difficulty; seconds: number; isMultiplayer?: boolean; roomCode?: string } | null>(null);
@@ -3452,30 +3453,6 @@ useEffect(() => {
         const userDocRef = doc(db, "users", uid);
         const userSnap = await getDoc(userDocRef);
 
-        // Read local session progress before evaluating cloud state
-        let localCompleted: CompletedGame[] = [];
-        try {
-          const stored = localStorage.getItem("sudoku_completed_games");
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed)) localCompleted = parsed;
-          }
-        } catch {}
-
-        const localTotalGames = Math.max(
-          Number(localStorage.getItem("sudoku_total_games_played") || 0),
-          Number(localStorage.getItem("sudoku_gamesPlayed") || 0),
-          localCompleted.length
-        );
-
-        const localTotalWins = Math.max(
-          Number(localStorage.getItem("sudoku_total_wins_count") || 0),
-          Number(localStorage.getItem("sudoku_winsCount") || 0),
-          localCompleted.filter((g: any) => g && g.isWon).length
-        );
-
-        const localWinStreak = Number(localStorage.getItem("sudoku_winStreak") || 0);
-
         if (userSnap.exists()) {
           const cloudDocData = userSnap.data();
 
@@ -3495,35 +3472,24 @@ useEffect(() => {
 
           const cloudStreak = typeof cloudDocData?.winStreak === "number" ? cloudDocData.winStreak : 0;
 
-          // Normalize counters: Ensure career statistics never drop below the actual match history records or local cache
-          const finalTotalGames = Math.max(cloudGames, cloudCompleted.length, localTotalGames);
-          const finalTotalWins = Math.max(cloudWins, cloudCompleted.filter((g: any) => g && g.isWon).length, localTotalWins);
-          const finalWinStreak = Math.max(cloudStreak, localWinStreak);
+          // Strictly derive career statistics 100% from cloud document (never merge with local guest!)
+          const finalTotalGames = Math.max(cloudGames, cloudCompleted.length);
+          const finalTotalWins = Math.max(cloudWins, cloudCompleted.filter((g: any) => g && g.isWon).length);
+          const finalWinStreak = cloudStreak;
 
-          const localBestTimes = personalBestTimesRef.current || {};
           const resolvedBestTimes: Record<string, number | null> = {
-            EASY: Number(cloudDocData?.bestTimes?.EASY ?? cloudDocData?.bestTimes?.easy) || localBestTimes.EASY || null,
-            MEDIUM: Number(cloudDocData?.bestTimes?.MEDIUM ?? cloudDocData?.bestTimes?.medium) || localBestTimes.MEDIUM || null,
-            HARD: Number(cloudDocData?.bestTimes?.HARD ?? cloudDocData?.bestTimes?.hard) || localBestTimes.HARD || null,
-            EXPERT: Number(cloudDocData?.bestTimes?.EXPERT ?? cloudDocData?.bestTimes?.expert) || localBestTimes.EXPERT || null,
-            MASTER: Number(cloudDocData?.bestTimes?.MASTER ?? cloudDocData?.bestTimes?.master) || localBestTimes.MASTER || null,
+            EASY: Number(cloudDocData?.bestTimes?.EASY ?? cloudDocData?.bestTimes?.easy) || null,
+            MEDIUM: Number(cloudDocData?.bestTimes?.MEDIUM ?? cloudDocData?.bestTimes?.medium) || null,
+            HARD: Number(cloudDocData?.bestTimes?.HARD ?? cloudDocData?.bestTimes?.hard) || null,
+            EXPERT: Number(cloudDocData?.bestTimes?.EXPERT ?? cloudDocData?.bestTimes?.expert) || null,
+            MASTER: Number(cloudDocData?.bestTimes?.MASTER ?? cloudDocData?.bestTimes?.master) || null,
           };
 
-          (["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"] as const).forEach(diff => {
-            const cloudVal = Number(cloudDocData?.bestTimes?.[diff] ?? cloudDocData?.bestTimes?.[diff.toLowerCase()]);
-            const localVal = localBestTimes[diff];
-            if (cloudVal > 0 && localVal && localVal > 0) {
-              resolvedBestTimes[diff] = Math.min(cloudVal, localVal);
-            } else if (localVal && localVal > 0 && (!cloudVal || isNaN(cloudVal))) {
-              resolvedBestTimes[diff] = localVal;
-            }
-          });
-
-          // Scan both cloud and local completed games for fastest qualifying times
-          [...cloudCompleted, ...localCompleted].forEach((g: any) => {
+          // Scan STRICTLY cloudCompleted games for fastest qualifying times (never local guest completed games!)
+          cloudCompleted.forEach((g: any) => {
             if (!g || !g.isWon) return;
             const diffUpper = String(g.difficulty || "").toUpperCase();
-            if (!["EASY", "MEDIUM", "HARD", "EXPERT"].includes(diffUpper)) return;
+            if (!["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"].includes(diffUpper)) return;
             const diffKey = diffUpper;
 
             const maxMistakes = Number(g.maxMistakes);
@@ -3568,22 +3534,20 @@ useEffect(() => {
             localStorage.setItem("sudoku_winStreak", String(finalWinStreak));
           } catch {}
 
-          // 2. Match history (recent games) and saved boards: strictly from cloudDocData.completedGames
-          if (cloudCompleted.length > 0) {
-            setCompletedGames(cloudCompleted);
-            try {
-              localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudCompleted));
-            } catch {}
-          }
+          // 2. Match history (recent games) and saved boards: strictly from cloudDocData
+          setCompletedGames(cloudCompleted);
+          try {
+            localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudCompleted));
+          } catch {}
 
-          // Self-heal Firestore document if counters, streak, or bestTimes were missing or desynchronized
-          const hasBetterBestTimes = (["EASY", "MEDIUM", "HARD", "EXPERT"] as const).some(diff => {
+          // Self-heal Firestore document ONLY if cloud counters or cloud match times are internally desynchronized
+          const hasBetterBestTimes = (["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"] as const).some(diff => {
             const cloudVal = Number(cloudDocData?.bestTimes?.[diff] ?? cloudDocData?.bestTimes?.[diff.toLowerCase()]) || 0;
             const resVal = resolvedBestTimes[diff] || 0;
             return resVal > 0 && (cloudVal === 0 || resVal < cloudVal);
           });
 
-          if (cloudGames < finalTotalGames || cloudWins < finalTotalWins || cloudStreak < finalWinStreak || hasBetterBestTimes) {
+          if (cloudGames < finalTotalGames || cloudWins < finalTotalWins || hasBetterBestTimes) {
             setDoc(userDocRef, {
               totalGamesPlayed: finalTotalGames,
               totalWinsCount: finalTotalWins,
@@ -3598,6 +3562,11 @@ useEffect(() => {
             setSavedGames(loadedSaved);
             try {
               localStorage.setItem("sudoku_saved_games", JSON.stringify(loadedSaved));
+            } catch {}
+          } else {
+            setSavedGames([]);
+            try {
+              localStorage.removeItem("sudoku_saved_games");
             } catch {}
           }
 
@@ -3815,6 +3784,29 @@ useEffect(() => {
           currentHydratedUidRef.current = uid;
         } else {
           // Document does not exist in Firestore yet: initialize it with local progress
+          let localCompleted: CompletedGame[] = [];
+          try {
+            const stored = localStorage.getItem("sudoku_completed_games");
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (Array.isArray(parsed)) localCompleted = parsed;
+            }
+          } catch {}
+
+          const localTotalGames = Math.max(
+            Number(localStorage.getItem("sudoku_total_games_played") || 0),
+            Number(localStorage.getItem("sudoku_gamesPlayed") || 0),
+            localCompleted.length
+          );
+
+          const localTotalWins = Math.max(
+            Number(localStorage.getItem("sudoku_total_wins_count") || 0),
+            Number(localStorage.getItem("sudoku_winsCount") || 0),
+            localCompleted.filter((g: any) => g && g.isWon).length
+          );
+
+          const localWinStreak = Number(localStorage.getItem("sudoku_winStreak") || 0);
+
           const currentProfile = userProfileRef.current;
           let resolvedDisplayName = "";
           if (authUser?.displayName && !isDefaultOrEmptyPlayerName(authUser.displayName)) {
@@ -3892,6 +3884,11 @@ useEffect(() => {
           });
           setCompletedGames(localCompleted);
 
+          // Clear guest vault because Guest #1 has now merged into this Google account
+          try {
+            localStorage.removeItem("sudoku_guest_vault");
+          } catch {}
+
           currentHydratedUidRef.current = uid;
         }
       } catch (err) {
@@ -3914,6 +3911,10 @@ useEffect(() => {
   // Auth listener for cloud state hydration and anonymous session bootstrap
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (isLoggingOutRef.current) {
+        console.log("[Auth] onAuthStateChanged ignored because logout is actively executing.");
+        return;
+      }
       if (!user) {
         currentHydratedUidRef.current = null;
         setIsAuthHydrating(false);
@@ -3925,8 +3926,12 @@ useEffect(() => {
           let guestProfile: any = null;
 
           if (existingStored) {
-            guestProfile = JSON.parse(existingStored);
-          } else if (vaultRaw) {
+            const parsed = JSON.parse(existingStored);
+            if (parsed && (parsed.id?.startsWith("GUEST_") || !parsed.isSynced)) {
+              guestProfile = parsed;
+            }
+          }
+          if (!guestProfile && vaultRaw) {
             const vault = JSON.parse(vaultRaw);
             if (vault?.userProfile) guestProfile = vault.userProfile;
           }
@@ -4337,8 +4342,8 @@ useEffect(() => {
 
         const isReturningUser = Boolean(existingUserDoc?.exists() && existingUserDoc?.data()?.name);
 
-        // Vault local guest snapshot on Google sign-in
-        if (isPriorGuest) {
+        // Vault local guest snapshot on Google sign-in ONLY if prior guest and returning user
+        if (isPriorGuest && isReturningUser) {
           try {
             const guestVaultData = {
               userProfile: userProfileRef.current || userProfile,
@@ -4351,10 +4356,14 @@ useEffect(() => {
               vaultedAt: Date.now()
             };
             localStorage.setItem("sudoku_guest_vault", JSON.stringify(guestVaultData));
-            console.log("[Auth] Successfully vaulted guest snapshot into sudoku_guest_vault");
+            console.log("[Auth] Successfully vaulted guest snapshot into sudoku_guest_vault for later logout restoration");
           } catch (err) {
             console.warn("Failed to vault guest snapshot:", err);
           }
+        } else if (!isReturningUser) {
+          try {
+            localStorage.removeItem("sudoku_guest_vault");
+          } catch {}
         }
 
         // If Returning User: strictly load the Google cloud profile. Zero data/name push from local guest into Google Firestore.
@@ -4468,6 +4477,7 @@ useEffect(() => {
   const handleGoogleLogin = handleConnectGoogle;
 
   const handleLogout = async () => {
+    isLoggingOutRef.current = true;
     try {
       addLog("🔒 Disconnecting session...");
       const currentUid = auth.currentUser?.uid || userProfile?.id;
@@ -4502,11 +4512,7 @@ useEffect(() => {
         } catch {}
       }
 
-      // 3. Revoke Firebase Auth session
-      currentHydratedUidRef.current = null;
-      await signOut(auth).catch((err) => console.warn("[Auth] Firebase signout notice:", err));
-
-      // 4. Wipe all local storage session items
+      // 3. Purge all shared session localStorage keys BEFORE sign-out
       const sessionKeysToWipe = [
         "sudoku_completed_games",
         "sudoku_total_games_played",
@@ -4523,7 +4529,9 @@ useEffect(() => {
         "sudoku_past_players",
         "sudoku_winStreak",
         "sudoku_prior_guest_id",
-        "sudoku_is_display_name_configured"
+        "sudoku_is_display_name_configured",
+        "sudoku_userProfile",
+        "sudoku_user_profile"
       ];
       sessionKeysToWipe.forEach(key => {
         try {
@@ -4531,7 +4539,7 @@ useEffect(() => {
         } catch {}
       });
 
-      // 5. Restore vaulted guest snapshot if available, or deterministically apply INITIAL_GUEST_STATE
+      // 4. Restore vaulted guest snapshot if available, or deterministically apply brand-new clean Guest #2
       let restoredVault: any = null;
       try {
         const vaultRaw = localStorage.getItem("sudoku_guest_vault");
@@ -4579,7 +4587,7 @@ useEffect(() => {
           localStorage.setItem("sudoku_winsCount", String(restoredWinsCount));
         } catch {}
 
-        const restoredBestTimes = restoredVault.bestTimes || INITIAL_GUEST_STATE.personalBestTimes;
+        const restoredBestTimes = restoredVault.bestTimes || { EASY: null, MEDIUM: null, HARD: null, EXPERT: null, MASTER: null };
         setPersonalBestTimes(restoredBestTimes);
         personalBestTimesRef.current = restoredBestTimes;
         try {
@@ -4619,26 +4627,49 @@ useEffect(() => {
         const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
         const randColor = colors[Math.floor(Math.random() * colors.length)];
         const cleanGuestProfile = {
-          ...INITIAL_GUEST_STATE.userProfile,
           id: freshGuestId,
           name: freshGuestName,
           avatarColor: randColor,
           isSynced: false
         };
 
+        const cleanBestTimes = { EASY: null, MEDIUM: null, HARD: null, EXPERT: null, MASTER: null };
+
         setUserProfile(cleanGuestProfile);
         userProfileRef.current = cleanGuestProfile;
+
+        // Initialize local storage and guest vault with clean Guest #2
         try {
           localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuestProfile));
           localStorage.setItem("sudoku_user_profile", JSON.stringify(cleanGuestProfile));
+          localStorage.setItem("sudoku_best_times", JSON.stringify(cleanBestTimes));
+          localStorage.setItem("sudoku_completed_games", "[]");
+          localStorage.setItem("sudoku_saved_games", "[]");
+          localStorage.setItem("sudoku_total_games_played", "0");
+          localStorage.setItem("sudoku_gamesPlayed", "0");
+          localStorage.setItem("sudoku_total_wins_count", "0");
+          localStorage.setItem("sudoku_winsCount", "0");
+          localStorage.setItem("sudoku_winStreak", "0");
+
+          const newGuestVault = {
+            userProfile: cleanGuestProfile,
+            completedGames: [],
+            savedGames: [],
+            bestTimes: cleanBestTimes,
+            totalGamesPlayed: 0,
+            totalWinsCount: 0,
+            winStreak: 0,
+            vaultedAt: Date.now()
+          };
+          localStorage.setItem("sudoku_guest_vault", JSON.stringify(newGuestVault));
         } catch {}
 
-        setCompletedGames(INITIAL_GUEST_STATE.completedGames);
-        setTotalGamesPlayed(INITIAL_GUEST_STATE.totalGamesPlayed);
-        setTotalWinsCount(INITIAL_GUEST_STATE.totalWinsCount);
-        setPersonalBestTimes(INITIAL_GUEST_STATE.personalBestTimes);
-        personalBestTimesRef.current = INITIAL_GUEST_STATE.personalBestTimes;
-        setSavedGames(INITIAL_GUEST_STATE.savedGames);
+        setCompletedGames([]);
+        setTotalGamesPlayed(0);
+        setTotalWinsCount(0);
+        setPersonalBestTimes(cleanBestTimes);
+        personalBestTimesRef.current = cleanBestTimes;
+        setSavedGames([]);
         setMultiplayerPlayers(INITIAL_GUEST_STATE.multiplayerPlayers);
         setPendingChallenges(INITIAL_GUEST_STATE.pendingChallenges);
         setActiveInviteNotification(null);
@@ -4649,14 +4680,14 @@ useEffect(() => {
         setIsNewRecordAchieved(false);
         setPbStage("idle");
         setStats({
-          totalGamesPlayed: INITIAL_GUEST_STATE.totalGamesPlayed,
-          totalWinsCount: INITIAL_GUEST_STATE.totalWinsCount,
+          totalGamesPlayed: 0,
+          totalWinsCount: 0,
           winStreak: 0,
-          bestTimes: INITIAL_GUEST_STATE.personalBestTimes
+          bestTimes: cleanBestTimes
         });
       }
 
-      // 6. Enforce zero-state: Clear boardState, savedSessionInfo, lastCompletedSession; DO NOT generate background puzzle
+      // 5. Enforce zero-state: Clear boardState, savedSessionInfo, lastCompletedSession; DO NOT generate background puzzle
       setActiveGameId(null);
       setChallengeMode(false);
       setChallengeSeed(null);
@@ -4675,11 +4706,15 @@ useEffect(() => {
         localStorage.removeItem("sudoku_lastCompletedSession");
       } catch {}
 
-      // 7. Clear notifications state & reset navigation smoothly in-memory
+      // 6. Clear notifications state & reset navigation smoothly in-memory
       setNotifications([]);
       setUnreadNotificationsCount(0);
       setCurrentScreen("home");
       setShowSettingsModal(false);
+
+      // 7. Revoke Firebase Auth session (after all state and storage is reset to guest)
+      currentHydratedUidRef.current = null;
+      await signOut(auth).catch((err) => console.warn("[Auth] Firebase signout notice:", err));
 
       addLog("👤 Returned to clean local guest session.");
       showToast(t("loggedOutToast"));
@@ -4687,6 +4722,8 @@ useEffect(() => {
       const friendlyMsg = getSanitizedAuthErrorMessage(err);
       console.warn("[Auth] Logout notice:", err?.code || "unknown_error");
       showToast(friendlyMsg);
+    } finally {
+      isLoggingOutRef.current = false;
     }
   };
 
