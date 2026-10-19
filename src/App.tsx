@@ -18262,7 +18262,7 @@ useEffect(() => {
                   : { opacity: 1, y: 0, scale: 1, x: 0 }
               }
               exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              className={`relative w-full max-w-md p-4 pt-3 rounded-2xl flex flex-col gap-2.5 backdrop-blur-md border shadow-[0_16px_36px_rgba(0,0,0,0.18)] cursor-grab active:cursor-grabbing overflow-hidden select-none ${
+              className={`relative w-full max-w-sm sm:max-w-md mx-auto p-3.5 sm:p-4 pt-3 rounded-2xl sm:rounded-3xl flex flex-col gap-3 backdrop-blur-md border shadow-2xl cursor-grab active:cursor-grabbing overflow-hidden select-none ${
                 darkMode 
                   ? "bg-zinc-900/95 border-zinc-800 text-stone-100" 
                   : "bg-white/95 border-stone-200 text-stone-900"
@@ -18271,164 +18271,168 @@ useEffect(() => {
               {/* Swipe-up indicator bar */}
               <div className="w-10 h-1 rounded-full bg-stone-400/40 mx-auto -mt-0.5 mb-0.5" />
 
-              <div className="flex items-center justify-between gap-3">
-                {activeInviteNotification.type === 'challenge_completed' ? (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-emerald-950/50 text-emerald-300" : "bg-emerald-50 text-emerald-600"}`}>
-                        <Trophy className="w-5 h-5 shrink-0" strokeWidth={2.5} />
-                      </div>
-                      <div className="flex flex-col text-left">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
-                            {t("challengeCompletedBadge")}
-                          </span>
-                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-500">
-                            {inviteCountdown}s
-                          </span>
-                        </div>
-                        <span className="font-sans text-xs font-semibold mt-0.5">
-                          {t("playerFinishedRace", { name: activeInviteNotification.fromName || 'Opponent' })}
+              {activeInviteNotification.type === 'challenge_completed' ? (
+                <>
+                  {/* Tier 1: Top Message Row */}
+                  <div className="flex items-center gap-3 w-full min-w-0">
+                    <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-emerald-950/50 text-emerald-300" : "bg-emerald-50 text-emerald-600"}`}>
+                      <Trophy className="w-5 h-5 shrink-0" strokeWidth={2.5} />
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col text-left">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
+                          {t("challengeCompletedBadge")}
+                        </span>
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-500">
+                          {inviteCountdown}s
                         </span>
                       </div>
+                      <span className="font-sans text-xs sm:text-sm font-semibold mt-0.5 leading-snug break-words">
+                        {t("playerFinishedRace", { name: activeInviteNotification.fromName || 'Opponent' })}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          playClickSound();
-                          const targetCode = activeInviteNotification.roomCode || activeInviteNotification.gameId;
-                          if (targetCode) {
-                            const cleanCode = String(targetCode).trim().toUpperCase();
-                            dismissedCompletionRoomsRef.current.add(String(targetCode).trim());
-                            dismissedCompletionRoomsRef.current.add(cleanCode);
-                            dismissedCompletionRoomsRef.current.add(cleanCode.slice(-6));
-                          }
-                          dockInviteToBell();
-                        }}
-                        className={`px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 cursor-pointer ${
-                          darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-200 text-stone-700 hover:bg-stone-300"
-                        }`}
-                      >
-                        {t("dismissAction")}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          playClickSound();
-                          const targetCode = activeInviteNotification.roomCode || activeInviteNotification.gameId;
-                          if (targetCode) {
-                            const cleanCode = String(targetCode).trim().toUpperCase();
-                            dismissedCompletionRoomsRef.current.add(String(targetCode).trim());
-                            dismissedCompletionRoomsRef.current.add(cleanCode);
-                            dismissedCompletionRoomsRef.current.add(cleanCode.slice(-6));
-                          }
-                          setPendingChallenges(prev => {
-                            const updated = prev.filter(c => c.id !== activeInviteNotification.id && c.inviteId !== activeInviteNotification.id && c.id !== targetCode && c.roomCode !== targetCode);
-                            try {
-                              localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
-                            } catch (err) {}
-                            return updated;
-                          });
-                          setActiveInviteNotification(null);
-                          handleViewChallengeResults(targetCode, true);
-                        }}
-                        className="px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 text-white cursor-pointer bg-emerald-600 hover:bg-emerald-500"
-                      >
-                        {t("viewResultsAction")}
-                      </button>
+                  </div>
+
+                  {/* Tier 2: Bottom Actions Row */}
+                  <div className="flex items-center justify-between gap-3 w-full pt-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playClickSound();
+                        const targetCode = activeInviteNotification.roomCode || activeInviteNotification.gameId;
+                        if (targetCode) {
+                          const cleanCode = String(targetCode).trim().toUpperCase();
+                          dismissedCompletionRoomsRef.current.add(String(targetCode).trim());
+                          dismissedCompletionRoomsRef.current.add(cleanCode);
+                          dismissedCompletionRoomsRef.current.add(cleanCode.slice(-6));
+                        }
+                        dockInviteToBell();
+                      }}
+                      className={`flex-1 py-2 px-3 rounded-xl font-medium text-xs sm:text-sm text-center transition-colors border-none cursor-pointer active:scale-95 ${
+                        darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-200 text-stone-700 hover:bg-stone-300"
+                      }`}
+                    >
+                      {t("dismissAction")}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playClickSound();
+                        const targetCode = activeInviteNotification.roomCode || activeInviteNotification.gameId;
+                        if (targetCode) {
+                          const cleanCode = String(targetCode).trim().toUpperCase();
+                          dismissedCompletionRoomsRef.current.add(String(targetCode).trim());
+                          dismissedCompletionRoomsRef.current.add(cleanCode);
+                          dismissedCompletionRoomsRef.current.add(cleanCode.slice(-6));
+                        }
+                        setPendingChallenges(prev => {
+                          const updated = prev.filter(c => c.id !== activeInviteNotification.id && c.inviteId !== activeInviteNotification.id && c.id !== targetCode && c.roomCode !== targetCode);
+                          try {
+                            localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+                          } catch (err) {}
+                          return updated;
+                        });
+                        setActiveInviteNotification(null);
+                        handleViewChallengeResults(targetCode, true);
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl font-semibold text-xs sm:text-sm text-center shadow-md transition-all border-none text-white cursor-pointer bg-emerald-600 hover:bg-emerald-500 active:scale-95"
+                    >
+                      {t("viewResultsAction")}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Tier 1: Top Message Row */}
+                  <div className="flex items-center gap-3 w-full min-w-0">
+                    <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-purple-950/50 text-purple-300" : "bg-purple-50 text-purple-600"}`}>
+                      <Users className="w-5 h-5 shrink-0" strokeWidth={2.5} />
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-purple-950/50 text-purple-300" : "bg-purple-50 text-purple-600"}`}>
-                        <Users className="w-5 h-5" strokeWidth={2.5} />
+                    <div className="flex-1 min-w-0 flex flex-col text-left">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-purple-400" : "text-purple-700"}`}>
+                          {t("sudoku_invite_title")}
+                        </span>
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-purple-500/15 text-purple-500">
+                          {inviteCountdown}s
+                        </span>
                       </div>
-                      <div className="flex flex-col text-left">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-purple-400" : "text-purple-700"}`}>
-                            {t("sudoku_invite_title")}
-                          </span>
-                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-purple-500/15 text-purple-500">
-                            {inviteCountdown}s
-                          </span>
-                        </div>
-                        {(() => {
-                          const text = t("user_invited_you", { name: "___NAME___" });
-                          const parts = text.split("___NAME___");
-                          if (parts.length === 2) {
-                            return (
-                              <span className="font-sans text-xs font-semibold mt-0.5">
-                                {parts[0]}<strong>{activeInviteNotification.fromName}</strong>{parts[1]}
-                              </span>
-                            );
-                          }
+                      {(() => {
+                        const text = t("user_invited_you", { name: "___NAME___" });
+                        const parts = text.split("___NAME___");
+                        if (parts.length === 2) {
                           return (
-                            <span className="font-sans text-xs font-semibold mt-0.5">
-                              {t("user_invited_you", { name: activeInviteNotification.fromName })}
+                            <span className="font-sans text-xs sm:text-sm font-semibold mt-0.5 leading-snug break-words">
+                              {parts[0]}<strong>{activeInviteNotification.fromName}</strong>{parts[1]}
                             </span>
                           );
-                        })()}
-                      </div>
+                        }
+                        return (
+                          <span className="font-sans text-xs sm:text-sm font-semibold mt-0.5 leading-snug break-words">
+                            {t("user_invited_you", { name: activeInviteNotification.fromName })}
+                          </span>
+                        );
+                      })()}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          playClickSound();
-                          const senderId = activeInviteNotification?.fromUserId || activeInviteNotification?.senderId || activeInviteNotification?.fromName;
-                          if (isActivelyInGame() && senderId) {
-                            mutedSendersInGameRef.current.add(String(senderId).trim());
-                            if (activeInviteNotification?.fromName) {
-                              mutedSendersInGameRef.current.add(String(activeInviteNotification.fromName).trim());
-                            }
-                            console.log(`[Invite Guard] In-game invite declined. Muted sender '${senderId}' for this match.`);
+                  </div>
+
+                  {/* Tier 2: Bottom Actions Row */}
+                  <div className="flex items-center justify-between gap-3 w-full pt-1">
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        playClickSound();
+                        const senderId = activeInviteNotification?.fromUserId || activeInviteNotification?.senderId || activeInviteNotification?.fromName;
+                        if (isActivelyInGame() && senderId) {
+                          mutedSendersInGameRef.current.add(String(senderId).trim());
+                          if (activeInviteNotification?.fromName) {
+                            mutedSendersInGameRef.current.add(String(activeInviteNotification.fromName).trim());
                           }
-                          try {
-                            await updateDoc(doc(db, "invites", activeInviteNotification.id), { status: "declined" });
-                          } catch (e) {
-                            console.error("Failed to decline invite in DB:", e);
-                          }
-                          setPendingChallenges(prev => prev.filter(c => c.id !== activeInviteNotification.id && c.inviteId !== activeInviteNotification.id));
-                          setActiveInviteNotification(null);
-                        }}
-                        className={`px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider cursor-pointer border-none transition-all active:scale-95 ${
-                          darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
-                        }`}
-                      >
-                        {t("btn_decline")}
-                      </button>
-                      <button
-                        disabled={isJoiningRoomLoading}
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (isJoiningRoomLoading) return;
-                          const { gameId, roomCode, id, password } = activeInviteNotification;
-                          await handleAcceptAndLaunchInvite(roomCode || gameId, id, password, true);
-                        }}
-                        className={`px-4.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 text-white flex items-center justify-center gap-1.5 ${
-                          isJoiningRoomLoading
-                            ? "opacity-80 cursor-not-allowed bg-emerald-700"
-                            : "cursor-pointer bg-emerald-600 hover:bg-emerald-500"
-                        }`}
-                      >
-                        {isJoiningRoomLoading ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin stroke-[2]" />
-                            <span>{t("joining_status")}</span>
-                          </>
-                        ) : (
-                          <span>{t("btn_accept")}</span>
-                        )}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+                          console.log(`[Invite Guard] In-game invite declined. Muted sender '${senderId}' for this match.`);
+                        }
+                        try {
+                          await updateDoc(doc(db, "invites", activeInviteNotification.id), { status: "declined" });
+                        } catch (e) {
+                          console.error("Failed to decline invite in DB:", e);
+                        }
+                        setPendingChallenges(prev => prev.filter(c => c.id !== activeInviteNotification.id && c.inviteId !== activeInviteNotification.id));
+                        setActiveInviteNotification(null);
+                      }}
+                      className={`flex-1 py-2 px-3 rounded-xl font-medium text-xs sm:text-sm text-center transition-colors border-none cursor-pointer active:scale-95 ${
+                        darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
+                      }`}
+                    >
+                      {t("btn_decline")}
+                    </button>
+                    <button
+                      disabled={isJoiningRoomLoading}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (isJoiningRoomLoading) return;
+                        const { gameId, roomCode, id, password } = activeInviteNotification;
+                        await handleAcceptAndLaunchInvite(roomCode || gameId, id, password, true);
+                      }}
+                      className={`flex-1 py-2 px-3 rounded-xl font-semibold text-xs sm:text-sm text-center shadow-md transition-all border-none text-white flex items-center justify-center gap-1.5 active:scale-95 ${
+                        isJoiningRoomLoading
+                          ? "opacity-80 cursor-not-allowed bg-emerald-700"
+                          : "cursor-pointer bg-emerald-600 hover:bg-emerald-500"
+                      }`}
+                    >
+                      {isJoiningRoomLoading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin stroke-[2]" />
+                          <span>{t("joining_status")}</span>
+                        </>
+                      ) : (
+                        <span>{t("btn_accept")}</span>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
 
               {/* 5-second countdown progress bar */}
-              <div className="w-full h-1 bg-stone-200/50 dark:bg-zinc-800/50 rounded-full overflow-hidden">
+              <div className="w-full h-1 bg-stone-200/50 dark:bg-zinc-800/50 rounded-full overflow-hidden mt-0.5">
                 <motion.div
                   initial={{ width: "100%" }}
                   animate={{ width: "0%" }}
