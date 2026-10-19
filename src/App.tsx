@@ -1498,6 +1498,30 @@ const shareOrCopyContent = async (
   }
 };
 
+// --- NAMESPACED STORAGE RESOLVER (ISOLATED DRAWERS) ---
+export const getScopedKey = (baseKey: string, uid?: string | null): string => {
+  let effectiveUid = uid;
+  if (effectiveUid === undefined) {
+    const authUser = auth.currentUser;
+    if (authUser && !authUser.isAnonymous) {
+      effectiveUid = authUser.uid;
+    } else {
+      try {
+        const stored = typeof window !== "undefined" ? (localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile")) : null;
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.isSynced && parsed?.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
+            effectiveUid = parsed.id;
+          }
+        }
+      } catch {}
+      if (!effectiveUid) effectiveUid = "guest";
+    }
+  }
+  const isGuest = !effectiveUid || effectiveUid === "guest" || effectiveUid === "GUEST" || effectiveUid.startsWith("GUEST_");
+  return isGuest ? `sudoku_guest_${baseKey}` : `sudoku_user_${effectiveUid}_${baseKey}`;
+};
+
 export default function App() {
   const { t, language } = useTranslation();
   const [googleClientId, setGoogleClientId] = useState<string | null>(() => {
@@ -1605,7 +1629,8 @@ useEffect(() => {
     isSynced: boolean;
   } | null>(() => {
     try {
-      const saved = localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile");
+      const scopedKey = getScopedKey("userProfile");
+      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.id) {
@@ -1618,24 +1643,27 @@ useEffect(() => {
           try {
             localStorage.setItem("sudoku_userProfile", JSON.stringify(fixedProfile));
             localStorage.setItem("sudoku_user_profile", JSON.stringify(fixedProfile));
+            localStorage.setItem(scopedKey, JSON.stringify(fixedProfile));
           } catch {}
           return fixedProfile;
         }
       }
     } catch {}
     try {
-      const vaultRaw = localStorage.getItem("sudoku_guest_vault");
+      const vaultRaw = localStorage.getItem("sudoku_guest_vault") || localStorage.getItem("sudoku_guest_userProfile");
       if (vaultRaw) {
         const vault = JSON.parse(vaultRaw);
-        if (vault?.userProfile) {
-          const rawName = (vault.userProfile.name || "").trim();
+        const candidate = vault?.userProfile || vault;
+        if (candidate?.id) {
+          const rawName = (candidate.name || "").trim();
           const restoredName = (!rawName || rawName === "Anonymous" || rawName === "Guest Voyager" || rawName === "Anonymous Voyager")
             ? `Pro_${Math.floor(1000 + Math.random() * 9000)}`
             : rawName.slice(0, 15);
-          const restored = { ...vault.userProfile, name: restoredName, isSynced: false };
+          const restored = { ...candidate, name: restoredName, isSynced: false };
           try {
             localStorage.setItem("sudoku_userProfile", JSON.stringify(restored));
             localStorage.setItem("sudoku_user_profile", JSON.stringify(restored));
+            localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(restored));
           } catch {}
           return restored;
         }
@@ -1657,6 +1685,7 @@ useEffect(() => {
     try {
       localStorage.setItem("sudoku_userProfile", JSON.stringify(initialProfile));
       localStorage.setItem("sudoku_user_profile", JSON.stringify(initialProfile));
+      localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(initialProfile));
     } catch {}
     return initialProfile;
   });
@@ -1665,6 +1694,8 @@ useEffect(() => {
   useEffect(() => {
     userProfileRef.current = userProfile;
   }, [userProfile]);
+
+  const syncGuestSnapshotInRealtimeRef = useRef<((updates?: any) => void) | null>(null);
 
   // Display name registration state
   const [showDisplayNameModal, setShowDisplayNameModal] = useState<boolean>(false);
@@ -1754,7 +1785,9 @@ useEffect(() => {
     };
     setUserProfile(updatedProfile);
     localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
+    localStorage.setItem(getScopedKey("userProfile"), JSON.stringify(updatedProfile));
     localStorage.setItem("sudoku_is_display_name_configured", "true");
+    syncGuestSnapshotInRealtimeRef.current?.({ userProfile: updatedProfile });
 
     if (auth.currentUser && !auth.currentUser.isAnonymous) {
       const userDocRef = doc(db, "users", auth.currentUser.uid);
@@ -2150,7 +2183,8 @@ useEffect(() => {
 
   const [savedGames, setSavedGames] = useState<CompletedGame[]>(() => {
     try {
-      const saved = localStorage.getItem("sudoku_saved_games");
+      const scopedKey = getScopedKey("saved_games");
+      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_saved_games");
       if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -2163,9 +2197,15 @@ useEffect(() => {
     }
   });
 
+  const savedGamesRef = useRef<CompletedGame[]>(savedGames);
+  useEffect(() => {
+    savedGamesRef.current = savedGames;
+  }, [savedGames]);
+
   const [completedGames, setCompletedGames] = useState<CompletedGame[]>(() => {
     try {
-      const saved = localStorage.getItem("sudoku_completed_games");
+      const scopedKey = getScopedKey("completed_games");
+      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_completed_games");
       if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -3034,12 +3074,13 @@ useEffect(() => {
   // Decoupled cumulative statistics counters that persist across match completions and history caps
   const [totalGamesPlayed, setTotalGamesPlayed] = useState<number>(() => {
     try {
-      const saved = localStorage.getItem("sudoku_total_games_played");
+      const scopedKey = getScopedKey("total_games_played");
+      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_total_games_played");
       if (saved !== null) {
         const val = parseInt(saved, 10);
         if (!isNaN(val) && val >= 0) return Math.max(val, completedGames.length);
       }
-      const legacy = localStorage.getItem("sudoku_gamesPlayed");
+      const legacy = localStorage.getItem(getScopedKey("gamesPlayed")) || localStorage.getItem("sudoku_gamesPlayed");
       if (legacy !== null) {
         const val = parseInt(legacy, 10);
         if (!isNaN(val) && val >= 0) return Math.max(val, completedGames.length);
@@ -3051,12 +3092,13 @@ useEffect(() => {
   const [totalWinsCount, setTotalWinsCount] = useState<number>(() => {
     const winsInHistory = completedGames.filter(g => g.isWon).length;
     try {
-      const saved = localStorage.getItem("sudoku_total_wins_count");
+      const scopedKey = getScopedKey("total_wins_count");
+      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_total_wins_count");
       if (saved !== null) {
         const val = parseInt(saved, 10);
         if (!isNaN(val) && val >= 0) return Math.max(val, winsInHistory);
       }
-      const legacy = localStorage.getItem("sudoku_winsCount");
+      const legacy = localStorage.getItem(getScopedKey("winsCount")) || localStorage.getItem("sudoku_winsCount");
       if (legacy !== null) {
         const val = parseInt(legacy, 10);
         if (!isNaN(val) && val >= 0) return Math.max(val, winsInHistory);
@@ -3067,7 +3109,8 @@ useEffect(() => {
 
   const [winStreak, setWinStreak] = useState<number>(() => {
     try {
-      const saved = localStorage.getItem("sudoku_winStreak");
+      const scopedKey = getScopedKey("winStreak");
+      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_winStreak");
       if (saved !== null) {
         const val = parseInt(saved, 10);
         if (!isNaN(val) && val >= 0) return val;
@@ -3105,7 +3148,8 @@ useEffect(() => {
     
     // 1. Read existing saved best times from localStorage (case-insensitive for tiers)
     try {
-      const saved = localStorage.getItem("sudoku_best_times");
+      const scopedKey = getScopedKey("best_times");
+      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_best_times");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === "object") {
@@ -3170,6 +3214,7 @@ useEffect(() => {
     // 3. Immediately write back reconciled best times so they are permanently saved
     try {
       localStorage.setItem("sudoku_best_times", JSON.stringify(records));
+      localStorage.setItem(getScopedKey("best_times"), JSON.stringify(records));
     } catch {}
 
     return records;
@@ -3180,6 +3225,60 @@ useEffect(() => {
   useEffect(() => {
     personalBestTimesRef.current = personalBestTimes;
   }, [personalBestTimes]);
+
+  // Synchronizes the guest snapshot into isolated drawer & sudoku_guest_vault in real-time
+  const syncGuestSnapshotInRealtime = useCallback((updates?: Partial<{
+    userProfile: any;
+    completedGames: CompletedGame[];
+    savedGames: CompletedGame[];
+    bestTimes: Record<string, number | null>;
+    totalGamesPlayed: number;
+    totalWinsCount: number;
+    winStreak: number;
+  }>) => {
+    const isGuestSession = !auth.currentUser || auth.currentUser.isAnonymous || !userProfileRef.current?.isSynced;
+    if (!isGuestSession) return;
+    try {
+      let currentVault: any = null;
+      const raw = localStorage.getItem("sudoku_guest_vault");
+      if (raw) {
+        try { currentVault = JSON.parse(raw); } catch {}
+      }
+      const newVault = {
+        userProfile: updates?.userProfile || currentVault?.userProfile || userProfileRef.current || userProfile,
+        completedGames: updates?.completedGames !== undefined ? updates.completedGames : (currentVault?.completedGames || completedGamesRef.current || completedGames),
+        savedGames: updates?.savedGames !== undefined ? updates.savedGames : (currentVault?.savedGames || savedGamesRef.current || savedGames),
+        bestTimes: updates?.bestTimes || currentVault?.bestTimes || personalBestTimesRef.current || personalBestTimes,
+        totalGamesPlayed: updates?.totalGamesPlayed !== undefined ? updates.totalGamesPlayed : (currentVault?.totalGamesPlayed ?? totalGamesPlayed),
+        totalWinsCount: updates?.totalWinsCount !== undefined ? updates.totalWinsCount : (currentVault?.totalWinsCount ?? totalWinsCount),
+        winStreak: updates?.winStreak !== undefined ? updates.winStreak : (currentVault?.winStreak ?? winStreak),
+        vaultedAt: Date.now()
+      };
+      localStorage.setItem("sudoku_guest_vault", JSON.stringify(newVault));
+      // Write into isolated guest drawer
+      if (newVault.userProfile) localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(newVault.userProfile));
+      if (newVault.completedGames) localStorage.setItem("sudoku_guest_completed_games", JSON.stringify(newVault.completedGames));
+      if (newVault.bestTimes) localStorage.setItem("sudoku_guest_best_times", JSON.stringify(newVault.bestTimes));
+      if (newVault.savedGames) localStorage.setItem("sudoku_guest_saved_games", JSON.stringify(newVault.savedGames));
+      if (typeof newVault.totalGamesPlayed === "number") {
+        localStorage.setItem("sudoku_guest_total_games_played", String(newVault.totalGamesPlayed));
+        localStorage.setItem("sudoku_guest_gamesPlayed", String(newVault.totalGamesPlayed));
+      }
+      if (typeof newVault.totalWinsCount === "number") {
+        localStorage.setItem("sudoku_guest_total_wins_count", String(newVault.totalWinsCount));
+        localStorage.setItem("sudoku_guest_winsCount", String(newVault.totalWinsCount));
+      }
+      if (typeof newVault.winStreak === "number") {
+        localStorage.setItem("sudoku_guest_winStreak", String(newVault.winStreak));
+      }
+    } catch (e) {
+      console.warn("[Auth] Failed to sync guest snapshot in real-time:", e);
+    }
+  }, [userProfile, completedGames, savedGames, personalBestTimes, totalGamesPlayed, totalWinsCount, winStreak]);
+  syncGuestSnapshotInRealtimeRef.current = syncGuestSnapshotInRealtime;
+  useEffect(() => {
+    syncGuestSnapshotInRealtimeRef.current = syncGuestSnapshotInRealtime;
+  }, [syncGuestSnapshotInRealtime]);
 
   const [isNewRecordAchieved, setIsNewRecordAchieved] = useState<boolean>(false);
   const [previousRecordTime, setPreviousRecordTime] = useState<number | null>(null);
@@ -3307,6 +3406,8 @@ useEffect(() => {
       setPersonalBestTimes(updated);
       try {
         localStorage.setItem("sudoku_best_times", JSON.stringify(updated));
+        localStorage.setItem(getScopedKey("best_times"), JSON.stringify(updated));
+        syncGuestSnapshotInRealtime({ bestTimes: updated });
       } catch {}
       setIsNewRecordAchieved(true);
       addLog(`🏆 New Personal Best Record achieved for ${diffKey}: ${formatTimer(elapsedSeconds)}!`);
@@ -3400,6 +3501,8 @@ useEffect(() => {
       try {
         localStorage.setItem("sudoku_total_games_played", String(gp));
         localStorage.setItem("sudoku_gamesPlayed", String(gp));
+        localStorage.setItem(getScopedKey("total_games_played"), String(gp));
+        localStorage.setItem(getScopedKey("gamesPlayed"), String(gp));
       } catch {}
     }
 
@@ -3409,6 +3512,8 @@ useEffect(() => {
       try {
         localStorage.setItem("sudoku_total_wins_count", String(gw));
         localStorage.setItem("sudoku_winsCount", String(gw));
+        localStorage.setItem(getScopedKey("total_wins_count"), String(gw));
+        localStorage.setItem(getScopedKey("winsCount"), String(gw));
       } catch {}
     }
 
@@ -3424,6 +3529,7 @@ useEffect(() => {
       personalBestTimesRef.current = loadedPB;
       try {
         localStorage.setItem("sudoku_best_times", JSON.stringify(loadedPB));
+        localStorage.setItem(getScopedKey("best_times"), JSON.stringify(loadedPB));
       } catch {}
     }
 
@@ -3431,6 +3537,7 @@ useEffect(() => {
       setWinStreak(stats.winStreak);
       try {
         localStorage.setItem("sudoku_winStreak", String(stats.winStreak));
+        localStorage.setItem(getScopedKey("winStreak"), String(stats.winStreak));
       } catch {}
     }
   }, []);
@@ -3527,17 +3634,24 @@ useEffect(() => {
           personalBestTimesRef.current = resolvedBestTimes;
           try {
             localStorage.setItem("sudoku_best_times", JSON.stringify(resolvedBestTimes));
+            localStorage.setItem(getScopedKey("best_times", uid), JSON.stringify(resolvedBestTimes));
             localStorage.setItem("sudoku_total_games_played", String(finalTotalGames));
             localStorage.setItem("sudoku_gamesPlayed", String(finalTotalGames));
+            localStorage.setItem(getScopedKey("total_games_played", uid), String(finalTotalGames));
+            localStorage.setItem(getScopedKey("gamesPlayed", uid), String(finalTotalGames));
             localStorage.setItem("sudoku_total_wins_count", String(finalTotalWins));
             localStorage.setItem("sudoku_winsCount", String(finalTotalWins));
+            localStorage.setItem(getScopedKey("total_wins_count", uid), String(finalTotalWins));
+            localStorage.setItem(getScopedKey("winsCount", uid), String(finalTotalWins));
             localStorage.setItem("sudoku_winStreak", String(finalWinStreak));
+            localStorage.setItem(getScopedKey("winStreak", uid), String(finalWinStreak));
           } catch {}
 
           // 2. Match history (recent games) and saved boards: strictly from cloudDocData
           setCompletedGames(cloudCompleted);
           try {
             localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudCompleted));
+            localStorage.setItem(getScopedKey("completed_games", uid), JSON.stringify(cloudCompleted));
           } catch {}
 
           // Self-heal Firestore document ONLY if cloud counters or cloud match times are internally desynchronized
@@ -3562,11 +3676,13 @@ useEffect(() => {
             setSavedGames(loadedSaved);
             try {
               localStorage.setItem("sudoku_saved_games", JSON.stringify(loadedSaved));
+              localStorage.setItem(getScopedKey("saved_games", uid), JSON.stringify(loadedSaved));
             } catch {}
           } else {
             setSavedGames([]);
             try {
               localStorage.removeItem("sudoku_saved_games");
+              localStorage.removeItem(getScopedKey("saved_games", uid));
             } catch {}
           }
 
@@ -3757,6 +3873,7 @@ useEffect(() => {
           try {
             localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
             localStorage.setItem("sudoku_user_profile", JSON.stringify(updatedProfile));
+            localStorage.setItem(getScopedKey("userProfile", uid), JSON.stringify(updatedProfile));
           } catch {}
 
           // 6. Sync current FCM push token & preference to users/{user.uid}
@@ -3828,6 +3945,7 @@ useEffect(() => {
           try {
             localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
             localStorage.setItem("sudoku_user_profile", JSON.stringify(updatedProfile));
+            localStorage.setItem(getScopedKey("userProfile", uid), JSON.stringify(updatedProfile));
           } catch {}
 
           const currentSettingsPayload = {
@@ -3883,6 +4001,9 @@ useEffect(() => {
             bestTimes: personalBestTimesRef.current
           });
           setCompletedGames(localCompleted);
+          try {
+            localStorage.setItem(getScopedKey("completed_games", uid), JSON.stringify(localCompleted));
+          } catch {}
 
           // Clear guest vault because Guest #1 has now merged into this Google account
           try {
@@ -3935,10 +4056,18 @@ useEffect(() => {
             const vault = JSON.parse(vaultRaw);
             if (vault?.userProfile) guestProfile = vault.userProfile;
           }
+          if (!guestProfile) {
+            const drawerStored = localStorage.getItem("sudoku_guest_userProfile");
+            if (drawerStored) {
+              const parsed = JSON.parse(drawerStored);
+              if (parsed?.id) guestProfile = parsed;
+            }
+          }
 
           if (guestProfile && guestProfile.id) {
             const rawName = (guestProfile.name || "").trim();
-            const safeName = (!rawName || rawName === "Anonymous" || rawName === "Guest Voyager" || rawName === "Anonymous Voyager" || isDefaultOrEmptyPlayerName(rawName))
+            const genericNames = ["Anonymous", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Guest"];
+            const safeName = (!rawName || genericNames.includes(rawName))
               ? `Pro_${Math.floor(1000 + Math.random() * 9000)}`
               : rawName.slice(0, 15);
             const resolvedGuest = {
@@ -3951,6 +4080,7 @@ useEffect(() => {
             try {
               localStorage.setItem("sudoku_userProfile", JSON.stringify(resolvedGuest));
               localStorage.setItem("sudoku_user_profile", JSON.stringify(resolvedGuest));
+              localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(resolvedGuest));
             } catch {}
           } else {
             const freshGuestId = "GUEST_" + Math.floor(1000 + Math.random() * 9000);
@@ -3968,6 +4098,7 @@ useEffect(() => {
             try {
               localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuest));
               localStorage.setItem("sudoku_user_profile", JSON.stringify(cleanGuest));
+              localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(cleanGuest));
             } catch {}
           }
         } catch (e) {
@@ -3982,7 +4113,8 @@ useEffect(() => {
         setIsAuthHydrating(false);
 
         const curProfile = userProfileRef.current;
-        if (!curProfile || !curProfile.name || curProfile.name === "Anonymous" || curProfile.name === "Guest Voyager" || curProfile.name === "Anonymous Voyager") {
+        const genericNames = ["Anonymous", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Guest"];
+        if (!curProfile || !curProfile.name || genericNames.includes(curProfile.name.trim())) {
           const safeName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
           const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
           const randColor = colors[Math.floor(Math.random() * colors.length)];
@@ -3997,6 +4129,7 @@ useEffect(() => {
           try {
             localStorage.setItem("sudoku_userProfile", JSON.stringify(sanitizedProfile));
             localStorage.setItem("sudoku_user_profile", JSON.stringify(sanitizedProfile));
+            localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(sanitizedProfile));
           } catch {}
         }
       } else if (user && !user.isAnonymous) {
@@ -4252,6 +4385,14 @@ useEffect(() => {
       const isPriorGuest = wasAnonymous || Boolean(priorProfileId && (priorProfileId.startsWith("GUEST_") || !userProfile?.isSynced));
       const priorGuestId = isPriorGuest ? (priorProfileId || (credentialUser?.isAnonymous ? credentialUser.uid : null)) : null;
 
+      // Real-time pre-snapshot of guest state before external auth flow triggers
+      if (isPriorGuest) {
+        syncGuestSnapshotInRealtime({
+          completedGames: completedGamesRef.current || completedGames,
+          savedGames: savedGamesRef.current || savedGames
+        });
+      }
+
       if (!credentialUser) {
         credentialUser = (await signInAnonymously(auth)).user;
       }
@@ -4347,8 +4488,8 @@ useEffect(() => {
           try {
             const guestVaultData = {
               userProfile: userProfileRef.current || userProfile,
-              completedGames: completedGames,
-              savedGames: savedGames,
+              completedGames: completedGamesRef.current || completedGames,
+              savedGames: savedGamesRef.current || savedGames,
               bestTimes: personalBestTimesRef.current || personalBestTimes,
               totalGamesPlayed: totalGamesPlayed,
               totalWinsCount: totalWinsCount,
@@ -4356,7 +4497,16 @@ useEffect(() => {
               vaultedAt: Date.now()
             };
             localStorage.setItem("sudoku_guest_vault", JSON.stringify(guestVaultData));
-            console.log("[Auth] Successfully vaulted guest snapshot into sudoku_guest_vault for later logout restoration");
+            syncGuestSnapshotInRealtime({
+              userProfile: guestVaultData.userProfile,
+              completedGames: guestVaultData.completedGames,
+              savedGames: guestVaultData.savedGames,
+              bestTimes: guestVaultData.bestTimes,
+              totalGamesPlayed: guestVaultData.totalGamesPlayed,
+              totalWinsCount: guestVaultData.totalWinsCount,
+              winStreak: guestVaultData.winStreak
+            });
+            console.log("[Auth] Successfully vaulted guest snapshot into sudoku_guest_vault and guest drawer for later logout restoration");
           } catch (err) {
             console.warn("Failed to vault guest snapshot:", err);
           }
@@ -4381,6 +4531,7 @@ useEffect(() => {
           try {
             localStorage.setItem("sudoku_userProfile", JSON.stringify(returningProfile));
             localStorage.setItem("sudoku_user_profile", JSON.stringify(returningProfile));
+            localStorage.setItem(getScopedKey("userProfile", finalUser.uid), JSON.stringify(returningProfile));
           } catch {}
           console.log("[Auth] Returning Google user recognized. Preserved cloud profile:", returningProfile.name);
         }
@@ -4550,9 +4701,22 @@ useEffect(() => {
         console.warn("[Auth] Failed to parse guest vault:", err);
       }
 
+      if (!restoredVault?.userProfile?.id) {
+        try {
+          const drawerProfileRaw = localStorage.getItem("sudoku_guest_userProfile");
+          if (drawerProfileRaw) {
+            const parsed = JSON.parse(drawerProfileRaw);
+            if (parsed?.id) {
+              restoredVault = { ...(restoredVault || {}), userProfile: parsed };
+            }
+          }
+        } catch {}
+      }
+
       if (restoredVault && restoredVault.userProfile?.id) {
         const rawName = restoredVault.userProfile.name;
-        const restoredName = (!rawName || rawName === "Anonymous" || rawName === "Guest Voyager" || rawName === "Anonymous Voyager" || isDefaultOrEmptyPlayerName(rawName))
+        const genericNames = ["Anonymous", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Guest"];
+        const restoredName = (!rawName || genericNames.includes(rawName.trim()))
           ? `Pro_${Math.floor(1000 + Math.random() * 9000)}`
           : rawName.trim().slice(0, 15);
         const restoredGuestProfile = {
@@ -4565,45 +4729,99 @@ useEffect(() => {
         try {
           localStorage.setItem("sudoku_userProfile", JSON.stringify(restoredGuestProfile));
           localStorage.setItem("sudoku_user_profile", JSON.stringify(restoredGuestProfile));
+          localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(restoredGuestProfile));
         } catch {}
 
-        const restoredCompleted = Array.isArray(restoredVault.completedGames) ? restoredVault.completedGames : [];
+        let restoredCompleted = Array.isArray(restoredVault.completedGames) ? restoredVault.completedGames : null;
+        if (!restoredCompleted) {
+          try {
+            const drawerCompleted = JSON.parse(localStorage.getItem("sudoku_guest_completed_games") || "[]");
+            if (Array.isArray(drawerCompleted)) restoredCompleted = drawerCompleted;
+          } catch {}
+        }
+        if (!restoredCompleted) restoredCompleted = [];
         setCompletedGames(restoredCompleted);
         try {
           localStorage.setItem("sudoku_completed_games", JSON.stringify(restoredCompleted));
+          localStorage.setItem("sudoku_guest_completed_games", JSON.stringify(restoredCompleted));
         } catch {}
 
-        const restoredGamesPlayed = typeof restoredVault.totalGamesPlayed === "number" ? restoredVault.totalGamesPlayed : 0;
+        let restoredGamesPlayed = typeof restoredVault.totalGamesPlayed === "number" ? restoredVault.totalGamesPlayed : null;
+        if (restoredGamesPlayed === null) {
+          const drawerVal = localStorage.getItem("sudoku_guest_total_games_played") || localStorage.getItem("sudoku_guest_gamesPlayed");
+          if (drawerVal !== null) {
+            const val = parseInt(drawerVal, 10);
+            if (!isNaN(val) && val >= 0) restoredGamesPlayed = val;
+          }
+        }
+        if (restoredGamesPlayed === null) restoredGamesPlayed = restoredCompleted.length;
         setTotalGamesPlayed(restoredGamesPlayed);
         try {
           localStorage.setItem("sudoku_total_games_played", String(restoredGamesPlayed));
           localStorage.setItem("sudoku_gamesPlayed", String(restoredGamesPlayed));
+          localStorage.setItem("sudoku_guest_total_games_played", String(restoredGamesPlayed));
+          localStorage.setItem("sudoku_guest_gamesPlayed", String(restoredGamesPlayed));
         } catch {}
 
-        const restoredWinsCount = typeof restoredVault.totalWinsCount === "number" ? restoredVault.totalWinsCount : 0;
+        let restoredWinsCount = typeof restoredVault.totalWinsCount === "number" ? restoredVault.totalWinsCount : null;
+        if (restoredWinsCount === null) {
+          const drawerVal = localStorage.getItem("sudoku_guest_total_wins_count") || localStorage.getItem("sudoku_guest_winsCount");
+          if (drawerVal !== null) {
+            const val = parseInt(drawerVal, 10);
+            if (!isNaN(val) && val >= 0) restoredWinsCount = val;
+          }
+        }
+        if (restoredWinsCount === null) restoredWinsCount = restoredCompleted.filter((g: any) => g && g.isWon).length;
         setTotalWinsCount(restoredWinsCount);
         try {
           localStorage.setItem("sudoku_total_wins_count", String(restoredWinsCount));
           localStorage.setItem("sudoku_winsCount", String(restoredWinsCount));
+          localStorage.setItem("sudoku_guest_total_wins_count", String(restoredWinsCount));
+          localStorage.setItem("sudoku_guest_winsCount", String(restoredWinsCount));
         } catch {}
 
-        const restoredBestTimes = restoredVault.bestTimes || { EASY: null, MEDIUM: null, HARD: null, EXPERT: null, MASTER: null };
+        let restoredBestTimes = restoredVault.bestTimes;
+        if (!restoredBestTimes) {
+          try {
+            const drawerBestTimes = JSON.parse(localStorage.getItem("sudoku_guest_best_times") || "null");
+            if (drawerBestTimes && typeof drawerBestTimes === "object") restoredBestTimes = drawerBestTimes;
+          } catch {}
+        }
+        if (!restoredBestTimes) restoredBestTimes = { EASY: null, MEDIUM: null, HARD: null, EXPERT: null, MASTER: null };
         setPersonalBestTimes(restoredBestTimes);
         personalBestTimesRef.current = restoredBestTimes;
         try {
           localStorage.setItem("sudoku_best_times", JSON.stringify(restoredBestTimes));
+          localStorage.setItem("sudoku_guest_best_times", JSON.stringify(restoredBestTimes));
         } catch {}
 
-        const restoredSavedGames = Array.isArray(restoredVault.savedGames) ? restoredVault.savedGames : [];
+        let restoredSavedGames = Array.isArray(restoredVault.savedGames) ? restoredVault.savedGames : null;
+        if (!restoredSavedGames) {
+          try {
+            const drawerSaved = JSON.parse(localStorage.getItem("sudoku_guest_saved_games") || "[]");
+            if (Array.isArray(drawerSaved)) restoredSavedGames = drawerSaved;
+          } catch {}
+        }
+        if (!restoredSavedGames) restoredSavedGames = [];
         setSavedGames(restoredSavedGames);
         try {
           localStorage.setItem("sudoku_saved_games", JSON.stringify(restoredSavedGames));
+          localStorage.setItem("sudoku_guest_saved_games", JSON.stringify(restoredSavedGames));
         } catch {}
 
-        const restoredWinStreak = typeof restoredVault.winStreak === "number" ? restoredVault.winStreak : 0;
+        let restoredWinStreak = typeof restoredVault.winStreak === "number" ? restoredVault.winStreak : null;
+        if (restoredWinStreak === null) {
+          const drawerVal = localStorage.getItem("sudoku_guest_winStreak");
+          if (drawerVal !== null) {
+            const val = parseInt(drawerVal, 10);
+            if (!isNaN(val) && val >= 0) restoredWinStreak = val;
+          }
+        }
+        if (restoredWinStreak === null) restoredWinStreak = 0;
         setWinStreak(restoredWinStreak);
         try {
           localStorage.setItem("sudoku_winStreak", String(restoredWinStreak));
+          localStorage.setItem("sudoku_guest_winStreak", String(restoredWinStreak));
         } catch {}
 
         setMultiplayerPlayers(INITIAL_GUEST_STATE.multiplayerPlayers);
@@ -4642,14 +4860,23 @@ useEffect(() => {
         try {
           localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuestProfile));
           localStorage.setItem("sudoku_user_profile", JSON.stringify(cleanGuestProfile));
+          localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(cleanGuestProfile));
           localStorage.setItem("sudoku_best_times", JSON.stringify(cleanBestTimes));
+          localStorage.setItem("sudoku_guest_best_times", JSON.stringify(cleanBestTimes));
           localStorage.setItem("sudoku_completed_games", "[]");
+          localStorage.setItem("sudoku_guest_completed_games", "[]");
           localStorage.setItem("sudoku_saved_games", "[]");
+          localStorage.setItem("sudoku_guest_saved_games", "[]");
           localStorage.setItem("sudoku_total_games_played", "0");
           localStorage.setItem("sudoku_gamesPlayed", "0");
+          localStorage.setItem("sudoku_guest_total_games_played", "0");
+          localStorage.setItem("sudoku_guest_gamesPlayed", "0");
           localStorage.setItem("sudoku_total_wins_count", "0");
           localStorage.setItem("sudoku_winsCount", "0");
+          localStorage.setItem("sudoku_guest_total_wins_count", "0");
+          localStorage.setItem("sudoku_guest_winsCount", "0");
           localStorage.setItem("sudoku_winStreak", "0");
+          localStorage.setItem("sudoku_guest_winStreak", "0");
 
           const newGuestVault = {
             userProfile: cleanGuestProfile,
@@ -9086,6 +9313,8 @@ useEffect(() => {
       try {
         localStorage.setItem("sudoku_total_games_played", String(next));
         localStorage.setItem("sudoku_gamesPlayed", String(next));
+        localStorage.setItem(getScopedKey("total_games_played"), String(next));
+        localStorage.setItem(getScopedKey("gamesPlayed"), String(next));
       } catch {}
       return next;
     });
@@ -9099,6 +9328,8 @@ useEffect(() => {
         try {
           localStorage.setItem("sudoku_total_wins_count", String(next));
           localStorage.setItem("sudoku_winsCount", String(next));
+          localStorage.setItem(getScopedKey("total_wins_count"), String(next));
+          localStorage.setItem(getScopedKey("winsCount"), String(next));
         } catch {}
         return next;
       });
@@ -9110,12 +9341,14 @@ useEffect(() => {
       setWinStreak(calculatedNextStreak);
       try {
         localStorage.setItem("sudoku_winStreak", String(calculatedNextStreak));
+        localStorage.setItem(getScopedKey("winStreak"), String(calculatedNextStreak));
       } catch {}
     } else {
       calculatedNextStreak = 0;
       setWinStreak(0);
       try {
         localStorage.setItem("sudoku_winStreak", "0");
+        localStorage.setItem(getScopedKey("winStreak"), "0");
       } catch {}
     }
 
@@ -9144,7 +9377,14 @@ useEffect(() => {
           updated[existsIndex] = { ...updated[existsIndex], participants: resolvedParts, isChallenge: isMultiplayerMatch };
           try {
             localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
+            localStorage.setItem(getScopedKey("completed_games"), JSON.stringify(updated));
           } catch {}
+          syncGuestSnapshotInRealtime({
+            completedGames: updated,
+            totalGamesPlayed: calculatedNextTotalGames,
+            totalWinsCount: isWon ? calculatedNextTotalWins : totalWinsCount,
+            winStreak: calculatedNextStreak
+          });
           return updated;
         }
         return prev;
@@ -9153,7 +9393,14 @@ useEffect(() => {
       const updated = [completedGameRecord, ...prev].slice(0, 10);
       try {
         localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
+        localStorage.setItem(getScopedKey("completed_games"), JSON.stringify(updated));
       } catch {}
+      syncGuestSnapshotInRealtime({
+        completedGames: updated,
+        totalGamesPlayed: calculatedNextTotalGames,
+        totalWinsCount: isWon ? calculatedNextTotalWins : totalWinsCount,
+        winStreak: calculatedNextStreak
+      });
       return updated;
     });
 
@@ -9295,6 +9542,8 @@ useEffect(() => {
       if (exists) {
         const filtered = prev.filter(r => r.id !== game.id);
         localStorage.setItem("sudoku_saved_games", JSON.stringify(filtered));
+        localStorage.setItem(getScopedKey("saved_games"), JSON.stringify(filtered));
+        syncGuestSnapshotInRealtime({ savedGames: filtered });
         showToast(t("puzzleRemovedSavedToast"));
         addLog(`📌 Puzzle #${game.seed || game.id} unsaved.`);
         return filtered;
@@ -9311,6 +9560,8 @@ useEffect(() => {
         
         const updated = [enrichedGame, ...prev];
         localStorage.setItem("sudoku_saved_games", JSON.stringify(updated));
+        localStorage.setItem(getScopedKey("saved_games"), JSON.stringify(updated));
+        syncGuestSnapshotInRealtime({ savedGames: updated });
         showToast(t("puzzleAddedSavedToast"));
         addLog(`📌 Puzzle #${game.seed || game.id} saved to Saved folder.`);
         
@@ -15918,7 +16169,7 @@ useEffect(() => {
           const matchingPending = pendingChallenges.find(c => c.id === incomingChallengeId);
           if (matchingPending?.inviteId) {
             try {
-              updateDoc(doc(db, "invites", matchingPending.inviteId), { status: "declined" });
+              updateDoc(doc(db, "invites", matchingPending.inviteId), { status: "declined" }).catch(() => {});
             } catch (e) {}
           }
           handleMaybeLaterChallenge();
@@ -16852,7 +17103,9 @@ useEffect(() => {
                         };
                         setUserProfile(updatedProfile);
                         localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
+                        localStorage.setItem(getScopedKey("userProfile"), JSON.stringify(updatedProfile));
                         localStorage.setItem("sudoku_is_display_name_configured", "true");
+                        syncGuestSnapshotInRealtime({ userProfile: updatedProfile });
 
                         if (auth.currentUser && !auth.currentUser.isAnonymous) {
                           const userDocRef = doc(db, "users", auth.currentUser.uid);
