@@ -292,6 +292,8 @@ const INITIAL_GUEST_STATE = {
   totalWinsCount: 0,
   personalBestTimes: { EASY: null, MEDIUM: null, HARD: null, EXPERT: null, MASTER: null } as Record<string, number | null>,
   savedGames: [] as CompletedGame[],
+  friends: [] as any[],
+  recentPlayers: [] as any[],
   multiplayerPlayers: [] as any[],
   pendingChallenges: [] as PendingChallenge[]
 };
@@ -1948,7 +1950,9 @@ useEffect(() => {
     lastPlayedAt?: number;
   }>>(() => {
     try {
-      const saved = localStorage.getItem("sudoku_past_players");
+      const currentUid = auth.currentUser?.uid;
+      const scopedPast = getScopedKey("past_players", currentUid);
+      const saved = localStorage.getItem(scopedPast) || localStorage.getItem("sudoku_past_players");
       let priorGuestId: string | null = null;
       let currentStoredId: string | null = null;
       try {
@@ -1979,17 +1983,111 @@ useEffect(() => {
               declinedTimestamp: undefined
             }));
         }
+      } else {
+        // Fallback: check scoped or legacy friends and recent_players
+        const scopedFriends = localStorage.getItem(getScopedKey("friends", currentUid)) || localStorage.getItem("sudoku_friends");
+        const scopedRecent = localStorage.getItem(getScopedKey("recent_players", currentUid)) || localStorage.getItem("sudoku_recent_players");
+        let parsedFriends: any[] = [];
+        let parsedRecent: any[] = [];
+        if (scopedFriends) {
+          try { const pf = JSON.parse(scopedFriends); if (Array.isArray(pf)) parsedFriends = pf; } catch {}
+        }
+        if (scopedRecent) {
+          try { const pr = JSON.parse(scopedRecent); if (Array.isArray(pr)) parsedRecent = pr; } catch {}
+        }
+        if (parsedFriends.length > 0 || parsedRecent.length > 0) {
+          const combined = [
+            ...parsedFriends.map(p => ({ ...p, isFriend: true })),
+            ...parsedRecent.filter(r => !parsedFriends.some(f => f.id === r.id)).map(p => ({ ...p, isFriend: false }))
+          ];
+          return combined
+            .filter(p => p && p.id && (!currentStoredId || p.id !== currentStoredId) && (!priorGuestId || p.id !== priorGuestId))
+            .map(p => ({ ...p, inviteStatus: "idle" as const }));
+        }
       }
     } catch {}
     
     return [];
   });
 
+  const [friends, setFriendsState] = useState<any[]>(() => {
+    return (multiplayerPlayers || []).filter(p => p.isFriend);
+  });
+  const [recentPlayers, setRecentPlayersState] = useState<any[]>(() => {
+    return (multiplayerPlayers || []).filter(p => !p.isFriend);
+  });
+  const friendsRef = useRef<any[]>(friends);
+  const recentPlayersRef = useRef<any[]>(recentPlayers);
+  const multiplayerPlayersRef = useRef<any[]>(multiplayerPlayers);
+
+  const setFriends = useCallback((newFriendsOrFn: any[] | ((prev: any[]) => any[])) => {
+    setFriendsState(prev => {
+      const next = typeof newFriendsOrFn === "function" ? newFriendsOrFn(prev) : newFriendsOrFn;
+      friendsRef.current = next;
+      const currentUid = auth.currentUser?.uid || userProfileRef.current?.id;
+      try {
+        localStorage.setItem(getScopedKey("friends", currentUid), JSON.stringify(next));
+        localStorage.setItem("sudoku_friends", JSON.stringify(next));
+        if (currentUid && !currentUid.startsWith("GUEST_") && currentUid !== "guest") {
+          localStorage.setItem(`sudoku_usr_${currentUid}_friends`, JSON.stringify(next));
+        }
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const setRecentPlayers = useCallback((newRecentOrFn: any[] | ((prev: any[]) => any[])) => {
+    setRecentPlayersState(prev => {
+      const next = typeof newRecentOrFn === "function" ? newRecentOrFn(prev) : newRecentOrFn;
+      recentPlayersRef.current = next;
+      const currentUid = auth.currentUser?.uid || userProfileRef.current?.id;
+      try {
+        localStorage.setItem(getScopedKey("recent_players", currentUid), JSON.stringify(next));
+        localStorage.setItem("sudoku_recent_players", JSON.stringify(next));
+        if (currentUid && !currentUid.startsWith("GUEST_") && currentUid !== "guest") {
+          localStorage.setItem(`sudoku_usr_${currentUid}_recent_players`, JSON.stringify(next));
+        }
+      } catch {}
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
+    multiplayerPlayersRef.current = multiplayerPlayers;
     try {
+      const currentUid = auth.currentUser?.uid || userProfile?.id;
+      const fList = multiplayerPlayers.filter(p => p.isFriend);
+      const rList = multiplayerPlayers.filter(p => !p.isFriend);
+
+      friendsRef.current = fList;
+      setFriendsState(fList);
+      recentPlayersRef.current = rList;
+      setRecentPlayersState(rList);
+
+      // 1. Scoped keys
+      localStorage.setItem(getScopedKey("friends", currentUid), JSON.stringify(fList));
+      localStorage.setItem(getScopedKey("recent_players", currentUid), JSON.stringify(rList));
+      localStorage.setItem(getScopedKey("past_players", currentUid), JSON.stringify(multiplayerPlayers));
+
+      // 2. Legacy global keys
+      localStorage.setItem("sudoku_friends", JSON.stringify(fList));
+      localStorage.setItem("sudoku_recent_players", JSON.stringify(rList));
       localStorage.setItem("sudoku_past_players", JSON.stringify(multiplayerPlayers));
+
+      // 3. User alias drawer
+      if (currentUid && !currentUid.startsWith("GUEST_") && currentUid !== "guest") {
+        localStorage.setItem(`sudoku_usr_${currentUid}_friends`, JSON.stringify(fList));
+        localStorage.setItem(`sudoku_usr_${currentUid}_recent_players`, JSON.stringify(rList));
+      }
+
+      // 4. Real-time sync for guest
+      syncGuestSnapshotInRealtimeRef.current?.({
+        friends: fList,
+        recentPlayers: rList,
+        multiplayerPlayers: multiplayerPlayers
+      });
     } catch {}
-  }, [multiplayerPlayers]);
+  }, [multiplayerPlayers, userProfile?.id]);
 
   const drawerPlayerIds = useMemo(() => {
     let priorGuestId: string | null = null;
@@ -3235,6 +3333,10 @@ useEffect(() => {
     totalGamesPlayed: number;
     totalWinsCount: number;
     winStreak: number;
+    friends?: any[];
+    recentPlayers?: any[];
+    recent_players?: any[];
+    multiplayerPlayers?: any[];
   }>) => {
     const isGuestSession = !auth.currentUser || auth.currentUser.isAnonymous || !userProfileRef.current?.isSynced;
     if (!isGuestSession) return;
@@ -3244,6 +3346,19 @@ useEffect(() => {
       if (raw) {
         try { currentVault = JSON.parse(raw); } catch {}
       }
+
+      const currentFriends = updates?.friends !== undefined 
+        ? updates.friends 
+        : (friendsRef.current || currentVault?.friends || (multiplayerPlayersRef.current || multiplayerPlayers).filter((p: any) => p && p.isFriend));
+      const currentRecent = updates?.recentPlayers !== undefined 
+        ? updates.recentPlayers 
+        : (updates?.recent_players !== undefined 
+            ? updates.recent_players 
+            : (recentPlayersRef.current || currentVault?.recentPlayers || currentVault?.recent_players || (multiplayerPlayersRef.current || multiplayerPlayers).filter((p: any) => p && !p.isFriend)));
+      const currentMultiplayer = updates?.multiplayerPlayers !== undefined
+        ? updates.multiplayerPlayers
+        : (multiplayerPlayersRef.current || currentVault?.multiplayerPlayers || multiplayerPlayers);
+
       const newVault = {
         userProfile: updates?.userProfile || currentVault?.userProfile || userProfileRef.current || userProfile,
         completedGames: updates?.completedGames !== undefined ? updates.completedGames : (currentVault?.completedGames || completedGamesRef.current || completedGames),
@@ -3252,6 +3367,10 @@ useEffect(() => {
         totalGamesPlayed: updates?.totalGamesPlayed !== undefined ? updates.totalGamesPlayed : (currentVault?.totalGamesPlayed ?? totalGamesPlayed),
         totalWinsCount: updates?.totalWinsCount !== undefined ? updates.totalWinsCount : (currentVault?.totalWinsCount ?? totalWinsCount),
         winStreak: updates?.winStreak !== undefined ? updates.winStreak : (currentVault?.winStreak ?? winStreak),
+        friends: currentFriends,
+        recentPlayers: currentRecent,
+        recent_players: currentRecent,
+        multiplayerPlayers: currentMultiplayer,
         vaultedAt: Date.now()
       };
       localStorage.setItem("sudoku_guest_vault", JSON.stringify(newVault));
@@ -3271,10 +3390,19 @@ useEffect(() => {
       if (typeof newVault.winStreak === "number") {
         localStorage.setItem("sudoku_guest_winStreak", String(newVault.winStreak));
       }
+      if (currentFriends) {
+        localStorage.setItem("sudoku_guest_friends", JSON.stringify(currentFriends));
+      }
+      if (currentRecent) {
+        localStorage.setItem("sudoku_guest_recent_players", JSON.stringify(currentRecent));
+      }
+      if (currentMultiplayer) {
+        localStorage.setItem("sudoku_guest_past_players", JSON.stringify(currentMultiplayer));
+      }
     } catch (e) {
       console.warn("[Auth] Failed to sync guest snapshot in real-time:", e);
     }
-  }, [userProfile, completedGames, savedGames, personalBestTimes, totalGamesPlayed, totalWinsCount, winStreak]);
+  }, [userProfile, completedGames, savedGames, personalBestTimes, totalGamesPlayed, totalWinsCount, winStreak, multiplayerPlayers]);
   syncGuestSnapshotInRealtimeRef.current = syncGuestSnapshotInRealtime;
   useEffect(() => {
     syncGuestSnapshotInRealtimeRef.current = syncGuestSnapshotInRealtime;
@@ -3686,20 +3814,20 @@ useEffect(() => {
             } catch {}
           }
 
-          // 3. Existing friends list
+          // 3. Existing friends list: strictly from cloud/user drawer (never touch guest drawer!)
           try {
             const storedPriorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
             const pastPlayersSnap = await getDocs(collection(db, "users", uid, "past_players"));
-            if (!pastPlayersSnap.empty) {
-              const loadedFriends: Array<{
-                id: string;
-                name: string;
-                isFriend: boolean;
-                status: 'online' | 'offline';
-                inviteStatus: 'idle' | 'sent' | 'joined' | 'declined';
-                lastPlayedAt?: number;
-              }> = [];
+            let loadedPlayers: Array<{
+              id: string;
+              name: string;
+              isFriend: boolean;
+              status: 'online' | 'offline';
+              inviteStatus: 'idle' | 'sent' | 'joined' | 'declined';
+              lastPlayedAt?: number;
+            }> = [];
 
+            if (!pastPlayersSnap.empty) {
               pastPlayersSnap.forEach((d) => {
                 const dData = d.data();
                 if (
@@ -3709,7 +3837,7 @@ useEffect(() => {
                   d.id !== uid &&
                   (!storedPriorGuestId || d.id !== storedPriorGuestId)
                 ) {
-                  loadedFriends.push({
+                  loadedPlayers.push({
                     id: d.id,
                     name: dData.name || "Player",
                     isFriend: !!dData.isFriend,
@@ -3719,16 +3847,9 @@ useEffect(() => {
                   });
                 }
               });
-
-              if (loadedFriends.length > 0) {
-                setMultiplayerPlayers(loadedFriends);
-                try {
-                  localStorage.setItem("sudoku_past_players", JSON.stringify(loadedFriends));
-                } catch {}
-              }
             } else if (Array.isArray(cloudDocData?.pastPlayers) || Array.isArray(cloudDocData?.friends)) {
               const rawPlayers = cloudDocData?.pastPlayers || cloudDocData?.friends || [];
-              const fallbackFriends = rawPlayers
+              loadedPlayers = rawPlayers
                 .filter((p: any) => 
                   p && 
                   p.id && 
@@ -3746,13 +3867,41 @@ useEffect(() => {
                   inviteStatus: "idle" as const,
                   lastPlayedAt: p.lastPlayedAt
                 }));
-              if (fallbackFriends.length > 0) {
-                setMultiplayerPlayers(fallbackFriends);
-                try {
-                  localStorage.setItem("sudoku_past_players", JSON.stringify(fallbackFriends));
-                } catch {}
+            } else {
+              // Fallback to user drawer
+              const userFriendsRaw = localStorage.getItem(getScopedKey("friends", uid)) || localStorage.getItem(`sudoku_usr_${uid}_friends`);
+              const userRecentRaw = localStorage.getItem(getScopedKey("recent_players", uid)) || localStorage.getItem(`sudoku_usr_${uid}_recent_players`);
+              let uFriends: any[] = [];
+              let uRecent: any[] = [];
+              if (userFriendsRaw) {
+                try { const parsed = JSON.parse(userFriendsRaw); if (Array.isArray(parsed)) uFriends = parsed; } catch {}
               }
+              if (userRecentRaw) {
+                try { const parsed = JSON.parse(userRecentRaw); if (Array.isArray(parsed)) uRecent = parsed; } catch {}
+              }
+              loadedPlayers = [
+                ...uFriends.map(p => ({ ...p, isFriend: true })),
+                ...uRecent.filter(r => !uFriends.some(f => f.id === r.id)).map(p => ({ ...p, isFriend: false }))
+              ];
             }
+
+            const cloudFriends = loadedPlayers.filter(p => p.isFriend);
+            const cloudRecent = loadedPlayers.filter(p => !p.isFriend);
+
+            setFriends(cloudFriends);
+            setRecentPlayers(cloudRecent);
+            setMultiplayerPlayers(loadedPlayers);
+
+            try {
+              localStorage.setItem(getScopedKey("friends", uid), JSON.stringify(cloudFriends));
+              localStorage.setItem(`sudoku_usr_${uid}_friends`, JSON.stringify(cloudFriends));
+              localStorage.setItem(getScopedKey("recent_players", uid), JSON.stringify(cloudRecent));
+              localStorage.setItem(`sudoku_usr_${uid}_recent_players`, JSON.stringify(cloudRecent));
+              localStorage.setItem(getScopedKey("past_players", uid), JSON.stringify(loadedPlayers));
+              localStorage.setItem("sudoku_friends", JSON.stringify(cloudFriends));
+              localStorage.setItem("sudoku_recent_players", JSON.stringify(cloudRecent));
+              localStorage.setItem("sudoku_past_players", JSON.stringify(loadedPlayers));
+            } catch {}
           } catch (friendsErr) {
             console.warn("[Auth] Friends restoration notice:", friendsErr);
           }
@@ -3978,6 +4127,21 @@ useEffect(() => {
           };
 
           const safeCompleted = JSON.parse(JSON.stringify(localCompleted.slice(0, 50)));
+
+          // Promote active guest friends and recent players into user drawer
+          const activeFriends = friendsRef.current || multiplayerPlayers.filter(p => p.isFriend);
+          const activeRecent = recentPlayersRef.current || multiplayerPlayers.filter(p => !p.isFriend);
+          try {
+            localStorage.setItem(getScopedKey("friends", uid), JSON.stringify(activeFriends));
+            localStorage.setItem(`sudoku_usr_${uid}_friends`, JSON.stringify(activeFriends));
+            localStorage.setItem(getScopedKey("recent_players", uid), JSON.stringify(activeRecent));
+            localStorage.setItem(`sudoku_usr_${uid}_recent_players`, JSON.stringify(activeRecent));
+            localStorage.setItem(getScopedKey("past_players", uid), JSON.stringify(multiplayerPlayers));
+            localStorage.setItem("sudoku_friends", JSON.stringify(activeFriends));
+            localStorage.setItem("sudoku_recent_players", JSON.stringify(activeRecent));
+            localStorage.setItem("sudoku_past_players", JSON.stringify(multiplayerPlayers));
+          } catch {}
+
           await setDoc(userDocRef, {
             name: resolvedDisplayName,
             email: authUser?.email || null,
@@ -3989,10 +4153,26 @@ useEffect(() => {
             winStreak: localWinStreak,
             bestTimes: personalBestTimesRef.current,
             completedGames: safeCompleted,
+            friends: activeFriends,
+            pastPlayers: multiplayerPlayers,
             settings: currentSettingsPayload,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           }, { merge: true });
+
+          // Also populate users/{uid}/past_players subcollection for all active multiplayerPlayers
+          if (multiplayerPlayers.length > 0) {
+            for (const opp of multiplayerPlayers) {
+              if (opp && opp.id && opp.id !== uid) {
+                setDoc(doc(db, "users", uid, "past_players", opp.id), {
+                  id: opp.id,
+                  name: opp.name || "Player",
+                  isFriend: !!opp.isFriend,
+                  timestamp: serverTimestamp()
+                }, { merge: true }).catch(() => {});
+              }
+            }
+          }
 
           setStats({
             totalGamesPlayed: localTotalGames,
@@ -4005,9 +4185,21 @@ useEffect(() => {
             localStorage.setItem(getScopedKey("completed_games", uid), JSON.stringify(localCompleted));
           } catch {}
 
-          // Clear guest vault because Guest #1 has now merged into this Google account
+          // Reset the guest drawer because active guest has now merged into this Google account
           try {
             localStorage.removeItem("sudoku_guest_vault");
+            localStorage.removeItem("sudoku_guest_friends");
+            localStorage.removeItem("sudoku_guest_recent_players");
+            localStorage.removeItem("sudoku_guest_past_players");
+            localStorage.removeItem("sudoku_guest_userProfile");
+            localStorage.removeItem("sudoku_guest_completed_games");
+            localStorage.removeItem("sudoku_guest_saved_games");
+            localStorage.removeItem("sudoku_guest_best_times");
+            localStorage.removeItem("sudoku_guest_total_games_played");
+            localStorage.removeItem("sudoku_guest_gamesPlayed");
+            localStorage.removeItem("sudoku_guest_total_wins_count");
+            localStorage.removeItem("sudoku_guest_winsCount");
+            localStorage.removeItem("sudoku_guest_winStreak");
           } catch {}
 
           currentHydratedUidRef.current = uid;
@@ -4486,6 +4678,8 @@ useEffect(() => {
         // Vault local guest snapshot on Google sign-in ONLY if prior guest and returning user
         if (isPriorGuest && isReturningUser) {
           try {
+            const guestFriends = friendsRef.current || multiplayerPlayers.filter(p => p.isFriend);
+            const guestRecent = recentPlayersRef.current || multiplayerPlayers.filter(p => !p.isFriend);
             const guestVaultData = {
               userProfile: userProfileRef.current || userProfile,
               completedGames: completedGamesRef.current || completedGames,
@@ -4494,9 +4688,16 @@ useEffect(() => {
               totalGamesPlayed: totalGamesPlayed,
               totalWinsCount: totalWinsCount,
               winStreak: winStreak,
+              friends: guestFriends,
+              recentPlayers: guestRecent,
+              recent_players: guestRecent,
+              multiplayerPlayers: multiplayerPlayersRef.current || multiplayerPlayers,
               vaultedAt: Date.now()
             };
             localStorage.setItem("sudoku_guest_vault", JSON.stringify(guestVaultData));
+            localStorage.setItem("sudoku_guest_friends", JSON.stringify(guestFriends));
+            localStorage.setItem("sudoku_guest_recent_players", JSON.stringify(guestRecent));
+            localStorage.setItem("sudoku_guest_past_players", JSON.stringify(guestVaultData.multiplayerPlayers));
             syncGuestSnapshotInRealtime({
               userProfile: guestVaultData.userProfile,
               completedGames: guestVaultData.completedGames,
@@ -4504,7 +4705,10 @@ useEffect(() => {
               bestTimes: guestVaultData.bestTimes,
               totalGamesPlayed: guestVaultData.totalGamesPlayed,
               totalWinsCount: guestVaultData.totalWinsCount,
-              winStreak: guestVaultData.winStreak
+              winStreak: guestVaultData.winStreak,
+              friends: guestFriends,
+              recentPlayers: guestRecent,
+              multiplayerPlayers: guestVaultData.multiplayerPlayers
             });
             console.log("[Auth] Successfully vaulted guest snapshot into sudoku_guest_vault and guest drawer for later logout restoration");
           } catch (err) {
@@ -4513,6 +4717,9 @@ useEffect(() => {
         } else if (!isReturningUser) {
           try {
             localStorage.removeItem("sudoku_guest_vault");
+            localStorage.removeItem("sudoku_guest_friends");
+            localStorage.removeItem("sudoku_guest_recent_players");
+            localStorage.removeItem("sudoku_guest_past_players");
           } catch {}
         }
 
@@ -4678,6 +4885,8 @@ useEffect(() => {
         "sudoku_pending_challenges",
         "sudoku_active_invite",
         "sudoku_past_players",
+        "sudoku_friends",
+        "sudoku_recent_players",
         "sudoku_winStreak",
         "sudoku_prior_guest_id",
         "sudoku_is_display_name_configured",
@@ -4824,7 +5033,58 @@ useEffect(() => {
           localStorage.setItem("sudoku_guest_winStreak", String(restoredWinStreak));
         } catch {}
 
-        setMultiplayerPlayers(INITIAL_GUEST_STATE.multiplayerPlayers);
+        // Restore guest friends & recent players from vault or guest drawer
+        let restoredFriends: any[] = Array.isArray(restoredVault.friends) ? restoredVault.friends : null;
+        if (!restoredFriends) {
+          try {
+            const drawerFriends = JSON.parse(localStorage.getItem("sudoku_guest_friends") || "[]");
+            if (Array.isArray(drawerFriends)) restoredFriends = drawerFriends;
+          } catch {}
+        }
+        if (!restoredFriends) restoredFriends = [];
+
+        let restoredRecentPlayers: any[] = Array.isArray(restoredVault.recentPlayers) 
+          ? restoredVault.recentPlayers 
+          : (Array.isArray(restoredVault.recent_players) ? restoredVault.recent_players : null);
+        if (!restoredRecentPlayers) {
+          try {
+            const drawerRecent = JSON.parse(localStorage.getItem("sudoku_guest_recent_players") || "[]");
+            if (Array.isArray(drawerRecent)) restoredRecentPlayers = drawerRecent;
+          } catch {}
+        }
+        if (!restoredRecentPlayers) restoredRecentPlayers = [];
+
+        if (restoredFriends.length === 0 && restoredRecentPlayers.length === 0) {
+          let fallbackMultiplayer: any[] = Array.isArray(restoredVault.multiplayerPlayers) ? restoredVault.multiplayerPlayers : null;
+          if (!fallbackMultiplayer) {
+            try {
+              const drawerPast = JSON.parse(localStorage.getItem("sudoku_guest_past_players") || "[]");
+              if (Array.isArray(drawerPast)) fallbackMultiplayer = drawerPast;
+            } catch {}
+          }
+          if (fallbackMultiplayer && fallbackMultiplayer.length > 0) {
+            restoredFriends = fallbackMultiplayer.filter((p: any) => p && p.isFriend);
+            restoredRecentPlayers = fallbackMultiplayer.filter((p: any) => p && !p.isFriend);
+          }
+        }
+
+        setFriends(restoredFriends);
+        setRecentPlayers(restoredRecentPlayers);
+        const combinedGuestPlayers = [
+          ...restoredFriends.map((p: any) => ({ ...p, isFriend: true })),
+          ...restoredRecentPlayers.filter((r: any) => !restoredFriends.some((f: any) => f.id === r.id)).map((p: any) => ({ ...p, isFriend: false }))
+        ];
+        setMultiplayerPlayers(combinedGuestPlayers);
+
+        try {
+          localStorage.setItem("sudoku_friends", JSON.stringify(restoredFriends));
+          localStorage.setItem("sudoku_guest_friends", JSON.stringify(restoredFriends));
+          localStorage.setItem("sudoku_recent_players", JSON.stringify(restoredRecentPlayers));
+          localStorage.setItem("sudoku_guest_recent_players", JSON.stringify(restoredRecentPlayers));
+          localStorage.setItem("sudoku_past_players", JSON.stringify(combinedGuestPlayers));
+          localStorage.setItem("sudoku_guest_past_players", JSON.stringify(combinedGuestPlayers));
+        } catch {}
+
         setPendingChallenges(INITIAL_GUEST_STATE.pendingChallenges);
         setActiveInviteNotification(null);
         setIsDockingToBell(false);
@@ -4897,7 +5157,17 @@ useEffect(() => {
         setPersonalBestTimes(cleanBestTimes);
         personalBestTimesRef.current = cleanBestTimes;
         setSavedGames([]);
+        setFriends([]);
+        setRecentPlayers([]);
         setMultiplayerPlayers(INITIAL_GUEST_STATE.multiplayerPlayers);
+        try {
+          localStorage.setItem("sudoku_friends", "[]");
+          localStorage.setItem("sudoku_guest_friends", "[]");
+          localStorage.setItem("sudoku_recent_players", "[]");
+          localStorage.setItem("sudoku_guest_recent_players", "[]");
+          localStorage.setItem("sudoku_past_players", "[]");
+          localStorage.setItem("sudoku_guest_past_players", "[]");
+        } catch {}
         setPendingChallenges(INITIAL_GUEST_STATE.pendingChallenges);
         setActiveInviteNotification(null);
         setIsDockingToBell(false);
@@ -5071,6 +5341,8 @@ useEffect(() => {
       setPersonalBestTimes(INITIAL_GUEST_STATE.personalBestTimes);
       personalBestTimesRef.current = INITIAL_GUEST_STATE.personalBestTimes;
       setSavedGames(INITIAL_GUEST_STATE.savedGames);
+      setFriends([]);
+      setRecentPlayers([]);
       setMultiplayerPlayers(INITIAL_GUEST_STATE.multiplayerPlayers);
       setPendingChallenges(INITIAL_GUEST_STATE.pendingChallenges);
       setActiveInviteNotification(null);
