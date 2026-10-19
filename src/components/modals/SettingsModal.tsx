@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown, WifiOff } from "lucide-react";
+import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown, WifiOff, Check } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -109,6 +109,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const { t, language, setLanguage, languages } = useTranslation();
   const { isIncognito, toggleIncognito } = useFriendPresence(userProfile?.id);
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
+  const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
 
   const toggleInfo = (id: string) => {
     setExpandedInfo(prev => ({ ...prev, [id]: !prev[id] }));
@@ -437,40 +438,81 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {t("selectLanguage")}
                   </span>
                 </div>
-                <div
-                  className={`relative w-fit flex items-center justify-between gap-2.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all shrink-0 ${
-                    darkMode
-                      ? "bg-sky-950/80 text-sky-100 hover:bg-sky-900/80"
-                      : "bg-white text-sky-950 hover:bg-sky-50 shadow-xs"
-                  }`}
-                >
-                  <span className="truncate pointer-events-none select-none">
-                    {languages.find((l) => l.code === language)?.nativeName || language}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-70 pointer-events-none" />
-                  <select
-                    value={language}
-                    onChange={(e) => {
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
                       playClickSound();
-                      const newLang = e.target.value as Language;
-                      setLanguage(newLang);
-                      if (onLanguageChange) {
-                        onLanguageChange(newLang);
-                      }
+                      setIsLangOpen((prev) => !prev);
                     }}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    className={`relative w-fit flex items-center justify-between gap-2.5 px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all shrink-0 border-none outline-none active:scale-95 ${
+                      darkMode
+                        ? "bg-sky-950/80 text-sky-100 hover:bg-sky-900/80"
+                        : "bg-white text-sky-950 hover:bg-sky-50 shadow-xs"
+                    }`}
                     aria-label={t("selectLanguage")}
+                    aria-expanded={isLangOpen}
                   >
-                    {languages.map((langOpt) => (
-                      <option
-                        key={langOpt.code}
-                        value={langOpt.code}
-                        className={darkMode ? "bg-zinc-900 text-stone-100" : "bg-white text-stone-900"}
+                    <span className="truncate select-none">
+                      {languages.find((l) => l.code === language)?.nativeName || language}
+                    </span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 shrink-0 opacity-70 transition-transform duration-200 ${
+                        isLangOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {/* In-DOM Theme-Locked Language Menu */}
+                  {isLangOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40 cursor-default"
+                        onClick={() => setIsLangOpen(false)}
+                      />
+                      <div
+                        className={`absolute right-0 top-full mt-1.5 z-50 w-52 max-h-[320px] overflow-y-auto py-1.5 rounded-2xl shadow-2xl border flex flex-col backdrop-blur-md transition-all ${
+                          darkMode
+                            ? "bg-zinc-900 text-stone-100 border-zinc-800"
+                            : "bg-white text-slate-900 border-slate-200/80"
+                        }`}
+                        role="menu"
                       >
-                        {langOpt.nativeName}
-                      </option>
-                    ))}
-                  </select>
+                        {languages.map((langOpt) => {
+                          const isSelected = language === langOpt.code;
+                          return (
+                            <button
+                              key={langOpt.code}
+                              type="button"
+                              onClick={() => {
+                                playClickSound();
+                                setLanguage(langOpt.code);
+                                if (onLanguageChange) {
+                                  onLanguageChange(langOpt.code);
+                                }
+                                setIsLangOpen(false);
+                              }}
+                              className={`w-full text-left px-3.5 py-2 text-xs transition-colors flex items-center justify-between border-none cursor-pointer ${
+                                isSelected
+                                  ? darkMode
+                                    ? "bg-sky-950/80 text-sky-300 font-bold"
+                                    : "bg-sky-100 text-sky-900 font-bold"
+                                  : darkMode
+                                  ? "text-stone-200 hover:bg-zinc-800"
+                                  : "text-slate-800 hover:bg-slate-100/80"
+                              }`}
+                              role="menuitem"
+                            >
+                              <span className="truncate">{langOpt.nativeName}</span>
+                              {isSelected && (
+                                <Check className="w-3.5 h-3.5 shrink-0 text-sky-500" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               <p className="text-xs font-normal leading-relaxed text-stone-500 dark:text-zinc-400 font-sans m-0 truncate whitespace-nowrap">
