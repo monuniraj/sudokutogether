@@ -355,7 +355,13 @@ export const StatsModal: React.FC<StatsModalProps> = ({
           </div>
 
           {/* Tab Panels */}
-          <div className="p-4 flex flex-col gap-3 max-h-[300px] overflow-y-auto custom-scrollbar text-left font-sans">
+          <div
+            className={`text-left font-sans ${
+              activeHistoryTab === "friends"
+                ? "p-4 pt-1 flex flex-col"
+                : "p-4 flex flex-col gap-3 max-h-[300px] overflow-y-auto custom-scrollbar"
+            }`}
+          >
             {activeHistoryTab === "completed" ? (
               completedGames.length === 0 ? (
                 <div className="py-8 text-center text-stone-500 font-sans text-xs">
@@ -618,9 +624,13 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                   const recentPlayers = sortPlayers(sanitizedPlayers);
 
                   return (
-                    <div className="flex flex-col h-full">
-                      {/* Segmented Control Header */}
-                      <div className="flex items-center justify-center px-1 shrink-0 mb-3 mt-1">
+                    <div className="flex flex-col h-full relative">
+                      {/* Segmented Control Header - Fixed at Top */}
+                      <div
+                        className={`sticky top-0 z-10 flex-shrink-0 pt-1 pb-3 px-1 transition-colors duration-200 rounded-lg ${
+                          darkMode ? "bg-[#250e1a]/95 backdrop-blur-md" : "bg-[#FAF2F6]/95 backdrop-blur-md"
+                        }`}
+                      >
                         <div className={`flex w-full rounded-lg p-1 ${darkMode ? "bg-black/35" : "bg-stone-200/50"}`}>
                           <button
                             onClick={() => setActivePlayersTab('recent')}
@@ -645,8 +655,8 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Tab Content */}
-                      <div className="flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto no-scrollbar pb-2">
+                      {/* Tab Content - Isolated Scroll Container */}
+                      <div className="flex flex-col gap-2 flex-1 min-h-0 max-h-[320px] overflow-y-auto custom-scrollbar pr-1 pb-2">
                         {activePlayersTab === 'friends' && (
                           friends.length === 0 ? (
                             <div className="py-6 text-center text-stone-500 font-sans text-xs italic">
