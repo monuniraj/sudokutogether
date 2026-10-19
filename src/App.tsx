@@ -283,7 +283,7 @@ interface PendingChallenge {
 const INITIAL_GUEST_STATE = {
   userProfile: { 
     id: "GUEST_" + Math.random().toString(36).substring(2, 9), 
-    name: "Guest Voyager", 
+    name: `Pro_${Math.floor(1000 + Math.random() * 9000)}`, 
     avatarColor: "#6B7280", 
     isSynced: false 
   },
@@ -1605,8 +1605,41 @@ useEffect(() => {
     isSynced: boolean;
   } | null>(() => {
     try {
-      const saved = localStorage.getItem("sudoku_userProfile");
-      if (saved) return JSON.parse(saved);
+      const saved = localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.id) {
+          const rawName = (parsed.name || "").trim();
+          if (rawName && rawName !== "Anonymous" && rawName !== "Guest Voyager" && rawName !== "Anonymous Voyager") {
+            return parsed;
+          }
+          const fixedName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
+          const fixedProfile = { ...parsed, name: fixedName, isSynced: false };
+          try {
+            localStorage.setItem("sudoku_userProfile", JSON.stringify(fixedProfile));
+            localStorage.setItem("sudoku_user_profile", JSON.stringify(fixedProfile));
+          } catch {}
+          return fixedProfile;
+        }
+      }
+    } catch {}
+    try {
+      const vaultRaw = localStorage.getItem("sudoku_guest_vault");
+      if (vaultRaw) {
+        const vault = JSON.parse(vaultRaw);
+        if (vault?.userProfile) {
+          const rawName = (vault.userProfile.name || "").trim();
+          const restoredName = (!rawName || rawName === "Anonymous" || rawName === "Guest Voyager" || rawName === "Anonymous Voyager")
+            ? `Pro_${Math.floor(1000 + Math.random() * 9000)}`
+            : rawName.slice(0, 15);
+          const restored = { ...vault.userProfile, name: restoredName, isSynced: false };
+          try {
+            localStorage.setItem("sudoku_userProfile", JSON.stringify(restored));
+            localStorage.setItem("sudoku_user_profile", JSON.stringify(restored));
+          } catch {}
+          return restored;
+        }
+      }
     } catch {}
     // Auto-generate unique guest token identity with unique username strictly capped at 12 characters (e.g. Pro_8492)
     const guestId = "GUEST_" + Math.floor(1000 + Math.random() * 9000);
@@ -1623,6 +1656,7 @@ useEffect(() => {
     };
     try {
       localStorage.setItem("sudoku_userProfile", JSON.stringify(initialProfile));
+      localStorage.setItem("sudoku_user_profile", JSON.stringify(initialProfile));
     } catch {}
     return initialProfile;
   });
@@ -3289,6 +3323,7 @@ useEffect(() => {
     if (!trimmed) return true;
 
     const defaultExact = [
+      "Anonymous",
       "Anonymous Voyager",
       "Guest Voyager",
       "Guest Solver",
@@ -3728,19 +3763,17 @@ useEffect(() => {
             }
           }
 
-          // 5. Profile sync
+          // 5. Profile sync: For existing cloud accounts, strictly prefer the cloud profile name
           const currentProfile = userProfileRef.current;
-          let resolvedDisplayName = currentProfile?.name || "";
-          if (isDefaultOrEmptyPlayerName(currentProfile?.name)) {
-            if (cloudDocData?.name && !isDefaultOrEmptyPlayerName(cloudDocData.name)) {
-              resolvedDisplayName = cloudDocData.name.trim().slice(0, 15);
-            } else if (authUser?.displayName) {
-              resolvedDisplayName = authUser.displayName.trim().slice(0, 15);
-            } else {
-              resolvedDisplayName = "Pro_Player";
-            }
+          let resolvedDisplayName = "";
+          if (cloudDocData?.name && !isDefaultOrEmptyPlayerName(cloudDocData.name)) {
+            resolvedDisplayName = cloudDocData.name.trim().slice(0, 15);
+          } else if (authUser?.displayName && !isDefaultOrEmptyPlayerName(authUser.displayName)) {
+            resolvedDisplayName = authUser.displayName.trim().slice(0, 15);
+          } else if (currentProfile?.name && !isDefaultOrEmptyPlayerName(currentProfile.name)) {
+            resolvedDisplayName = currentProfile.name.trim().slice(0, 15);
           } else {
-            resolvedDisplayName = currentProfile!.name;
+            resolvedDisplayName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
           }
 
           const updatedProfile = {
@@ -3754,6 +3787,7 @@ useEffect(() => {
           setUserProfile(updatedProfile);
           try {
             localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
+            localStorage.setItem("sudoku_user_profile", JSON.stringify(updatedProfile));
           } catch {}
 
           // 6. Sync current FCM push token & preference to users/{user.uid}
@@ -3782,7 +3816,14 @@ useEffect(() => {
         } else {
           // Document does not exist in Firestore yet: initialize it with local progress
           const currentProfile = userProfileRef.current;
-          const resolvedDisplayName = authUser?.displayName?.trim()?.slice(0, 15) || currentProfile?.name || "Pro_Player";
+          let resolvedDisplayName = "";
+          if (authUser?.displayName && !isDefaultOrEmptyPlayerName(authUser.displayName)) {
+            resolvedDisplayName = authUser.displayName.trim().slice(0, 15);
+          } else if (currentProfile?.name && !isDefaultOrEmptyPlayerName(currentProfile.name)) {
+            resolvedDisplayName = currentProfile.name.trim().slice(0, 15);
+          } else {
+            resolvedDisplayName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
+          }
           const updatedProfile = {
             id: uid,
             name: resolvedDisplayName,
@@ -3794,6 +3835,7 @@ useEffect(() => {
           setUserProfile(updatedProfile);
           try {
             localStorage.setItem("sudoku_userProfile", JSON.stringify(updatedProfile));
+            localStorage.setItem("sudoku_user_profile", JSON.stringify(updatedProfile));
           } catch {}
 
           const currentSettingsPayload = {
@@ -3875,12 +3917,83 @@ useEffect(() => {
       if (!user) {
         currentHydratedUidRef.current = null;
         setIsAuthHydrating(false);
+
+        // Safe Fallback: Ensure guest profile exists and is never "Anonymous"
+        try {
+          const existingStored = localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile");
+          const vaultRaw = localStorage.getItem("sudoku_guest_vault");
+          let guestProfile: any = null;
+
+          if (existingStored) {
+            guestProfile = JSON.parse(existingStored);
+          } else if (vaultRaw) {
+            const vault = JSON.parse(vaultRaw);
+            if (vault?.userProfile) guestProfile = vault.userProfile;
+          }
+
+          if (guestProfile && guestProfile.id) {
+            const rawName = (guestProfile.name || "").trim();
+            const safeName = (!rawName || rawName === "Anonymous" || rawName === "Guest Voyager" || rawName === "Anonymous Voyager" || isDefaultOrEmptyPlayerName(rawName))
+              ? `Pro_${Math.floor(1000 + Math.random() * 9000)}`
+              : rawName.slice(0, 15);
+            const resolvedGuest = {
+              ...guestProfile,
+              name: safeName,
+              isSynced: false
+            };
+            setUserProfile(resolvedGuest);
+            userProfileRef.current = resolvedGuest;
+            try {
+              localStorage.setItem("sudoku_userProfile", JSON.stringify(resolvedGuest));
+              localStorage.setItem("sudoku_user_profile", JSON.stringify(resolvedGuest));
+            } catch {}
+          } else {
+            const freshGuestId = "GUEST_" + Math.floor(1000 + Math.random() * 9000);
+            const freshName = `Pro_${freshGuestId.split("_")[1]}`;
+            const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
+            const randColor = colors[Math.floor(Math.random() * colors.length)];
+            const cleanGuest = {
+              id: freshGuestId,
+              name: freshName,
+              avatarColor: randColor,
+              isSynced: false
+            };
+            setUserProfile(cleanGuest);
+            userProfileRef.current = cleanGuest;
+            try {
+              localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuest));
+              localStorage.setItem("sudoku_user_profile", JSON.stringify(cleanGuest));
+            } catch {}
+          }
+        } catch (e) {
+          console.warn("[Auth] Fallback guest profile recovery error:", e);
+        }
+
         signInAnonymously(auth).catch((err) => {
           console.warn("[Auth] Background anonymous session init error:", err);
         });
       } else if (user.isAnonymous) {
         currentHydratedUidRef.current = user.uid;
         setIsAuthHydrating(false);
+
+        const curProfile = userProfileRef.current;
+        if (!curProfile || !curProfile.name || curProfile.name === "Anonymous" || curProfile.name === "Guest Voyager" || curProfile.name === "Anonymous Voyager") {
+          const safeName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
+          const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
+          const randColor = colors[Math.floor(Math.random() * colors.length)];
+          const sanitizedProfile = {
+            id: curProfile?.id || ("GUEST_" + Math.floor(1000 + Math.random() * 9000)),
+            name: safeName,
+            avatarColor: curProfile?.avatarColor || randColor,
+            isSynced: false
+          };
+          setUserProfile(sanitizedProfile);
+          userProfileRef.current = sanitizedProfile;
+          try {
+            localStorage.setItem("sudoku_userProfile", JSON.stringify(sanitizedProfile));
+            localStorage.setItem("sudoku_user_profile", JSON.stringify(sanitizedProfile));
+          } catch {}
+        }
       } else if (user && !user.isAnonymous) {
         // Unified Cloud Data Hydration: onAuthStateChanged is the single driver of cloud-to-local hydration
         try {
@@ -4213,7 +4326,18 @@ useEffect(() => {
         addLog(`🔒 Connected Google Account: ${finalUser.email}`);
         showToast(t("connectedGoogleToast"));
 
-        // TASK 1: VAULT LOCAL GUEST SNAPSHOT ON GOOGLE SIGN-IN
+        // TASK 1: STRICT ACCOUNT ISOLATION - Check if Google account already exists in cloud
+        const userDocRef = doc(db, "users", finalUser.uid);
+        let existingUserDoc: any = null;
+        try {
+          existingUserDoc = await getDoc(userDocRef);
+        } catch (fetchErr) {
+          console.warn("[Auth] Failed to check existing user doc:", fetchErr);
+        }
+
+        const isReturningUser = Boolean(existingUserDoc?.exists() && existingUserDoc?.data()?.name);
+
+        // Vault local guest snapshot on Google sign-in
         if (isPriorGuest) {
           try {
             const guestVaultData = {
@@ -4231,6 +4355,25 @@ useEffect(() => {
           } catch (err) {
             console.warn("Failed to vault guest snapshot:", err);
           }
+        }
+
+        // If Returning User: strictly load the Google cloud profile. Zero data/name push from local guest into Google Firestore.
+        if (isReturningUser) {
+          const cloudData = existingUserDoc.data();
+          const returningProfile = {
+            id: finalUser.uid,
+            name: (cloudData.name || finalUser.displayName || "Pro_Player").trim().slice(0, 15),
+            avatarColor: cloudData.avatarColor || "#8B5CF6",
+            isSynced: true,
+            email: finalUser.email || cloudData.email || undefined
+          };
+          setUserProfile(returningProfile);
+          userProfileRef.current = returningProfile;
+          try {
+            localStorage.setItem("sudoku_userProfile", JSON.stringify(returningProfile));
+            localStorage.setItem("sudoku_user_profile", JSON.stringify(returningProfile));
+          } catch {}
+          console.log("[Auth] Returning Google user recognized. Preserved cloud profile:", returningProfile.name);
         }
 
         // GUEST-TO-GMAIL IDENTITY MIGRATION & GHOST CLEANUP (non-blocking)
@@ -4400,14 +4543,20 @@ useEffect(() => {
       }
 
       if (restoredVault && restoredVault.userProfile?.id) {
+        const rawName = restoredVault.userProfile.name;
+        const restoredName = (!rawName || rawName === "Anonymous" || rawName === "Guest Voyager" || rawName === "Anonymous Voyager" || isDefaultOrEmptyPlayerName(rawName))
+          ? `Pro_${Math.floor(1000 + Math.random() * 9000)}`
+          : rawName.trim().slice(0, 15);
         const restoredGuestProfile = {
           ...restoredVault.userProfile,
+          name: restoredName,
           isSynced: false
         };
         setUserProfile(restoredGuestProfile);
         userProfileRef.current = restoredGuestProfile;
         try {
           localStorage.setItem("sudoku_userProfile", JSON.stringify(restoredGuestProfile));
+          localStorage.setItem("sudoku_user_profile", JSON.stringify(restoredGuestProfile));
         } catch {}
 
         const restoredCompleted = Array.isArray(restoredVault.completedGames) ? restoredVault.completedGames : [];
@@ -4466,15 +4615,22 @@ useEffect(() => {
         console.log("[Auth] Successfully restored guest persona from vault on logout:", restoredGuestProfile.id);
       } else {
         const freshGuestId = "GUEST_" + Math.random().toString(36).substring(2, 9);
+        const freshGuestName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
+        const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
+        const randColor = colors[Math.floor(Math.random() * colors.length)];
         const cleanGuestProfile = {
           ...INITIAL_GUEST_STATE.userProfile,
-          id: freshGuestId
+          id: freshGuestId,
+          name: freshGuestName,
+          avatarColor: randColor,
+          isSynced: false
         };
 
         setUserProfile(cleanGuestProfile);
         userProfileRef.current = cleanGuestProfile;
         try {
           localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuestProfile));
+          localStorage.setItem("sudoku_user_profile", JSON.stringify(cleanGuestProfile));
         } catch {}
 
         setCompletedGames(INITIAL_GUEST_STATE.completedGames);
