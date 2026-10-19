@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown } from "lucide-react";
+import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown, WifiOff } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -57,6 +57,7 @@ export interface SettingsModalProps {
   onCancelConnectGoogle?: () => void;
   onLogout?: () => void;
   onLanguageChange?: (lang: Language) => void;
+  isOnline?: boolean;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -102,7 +103,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isConnectingGoogle,
   onCancelConnectGoogle,
   onLogout,
-  onLanguageChange
+  onLanguageChange,
+  isOnline = true
 }) => {
   const { t, language, setLanguage, languages } = useTranslation();
   const { isIncognito, toggleIncognito } = useFriendPresence(userProfile?.id);
@@ -187,16 +189,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                playClickSound();
-                onOpenDisplayNameModal();
-              }}
-              className="p-2 rounded-full border-none cursor-pointer transition-all hover:bg-purple-200/50 dark:hover:bg-purple-950/40 active:scale-95 text-purple-700 dark:text-purple-300 flex items-center justify-center shrink-0"
-              title={t("displayName")}
-            >
-              <Pencil className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!isOnline && userProfile?.isSynced && (
+                <div
+                  className="p-1.5 flex items-center justify-center shrink-0 text-amber-500/80 animate-pulse"
+                  title="Offline • Playing with local cache"
+                  aria-label="Offline • Playing with local cache"
+                >
+                  <WifiOff className="w-4 h-4 shrink-0" />
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  playClickSound();
+                  onOpenDisplayNameModal();
+                }}
+                className="p-2 rounded-full border-none cursor-pointer transition-all hover:bg-purple-200/50 dark:hover:bg-purple-950/40 active:scale-95 text-purple-700 dark:text-purple-300 flex items-center justify-center shrink-0"
+                title={t("displayName")}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Incognito Master Toggle (Ghost Mode) */}

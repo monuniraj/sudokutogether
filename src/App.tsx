@@ -3686,7 +3686,46 @@ useEffect(() => {
       setIsAuthHydrating(true);
       try {
         const userDocRef = doc(db, "users", uid);
-        const userSnap = await getDoc(userDocRef);
+        let userSnap: any = null;
+        try {
+          userSnap = await getDoc(userDocRef);
+        } catch (netErr: any) {
+          console.warn("[Auth] Offline or network failure fetching Firestore user document. Retaining local cached stats for uid:", uid, netErr);
+          // Gracefully retain all local drawer data, do not reset stats to 0
+          try {
+            const cachedGamesRaw = localStorage.getItem(getScopedKey("total_games_played", uid)) || localStorage.getItem(`sudoku_usr_${uid}_gamesPlayed`) || localStorage.getItem(getScopedKey("gamesPlayed", uid));
+            const cachedWinsRaw = localStorage.getItem(getScopedKey("total_wins_count", uid)) || localStorage.getItem(`sudoku_usr_${uid}_winsCount`) || localStorage.getItem(getScopedKey("winsCount", uid));
+            const cachedCompletedRaw = localStorage.getItem(getScopedKey("completed_games", uid)) || localStorage.getItem(`sudoku_usr_${uid}_completed_games`);
+            const cachedBestTimesRaw = localStorage.getItem(getScopedKey("best_times", uid)) || localStorage.getItem(`sudoku_usr_${uid}_best_times`);
+            const cachedWinStreakRaw = localStorage.getItem(getScopedKey("winStreak", uid)) || localStorage.getItem(`sudoku_usr_${uid}_winStreak`);
+
+            if (cachedGamesRaw !== null && !isNaN(parseInt(cachedGamesRaw, 10))) {
+              setTotalGamesPlayed(parseInt(cachedGamesRaw, 10));
+            }
+            if (cachedWinsRaw !== null && !isNaN(parseInt(cachedWinsRaw, 10))) {
+              setTotalWinsCount(parseInt(cachedWinsRaw, 10));
+            }
+            if (cachedWinStreakRaw !== null && !isNaN(parseInt(cachedWinStreakRaw, 10))) {
+              setWinStreak(parseInt(cachedWinStreakRaw, 10));
+            }
+            if (cachedCompletedRaw) {
+              const parsed = JSON.parse(cachedCompletedRaw);
+              if (Array.isArray(parsed)) {
+                setCompletedGames(parsed);
+                completedGamesRef.current = parsed;
+              }
+            }
+            if (cachedBestTimesRaw) {
+              const parsed = JSON.parse(cachedBestTimesRaw);
+              if (parsed && typeof parsed === "object") {
+                setPersonalBestTimes(parsed);
+                personalBestTimesRef.current = parsed;
+              }
+            }
+          } catch {}
+          currentHydratedUidRef.current = uid;
+          return;
+        }
 
         if (userSnap.exists()) {
           const cloudDocData = userSnap.data();
@@ -3763,16 +3802,20 @@ useEffect(() => {
           try {
             localStorage.setItem("sudoku_best_times", JSON.stringify(resolvedBestTimes));
             localStorage.setItem(getScopedKey("best_times", uid), JSON.stringify(resolvedBestTimes));
+            localStorage.setItem(`sudoku_usr_${uid}_best_times`, JSON.stringify(resolvedBestTimes));
             localStorage.setItem("sudoku_total_games_played", String(finalTotalGames));
             localStorage.setItem("sudoku_gamesPlayed", String(finalTotalGames));
             localStorage.setItem(getScopedKey("total_games_played", uid), String(finalTotalGames));
             localStorage.setItem(getScopedKey("gamesPlayed", uid), String(finalTotalGames));
+            localStorage.setItem(`sudoku_usr_${uid}_gamesPlayed`, String(finalTotalGames));
             localStorage.setItem("sudoku_total_wins_count", String(finalTotalWins));
             localStorage.setItem("sudoku_winsCount", String(finalTotalWins));
             localStorage.setItem(getScopedKey("total_wins_count", uid), String(finalTotalWins));
             localStorage.setItem(getScopedKey("winsCount", uid), String(finalTotalWins));
+            localStorage.setItem(`sudoku_usr_${uid}_winsCount`, String(finalTotalWins));
             localStorage.setItem("sudoku_winStreak", String(finalWinStreak));
             localStorage.setItem(getScopedKey("winStreak", uid), String(finalWinStreak));
+            localStorage.setItem(`sudoku_usr_${uid}_winStreak`, String(finalWinStreak));
           } catch {}
 
           // 2. Match history (recent games) and saved boards: strictly from cloudDocData
@@ -3780,6 +3823,7 @@ useEffect(() => {
           try {
             localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudCompleted));
             localStorage.setItem(getScopedKey("completed_games", uid), JSON.stringify(cloudCompleted));
+            localStorage.setItem(`sudoku_usr_${uid}_completed_games`, JSON.stringify(cloudCompleted));
           } catch {}
 
           // Self-heal Firestore document ONLY if cloud counters or cloud match times are internally desynchronized
@@ -4325,6 +4369,123 @@ useEffect(() => {
           } catch {}
         }
       } else if (user && !user.isAnonymous) {
+        // --- 0ms SYNCHRONOUS LOCAL CACHE HYDRATION ---
+        // Instantly populate the user's isolated local drawer before or while network Firestore loads
+        try {
+          const uid = user.uid;
+
+          // 1. User Profile Cache
+          const cachedProfileRaw = localStorage.getItem(getScopedKey("userProfile", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_userProfile`);
+          if (cachedProfileRaw) {
+            try {
+              const parsedProfile = JSON.parse(cachedProfileRaw);
+              if (parsedProfile && parsedProfile.id) {
+                setUserProfile(parsedProfile);
+                userProfileRef.current = parsedProfile;
+              }
+            } catch {}
+          } else if (user.displayName || user.email) {
+            setUserProfile(prev => ({
+              ...(prev || { avatarColor: "#8B5CF6" }),
+              id: uid,
+              name: (user.displayName || prev?.name || "Player").trim().slice(0, 15),
+              email: user.email || prev?.email,
+              isSynced: true
+            }));
+          }
+
+          // 2. Games Played Cache
+          const cachedGamesPlayedRaw = localStorage.getItem(getScopedKey("total_games_played", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_gamesPlayed`)
+            || localStorage.getItem(getScopedKey("gamesPlayed", uid));
+          let cachedGamesPlayed: number | null = null;
+          if (cachedGamesPlayedRaw !== null) {
+            const val = parseInt(cachedGamesPlayedRaw, 10);
+            if (!isNaN(val) && val >= 0) cachedGamesPlayed = val;
+          }
+
+          // 3. Wins Count Cache
+          const cachedWinsCountRaw = localStorage.getItem(getScopedKey("total_wins_count", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_winsCount`)
+            || localStorage.getItem(getScopedKey("winsCount", uid));
+          let cachedWinsCount: number | null = null;
+          if (cachedWinsCountRaw !== null) {
+            const val = parseInt(cachedWinsCountRaw, 10);
+            if (!isNaN(val) && val >= 0) cachedWinsCount = val;
+          }
+
+          // 4. Completed Games History Cache
+          const cachedCompletedRaw = localStorage.getItem(getScopedKey("completed_games", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_completed_games`);
+          let cachedCompleted: CompletedGame[] | null = null;
+          if (cachedCompletedRaw) {
+            try {
+              const parsed = JSON.parse(cachedCompletedRaw);
+              if (Array.isArray(parsed)) cachedCompleted = parsed;
+            } catch {}
+          }
+
+          // 5. Best Times Cache
+          const cachedBestTimesRaw = localStorage.getItem(getScopedKey("best_times", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_best_times`);
+          let cachedBestTimes: Record<string, number | null> | null = null;
+          if (cachedBestTimesRaw) {
+            try {
+              const parsed = JSON.parse(cachedBestTimesRaw);
+              if (parsed && typeof parsed === "object") cachedBestTimes = parsed;
+            } catch {}
+          }
+
+          // 6. Win Streak Cache
+          const cachedWinStreakRaw = localStorage.getItem(getScopedKey("winStreak", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_winStreak`);
+          let cachedWinStreak: number | null = null;
+          if (cachedWinStreakRaw !== null) {
+            const val = parseInt(cachedWinStreakRaw, 10);
+            if (!isNaN(val) && val >= 0) cachedWinStreak = val;
+          }
+
+          // Apply cached values immediately if any exist for this uid
+          if (cachedGamesPlayed !== null) {
+            setTotalGamesPlayed(cachedGamesPlayed);
+          } else if (cachedCompleted && cachedCompleted.length > 0) {
+            setTotalGamesPlayed(cachedCompleted.length);
+          }
+
+          if (cachedWinsCount !== null) {
+            setTotalWinsCount(cachedWinsCount);
+          } else if (cachedCompleted) {
+            setTotalWinsCount(cachedCompleted.filter((g: any) => g && g.isWon).length);
+          }
+
+          if (cachedWinStreak !== null) {
+            setWinStreak(cachedWinStreak);
+          }
+
+          if (cachedCompleted !== null) {
+            setCompletedGames(cachedCompleted);
+            completedGamesRef.current = cachedCompleted;
+          }
+
+          if (cachedBestTimes !== null) {
+            setPersonalBestTimes(cachedBestTimes);
+            personalBestTimesRef.current = cachedBestTimes;
+          }
+
+          // Also invoke setStats to mirror to active shared state if we have stats
+          if (cachedGamesPlayed !== null || cachedWinsCount !== null || cachedBestTimes !== null || cachedWinStreak !== null) {
+            setStats({
+              totalGamesPlayed: cachedGamesPlayed ?? undefined,
+              totalWinsCount: cachedWinsCount ?? undefined,
+              winStreak: cachedWinStreak ?? undefined,
+              bestTimes: cachedBestTimes || undefined
+            });
+          }
+        } catch (fastHydrateErr) {
+          console.warn("[Auth] Fast local cache hydration error in onAuthStateChanged:", fastHydrateErr);
+        }
+
         // Unified Cloud Data Hydration: onAuthStateChanged is the single driver of cloud-to-local hydration
         try {
           await hydrateUserFromCloudRef.current(user.uid, user, true);
@@ -14288,6 +14449,7 @@ useEffect(() => {
               isConnectingGoogle={isConnectingGoogle}
               onCancelConnectGoogle={handleCancelGoogleLogin}
               onLogout={handleLogout}
+              isOnline={isOnline}
             />
           )}
 
