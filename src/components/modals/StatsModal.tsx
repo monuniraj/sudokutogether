@@ -64,7 +64,27 @@ export const StatsModal: React.FC<StatsModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const [activePlayersTab, setActivePlayersTab] = React.useState<"recent" | "friends">("recent");
-  const playerIds = (multiplayerPlayers || []).map((p) => p.id);
+  const sanitizedPlayers = React.useMemo(() => {
+    let priorGuestId: string | null = null;
+    let myId: string | null = null;
+    try {
+      priorGuestId = localStorage.getItem("sudoku_prior_guest_id");
+      const userProfileStr = localStorage.getItem("sudoku_userProfile");
+      if (userProfileStr) {
+        myId = JSON.parse(userProfileStr)?.id;
+      }
+    } catch {}
+
+    return (multiplayerPlayers || []).filter((p) => {
+      if (!p || !p.id) return false;
+      if (myId && p.id === myId) return false;
+      if (priorGuestId && p.id === priorGuestId) return false;
+      if (p.id === "GUEST_ANON" || p.id === "me") return false;
+      return true;
+    });
+  }, [multiplayerPlayers]);
+
+  const playerIds = sanitizedPlayers.map((p) => p.id);
   const { getFriendStatus, getFriendLastActive } = useFriendPresence(undefined, playerIds);
   return (
     <div
@@ -329,7 +349,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                   darkMode ? "bg-[#9d174d]/45 text-[#fbcfe8]/80" : "bg-pink-100/50 text-[#9D174D]/80"
                 }`}
               >
-                {multiplayerPlayers.filter((p) => p.isFriend).length}
+                {sanitizedPlayers.filter((p) => p.isFriend).length}
               </span>
             </button>
           </div>
@@ -594,8 +614,8 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                     });
                   };
 
-                  const friends = sortPlayers(multiplayerPlayers.filter((p) => p.isFriend));
-                  const recentPlayers = sortPlayers(multiplayerPlayers);
+                  const friends = sortPlayers(sanitizedPlayers.filter((p) => p.isFriend));
+                  const recentPlayers = sortPlayers(sanitizedPlayers);
 
                   return (
                     <div className="flex flex-col h-full">

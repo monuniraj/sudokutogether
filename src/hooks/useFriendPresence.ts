@@ -80,7 +80,7 @@ export function useFriendPresence(
         prevRef,
         {
           status: "offline",
-          lastActive: serverTimestamp(),
+          isMigrated: true,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
@@ -227,8 +227,25 @@ export function useFriendPresence(
   useEffect(() => {
     if (!trackedFriendIds || trackedFriendIds.length === 0) return;
 
-    // Filter unique valid friend IDs
-    const uniqueIds = Array.from(new Set(trackedFriendIds.filter(Boolean)));
+    let priorGuestId: string | null = null;
+    try {
+      priorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
+    } catch {}
+    const currentId = userId || getStoredUserId();
+
+    // Filter unique valid friend IDs, excluding self, retired guest persona, and dummy IDs
+    const uniqueIds = Array.from(
+      new Set(
+        trackedFriendIds.filter(
+          (id) =>
+            Boolean(id) &&
+            id !== currentId &&
+            (!priorGuestId || id !== priorGuestId) &&
+            id !== "GUEST_ANON" &&
+            id !== "me"
+        )
+      )
+    );
     const unsubs: Array<() => void> = [];
 
     uniqueIds.forEach((friendId) => {
@@ -314,7 +331,15 @@ export function useFriendPresence(
         priorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
       } catch {}
 
-      if (friendId === currentId || (priorGuestId && friendId === priorGuestId)) {
+      // Retired guest ID or invalid IDs must NEVER be reported as online
+      if (priorGuestId && friendId === priorGuestId) {
+        return "offline";
+      }
+      if (!friendId || friendId === "GUEST_ANON" || friendId === "me") {
+        return "offline";
+      }
+
+      if (friendId === currentId) {
         return isIncognito ? "offline" : "online";
       }
 

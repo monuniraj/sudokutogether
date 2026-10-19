@@ -4213,6 +4213,26 @@ useEffect(() => {
         addLog(`🔒 Connected Google Account: ${finalUser.email}`);
         showToast(t("connectedGoogleToast"));
 
+        // TASK 1: VAULT LOCAL GUEST SNAPSHOT ON GOOGLE SIGN-IN
+        if (isPriorGuest) {
+          try {
+            const guestVaultData = {
+              userProfile: userProfileRef.current || userProfile,
+              completedGames: completedGames,
+              savedGames: savedGames,
+              bestTimes: personalBestTimesRef.current || personalBestTimes,
+              totalGamesPlayed: totalGamesPlayed,
+              totalWinsCount: totalWinsCount,
+              winStreak: winStreak,
+              vaultedAt: Date.now()
+            };
+            localStorage.setItem("sudoku_guest_vault", JSON.stringify(guestVaultData));
+            console.log("[Auth] Successfully vaulted guest snapshot into sudoku_guest_vault");
+          } catch (err) {
+            console.warn("Failed to vault guest snapshot:", err);
+          }
+        }
+
         // GUEST-TO-GMAIL IDENTITY MIGRATION & GHOST CLEANUP (non-blocking)
         if (priorGuestId && priorGuestId !== finalUser.uid) {
           (async () => {
@@ -4220,15 +4240,26 @@ useEffect(() => {
               localStorage.setItem("sudoku_prior_guest_id", priorGuestId);
               const guestDocRef = doc(db, "users", priorGuestId);
               await setDoc(guestDocRef, {
-                status: "migrated",
-                lastActive: serverTimestamp(),
+                status: "offline",
+                isMigrated: true,
                 updatedAt: serverTimestamp(),
                 migratedTo: finalUser.uid
               }, { merge: true });
-              console.log(`[Auth] Prior guest ID ${priorGuestId} marked as migrated to ${finalUser.uid}`);
+              console.log(`[Auth] Prior guest ID ${priorGuestId} marked as migrated & offline to ${finalUser.uid}`);
             } catch (migErr) {
               console.warn("[Auth] Failed to mark prior guest as migrated in Firestore:", migErr);
             }
+
+            // Immediately mark guest as left in any active rooms to prevent lobby ghost participant leak
+            try {
+              if (rematchGameId) {
+                await setDoc(doc(db, "rooms", rematchGameId, "players", priorGuestId), {
+                  status: "left",
+                  isMigrated: true,
+                  leftAt: serverTimestamp()
+                }, { merge: true });
+              }
+            } catch {}
 
             // Clean up prior guest ID and current UID from past_players subcollection in Firestore
             try {
@@ -4236,11 +4267,24 @@ useEffect(() => {
               await deleteDoc(doc(db, "users", finalUser.uid, "past_players", finalUser.uid));
             } catch {}
 
-            // Remove prior guest ID from local rematchInviteStates to prevent ghost 60s cooldowns
+            // Immediately filter out prior guest and self from multiplayerPlayers in-memory roster
+            setMultiplayerPlayers(prev => prev.filter(p => p.id !== priorGuestId && p.id !== finalUser.uid));
+
+            // Remove prior guest ID and current UID from local rematchInviteStates to prevent ghost 60s cooldowns
             setRematchInviteStates(prev => {
-              if (!prev[priorGuestId]) return prev;
+              if (!prev[priorGuestId] && !prev[finalUser.uid]) return prev;
               const next = { ...prev };
               delete next[priorGuestId];
+              delete next[finalUser.uid];
+              return next;
+            });
+
+            // Clean up accepted lobby user IDs
+            setLobbyAcceptedUserIds(prev => {
+              if (!prev.has(priorGuestId) && !prev.has(finalUser.uid)) return prev;
+              const next = new Set(prev);
+              next.delete(priorGuestId);
+              next.delete(finalUser.uid);
               return next;
             });
           })().catch((err) => console.warn("[Auth] Background guest migration notice:", err));
@@ -4344,40 +4388,117 @@ useEffect(() => {
         } catch {}
       });
 
-      // 5. Deterministically apply INITIAL_GUEST_STATE to all relevant in-memory states in a single synchronous pass
-      const freshGuestId = "GUEST_" + Math.random().toString(36).substring(2, 9);
-      const cleanGuestProfile = {
-        ...INITIAL_GUEST_STATE.userProfile,
-        id: freshGuestId
-      };
-
-      setUserProfile(cleanGuestProfile);
-      userProfileRef.current = cleanGuestProfile;
+      // 5. Restore vaulted guest snapshot if available, or deterministically apply INITIAL_GUEST_STATE
+      let restoredVault: any = null;
       try {
-        localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuestProfile));
-      } catch {}
+        const vaultRaw = localStorage.getItem("sudoku_guest_vault");
+        if (vaultRaw) {
+          restoredVault = JSON.parse(vaultRaw);
+        }
+      } catch (err) {
+        console.warn("[Auth] Failed to parse guest vault:", err);
+      }
 
-      setCompletedGames(INITIAL_GUEST_STATE.completedGames);
-      setTotalGamesPlayed(INITIAL_GUEST_STATE.totalGamesPlayed);
-      setTotalWinsCount(INITIAL_GUEST_STATE.totalWinsCount);
-      setPersonalBestTimes(INITIAL_GUEST_STATE.personalBestTimes);
-      personalBestTimesRef.current = INITIAL_GUEST_STATE.personalBestTimes;
-      setSavedGames(INITIAL_GUEST_STATE.savedGames);
-      setMultiplayerPlayers(INITIAL_GUEST_STATE.multiplayerPlayers);
-      setPendingChallenges(INITIAL_GUEST_STATE.pendingChallenges);
-      setActiveInviteNotification(null);
-      setIsDockingToBell(false);
-      setWinStreak(0);
-      setHistory([]);
-      setPreviousRecordTime(null);
-      setIsNewRecordAchieved(false);
-      setPbStage("idle");
-      setStats({
-        totalGamesPlayed: INITIAL_GUEST_STATE.totalGamesPlayed,
-        totalWinsCount: INITIAL_GUEST_STATE.totalWinsCount,
-        winStreak: 0,
-        bestTimes: INITIAL_GUEST_STATE.personalBestTimes
-      });
+      if (restoredVault && restoredVault.userProfile?.id) {
+        const restoredGuestProfile = {
+          ...restoredVault.userProfile,
+          isSynced: false
+        };
+        setUserProfile(restoredGuestProfile);
+        userProfileRef.current = restoredGuestProfile;
+        try {
+          localStorage.setItem("sudoku_userProfile", JSON.stringify(restoredGuestProfile));
+        } catch {}
+
+        const restoredCompleted = Array.isArray(restoredVault.completedGames) ? restoredVault.completedGames : [];
+        setCompletedGames(restoredCompleted);
+        try {
+          localStorage.setItem("sudoku_completed_games", JSON.stringify(restoredCompleted));
+        } catch {}
+
+        const restoredGamesPlayed = typeof restoredVault.totalGamesPlayed === "number" ? restoredVault.totalGamesPlayed : 0;
+        setTotalGamesPlayed(restoredGamesPlayed);
+        try {
+          localStorage.setItem("sudoku_total_games_played", String(restoredGamesPlayed));
+          localStorage.setItem("sudoku_gamesPlayed", String(restoredGamesPlayed));
+        } catch {}
+
+        const restoredWinsCount = typeof restoredVault.totalWinsCount === "number" ? restoredVault.totalWinsCount : 0;
+        setTotalWinsCount(restoredWinsCount);
+        try {
+          localStorage.setItem("sudoku_total_wins_count", String(restoredWinsCount));
+          localStorage.setItem("sudoku_winsCount", String(restoredWinsCount));
+        } catch {}
+
+        const restoredBestTimes = restoredVault.bestTimes || INITIAL_GUEST_STATE.personalBestTimes;
+        setPersonalBestTimes(restoredBestTimes);
+        personalBestTimesRef.current = restoredBestTimes;
+        try {
+          localStorage.setItem("sudoku_best_times", JSON.stringify(restoredBestTimes));
+        } catch {}
+
+        const restoredSavedGames = Array.isArray(restoredVault.savedGames) ? restoredVault.savedGames : [];
+        setSavedGames(restoredSavedGames);
+        try {
+          localStorage.setItem("sudoku_saved_games", JSON.stringify(restoredSavedGames));
+        } catch {}
+
+        const restoredWinStreak = typeof restoredVault.winStreak === "number" ? restoredVault.winStreak : 0;
+        setWinStreak(restoredWinStreak);
+        try {
+          localStorage.setItem("sudoku_winStreak", String(restoredWinStreak));
+        } catch {}
+
+        setMultiplayerPlayers(INITIAL_GUEST_STATE.multiplayerPlayers);
+        setPendingChallenges(INITIAL_GUEST_STATE.pendingChallenges);
+        setActiveInviteNotification(null);
+        setIsDockingToBell(false);
+        setHistory([]);
+        setPreviousRecordTime(null);
+        setIsNewRecordAchieved(false);
+        setPbStage("idle");
+        setStats({
+          totalGamesPlayed: restoredGamesPlayed,
+          totalWinsCount: restoredWinsCount,
+          winStreak: restoredWinStreak,
+          bestTimes: restoredBestTimes
+        });
+        console.log("[Auth] Successfully restored guest persona from vault on logout:", restoredGuestProfile.id);
+      } else {
+        const freshGuestId = "GUEST_" + Math.random().toString(36).substring(2, 9);
+        const cleanGuestProfile = {
+          ...INITIAL_GUEST_STATE.userProfile,
+          id: freshGuestId
+        };
+
+        setUserProfile(cleanGuestProfile);
+        userProfileRef.current = cleanGuestProfile;
+        try {
+          localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuestProfile));
+        } catch {}
+
+        setCompletedGames(INITIAL_GUEST_STATE.completedGames);
+        setTotalGamesPlayed(INITIAL_GUEST_STATE.totalGamesPlayed);
+        setTotalWinsCount(INITIAL_GUEST_STATE.totalWinsCount);
+        setPersonalBestTimes(INITIAL_GUEST_STATE.personalBestTimes);
+        personalBestTimesRef.current = INITIAL_GUEST_STATE.personalBestTimes;
+        setSavedGames(INITIAL_GUEST_STATE.savedGames);
+        setMultiplayerPlayers(INITIAL_GUEST_STATE.multiplayerPlayers);
+        setPendingChallenges(INITIAL_GUEST_STATE.pendingChallenges);
+        setActiveInviteNotification(null);
+        setIsDockingToBell(false);
+        setWinStreak(0);
+        setHistory([]);
+        setPreviousRecordTime(null);
+        setIsNewRecordAchieved(false);
+        setPbStage("idle");
+        setStats({
+          totalGamesPlayed: INITIAL_GUEST_STATE.totalGamesPlayed,
+          totalWinsCount: INITIAL_GUEST_STATE.totalWinsCount,
+          winStreak: 0,
+          bestTimes: INITIAL_GUEST_STATE.personalBestTimes
+        });
+      }
 
       // 6. Enforce zero-state: Clear boardState, savedSessionInfo, lastCompletedSession; DO NOT generate background puzzle
       setActiveGameId(null);
@@ -9686,6 +9807,11 @@ useEffect(() => {
   useEffect(() => {
     if (!showCreateChallengeModal || !isOnline || !rematchGameId) return;
 
+    let priorGuestId: string | null = null;
+    try {
+      priorGuestId = localStorage.getItem("sudoku_prior_guest_id");
+    } catch {}
+
     const roomPlayersCol = collection(db, "rooms", rematchGameId, "players");
     const unsub = onSnapshot(roomPlayersCol, (snapshot) => {
       const joined: Array<{ id: string; name: string; updatedAt?: any }> = [];
@@ -9694,7 +9820,7 @@ useEffect(() => {
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         const uId = data.id || docSnap.id;
-        if (!uId || uId === userProfile?.id) return;
+        if (!uId || uId === userProfile?.id || (priorGuestId && uId === priorGuestId)) return;
 
         const isLeft = data.status === "left" || data.status === "abandoned" || data.status === "disconnected";
         const isActive = data.status === "active" || data.status === "joined";
@@ -9714,6 +9840,7 @@ useEffect(() => {
           let next = [...prev];
           let changed = false;
           joined.forEach(({ id, name }) => {
+            if (id === userProfile?.id || (priorGuestId && id === priorGuestId)) return;
             const existing = next.findIndex(p => p.id === id);
             if (existing === -1) {
               next.push({ id, name, isFriend: false, status: "online" as const, inviteStatus: "idle" as const, lastPlayedAt: now });

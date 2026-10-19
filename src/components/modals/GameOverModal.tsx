@@ -108,7 +108,29 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const [activeListTab, setActiveListTab] = useState<'recent' | 'friends'>('recent');
-  const playerIds = (multiplayerPlayers || []).map((p: any) => p.id);
+  const sanitizedPlayers = useMemo(() => {
+    let priorGuestId: string | null = null;
+    let myId: string | null = userProfile?.id || null;
+    try {
+      priorGuestId = localStorage.getItem("sudoku_prior_guest_id");
+      if (!myId) {
+        const userProfileStr = localStorage.getItem("sudoku_userProfile");
+        if (userProfileStr) {
+          myId = JSON.parse(userProfileStr)?.id;
+        }
+      }
+    } catch {}
+
+    return (multiplayerPlayers || []).filter((p: any) => {
+      if (!p || !p.id) return false;
+      if (myId && p.id === myId) return false;
+      if (priorGuestId && p.id === priorGuestId) return false;
+      if (p.id === "GUEST_ANON" || p.id === "me") return false;
+      return true;
+    });
+  }, [multiplayerPlayers, userProfile?.id]);
+
+  const playerIds = sanitizedPlayers.map((p: any) => p.id);
   const { isIncognito, toggleIncognito, getFriendStatus, getFriendLastActive } = useFriendPresence(userProfile?.id, playerIds);
 
   const results = useMemo(() => {
@@ -817,8 +839,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   });
                 };
 
-                const friends = sortPlayers((multiplayerPlayers || []).filter((p) => p.isFriend));
-                const recentPlayers = sortPlayers((multiplayerPlayers || []).filter((p) => !p.isFriend));
+                const friends = sortPlayers(sanitizedPlayers.filter((p) => p.isFriend));
+                const recentPlayers = sortPlayers(sanitizedPlayers.filter((p) => !p.isFriend));
 
                 const renderRow = (player: any, index: number) => {
                   const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(
@@ -983,7 +1005,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
                     {/* PLAYER ROSTER & INLINE ACTIONS */}
                     <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 no-scrollbar flex flex-col gap-4 max-h-[190px] my-1.5 py-0.5">
-                      {(multiplayerPlayers || []).length === 0 ? (
+                      {sanitizedPlayers.length === 0 ? (
                         <span className="text-xs italic text-stone-500 py-4 text-center">
                           {t("noPastPlayersNotice")}
                         </span>
@@ -1023,7 +1045,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 {/* Left: RE-INVITE ALL / STOP */}
                 <button
                   onClick={() => handleReinviteAll()}
-                  disabled={!isInvitingAll && multiplayerPlayers.length === 0}
+                  disabled={!isInvitingAll && sanitizedPlayers.length === 0}
                   className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 cursor-pointer text-center flex items-center justify-center gap-1.5 active:scale-95 shadow-xs leading-normal overflow-visible ${
                     isInvitingAll
                       ? "bg-rose-500 hover:bg-rose-600 text-white animate-pulse"

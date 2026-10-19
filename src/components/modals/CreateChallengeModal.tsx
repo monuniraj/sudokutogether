@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -94,7 +94,27 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
   playClickSound
 }) => {
   const { t } = useTranslation();
-  const playerIds = multiplayerPlayers.map((p) => p.id);
+  const sanitizedPlayers = useMemo(() => {
+    let priorGuestId: string | null = null;
+    let myId: string | null = null;
+    try {
+      priorGuestId = localStorage.getItem("sudoku_prior_guest_id");
+      const userProfileStr = localStorage.getItem("sudoku_userProfile");
+      if (userProfileStr) {
+        myId = JSON.parse(userProfileStr)?.id;
+      }
+    } catch {}
+
+    return (multiplayerPlayers || []).filter((p) => {
+      if (!p || !p.id) return false;
+      if (myId && p.id === myId) return false;
+      if (priorGuestId && p.id === priorGuestId) return false;
+      if (p.id === "GUEST_ANON" || p.id === "me") return false;
+      return true;
+    });
+  }, [multiplayerPlayers]);
+
+  const playerIds = sanitizedPlayers.map((p) => p.id);
   const { isIncognito, toggleIncognito, getFriendStatus, getFriendLastActive } = useFriendPresence(undefined, playerIds);
   const [openDropdown, setOpenDropdown] = useState<"difficulty" | "mistakes" | "hints" | "timer" | null>(null);
   const [isLobbyLocked, setIsLobbyLocked] = useState<boolean>(false);
@@ -495,8 +515,8 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
       <div className="flex-1 min-h-0 flex flex-col gap-2 select-none">
         <div className="flex items-center justify-center px-1 shrink-0 mb-1">
           {(() => {
-            const fCount = multiplayerPlayers.filter(p => p.isFriend).length;
-            const rCount = multiplayerPlayers.length;
+            const fCount = sanitizedPlayers.filter(p => p.isFriend).length;
+            const rCount = sanitizedPlayers.length;
             return (
               <div className={`flex w-full rounded-lg p-1 ${darkMode ? "bg-zinc-900/60" : "bg-stone-200/50"}`}>
                 <button
@@ -525,7 +545,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-4 no-scrollbar pb-2">
-          {multiplayerPlayers.length === 0 ? (
+          {sanitizedPlayers.length === 0 ? (
             <span className="text-xs italic text-stone-500 py-6 text-center">
               {t("noPastPlayers")}
             </span>
@@ -563,8 +583,8 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                   });
                 };
 
-                const friends = sortPlayers(multiplayerPlayers.filter(p => p.isFriend));
-                const recentPlayers = sortPlayers(multiplayerPlayers);
+                const friends = sortPlayers(sanitizedPlayers.filter(p => p.isFriend));
+                const recentPlayers = sortPlayers(sanitizedPlayers);
 
                 const renderRow = (player: any, index: number) => {
                   const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
@@ -739,7 +759,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
               }
               handleReinviteAll();
             }}
-            disabled={!isOnline || (!isInvitingAll && multiplayerPlayers.length === 0)}
+            disabled={!isOnline || (!isInvitingAll && sanitizedPlayers.length === 0)}
             style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
             className={`w-full py-2.5 px-2 text-xs font-mono font-black uppercase tracking-wider rounded-xl border-none transition-all duration-150 text-center flex items-center justify-center gap-1.5 shadow-xs ${
               !isOnline
