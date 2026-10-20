@@ -166,13 +166,31 @@ function sanitizeFallbackKey(key: string, params?: Record<string, string | numbe
 }
 
 /**
+ * Resolves scoped language storage key to preserve guest vs authenticated persona preferences
+ */
+function getScopedLanguageKey(): string {
+  let effectiveUid: string | null = null;
+  try {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem("sudoku_userProfile") : null;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed?.isSynced && parsed?.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
+        effectiveUid = parsed.id;
+      }
+    }
+  } catch {}
+  return effectiveUid ? `sudoku_user_${effectiveUid}_language` : "sudoku_guest_language";
+}
+
+/**
  * Detects device locale from navigator.language with fallback to 'en'.
  * Only runs auto-detection if the user has not explicitly set a preference in localStorage.
  */
 export function getDeviceLanguage(): Language {
   if (typeof window === 'undefined' || !navigator) return 'en';
 
-  const saved = localStorage.getItem(STORAGE_KEY) as Language | null;
+  const scopedKey = getScopedLanguageKey();
+  const saved = (localStorage.getItem(scopedKey) || localStorage.getItem(STORAGE_KEY)) as Language | null;
   if (saved && translations[saved]) {
     return saved;
   }
@@ -209,6 +227,7 @@ export function setGlobalLanguage(lang: Language): void {
   if (!translations[lang]) return;
   globalLanguageState = lang;
   try {
+    localStorage.setItem(getScopedLanguageKey(), lang);
     localStorage.setItem(STORAGE_KEY, lang);
   } catch (e) {
     console.error('Failed to persist language setting to localStorage:', e);

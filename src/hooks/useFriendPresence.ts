@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { doc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
 import { getTimestampMillis, PRESENCE_TIMEOUT_MS } from "../utils/formatTimestamp";
 
 const INCOGNITO_STORAGE_KEY = "sudoku_is_incognito";
@@ -38,6 +38,26 @@ function getStoredUserId(): string | null {
 }
 
 /**
+ * Resolves user/guest scoped storage key to enforce zero-third-space isolation
+ */
+function getScopedIncognitoKey(uid?: string | null): string {
+  let effectiveUid = uid;
+  if (!effectiveUid) {
+    try {
+      const authUser = auth.currentUser;
+      if (authUser && !authUser.isAnonymous) {
+        effectiveUid = authUser.uid;
+      }
+    } catch {}
+    if (!effectiveUid) {
+      effectiveUid = getStoredUserId();
+    }
+  }
+  const isGuest = !effectiveUid || effectiveUid === "guest" || effectiveUid === "GUEST" || effectiveUid.startsWith("GUEST_");
+  return isGuest ? "sudoku_guest_is_incognito" : `sudoku_user_${effectiveUid}_is_incognito`;
+}
+
+/**
  * Robust presence hook with incognito mode (ghost mode) and fail-safe disconnects.
  * 
  * Features:
@@ -53,9 +73,13 @@ export function useFriendPresence(
   explicitUserId?: string,
   trackedFriendIds: string[] = []
 ): FriendPresenceState {
+  const userId = explicitUserId || getStoredUserId();
+
   const [isIncognito, setIsIncognitoState] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(INCOGNITO_STORAGE_KEY) === "true";
+      const scopedKey = getScopedIncognitoKey(explicitUserId || getStoredUserId());
+      const saved = localStorage.getItem(scopedKey) ?? localStorage.getItem(INCOGNITO_STORAGE_KEY);
+      return saved === "true";
     } catch {
       return false;
     }
@@ -64,10 +88,18 @@ export function useFriendPresence(
   const [friendPresenceMap, setFriendPresenceMap] = useState<Record<string, "online" | "offline">>({});
   const [friendLastActiveMap, setFriendLastActiveMap] = useState<Record<string, any>>({});
 
-  const userId = explicitUserId || getStoredUserId();
   const prevUserIdRef = useRef<string | null>(userId || null);
   const isIncognitoRef = useRef(isIncognito);
   isIncognitoRef.current = isIncognito;
+
+  // Re-sync incognito state when persona (userId) transitions
+  useEffect(() => {
+    try {
+      const scopedKey = getScopedIncognitoKey(userId);
+      const val = localStorage.getItem(scopedKey) === "true";
+      setIsIncognitoState(val);
+    } catch {}
+  }, [userId]);
 
   // Cleanup tracking: When userId transitions (e.g., from GUEST_XXXX to Google UID),
   // immediately broadcast status: "offline" to users/{prevUserId}
@@ -117,14 +149,15 @@ export function useFriendPresence(
     setIsIncognitoState((prev) => {
       const nextVal = typeof val === "function" ? val(prev) : val;
       try {
-        localStorage.setItem(INCOGNITO_STORAGE_KEY, String(nextVal));
+        const scopedKey = getScopedIncognitoKey(userId || getStoredUserId());
+        localStorage.setItem(scopedKey, String(nextVal));
       } catch {}
       queueMicrotask(() => {
         window.dispatchEvent(new CustomEvent(INCOGNITO_EVENT, { detail: nextVal }));
       });
       return nextVal;
     });
-  }, []);
+  }, [userId]);
 
   const toggleIncognito = useCallback(() => {
     setIsIncognito((prev) => !prev);
@@ -133,7 +166,8 @@ export function useFriendPresence(
   // Sync across tabs & within same tab via storage & custom events
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === INCOGNITO_STORAGE_KEY && e.newValue !== null) {
+      const currentScopedKey = getScopedIncognitoKey(userId || getStoredUserId());
+      if ((e.key === currentScopedKey || e.key === INCOGNITO_STORAGE_KEY) && e.newValue !== null) {
         setIsIncognitoState(e.newValue === "true");
       }
     };
@@ -152,7 +186,7 @@ export function useFriendPresence(
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener(INCOGNITO_EVENT, handleCustomChange);
     };
-  }, []);
+  }, [userId]);
 
   // Presence lifecycle: broadcast changes when isIncognito or userId changes
   useEffect(() => {
