@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { X, RefreshCw, Play, XCircle } from "lucide-react";
+import { X, RefreshCw, Play, XCircle, Lock } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
 
 export interface JoinRoomModalProps {
@@ -35,6 +35,20 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
   playClickSound
 }) => {
   const { t } = useTranslation();
+  const roomCodeInputRef = useRef<HTMLInputElement>(null);
+  const roomPinInputRef = useRef<HTMLInputElement>(null);
+  const [isRoomCodeFocused, setIsRoomCodeFocused] = React.useState(false);
+  const [isRoomPinFocused, setIsRoomPinFocused] = React.useState(false);
+
+  // Auto-focus room code input when opened
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => {
+        roomCodeInputRef.current?.focus();
+      }, 120);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -77,50 +91,167 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
         {t("enterRoomCodeSub")}
       </p>
 
-      {/* 6-digit room code input */}
+      {/* 6-digit room code input with segmented slots */}
       <div className="flex flex-col gap-1.5 mt-1">
-        <label className="font-sans font-bold text-2xs uppercase tracking-wider text-stone-400 dark:text-stone-500">
-          {t("roomCodeInputLabel")}
-        </label>
-        <input
-          type="text"
-          maxLength={6}
-          placeholder="849201"
-          value={roomCodeInput}
-          onChange={(e) => {
-            const cleaned = e.target.value.replace(/[^0-9]/g, '');
-            setRoomCodeInput(cleaned);
-            setJoinRoomError(null);
-          }}
-          className={`w-full py-3 px-4 rounded-xl text-center text-xl font-mono font-black tracking-[0.3em] border-none outline-none transition-colors ${
-            darkMode 
-              ? "bg-zinc-900 text-stone-100 placeholder-zinc-700 focus:ring-2 focus:ring-sky-500/50" 
-              : "bg-stone-100 text-stone-850 placeholder-stone-400 focus:ring-2 focus:ring-sky-500/30 shadow-inner"
-          }`}
-        />
+        <div className="flex items-center justify-between">
+          <label className="font-sans font-bold text-2xs uppercase tracking-wider text-stone-400 dark:text-stone-500">
+            {t("roomCodeInputLabel")}
+          </label>
+          <span className="text-[10px] font-mono text-stone-400 dark:text-stone-500">
+            {roomCodeInput.length}/6
+          </span>
+        </div>
+
+        <div 
+          onClick={() => roomCodeInputRef.current?.focus()}
+          className="relative w-full cursor-pointer"
+        >
+          {/* Overlaid hidden numeric input */}
+          <input
+            ref={roomCodeInputRef}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            autoComplete="one-time-code"
+            value={roomCodeInput}
+            onFocus={() => setIsRoomCodeFocused(true)}
+            onBlur={() => setIsRoomCodeFocused(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && roomCodeInput.trim().length === 6 && !isJoiningRoomLoading) {
+                playClickSound();
+                onJoinRoom();
+              }
+            }}
+            onChange={(e) => {
+              const cleaned = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+              setRoomCodeInput(cleaned);
+              setJoinRoomError(null);
+            }}
+            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+            aria-label={t("roomCodeInputLabel")}
+          />
+
+          {/* 6 Segmented Digit Slots */}
+          <div className="grid grid-cols-6 gap-2 sm:gap-2.5 w-full">
+            {[0, 1, 2, 3, 4, 5].map((idx) => {
+              const hasDigit = idx < roomCodeInput.length;
+              const isSlotActive = isRoomCodeFocused && (idx === roomCodeInput.length || (idx === 5 && roomCodeInput.length === 6));
+              const digit = hasDigit ? roomCodeInput[idx] : null;
+
+              return (
+                <div
+                  key={`room-slot-${idx}`}
+                  className={`h-12 sm:h-13 rounded-xl flex items-center justify-center font-mono text-lg sm:text-xl transition-all duration-150 select-none ${
+                    isSlotActive
+                      ? "border-2 border-sky-500 ring-2 ring-sky-500/40 shadow-[0_0_12px_rgba(14,165,233,0.35)] bg-sky-500/10 dark:bg-sky-500/15 scale-[1.03]"
+                      : hasDigit
+                      ? (darkMode 
+                          ? "border border-sky-500/40 bg-zinc-900 shadow-sm" 
+                          : "border border-sky-500/30 bg-stone-100 shadow-sm")
+                      : (darkMode
+                          ? "border border-zinc-800/80 bg-zinc-900/50"
+                          : "border border-stone-200/80 bg-stone-100/60 shadow-inner")
+                  }`}
+                >
+                  {hasDigit ? (
+                    <span className="text-stone-900 dark:text-white font-bold">
+                      {digit}
+                    </span>
+                  ) : (
+                    <span className={`opacity-25 text-slate-500/30 dark:text-slate-500/30 font-black text-sm ${
+                      isSlotActive ? "animate-pulse text-sky-400/60 opacity-40" : ""
+                    }`}>
+                      –
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      {/* Optional Room PIN input */}
+      {/* Optional Room PIN input with segmented slots */}
       <div className="flex flex-col gap-1.5">
-        <label className="font-sans font-bold text-2xs uppercase tracking-wider text-stone-400 dark:text-stone-500">
-          {t("pinInputLabel")}
-        </label>
-        <input
-          type="password"
-          maxLength={4}
-          placeholder="• • • •"
-          value={roomPinInput}
-          onChange={(e) => {
-            const cleaned = e.target.value.replace(/[^0-9]/g, '');
-            setRoomPinInput(cleaned);
-            setJoinRoomError(null);
-          }}
-          className={`w-full py-2.5 px-4 rounded-xl text-center text-sm font-mono font-bold tracking-widest border-none outline-none transition-colors ${
-            darkMode 
-              ? "bg-zinc-900 text-stone-100 placeholder-zinc-700 focus:ring-2 focus:ring-sky-500/50" 
-              : "bg-stone-100 text-stone-850 placeholder-stone-400 focus:ring-2 focus:ring-sky-500/30 shadow-inner"
-          }`}
-        />
+        <div className="flex items-center justify-between">
+          <label className="font-sans font-bold text-2xs uppercase tracking-wider text-stone-400 dark:text-stone-500 flex items-center gap-1.5">
+            <Lock className="w-3 h-3 opacity-60" />
+            <span>{t("pinInputLabel")}</span>
+          </label>
+          {roomPinInput.length > 0 && (
+            <span className="text-[10px] font-mono text-stone-400 dark:text-stone-500">
+              {roomPinInput.length}/4
+            </span>
+          )}
+        </div>
+
+        <div 
+          onClick={() => roomPinInputRef.current?.focus()}
+          className="relative w-full max-w-[240px] mx-auto cursor-pointer"
+        >
+          {/* Overlaid hidden password input */}
+          <input
+            ref={roomPinInputRef}
+            type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={4}
+            value={roomPinInput}
+            onFocus={() => setIsRoomPinFocused(true)}
+            onBlur={() => setIsRoomPinFocused(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && roomCodeInput.trim().length === 6 && !isJoiningRoomLoading) {
+                playClickSound();
+                onJoinRoom();
+              }
+            }}
+            onChange={(e) => {
+              const cleaned = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
+              setRoomPinInput(cleaned);
+              setJoinRoomError(null);
+            }}
+            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+            aria-label={t("pinInputLabel")}
+          />
+
+          {/* 4 Segmented PIN Slots */}
+          <div className="grid grid-cols-4 gap-2.5 sm:gap-3 w-full">
+            {[0, 1, 2, 3].map((idx) => {
+              const hasDigit = idx < roomPinInput.length;
+              const isSlotActive = isRoomPinFocused && (idx === roomPinInput.length || (idx === 3 && roomPinInput.length === 4));
+
+              return (
+                <div
+                  key={`pin-slot-${idx}`}
+                  className={`h-11 sm:h-12 rounded-xl flex items-center justify-center font-mono text-base sm:text-lg transition-all duration-150 select-none ${
+                    isSlotActive
+                      ? "border-2 border-sky-500 ring-2 ring-sky-500/40 shadow-[0_0_12px_rgba(14,165,233,0.35)] bg-sky-500/10 dark:bg-sky-500/15 scale-[1.03]"
+                      : hasDigit
+                      ? (darkMode 
+                          ? "border border-sky-500/40 bg-zinc-900 shadow-sm" 
+                          : "border border-sky-500/30 bg-stone-100 shadow-sm")
+                      : (darkMode
+                          ? "border border-zinc-800/80 bg-zinc-900/50"
+                          : "border border-stone-200/80 bg-stone-100/60 shadow-inner")
+                  }`}
+                >
+                  {hasDigit ? (
+                    <span className="text-stone-900 dark:text-white font-bold text-lg">
+                      ●
+                    </span>
+                  ) : (
+                    <span className={`opacity-25 text-slate-500/30 dark:text-slate-500/30 font-black text-sm ${
+                      isSlotActive ? "animate-pulse text-sky-400/60 opacity-40" : ""
+                    }`}>
+                      •
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Error Message */}

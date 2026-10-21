@@ -15,6 +15,7 @@ export interface CompletedGameRecord {
   mistakes: number;
   maxMistakes: number;
   isChallenge?: boolean;
+  strictMistakeLimit?: boolean;
 }
 
 export interface MultiplayerPlayerRecord {

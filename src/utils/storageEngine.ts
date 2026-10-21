@@ -14,6 +14,7 @@
 export interface UserVaultProfile {
   id: string;
   displayName: string;
+  name?: string;
   avatarColor: string;
   isSynced: boolean;
   email?: string;
@@ -189,6 +190,9 @@ export function setActiveAuthUid(uid?: string | null): void {
 
 /**
  * Scans an array of completed games to reconcile and extract the fastest qualifying winning times.
+ * STRICT MISTAKE LIMIT GUARD:
+ * If a game was completed with strictMistakeLimit === false (unlimited mistakes/casual mode),
+ * or maxMistakes > 3, or mistakes >= 3, or hints > 3, it MUST NOT update or qualify for bestTimes!
  */
 export function reconcileBestTimesFromHistory(
   history: any[],
@@ -209,6 +213,18 @@ export function reconcileBestTimesFromHistory(
     const isWon = Boolean(g.isWon === true || g.result === "win" || g.outcome === "win");
     if (!isWon) return;
 
+    // Strict Mistake Limit Rule Guard:
+    // Disqualify if strictMistakeLimit is false (unlimited mistakes / casual mode)
+    if (g.strictMistakeLimit === false) return;
+    const maxMistakes = Number(g.maxMistakes);
+    if (!isNaN(maxMistakes) && maxMistakes > 3) return; // e.g. 999 or custom multiplayer > 3
+    const mistakes = Number(g.mistakes);
+    if (!isNaN(mistakes) && mistakes >= 3) return;
+    const hints = Number(g.hints);
+    if (!isNaN(hints) && hints > 3) return;
+    const maxHints = Number(g.maxHints);
+    if (!isNaN(maxHints) && maxHints > 3) return;
+
     const diff = String(g.difficulty || "").toUpperCase() as keyof UserVaultBestTimes;
     if (!["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"].includes(diff)) return;
 
@@ -222,6 +238,51 @@ export function reconcileBestTimesFromHistory(
   });
 
   return result;
+}
+
+/**
+ * Updates personal best time for a given difficulty in the user vault with strict mistake limit guards.
+ * If strictMistakeLimit === false (unlimited mistakes/casual mode), the path writing to bestTimes is bypassed.
+ */
+export function updatePersonalBestTime(
+  uid: string | null | undefined,
+  difficulty: string,
+  elapsedSeconds: number,
+  options?: {
+    strictMistakeLimit?: boolean;
+    mistakes?: number;
+    maxMistakes?: number;
+    hints?: number;
+    maxHints?: number;
+  }
+): boolean {
+  if (options?.strictMistakeLimit === false) return false;
+  if (options?.maxMistakes !== undefined && options.maxMistakes > 3) return false;
+  if (options?.mistakes !== undefined && options.mistakes >= 3) return false;
+  if (options?.hints !== undefined && options.hints > 3) return false;
+  if (options?.maxHints !== undefined && options.maxHints > 3) return false;
+  if (!elapsedSeconds || elapsedSeconds <= 0) return false;
+
+  const diffKey = String(difficulty || "").toUpperCase() as keyof UserVaultBestTimes;
+  if (!["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"].includes(diffKey)) return false;
+
+  let isNewRecord = false;
+  updateVault((prevVault) => {
+    const current = prevVault.bestTimes[diffKey] || 0;
+    if (current === 0 || elapsedSeconds < current) {
+      isNewRecord = true;
+      return {
+        ...prevVault,
+        bestTimes: {
+          ...prevVault.bestTimes,
+          [diffKey]: elapsedSeconds
+        }
+      };
+    }
+    return prevVault;
+  }, uid);
+
+  return isNewRecord;
 }
 
 /**

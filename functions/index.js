@@ -9,63 +9,63 @@ const PUSH_TRANSLATIONS = {
   en: {
     duelInviteTitle: "Sudoku Duel Challenge!",
     duelInviteBody: (from) => `${from} challenged you to a Sudoku duel!`,
-    duelCompleteTitle: "🏆 Duel Completed!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} finished your challenge! Tap to see who won.`,
     defaultPlayer: "A player"
   },
   hi: {
     duelInviteTitle: "सुडोकू मुकाबला!",
     duelInviteBody: (from) => `${from} ने आपको सुडोकू मुकाबले का चैलेंज भेजा है!`,
-    duelCompleteTitle: "🏆 मुकाबला खत्म हुआ!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} ने चैलेंज पूरा कर लिया! देखें कौन जीता।`,
     defaultPlayer: "एक खिलाड़ी"
   },
   de: {
     duelInviteTitle: "Sudoku-Duell!",
     duelInviteBody: (from) => `${from} fordert dich zu einem Sudoku-Duell heraus!`,
-    duelCompleteTitle: "🏆 Duell beendet!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} hat die Challenge beendet! Tippe, um das Ergebnis zu sehen.`,
     defaultPlayer: "Ein Spieler"
   },
   ja: {
     duelInviteTitle: "数独の対戦リクエスト！",
     duelInviteBody: (from) => `${from}さんから数独の対戦を挑まれました！`,
-    duelCompleteTitle: "🏆 対戦完了！",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name}さんがパズルを解き終えました！結果を確認しましょう。`,
     defaultPlayer: "プレイヤー"
   },
   ko: {
     duelInviteTitle: "스도쿠 대결 신청!",
     duelInviteBody: (from) => `${from}님이 스도쿠 대결을 신청했습니다!`,
-    duelCompleteTitle: "🏆 대결 완료!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name}님이 퍼즐을 완료했습니다! 승자를 확인해 보세요.`,
     defaultPlayer: "플레이어"
   },
   es: {
     duelInviteTitle: "¡Duelo de Sudoku!",
     duelInviteBody: (from) => `¡${from} te ha desafiado a un duelo de Sudoku!`,
-    duelCompleteTitle: "🏆 ¡Duelo finalizado!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `¡${name} terminó el desafío! Toca para ver quién ganó.`,
     defaultPlayer: "Un jugador"
   },
   fr: {
     duelInviteTitle: "Duel de Sudoku !",
     duelInviteBody: (from) => `${from} vous a défié en duel de Sudoku !`,
-    duelCompleteTitle: "🏆 Duel terminé !",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} a terminé le défi ! Appuyez pour voir le vainqueur.`,
     defaultPlayer: "Un joueur"
   },
   it: {
     duelInviteTitle: "Sfida a Sudoku!",
     duelInviteBody: (from) => `${from} ti ha sfidato a un duello di Sudoku!`,
-    duelCompleteTitle: "🏆 Duello terminato!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} ha completato la sfida! Tocca per scoprire chi ha vinto.`,
     defaultPlayer: "Un giocatore"
   },
   "pt-BR": {
     duelInviteTitle: "Duelo de Sudoku!",
     duelInviteBody: (from) => `${from} desafiou você para um duelo de Sudoku!`,
-    duelCompleteTitle: "🏆 Duelo finalizado!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} concluiu o desafio! Toque para ver quem venceu.`,
     defaultPlayer: "Um jogador"
   }
@@ -273,6 +273,11 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
     }
 
     for (const recipientId of recipientUids) {
+      if (!recipientId || recipientId === finisherUid) {
+        console.log(`[onChallengeCompleted] Suppressed self-notification: finisher ${finisherUid} === recipient ${recipientId}`);
+        continue;
+      }
+
       const userDoc = await db.collection("users").doc(recipientId).get();
       if (!userDoc.exists) continue;
 
@@ -298,6 +303,9 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
           type: "challenge_completed",
           roomCode: String(roomCode),
           finisherName: cleanFinisher,
+          completedByUid: String(finisherUid),
+          finisherUid: String(finisherUid),
+          recipientUid: String(recipientId),
           title: notifTitle,
           body: notifBody,
           lang: targetLang

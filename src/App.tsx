@@ -269,6 +269,7 @@ interface CompletedGame {
   participants?: any[];
   userId?: string;
   playerName?: string;
+  strictMistakeLimit?: boolean;
 }
 
 interface PendingChallenge {
@@ -287,6 +288,7 @@ interface PendingChallenge {
   fromUserId?: string;
   sentAt?: number;
   type?: 'invite' | 'challenge_completed';
+  title?: string;
   roomCode?: string;
   gameId?: string;
   isGrouped?: boolean;
@@ -299,6 +301,7 @@ const INITIAL_GUEST_STATE = {
   userProfile: { 
     id: "GUEST_" + Math.random().toString(36).substring(2, 9), 
     name: `Pro_${Math.floor(1000 + Math.random() * 9000)}`, 
+    displayName: `Pro_${Math.floor(1000 + Math.random() * 9000)}`, 
     avatarColor: "#6B7280", 
     isSynced: false 
   },
@@ -1698,10 +1701,13 @@ useEffect(() => {
   const [gridOverlay, setGridOverlay] = useState<boolean>(true);
 
   // 0ms SYNCHRONOUS BOOTSTRAP (INITIAL APP MOUNT)
-  const bootstrapUid = getActiveAuthUid() || "guest";
+  const bootstrapUid = getActiveAuthUid();
+  const userHasVault = bootstrapUid ? hasVault(bootstrapUid) : false;
   const initialVaultRef = useRef<UserVault | null>(null);
   if (!initialVaultRef.current) {
-    initialVaultRef.current = loadVault(bootstrapUid);
+    initialVaultRef.current = userHasVault && bootstrapUid
+      ? loadVault(bootstrapUid)
+      : loadVault(bootstrapUid || "guest");
   }
   const initialVault = initialVaultRef.current;
 
@@ -1716,13 +1722,39 @@ useEffect(() => {
     isSynced: boolean;
   } | null>(() => {
     const p = initialVault.profile;
+    // If hasVault(uid) is true, render the saved vault profile name immediately without delay
+    if (userHasVault && p.displayName && !isGenericDisplayName(p.displayName)) {
+      const activeName = p.displayName.trim().slice(0, 15);
+      return {
+        id: p.id,
+        name: activeName,
+        displayName: activeName,
+        avatarColor: p.avatarColor || "#8B5CF6",
+        isSynced: Boolean(p.isSynced),
+        email: p.email || null
+      };
+    }
+
+    // Cold boot (empty cache / returning auth user without local vault):
+    // Do NOT render interim fallback names ("Player" or email). Show empty name for clean skeleton placeholder.
+    if (bootstrapUid) {
+      return {
+        id: bootstrapUid,
+        name: "",
+        displayName: "",
+        avatarColor: p.avatarColor || "#8B5CF6",
+        isSynced: true,
+        email: p.email || null
+      };
+    }
+
     return {
       id: p.id,
       name: p.displayName || "Player",
       displayName: p.displayName || "Player",
       avatarColor: p.avatarColor || "#8B5CF6",
-      isSynced: Boolean(p.isSynced),
-      email: p.email || null
+      isSynced: false,
+      email: null
     };
   });
 
@@ -1779,31 +1811,33 @@ useEffect(() => {
   };
 
   const getActiveDisplayName = (): string => {
-    if (isSyncingCloudData) {
-      if (auth.currentUser?.displayName) {
-        return auth.currentUser.displayName.trim().slice(0, 15);
+    const currentUid = auth.currentUser?.uid || userProfileRef.current?.id || getActiveAuthUid();
+    const userVaultExists = currentUid ? hasVault(currentUid) : false;
+
+    // 1. If hasVault(uid) is true, render the saved vault profile name immediately without delay
+    if (userVaultExists && currentUid) {
+      const cached = loadVault(currentUid);
+      if (cached.profile.displayName && !isGenericDisplayName(cached.profile.displayName)) {
+        return cached.profile.displayName.trim().slice(0, 15);
       }
-      if (auth.currentUser?.email) {
-        return auth.currentUser.email.split("@")[0].slice(0, 15);
-      }
-      return "Syncing...";
     }
 
-    const raw = (userProfile?.name || "").trim();
-    const isGenericGuestName =
-      !raw ||
-      raw === "Anonymous Voyager" ||
-      raw === "Guest Voyager" ||
-      raw === "Guest Solver" ||
-      raw === "Guest" ||
-      raw.startsWith("Bold Voyager") ||
-      raw.startsWith("Player");
-
-    if (!isGenericGuestName && raw.length <= 15) {
-      return raw;
+    // 2. If userProfile state already holds a valid custom name, return it immediately
+    const profileName = (userProfile?.name || userProfile?.displayName || "").trim();
+    if (profileName && !isGenericDisplayName(profileName)) {
+      return profileName.slice(0, 15);
     }
-    if (!isGenericGuestName && raw.length > 15 && !raw.startsWith("Bold Voyager")) {
-      return raw.slice(0, 15);
+
+    // 3. Cold boot / syncing check:
+    // If cold boot (empty cache) or currently syncing, DO NOT render interim fallback names (email or "Player").
+    // Return empty string so UI callers can render clean skeleton placeholders until Firestore hydration commits.
+    if (isSyncingCloudData || isAuthHydrating) {
+      return "";
+    }
+
+    // 4. Fallback for pure offline guest only
+    if (profileName && profileName.length <= 15) {
+      return profileName;
     }
 
     const randNum = (userProfile?.id || "").replace(/[^0-9]/g, "").slice(-4) || String(Math.floor(1000 + Math.random() * 9000));
@@ -3439,6 +3473,21 @@ useEffect(() => {
 
   // Unified Personal Best Time update logic with Fair-Play safeguards
   const updatePersonalBestTime = (diff: Difficulty, elapsedSeconds: number): boolean => {
+    // 1. Strict Mistake Limit Guard on Personal Bests:
+    // If completed with strictMistakeLimit === false (unlimited mistakes/casual mode),
+    // it MUST NOT update bestTimes (Personal Best).
+    const maxMistakesLimit = boardState ? boardState.maxMistakesLimit : (mistakeLimitEnabled ? 3 : 999);
+    const isStrictMistakeSetting = Boolean(
+      (settingsStateRef.current.strictMistakeLimit ?? true) &&
+      (settingsStateRef.current.mistakeLimitEnabled ?? true) &&
+      mistakeLimitEnabled &&
+      maxMistakesLimit <= 3
+    );
+
+    if (!isStrictMistakeSetting) {
+      setIsNewRecordAchieved(false);
+      return false;
+    }
     if (!elapsedSeconds || elapsedSeconds <= 0) return false;
     const diffKey = diff.toUpperCase() as Difficulty;
     const currentBest = personalBestTimesRef.current[diffKey] || 0;
@@ -4462,8 +4511,7 @@ useEffect(() => {
           const userHasVault = hasVault(uid);
           const cachedVault = loadVault(uid);
 
-          // Cold-boot protection: Do NOT eagerly set userProfile to generic "Player" on cold cache.
-          // Wait for hydrateUserFromCloud to resolve the Firestore document before committing profile.
+          // If hasVault(uid) is true, render the saved vault profile name immediately without delay
           const cachedName = cachedVault.profile.displayName;
           const hasValidCustomName = userHasVault && Boolean(cachedName) && !isGenericDisplayName(cachedName);
 
@@ -4479,6 +4527,20 @@ useEffect(() => {
             };
             setUserProfile(cachedProfile);
             userProfileRef.current = cachedProfile;
+          } else if (!userHasVault) {
+            // Cold boot (empty cache): Do NOT render interim fallback names ("Player" or email).
+            // Show a clean loading skeleton/placeholder until hydrateUserFromCloud resolves the Firestore custom name.
+            setUserProfile((prev) => {
+              if (prev && prev.name && !isGenericDisplayName(prev.name)) return prev;
+              return {
+                id: uid,
+                name: "",
+                displayName: "",
+                avatarColor: cachedVault.profile.avatarColor || "#8B5CF6",
+                isSynced: true,
+                email: user.email || null
+              };
+            });
           }
 
           if (userHasVault) {
@@ -5194,7 +5256,8 @@ useEffect(() => {
       const freshGuestId = "GUEST_" + Math.random().toString(36).substring(2, 9);
       const cleanGuestProfile = {
         ...INITIAL_GUEST_STATE.userProfile,
-        id: freshGuestId
+        id: freshGuestId,
+        displayName: INITIAL_GUEST_STATE.userProfile.name
       };
 
       setUserProfile(cleanGuestProfile);
@@ -6968,6 +7031,19 @@ useEffect(() => {
   });
 
   const triggerBackgroundNotification = async (inviteData: any) => {
+    // 1. FOREGROUND PUSH SUPPRESSION: Suppress OS push notifications when the app is actively open and in view
+    if (typeof document !== "undefined" && document.visibilityState === "visible") {
+      console.log("[Push] App is in foreground (visible). Suppressed OS-level push notification.");
+      return;
+    }
+
+    // 2. SELF-NOTIFICATION SUPPRESSION: Disallow notifications to self
+    const currentRecipient = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "";
+    if (inviteData?.fromUserId && currentRecipient && inviteData.fromUserId === currentRecipient) {
+      console.log("[Push] Self-notification suppressed in triggerBackgroundNotification.");
+      return;
+    }
+
     const title = "Sudoku Challenge Invite";
     const body = `${inviteData.fromName} invited you to play Sudoku!`;
     const gameId = inviteData.gameId;
@@ -7050,11 +7126,20 @@ useEffect(() => {
               const isSuppressed = shouldSuppressToastForRoom(targetCode);
 
               if (type === 'challenge_completed') {
+                const notifData = (notification.data as any) || {};
+                const completedByUid = notifData.completedByUid || notifData.finisherUid || notifData.senderId || notifData.fromUserId;
+                const recipientUid = notifData.recipientUid || notifData.toUserId || notifData.targetUid || userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "";
+                if (completedByUid && recipientUid && completedByUid === recipientUid) {
+                  console.log(`[Push] Self-notification suppressed in pushRecListener: completedByUid (${completedByUid}) === recipientUid (${recipientUid})`);
+                  return;
+                }
+
                 const notifId = notification.id || `push-${Date.now()}`;
                 const completedItem: PendingChallenge = {
                   id: `${targetCode}_completed_${notifId || Date.now()}`,
                   inviteId: notifId,
                   type: 'challenge_completed',
+                  title: "Puzzle Race Finished",
                   fromName: fromName || senderName || "Opponent",
                   senderName: fromName || senderName || "Opponent",
                   roomCode: targetCode,
@@ -7097,6 +7182,7 @@ useEffect(() => {
                   setActiveInviteNotification({
                     id: notifId,
                     type: 'challenge_completed',
+                    title: "Puzzle Race Finished",
                     fromName: fromName || senderName || "Opponent",
                     roomCode: targetCode,
                     gameId: targetCode
@@ -7210,6 +7296,13 @@ useEffect(() => {
               }
             } else if (event.data && event.data.type === 'challenge_completed') {
               console.log("[Push] Web push challenge completed received from SW:", event.data);
+              const completedByUid = event.data.completedByUid || event.data.finisherUid || event.data.senderId || event.data.fromUserId;
+              const recipientUid = event.data.recipientUid || event.data.toUserId || event.data.targetUid || userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "";
+              if (completedByUid && recipientUid && completedByUid === recipientUid) {
+                console.log(`[Push] Self-notification suppressed in SW message handler: completedByUid (${completedByUid}) === recipientUid (${recipientUid})`);
+                return;
+              }
+
               const { roomCode, gameId, senderName, fromName } = event.data;
               const targetCode = roomCode || gameId || "";
               const notifId = `sw-completed-${Date.now()}`;
@@ -7217,6 +7310,7 @@ useEffect(() => {
                 id: `${targetCode}_completed_${notifId || Date.now()}`,
                 inviteId: notifId,
                 type: 'challenge_completed',
+                title: "Puzzle Race Finished",
                 fromName: fromName || senderName || "Opponent",
                 senderName: fromName || senderName || "Opponent",
                 roomCode: targetCode,
@@ -7261,6 +7355,7 @@ useEffect(() => {
                 setActiveInviteNotification({
                   id: notifId,
                   type: 'challenge_completed',
+                  title: "Puzzle Race Finished",
                   fromName: fromName || senderName || "Opponent",
                   roomCode: targetCode,
                   gameId: targetCode
@@ -7291,11 +7386,19 @@ useEffect(() => {
                 const finisherName = data.finisherName || data.fromName || data.senderName || notif.title || "Opponent";
 
                 if (type === 'challenge_completed') {
+                  const completedByUid = data.completedByUid || data.finisherUid || data.senderId || data.fromUserId;
+                  const recipientUid = data.recipientUid || data.toUserId || data.targetUid || userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "";
+                  if (completedByUid && recipientUid && completedByUid === recipientUid) {
+                    console.log(`[Push] Self-notification suppressed in onMessage: completedByUid (${completedByUid}) === recipientUid (${recipientUid})`);
+                    return;
+                  }
+
                   const notifId = `fcm-completed-${Date.now()}`;
                   const completedItem: PendingChallenge = {
                     id: `${roomCode}_completed_${notifId || Date.now()}`,
                     inviteId: notifId,
                     type: 'challenge_completed',
+                    title: "Puzzle Race Finished",
                     fromName: finisherName,
                     senderName: finisherName,
                     roomCode: roomCode,
@@ -7341,6 +7444,7 @@ useEffect(() => {
                     setActiveInviteNotification({
                       id: notifId,
                       type: 'challenge_completed',
+                      title: "Puzzle Race Finished",
                       fromName: finisherName,
                       roomCode: roomCode,
                       gameId: roomCode
@@ -9613,7 +9717,13 @@ useEffect(() => {
     //    a) A run only qualifies if hints used <= 3 AND max hints limit <= 3.
     //    b) If hints used > 3 or hints set to unlimited (> 3), personal best is not recorded.
     const maxMistakesLimit = boardState ? boardState.maxMistakesLimit : (mistakeLimitEnabled ? 3 : 999);
-    const isUnlimitedMistakes = !mistakeLimitEnabled || maxMistakesLimit >= 999;
+    const isStrictMistakeSetting = Boolean(
+      (settingsStateRef.current.strictMistakeLimit ?? true) &&
+      (settingsStateRef.current.mistakeLimitEnabled ?? true) &&
+      mistakeLimitEnabled &&
+      maxMistakesLimit <= 3
+    );
+    const isUnlimitedMistakes = !mistakeLimitEnabled || maxMistakesLimit >= 999 || !isStrictMistakeSetting;
     const isCustomIncreasedAbove3 = maxMistakesLimit > 3;
     const isWithinStandardLimit = finalMistakes < 3;
 
@@ -9621,8 +9731,11 @@ useEffect(() => {
     const maxHintsLimit = boardState?.maxHintsLimit ?? (challengeMode ? challengeHintLimit : 3);
     const isHintsDisqualified = hintsUsed > 3 || maxHintsLimit > 3;
 
+    // RULE ENFORCEMENT:
+    // If strictMistakeLimit === false (unlimited mistakes/casual mode), it MUST NOT update bestTimes.
     const qualifiesForPersonalBest = 
       isWon && 
+      isStrictMistakeSetting &&
       !isUnlimitedMistakes && 
       !isCustomIncreasedAbove3 && 
       isWithinStandardLimit && 
@@ -9698,7 +9811,7 @@ useEffect(() => {
       difficulty: difficulty,
       timeSec: sessionSeconds,
       mistakes: finalMistakes,
-      maxMistakes: boardState ? boardState.maxMistakesLimit : (mistakeLimitEnabled ? 3 : 999),
+      maxMistakes: maxMistakesLimit,
       hints: hintsUsed,
       maxHints: maxHintsLimit,
       isWon: isWon,
@@ -9707,7 +9820,8 @@ useEffect(() => {
       seed: gameSeed,
       userId: userProfile?.id || "GUEST_ANON",
       playerName: pName,
-      participants: resolvedParts
+      participants: resolvedParts,
+      strictMistakeLimit: isStrictMistakeSetting && !isUnlimitedMistakes && !isCustomIncreasedAbove3
     };
 
     // Perform atomic transaction on single canonical vault
@@ -9732,7 +9846,13 @@ useEffect(() => {
         updatedHistory = [completedGameRecord, ...existingHistory].slice(0, 50);
       }
 
-      const reconciledBestTimes = reconcileBestTimesFromHistory(updatedHistory, prevVault.bestTimes);
+      // RULE ENFORCEMENT:
+      // If a game is completed with strictMistakeLimit === false (unlimited mistakes/casual mode),
+      // it MUST NOT update bestTimes. The match can still be recorded in completedGames history
+      // and total play count, but the path that writes to bestTimes must be completely bypassed.
+      const reconciledBestTimes = qualifiesForPersonalBest
+        ? reconcileBestTimesFromHistory(updatedHistory, prevVault.bestTimes)
+        : prevVault.bestTimes;
 
       return {
         ...prevVault,
@@ -9752,8 +9872,10 @@ useEffect(() => {
     setWinStreak(updatedVault.stats.winStreak);
     setCompletedGames(updatedVault.completedGames);
     completedGamesRef.current = updatedVault.completedGames;
-    setPersonalBestTimes(updatedVault.bestTimes);
-    personalBestTimesRef.current = updatedVault.bestTimes;
+    if (qualifiesForPersonalBest) {
+      setPersonalBestTimes(updatedVault.bestTimes);
+      personalBestTimesRef.current = updatedVault.bestTimes;
+    }
 
     if (targetUid === "guest" || targetUid.startsWith("GUEST_")) {
       syncGuestSnapshotInRealtime({
@@ -10505,7 +10627,8 @@ useEffect(() => {
     const notifiedOpponents = new Set<string>();
 
     const recordOpponentCompletion = (oppUid: string, oppName: string) => {
-      if (!oppUid || isSelfUser(oppUid, oppName)) return;
+      const recipientUid = currentUid || currentAuthUid || currentUserProfileId;
+      if (!oppUid || oppUid === recipientUid || isSelfUser(oppUid, oppName)) return;
       if (notifiedOpponents.has(oppUid)) return;
       notifiedOpponents.add(oppUid);
 
@@ -10514,6 +10637,7 @@ useEffect(() => {
         id: `${cleanRoomCode}_completed_${oppUid}`,
         inviteId: notifId,
         type: 'challenge_completed',
+        title: "Puzzle Race Finished",
         fromName: oppName || "Opponent",
         senderName: oppName || "Opponent",
         roomCode: cleanRoomCode,
@@ -10552,6 +10676,7 @@ useEffect(() => {
           setActiveInviteNotification({
             id: notifId,
             type: 'challenge_completed',
+            title: "Puzzle Race Finished",
             fromName: oppName || "Opponent",
             roomCode: cleanRoomCode,
             gameId: cleanRoomCode
@@ -10569,15 +10694,16 @@ useEffect(() => {
       const data = snap.data();
       if (!data) return;
 
+      const recipientUid = currentUid || currentAuthUid || currentUserProfileId;
       const finisherUid = data.lastCompletedUid || data.winner || data.completedBy;
       const finisherName = data.lastCompletedBy || data.winnerName || data.completedByName || "Opponent";
-      if (finisherUid && !isSelfUser(finisherUid, finisherName)) {
+      if (finisherUid && finisherUid !== recipientUid && !isSelfUser(finisherUid, finisherName)) {
         recordOpponentCompletion(finisherUid, finisherName);
       }
 
       if (data.players && typeof data.players === 'object') {
         Object.entries(data.players).forEach(([pId, pData]: [string, any]) => {
-          if (!isSelfUser(pId, pData?.name || pData?.playerName) && (pData?.status === "completed" || pData?.status === "victory" || pData?.isWon)) {
+          if (pId !== recipientUid && !isSelfUser(pId, pData?.name || pData?.playerName) && (pData?.status === "completed" || pData?.status === "victory" || pData?.isWon)) {
             recordOpponentCompletion(pId, pData?.name || pData?.playerName || "Opponent");
           }
         });
@@ -10588,12 +10714,13 @@ useEffect(() => {
 
     // 2. Real-time listener on room players subcollection for instant status changes
     const unsubRoomPlayers = onSnapshot(roomPlayersCol, (snapshot) => {
+      const recipientUid = currentUid || currentAuthUid || currentUserProfileId;
       snapshot.docChanges().forEach((change) => {
         if (change.type === "added" || change.type === "modified") {
           const pData = change.doc.data();
           const pId = change.doc.id || pData.id || pData.userId;
           const isFinished = pData.status === "completed" || pData.status === "victory" || pData.status === "mistake_game_over" || pData.isWon === true;
-          if (isFinished && pId && !isSelfUser(pId, pData.name || pData.playerName)) {
+          if (isFinished && pId && pId !== recipientUid && !isSelfUser(pId, pData.name || pData.playerName)) {
             recordOpponentCompletion(pId, pData.name || pData.playerName || "Opponent");
           }
         }
@@ -17702,13 +17829,23 @@ useEffect(() => {
                       className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-black text-white shrink-0 shadow-sm"
                       style={{ backgroundColor: userProfile?.avatarColor || "#2B6CB0" }}
                     >
-                      {userProfile?.name ? userProfile.name.charAt(0).toUpperCase() : "V"}
+                      {(isSyncingCloudData || isAuthHydrating) && (!userProfile?.name || isGenericDisplayName(userProfile.name)) ? (
+                        <RefreshCw className="w-5 h-5 animate-spin text-white" />
+                      ) : userProfile?.name && !isGenericDisplayName(userProfile.name) ? (
+                        userProfile.name.charAt(0).toUpperCase()
+                      ) : (
+                        "V"
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-sans font-black text-[#2B6CB0] text-sm truncate">
-                          {isSyncingCloudData ? "Syncing..." : (userProfile?.name || "Voyager_Guest")}
-                        </span>
+                        {(isSyncingCloudData || isAuthHydrating) && (!userProfile?.name || isGenericDisplayName(userProfile.name)) ? (
+                          <div className="w-28 h-4 bg-blue-200/60 rounded animate-pulse my-0.5" />
+                        ) : (
+                          <span className="font-sans font-black text-[#2B6CB0] text-sm truncate">
+                            {userProfile?.name || "Player"}
+                          </span>
+                        )}
                         <span className={`text-[8.5px] font-mono font-black px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0 ${
                           userProfile?.isSynced ? "bg-[#E6F4EA] text-[#135236]" : "bg-[#F3E8FF] text-[#6B21A8]"
                         }`}>
@@ -17723,7 +17860,7 @@ useEffect(() => {
                         </span>
                       </div>
                       <p className="text-[10.5px] text-[#2B6CB0] font-mono uppercase mt-0.5 tracking-wide leading-none">
-                        ID: {isSyncingCloudData ? "..." : (userProfile?.id || "N/A")}
+                        ID: {(isSyncingCloudData || isAuthHydrating) && (!userProfile?.id || userProfile.id.startsWith("GUEST_")) ? "..." : (userProfile?.id || "N/A")}
                       </p>
                       {userProfile?.email && (
                         <p className="text-xs text-stone-650 font-sans mt-1 flex items-center gap-1.5">

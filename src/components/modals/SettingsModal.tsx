@@ -5,6 +5,7 @@ import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
 import { Language } from "../../i18n/translations";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
+import { isGenericDisplayName } from "../../utils/storageEngine";
 
 export interface SettingsModalProps {
   fromGameplaySettings: boolean;
@@ -166,9 +167,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div
                 className="w-10 h-10 rounded-full border-none flex items-center justify-center text-md font-sans font-black text-white shrink-0 shadow-sm bg-purple-600 select-none"
               >
-                {isConnecting ? (
+                {isConnecting && (!userProfile?.name || isGenericDisplayName(userProfile.name)) ? (
                   <RefreshCw className="w-5 h-5 animate-spin" />
-                ) : userProfile?.name ? (
+                ) : userProfile?.name && !isGenericDisplayName(userProfile.name) ? (
                   String(Array.from(userProfile.name)[0]).toUpperCase()
                 ) : (
                   "V"
@@ -180,14 +181,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     darkMode ? "text-stone-100" : "text-purple-950"
                   }`}
                 >
-                  {isConnecting ? (
-                    <span className="opacity-75 animate-pulse">
-                      {userProfile?.email ? userProfile.email.split("@")[0] : "Syncing..."}
-                    </span>
+                  {isConnecting && (!userProfile?.name || isGenericDisplayName(userProfile.name)) ? (
+                    <span className="inline-block w-24 h-4 bg-purple-300/40 dark:bg-purple-700/40 rounded animate-pulse" />
                   ) : userProfile?.name &&
                   userProfile.name !== "Anonymous Voyager" &&
                   userProfile.name !== "Guest Voyager" &&
-                  userProfile.name !== "Guest Solver"
+                  userProfile.name !== "Guest Solver" &&
+                  !isGenericDisplayName(userProfile.name)
                     ? userProfile.name
                     : t("anonymousVoyager")}
                 </span>

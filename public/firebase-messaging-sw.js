@@ -19,7 +19,7 @@ const PUSH_TRANSLATIONS = {
   en: {
     duelInviteTitle: "Sudoku Duel Challenge!",
     duelInviteBody: (from) => `${from} challenged you to a Sudoku duel!`,
-    duelCompleteTitle: "🏆 Duel Completed!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} finished your challenge! Tap to see who won.`,
     defaultPlayer: "A player",
     genericInviteBody: "You have a new game invitation!"
@@ -27,7 +27,7 @@ const PUSH_TRANSLATIONS = {
   hi: {
     duelInviteTitle: "सुडोकू मुकाबला!",
     duelInviteBody: (from) => `${from} ने आपको सुडोकू मुकाबले का चैलेंज भेजा है!`,
-    duelCompleteTitle: "🏆 मुकाबला खत्म हुआ!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} ने चैलेंज पूरा कर लिया! देखें कौन जीता।`,
     defaultPlayer: "एक खिलाड़ी",
     genericInviteBody: "आपके पास एक नया खेल निमंत्रण है!"
@@ -35,7 +35,7 @@ const PUSH_TRANSLATIONS = {
   de: {
     duelInviteTitle: "Sudoku-Duell!",
     duelInviteBody: (from) => `${from} fordert dich zu einem Sudoku-Duell heraus!`,
-    duelCompleteTitle: "🏆 Duell beendet!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} hat die Challenge beendet! Tippe, um das Ergebnis zu sehen.`,
     defaultPlayer: "Ein Spieler",
     genericInviteBody: "Du hast eine neue Spieleinladung!"
@@ -43,7 +43,7 @@ const PUSH_TRANSLATIONS = {
   ja: {
     duelInviteTitle: "数独の対戦リクエスト！",
     duelInviteBody: (from) => `${from}さんから数独の対戦を挑まれました！`,
-    duelCompleteTitle: "🏆 対戦完了！",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name}さんがパズルを解き終えました！結果を確認しましょう。`,
     defaultPlayer: "プレイヤー",
     genericInviteBody: "新しい対戦リクエストが届きました！"
@@ -51,7 +51,7 @@ const PUSH_TRANSLATIONS = {
   ko: {
     duelInviteTitle: "스도쿠 대결 신청!",
     duelInviteBody: (from) => `${from}님이 스도쿠 대결을 신청했습니다!`,
-    duelCompleteTitle: "🏆 대결 완료!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name}님이 퍼즐을 완료했습니다! 승자를 확인해 보세요.`,
     defaultPlayer: "플레이어",
     genericInviteBody: "새로운 게임 초대가 도착했습니다!"
@@ -59,7 +59,7 @@ const PUSH_TRANSLATIONS = {
   es: {
     duelInviteTitle: "¡Duelo de Sudoku!",
     duelInviteBody: (from) => `¡${from} te ha desafiado a un duelo de Sudoku!`,
-    duelCompleteTitle: "🏆 ¡Duelo finalizado!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `¡${name} terminó el desafío! Toca para ver quién ganó.`,
     defaultPlayer: "Un jugador",
     genericInviteBody: "¡Tienes una nueva invitación de juego!"
@@ -67,7 +67,7 @@ const PUSH_TRANSLATIONS = {
   fr: {
     duelInviteTitle: "Duel de Sudoku !",
     duelInviteBody: (from) => `${from} vous a défié en duel de Sudoku !`,
-    duelCompleteTitle: "🏆 Duel terminé !",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} a terminé le défi ! Appuyez pour voir le vainqueur.`,
     defaultPlayer: "Un joueur",
     genericInviteBody: "Vous avez une nouvelle invitation à jouer !"
@@ -75,7 +75,7 @@ const PUSH_TRANSLATIONS = {
   it: {
     duelInviteTitle: "Sfida a Sudoku!",
     duelInviteBody: (from) => `${from} ti ha sfidato a un duello di Sudoku!`,
-    duelCompleteTitle: "🏆 Duello terminato!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} ha completato la sfida! Tocca per scoprire chi ha vinto.`,
     defaultPlayer: "Un giocatore",
     genericInviteBody: "Hai un nuovo invito di gioco!"
@@ -83,7 +83,7 @@ const PUSH_TRANSLATIONS = {
   "pt-BR": {
     duelInviteTitle: "Duelo de Sudoku!",
     duelInviteBody: (from) => `${from} desafiou você para um duelo de Sudoku!`,
-    duelCompleteTitle: "🏆 Duelo finalizado!",
+    duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} concluiu o desafio! Toque para ver quem venceu.`,
     defaultPlayer: "Um jogador",
     genericInviteBody: "Você tem um novo convite de jogo!"
@@ -109,26 +109,48 @@ function resolveLanguage(lang) {
 }
 
 // Background message handler
-messaging.onBackgroundMessage((payload) => {
+messaging.onBackgroundMessage(async (payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
   
   const data = payload.data || {};
+
+  // 1. SELF-NOTIFICATION SUPPRESSION: Player who solved/completed must NEVER receive external notification
+  if (data.type === 'challenge_completed') {
+    const completedByUid = data.completedByUid || data.finisherUid || data.senderId || data.fromUserId;
+    const recipientUid = data.recipientUid || data.toUserId || data.targetUid;
+    if (completedByUid && recipientUid && completedByUid === recipientUid) {
+      console.log('[firebase-messaging-sw.js] Suppressed self-notification in background SW');
+      return;
+    }
+  }
+
+  // 2. FOREGROUND PUSH SUPPRESSION: Suppress OS push banners when app is actively open and in view
+  try {
+    const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const isAppInForeground = windowClients.some(client => client.visibilityState === 'visible');
+    if (isAppInForeground) {
+      console.log('[firebase-messaging-sw.js] App is actively in foreground (visible). Suppressing OS-level push banner.');
+      return;
+    }
+  } catch (err) {
+    console.warn('[firebase-messaging-sw.js] Error checking window visibility:', err);
+  }
+
   const lang = resolveLanguage(data.lang);
   const t = PUSH_TRANSLATIONS[lang] || PUSH_TRANSLATIONS.en;
 
   let notificationTitle = payload.notification?.title || data.title;
   let notificationBody = payload.notification?.body || data.body;
 
-  if (!notificationTitle || !notificationBody) {
-    if (data.type === 'challenge_completed') {
-      const finisher = data.finisherName || t.defaultPlayer;
-      if (!notificationTitle) notificationTitle = t.duelCompleteTitle;
-      if (!notificationBody) notificationBody = t.duelCompleteBody(finisher);
-    } else {
-      const fromName = data.fromName || data.senderName;
-      if (!notificationTitle) notificationTitle = t.duelInviteTitle;
-      if (!notificationBody) notificationBody = fromName ? t.duelInviteBody(fromName) : t.genericInviteBody;
-    }
+  // 3. UNIFIED TAXONOMY: Strictly "Puzzle Race Finished" for all challenge completions
+  if (data.type === 'challenge_completed') {
+    notificationTitle = "Puzzle Race Finished";
+    const finisher = data.finisherName || t.defaultPlayer;
+    if (!notificationBody) notificationBody = t.duelCompleteBody(finisher);
+  } else if (!notificationTitle || !notificationBody) {
+    const fromName = data.fromName || data.senderName;
+    if (!notificationTitle) notificationTitle = t.duelInviteTitle;
+    if (!notificationBody) notificationBody = fromName ? t.duelInviteBody(fromName) : t.genericInviteBody;
   }
 
   const notificationOptions = {
@@ -143,7 +165,7 @@ messaging.onBackgroundMessage((payload) => {
     data: data
   };
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
 // Handle tap on notification
@@ -173,7 +195,12 @@ self.addEventListener('notificationclick', (event) => {
         if (client.url.includes(location.origin) && 'focus' in client) {
           if (data.type === 'challenge_completed') {
             const roomCode = data.roomCode || gameId || '';
-            client.postMessage({ type: 'challenge_completed', roomCode, fromName: senderName });
+            client.postMessage({ 
+              type: 'challenge_completed', 
+              roomCode, 
+              fromName: senderName,
+              completedByUid: data.completedByUid || data.finisherUid
+            });
           } else {
             client.postMessage({ type: 'navigate_invite', gameId, password, senderName });
           }
