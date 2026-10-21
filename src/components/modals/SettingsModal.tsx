@@ -312,9 +312,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       isSynced: false,
                       email: undefined
                     };
-                    try {
-                      localStorage.setItem("sudoku_userProfile", JSON.stringify(updated));
-                    } catch {}
                     return updated;
                   });
                   addLog("👤 Profile disconnected from cloud sync.");

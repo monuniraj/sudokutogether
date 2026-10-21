@@ -1534,24 +1534,7 @@ export const getScopedKey = (baseKey: string, uid?: string | null): string => {
     if (authUser && !authUser.isAnonymous) {
       effectiveUid = authUser.uid;
     } else {
-      try {
-        const stored = typeof window !== "undefined" ? (localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile")) : null;
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed?.isSynced && parsed?.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
-            effectiveUid = parsed.id;
-          }
-        }
-      } catch {}
-      if (!effectiveUid && typeof window !== "undefined") {
-        try {
-          const lastAuth = localStorage.getItem("sudoku_last_auth_uid");
-          if (lastAuth && !lastAuth.startsWith("GUEST_") && lastAuth !== "GUEST" && lastAuth !== "guest") {
-            effectiveUid = lastAuth;
-          }
-        } catch {}
-      }
-      if (!effectiveUid) effectiveUid = "guest";
+      effectiveUid = getActiveAuthUid() || "guest";
     }
   }
   const isGuest = !effectiveUid || effectiveUid === "guest" || effectiveUid === "GUEST" || effectiveUid.startsWith("GUEST_");
@@ -1610,16 +1593,7 @@ useEffect(() => {
 
   // Auth hydration status guard
   const [isAuthHydrating, setIsAuthHydrating] = useState<boolean>(() => {
-    try {
-      const stored = typeof window !== "undefined" ? (localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile")) : null;
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.isSynced && parsed?.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
-          return true;
-        }
-      }
-    } catch {}
-    return false;
+    return Boolean(getActiveAuthUid());
   });
   const [isConnectingGoogle, setIsConnectingGoogle] = useState<boolean>(false);
   const isConnectingRef = useRef<boolean>(false);
@@ -2035,13 +2009,7 @@ useEffect(() => {
       const currentUid = auth.currentUser?.uid;
       const scopedPast = getScopedKey("past_players", currentUid);
       const saved = localStorage.getItem(scopedPast);
-      let currentStoredId: string | null = null;
-      try {
-        const storedUser = localStorage.getItem("sudoku_userProfile");
-        if (storedUser) {
-          currentStoredId = JSON.parse(storedUser)?.id || null;
-        }
-      } catch {}
+      const currentStoredId: string | null = currentUid || getActiveAuthUid() || loadVault("guest").profile?.id;
 
       if (saved) {
         const parsed = JSON.parse(saved) as any[];
@@ -5232,7 +5200,13 @@ useEffect(() => {
       setUserProfile(cleanGuestProfile);
       userProfileRef.current = cleanGuestProfile;
       try {
-        localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuestProfile));
+        saveVault({
+          profile: cleanGuestProfile,
+          stats: { totalGamesPlayed: 0, totalWinsCount: 0, winStreak: 0 },
+          bestTimes: { EASY: null, MEDIUM: null, HARD: null, EXPERT: null, MASTER: null },
+          completedGames: [],
+          savedGames: []
+        }, "guest");
       } catch {}
 
       setCompletedGames(INITIAL_GUEST_STATE.completedGames);
@@ -5708,8 +5682,9 @@ useEffect(() => {
 
   // Real-time listener for incoming invites from Firestore
   useEffect(() => {
-    const user = userProfile ? { uid: userProfile.id } : null;
-    if (!user?.uid) return;
+    const effectiveUid = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid();
+    if (!effectiveUid) return;
+    const user = { uid: effectiveUid };
 
     console.log(`[Firestore] Subscribing to incoming invites for user: ${user.uid}`);
     const invitesCol = collection(db, "invites");
@@ -9470,7 +9445,7 @@ useEffect(() => {
 
     const seed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
     const activeRoomCode = String(seed).padStart(6, '0').slice(-6);
-    const currentUserId = userProfile?.id || "GUEST_ANON";
+    const currentUserId = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "GUEST_ANON";
     const currentUserName = getActiveDisplayName();
 
     // Ensure room is synced with current settings before invite is dispatched
@@ -9481,12 +9456,29 @@ useEffect(() => {
       timerEnabled: challengeTimerEnabled
     });
 
+    // Resolve target player ID if target has migrated to Google UID
+    let targetPlayerId = playerId;
+    if (playerId.startsWith("GUEST_") || !playerId.includes("-")) {
+      try {
+        const targetDoc = await getDoc(doc(db, "users", playerId));
+        if (targetDoc.exists()) {
+          const targetData = targetDoc.data();
+          if (targetData?.migratedTo) {
+            targetPlayerId = targetData.migratedTo;
+            console.log(`[Firestore] Target player ${playerId} resolved to migrated UID: ${targetPlayerId}`);
+          }
+        }
+      } catch (checkErr) {
+        console.debug("[Firestore] Notice resolving target player migration:", checkErr);
+      }
+    }
+
     // Write to Firestore invites collection with canonical payload directly bound to active roomCode
     try {
       const inviteRef = doc(collection(db, "invites"));
       await setDoc(inviteRef, {
         id: inviteRef.id,
-        toUserId: playerId,
+        toUserId: targetPlayerId,
         fromUserId: currentUserId,
         fromName: currentUserName,
         roomCode: activeRoomCode,
@@ -9495,7 +9487,7 @@ useEffect(() => {
         timestamp: Date.now(),
         expiresAt: Date.now() + (48 * 60 * 60 * 1000)
       });
-      console.log(`[Firestore] Dispatched real-time invite to player ${playerId} for canonical room ${activeRoomCode}`);
+      console.log(`[Firestore] Dispatched real-time invite to player ${targetPlayerId} (orig: ${playerId}) for canonical room ${activeRoomCode}`);
     } catch (err) {
       console.error("[Firestore] Failed to dispatch invite:", err);
     }
@@ -15785,6 +15777,7 @@ useEffect(() => {
               {/* 3. CREATE / CHALLENGE SETUP */}
               <CreateChallengeModal
                 isOpen={showCreateChallengeModal}
+                currentUserId={userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || undefined}
                 onClose={() => {
                   setShowCreateChallengeModal(false);
                   setOpenedCreateFromMultiplayerResult(false);

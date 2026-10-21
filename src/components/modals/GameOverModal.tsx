@@ -22,6 +22,8 @@ import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { formatActiveStatus } from "../../utils/formatTimestamp";
 import { IncognitoIcon } from "../common/IncognitoIcon";
+import { auth } from "../../firebase";
+import { getActiveAuthUid, loadVault } from "../../utils/storageEngine";
 
 export interface GameOverModalProps {
   isOpen: boolean;
@@ -109,15 +111,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   const { t } = useTranslation();
   const [activeListTab, setActiveListTab] = useState<'recent' | 'friends'>('recent');
   const sanitizedPlayers = useMemo(() => {
-    let myId: string | null = userProfile?.id || null;
-    try {
-      if (!myId) {
-        const userProfileStr = localStorage.getItem("sudoku_userProfile");
-        if (userProfileStr) {
-          myId = JSON.parse(userProfileStr)?.id;
-        }
-      }
-    } catch {}
+    const myId: string | null = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || loadVault("guest").profile?.id;
 
     return (multiplayerPlayers || []).filter((p: any) => {
       if (!p || !p.id) return false;
@@ -128,7 +122,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   }, [multiplayerPlayers, userProfile?.id]);
 
   const playerIds = sanitizedPlayers.map((p: any) => p.id);
-  const { isIncognito, toggleIncognito, getFriendStatus, getFriendLastActive } = useFriendPresence(userProfile?.id, playerIds);
+  const effectiveUserId = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || loadVault("guest").profile?.id;
+  const { isIncognito, toggleIncognito, getFriendStatus, getFriendLastActive } = useFriendPresence(effectiveUserId, playerIds);
 
   const results = useMemo(() => {
     const didCurrentPlayerFail =

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { translations, TranslationKey, Language, LANGUAGES, LanguageOption } from './translations';
+import { getActiveAuthUid } from '../utils/storageEngine';
 
 const STORAGE_KEY = 'sudoku_language';
 const LANGUAGE_CHANGE_EVENT = 'sudoku_language_change';
@@ -171,13 +172,7 @@ function sanitizeFallbackKey(key: string, params?: Record<string, string | numbe
 function getScopedLanguageKey(): string {
   let effectiveUid: string | null = null;
   try {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem("sudoku_userProfile") : null;
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed?.isSynced && parsed?.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
-        effectiveUid = parsed.id;
-      }
-    }
+    effectiveUid = getActiveAuthUid();
   } catch {}
   return effectiveUid ? `sudoku_user_${effectiveUid}_language` : "sudoku_guest_language";
 }

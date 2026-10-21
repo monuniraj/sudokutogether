@@ -19,6 +19,8 @@ import { formatMatchTimestamp, formatActiveStatus } from "../../utils/formatTime
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { IncognitoIcon } from "../common/IncognitoIcon";
+import { auth } from "../../firebase";
+import { getActiveAuthUid, loadVault } from "../../utils/storageEngine";
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 
@@ -26,6 +28,7 @@ export interface CreateChallengeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBack?: () => void;
+  currentUserId?: string;
   challengeSeed?: number;
   boardState?: { seed?: number | string; [key: string]: any } | null;
   isRoomLocked: boolean;
@@ -62,6 +65,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
   isOpen,
   onClose,
   onBack,
+  currentUserId,
   challengeSeed,
   boardState,
   isRoomLocked,
@@ -94,25 +98,19 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
   playClickSound
 }) => {
   const { t } = useTranslation();
-  const sanitizedPlayers = useMemo(() => {
-    let myId: string | null = null;
-    try {
-      const userProfileStr = localStorage.getItem("sudoku_userProfile");
-      if (userProfileStr) {
-        myId = JSON.parse(userProfileStr)?.id;
-      }
-    } catch {}
+  const effectiveUserId = currentUserId || auth.currentUser?.uid || getActiveAuthUid() || loadVault("guest").profile?.id;
 
+  const sanitizedPlayers = useMemo(() => {
     return (multiplayerPlayers || []).filter((p) => {
       if (!p || !p.id) return false;
-      if (myId && p.id === myId) return false;
+      if (effectiveUserId && p.id === effectiveUserId) return false;
       if (p.id === "GUEST_ANON" || p.id === "me") return false;
       return true;
     });
-  }, [multiplayerPlayers]);
+  }, [multiplayerPlayers, effectiveUserId]);
 
   const playerIds = sanitizedPlayers.map((p) => p.id);
-  const { isIncognito, toggleIncognito, getFriendStatus, getFriendLastActive } = useFriendPresence(undefined, playerIds);
+  const { isIncognito, toggleIncognito, getFriendStatus, getFriendLastActive } = useFriendPresence(effectiveUserId, playerIds);
   const [openDropdown, setOpenDropdown] = useState<"difficulty" | "mistakes" | "hints" | "timer" | null>(null);
   const [isLobbyLocked, setIsLobbyLocked] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"recent" | "friends">("recent");

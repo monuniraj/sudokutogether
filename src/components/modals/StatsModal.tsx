@@ -3,6 +3,8 @@ import { Check, X, Plus, RefreshCw } from "lucide-react";
 import { formatMatchTimestamp, formatActiveStatus } from "../../utils/formatTimestamp";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
+import { auth } from "../../firebase";
+import { getActiveAuthUid, loadVault } from "../../utils/storageEngine";
 
 export interface CompletedGameRecord {
   id: string;
@@ -67,25 +69,19 @@ export const StatsModal: React.FC<StatsModalProps> = ({
   const isSyncing = isSyncingCloudData ?? isAuthHydrating;
   const { t } = useTranslation();
   const [activePlayersTab, setActivePlayersTab] = React.useState<"recent" | "friends">("recent");
-  const sanitizedPlayers = React.useMemo(() => {
-    let myId: string | null = null;
-    try {
-      const userProfileStr = localStorage.getItem("sudoku_userProfile");
-      if (userProfileStr) {
-        myId = JSON.parse(userProfileStr)?.id;
-      }
-    } catch {}
+  const myId = auth.currentUser?.uid || getActiveAuthUid() || loadVault("guest").profile?.id;
 
+  const sanitizedPlayers = React.useMemo(() => {
     return (multiplayerPlayers || []).filter((p) => {
       if (!p || !p.id) return false;
       if (myId && p.id === myId) return false;
       if (p.id === "GUEST_ANON" || p.id === "me") return false;
       return true;
     });
-  }, [multiplayerPlayers]);
+  }, [multiplayerPlayers, myId]);
 
   const playerIds = sanitizedPlayers.map((p) => p.id);
-  const { getFriendStatus, getFriendLastActive } = useFriendPresence(undefined, playerIds);
+  const { getFriendStatus, getFriendLastActive } = useFriendPresence(myId, playerIds);
   return (
     <div
       className={`p-4 md:p-8 flex-1 w-full flex flex-col items-center justify-start overflow-y-auto pb-10 select-none pt-[calc(85px+env(safe-area-inset-top,0px))] lg:pt-[130px] transition-colors duration-300 ${

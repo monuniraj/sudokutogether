@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { doc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { getTimestampMillis, PRESENCE_TIMEOUT_MS } from "../utils/formatTimestamp";
+import { getActiveAuthUid, loadVault } from "../utils/storageEngine";
 
 const INCOGNITO_STORAGE_KEY = "sudoku_is_incognito";
 const INCOGNITO_EVENT = "sudoku_incognito_change";
@@ -24,15 +26,17 @@ export interface FriendPresenceState {
 }
 
 /**
- * Helper to safely extract current user ID from localStorage if not passed.
+ * Helper to safely extract current user ID from auth or canonical storage if not passed.
  */
 function getStoredUserId(): string | null {
   try {
-    const saved = localStorage.getItem("sudoku_userProfile");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed?.id) return String(parsed.id);
+    const authUser = auth.currentUser;
+    if (authUser && !authUser.isAnonymous && authUser.uid) {
+      return authUser.uid;
     }
+    const activeUid = getActiveAuthUid();
+    const vault = loadVault(activeUid || "guest");
+    if (vault?.profile?.id) return String(vault.profile.id);
   } catch {}
   return null;
 }
@@ -73,7 +77,30 @@ export function useFriendPresence(
   explicitUserId?: string,
   trackedFriendIds: string[] = []
 ): FriendPresenceState {
-  const userId = explicitUserId || getStoredUserId();
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(() => explicitUserId || getStoredUserId());
+
+  useEffect(() => {
+    if (explicitUserId) {
+      setResolvedUserId(explicitUserId);
+    } else {
+      setResolvedUserId(getStoredUserId());
+    }
+  }, [explicitUserId]);
+
+  useEffect(() => {
+    if (!explicitUserId) {
+      const unsub = onAuthStateChanged(auth, (user) => {
+        if (user && !user.isAnonymous && user.uid) {
+          setResolvedUserId(user.uid);
+        } else {
+          setResolvedUserId(getStoredUserId());
+        }
+      });
+      return () => unsub();
+    }
+  }, [explicitUserId]);
+
+  const userId = explicitUserId || resolvedUserId || getStoredUserId();
 
   const [isIncognito, setIsIncognitoState] = useState<boolean>(() => {
     try {
