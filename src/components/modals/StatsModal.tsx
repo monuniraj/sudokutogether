@@ -68,10 +68,8 @@ export const StatsModal: React.FC<StatsModalProps> = ({
   const { t } = useTranslation();
   const [activePlayersTab, setActivePlayersTab] = React.useState<"recent" | "friends">("recent");
   const sanitizedPlayers = React.useMemo(() => {
-    let priorGuestId: string | null = null;
     let myId: string | null = null;
     try {
-      priorGuestId = localStorage.getItem("sudoku_prior_guest_id");
       const userProfileStr = localStorage.getItem("sudoku_userProfile");
       if (userProfileStr) {
         myId = JSON.parse(userProfileStr)?.id;
@@ -81,7 +79,6 @@ export const StatsModal: React.FC<StatsModalProps> = ({
     return (multiplayerPlayers || []).filter((p) => {
       if (!p || !p.id) return false;
       if (myId && p.id === myId) return false;
-      if (priorGuestId && p.id === priorGuestId) return false;
       if (p.id === "GUEST_ANON" || p.id === "me") return false;
       return true;
     });

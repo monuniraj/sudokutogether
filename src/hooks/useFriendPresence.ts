@@ -261,20 +261,15 @@ export function useFriendPresence(
   useEffect(() => {
     if (!trackedFriendIds || trackedFriendIds.length === 0) return;
 
-    let priorGuestId: string | null = null;
-    try {
-      priorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
-    } catch {}
     const currentId = userId || getStoredUserId();
 
-    // Filter unique valid friend IDs, excluding self, retired guest persona, and dummy IDs
+    // Filter unique valid friend IDs, excluding self and dummy IDs
     const uniqueIds = Array.from(
       new Set(
         trackedFriendIds.filter(
           (id) =>
             Boolean(id) &&
             id !== currentId &&
-            (!priorGuestId || id !== priorGuestId) &&
             id !== "GUEST_ANON" &&
             id !== "me"
         )
@@ -360,15 +355,7 @@ export function useFriendPresence(
       fallbackLastActive?: any
     ): "online" | "offline" => {
       const currentId = userId || getStoredUserId();
-      let priorGuestId: string | null = null;
-      try {
-        priorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
-      } catch {}
 
-      // Retired guest ID or invalid IDs must NEVER be reported as online
-      if (priorGuestId && friendId === priorGuestId) {
-        return "offline";
-      }
       if (!friendId || friendId === "GUEST_ANON" || friendId === "me") {
         return "offline";
       }

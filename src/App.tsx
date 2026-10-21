@@ -23,12 +23,14 @@ import { formatMatchTimestamp, formatInviteTimestamp, formatActiveStatus } from 
 import { useFriendPresence } from "./hooks/useFriendPresence";
 import {
   loadVault,
+  hasVault,
   saveVault,
   updateVault,
   purgeLegacyKeys,
   getActiveAuthUid,
   setActiveAuthUid,
   reconcileBestTimesFromHistory,
+  isGenericDisplayName,
   saveSettings,
   getSettings,
   type UserVault,
@@ -2033,10 +2035,8 @@ useEffect(() => {
       const currentUid = auth.currentUser?.uid;
       const scopedPast = getScopedKey("past_players", currentUid);
       const saved = localStorage.getItem(scopedPast);
-      let priorGuestId: string | null = null;
       let currentStoredId: string | null = null;
       try {
-        priorGuestId = localStorage.getItem("sudoku_prior_guest_id");
         const storedUser = localStorage.getItem("sudoku_userProfile");
         if (storedUser) {
           currentStoredId = JSON.parse(storedUser)?.id || null;
@@ -2046,15 +2046,14 @@ useEffect(() => {
       if (saved) {
         const parsed = JSON.parse(saved) as any[];
         if (Array.isArray(parsed)) {
-          // Filter out legacy simulated demo bots, self, and prior guest persona
+          // Filter out legacy simulated demo bots and self
           return parsed
             .filter(p => 
               p && p.id &&
               p.id !== "USER_88201" && 
               p.id !== "GUEST_99210" && 
               p.id !== "USER_33104" &&
-              (!currentStoredId || p.id !== currentStoredId) &&
-              (!priorGuestId || p.id !== priorGuestId)
+              (!currentStoredId || p.id !== currentStoredId)
             )
             .map(p => ({
               ...p,
@@ -2081,7 +2080,7 @@ useEffect(() => {
             ...parsedRecent.filter(r => !parsedFriends.some(f => f.id === r.id)).map(p => ({ ...p, isFriend: false }))
           ];
           return combined
-            .filter(p => p && p.id && (!currentStoredId || p.id !== currentStoredId) && (!priorGuestId || p.id !== priorGuestId))
+            .filter(p => p && p.id && (!currentStoredId || p.id !== currentStoredId))
             .map(p => ({ ...p, inviteStatus: "idle" as const }));
         }
       }
@@ -2153,14 +2152,10 @@ useEffect(() => {
   }, [multiplayerPlayers, userProfile?.id]);
 
   const drawerPlayerIds = useMemo(() => {
-    let priorGuestId: string | null = null;
-    try {
-      priorGuestId = localStorage.getItem("sudoku_prior_guest_id");
-    } catch {}
     const myId = userProfile?.id;
     return (multiplayerPlayers || [])
       .map((p: any) => p.id)
-      .filter((id: string) => Boolean(id) && id !== myId && (!priorGuestId || id !== priorGuestId));
+      .filter((id: string) => Boolean(id) && id !== myId);
   }, [multiplayerPlayers, userProfile?.id]);
   const { getFriendStatus: getDrawerFriendStatus, getFriendLastActive: getDrawerFriendLastActive } = useFriendPresence(userProfile?.id, drawerPlayerIds);
 
@@ -3784,79 +3779,151 @@ useEffect(() => {
             return !t || ["Anonymous", "Guest", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Player"].includes(t);
           };
 
-          const updatedVault = updateVault((currentVault) => {
-            // 1. Merge completed games
-            const mergedMap = new Map<string, any>();
-            if (Array.isArray(currentVault.completedGames)) {
-              currentVault.completedGames.forEach((g: any) => { if (g && g.id) mergedMap.set(g.id, g); });
+          // 1. Strict ZERO-MERGE isolation with Guest: Read ONLY this Google user's local vault (sudoku_vault_${uid})
+          const localVault = loadVault(uid);
+          const localCompleted: CompletedGame[] = Array.isArray(localVault.completedGames) ? localVault.completedGames : [];
+
+          // 2. Intra-User History Reconciliation: Deduplicate & merge completedGames by unique id
+          const gamesMap = new Map<string, CompletedGame>();
+          cloudCompleted.forEach(g => {
+            if (g && g.id) gamesMap.set(String(g.id), g);
+          });
+
+          let hasLocalUnsynced = false;
+          localCompleted.forEach(localGame => {
+            if (localGame && localGame.id) {
+              const gameKey = String(localGame.id);
+              if (!gamesMap.has(gameKey)) {
+                gamesMap.set(gameKey, localGame);
+                hasLocalUnsynced = true;
+              } else {
+                const existing = gamesMap.get(gameKey)!;
+                if ((localGame.participants?.length || 0) > (existing.participants?.length || 0)) {
+                  gamesMap.set(gameKey, { ...existing, participants: localGame.participants });
+                }
+              }
             }
-            cloudCompleted.forEach((g: any) => { if (g && g.id) mergedMap.set(g.id, g); });
-            const finalCompleted = mergedMap.size > 0 ? Array.from(mergedMap.values()) : (cloudCompleted.length > 0 ? cloudCompleted : currentVault.completedGames);
+          });
 
-            // 2. Career stats
-            const finalTotalGames = Math.max(cloudGames, cloudCompleted.length, currentVault.stats.totalGamesPlayed || 0, finalCompleted.length);
-            const finalTotalWins = Math.max(
-              cloudWins,
-              cloudCompleted.filter((g: any) => g && (g.isWon || g.result === "win")).length,
-              currentVault.stats.totalWinsCount || 0,
-              finalCompleted.filter((g: any) => g && (g.isWon || g.result === "win")).length
-            );
-            const finalWinStreak = Math.max(cloudStreak, currentVault.stats.winStreak || 0);
+          // Sort reconciled completed games by date descending (newest first), capped to 50
+          const reconciledCompleted: CompletedGame[] = Array.from(gamesMap.values())
+            .sort((a, b) => {
+              const timeA = a.date ? new Date(a.date).getTime() : 0;
+              const timeB = b.date ? new Date(b.date).getTime() : 0;
+              return timeB - timeA;
+            })
+            .slice(0, 50);
 
-            // 3. Best times: combine cloudBestTimes + currentVault.bestTimes + reconcile against all winning runs in finalCompleted
-            const combinedBestTimes: Partial<UserVaultBestTimes> = {
-              EASY: parseTimeToSeconds(rawBestTimes?.EASY ?? rawBestTimes?.easy) || currentVault.bestTimes.EASY,
-              MEDIUM: parseTimeToSeconds(rawBestTimes?.MEDIUM ?? rawBestTimes?.medium) || currentVault.bestTimes.MEDIUM,
-              HARD: parseTimeToSeconds(rawBestTimes?.HARD ?? rawBestTimes?.hard) || currentVault.bestTimes.HARD,
-              EXPERT: parseTimeToSeconds(rawBestTimes?.EXPERT ?? rawBestTimes?.expert) || currentVault.bestTimes.EXPERT,
-              MASTER: parseTimeToSeconds(rawBestTimes?.MASTER ?? rawBestTimes?.master) || currentVault.bestTimes.MASTER,
-            };
-            const resolvedBestTimes = reconcileBestTimesFromHistory(finalCompleted, combinedBestTimes);
+          // 3. Reconcile Best Times from both cloud and local history
+          const cloudBestTimes: Partial<UserVaultBestTimes> = {
+            EASY: parseTimeToSeconds(rawBestTimes?.EASY ?? rawBestTimes?.easy) || null,
+            MEDIUM: parseTimeToSeconds(rawBestTimes?.MEDIUM ?? rawBestTimes?.medium) || null,
+            HARD: parseTimeToSeconds(rawBestTimes?.HARD ?? rawBestTimes?.hard) || null,
+            EXPERT: parseTimeToSeconds(rawBestTimes?.EXPERT ?? rawBestTimes?.expert) || null,
+            MASTER: parseTimeToSeconds(rawBestTimes?.MASTER ?? rawBestTimes?.master) || null,
+          };
 
-            // 4. Saved games
-            let finalSaved = currentVault.savedGames || [];
-            if (Array.isArray(cloudDocData?.savedGames)) {
-              finalSaved = cloudDocData.savedGames.slice(0, 50);
-            }
+          const pickFastest = (t1?: number | null, t2?: number | null): number | null => {
+            const v1 = typeof t1 === "number" && t1 > 0 ? t1 : null;
+            const v2 = typeof t2 === "number" && t2 > 0 ? t2 : null;
+            if (v1 !== null && v2 !== null) return Math.min(v1, v2);
+            return v1 ?? v2 ?? null;
+          };
 
-            // 5. Profile Name
-            let resolvedDisplayName = "";
-            const cloudCustomName = cloudDocData?.displayName || cloudDocData?.name;
-            if (cloudCustomName && !isGenericPlaceholder(cloudCustomName)) {
-              resolvedDisplayName = cloudCustomName.trim().slice(0, 15);
-            } else if (currentVault.profile.displayName && !isGenericPlaceholder(currentVault.profile.displayName)) {
-              resolvedDisplayName = currentVault.profile.displayName.trim().slice(0, 15);
-            } else if (authUser?.displayName && !isGenericPlaceholder(authUser.displayName)) {
-              resolvedDisplayName = authUser.displayName.trim().slice(0, 15);
-            } else if (authUser?.email && typeof authUser.email === "string" && authUser.email.includes("@")) {
-              resolvedDisplayName = authUser.email.split("@")[0].trim().slice(0, 15);
-            } else {
-              resolvedDisplayName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
-            }
+          const combinedBestTimes: Partial<UserVaultBestTimes> = {
+            EASY: pickFastest(cloudBestTimes.EASY, localVault.bestTimes?.EASY),
+            MEDIUM: pickFastest(cloudBestTimes.MEDIUM, localVault.bestTimes?.MEDIUM),
+            HARD: pickFastest(cloudBestTimes.HARD, localVault.bestTimes?.HARD),
+            EXPERT: pickFastest(cloudBestTimes.EXPERT, localVault.bestTimes?.EXPERT),
+            MASTER: pickFastest(cloudBestTimes.MASTER, localVault.bestTimes?.MASTER),
+          };
+          const resolvedBestTimes = reconcileBestTimesFromHistory(reconciledCompleted, combinedBestTimes);
 
-            return {
-              profile: {
-                id: uid,
-                displayName: resolvedDisplayName,
-                avatarColor: cloudDocData?.avatarColor || currentVault.profile.avatarColor || "#8B5CF6",
-                isSynced: true,
-                email: authUser?.email || cloudDocData?.email || currentVault.profile.email
-              },
+          // 4. Calculate totalGamesPlayed and totalWinsCount from deduplicated list & cloud
+          const winningGames = reconciledCompleted.filter((g: any) => g && (g.isWon === true || g.result === "win" || g.outcome === "win"));
+          const finalTotalGames = Math.max(
+            cloudGames,
+            localVault.stats?.totalGamesPlayed || 0,
+            reconciledCompleted.length
+          );
+          const finalTotalWins = Math.max(
+            cloudWins,
+            localVault.stats?.totalWinsCount || 0,
+            winningGames.length
+          );
+          const finalWinStreak = Math.max(
+            cloudStreak,
+            localVault.stats?.winStreak || 0
+          );
+
+          // 5. If localVault contains valid games belonging to this UID that Firestore lacks, push merged state back immediately (sync-up)
+          const needsCloudSyncUp = hasLocalUnsynced
+            || (reconciledCompleted.length > cloudCompleted.length)
+            || (finalTotalGames > cloudGames)
+            || (finalTotalWins > cloudWins);
+
+          if (needsCloudSyncUp) {
+            setDoc(userDocRef, {
               stats: {
                 totalGamesPlayed: finalTotalGames,
                 totalWinsCount: finalTotalWins,
                 winStreak: finalWinStreak
               },
+              totalGamesPlayed: finalTotalGames,
+              totalWinsCount: finalTotalWins,
+              winStreak: finalWinStreak,
+              completedGames: reconciledCompleted,
               bestTimes: resolvedBestTimes,
-              completedGames: finalCompleted,
-              savedGames: finalSaved
-            };
-          }, uid);
+              updatedAt: serverTimestamp()
+            }, { merge: true }).catch(syncErr => {
+              console.warn("[Firestore] Failed to sync-up reconciled games to Firestore:", syncErr);
+            });
+          }
+
+          let finalSaved: any[] = [];
+          if (Array.isArray(cloudDocData?.savedGames)) {
+            finalSaved = cloudDocData.savedGames.slice(0, 50);
+          } else if (Array.isArray(localVault.savedGames) && localVault.savedGames.length > 0) {
+            finalSaved = localVault.savedGames.slice(0, 50);
+          }
+
+          // 6. Profile Name: Firestore is SSOT. The custom name in Firestore takes absolute precedence.
+          let resolvedDisplayName = "";
+          const cloudCustomName = cloudDocData?.displayName || cloudDocData?.name;
+          if (cloudCustomName && typeof cloudCustomName === "string" && cloudCustomName.trim()) {
+            resolvedDisplayName = cloudCustomName.trim().slice(0, 15);
+          } else if (localVault.profile.displayName && !isGenericPlaceholder(localVault.profile.displayName)) {
+            resolvedDisplayName = localVault.profile.displayName.trim().slice(0, 15);
+          } else if (authUser?.displayName && !isGenericPlaceholder(authUser.displayName)) {
+            resolvedDisplayName = authUser.displayName.trim().slice(0, 15);
+          } else if (authUser?.email && typeof authUser.email === "string" && authUser.email.includes("@")) {
+            resolvedDisplayName = authUser.email.split("@")[0].trim().slice(0, 15);
+          } else {
+            resolvedDisplayName = "Player";
+          }
+
+          const updatedVault: UserVault = {
+            profile: {
+              id: uid,
+              displayName: resolvedDisplayName,
+              avatarColor: cloudDocData?.avatarColor || localVault.profile.avatarColor || "#8B5CF6",
+              isSynced: true,
+              email: cloudDocData?.email || authUser?.email || localVault.profile.email
+            },
+            stats: {
+              totalGamesPlayed: finalTotalGames,
+              totalWinsCount: finalTotalWins,
+              winStreak: finalWinStreak
+            },
+            bestTimes: resolvedBestTimes,
+            completedGames: reconciledCompleted,
+            savedGames: finalSaved
+          };
 
           // Persist the unified single vault object to sudoku_vault_${uid}
           saveVault(updatedVault, uid);
 
-          // Set React states directly from the updated canonical vault
+          // Atomically update React states simultaneously from reconciled payload
           setTotalGamesPlayed(updatedVault.stats.totalGamesPlayed);
           setTotalWinsCount(updatedVault.stats.totalWinsCount);
           setWinStreak(updatedVault.stats.winStreak);
@@ -3878,38 +3945,8 @@ useEffect(() => {
           userProfileRef.current = updatedProfile;
           setUserProfile(updatedProfile);
 
-          // Self-heal Firestore document ONLY if cloud counters or cloud match times are internally desynchronized
-          const hasBetterBestTimes = (["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"] as const).some(diff => {
-            const cloudVal = Number(rawBestTimes?.[diff] ?? rawBestTimes?.[diff.toLowerCase()]) || 0;
-            const resVal = updatedVault.bestTimes[diff] || 0;
-            return resVal > 0 && (cloudVal === 0 || resVal < cloudVal);
-          });
-
-          if (cloudGames < updatedVault.stats.totalGamesPlayed || cloudWins < updatedVault.stats.totalWinsCount || hasBetterBestTimes || cloudCompleted.length < updatedVault.completedGames.length) {
-            setDoc(userDocRef, {
-              totalGamesPlayed: updatedVault.stats.totalGamesPlayed,
-              gamesPlayed: updatedVault.stats.totalGamesPlayed,
-              totalWinsCount: updatedVault.stats.totalWinsCount,
-              wins: updatedVault.stats.totalWinsCount,
-              winStreak: updatedVault.stats.winStreak,
-              bestTimes: updatedVault.bestTimes,
-              completedGames: updatedVault.completedGames,
-              savedGames: updatedVault.savedGames,
-              stats: {
-                gamesPlayed: updatedVault.stats.totalGamesPlayed,
-                totalGamesPlayed: updatedVault.stats.totalGamesPlayed,
-                wins: updatedVault.stats.totalWinsCount,
-                totalWinsCount: updatedVault.stats.totalWinsCount,
-                winStreak: updatedVault.stats.winStreak,
-                bestTimes: updatedVault.bestTimes,
-              },
-              lastUpdated: serverTimestamp()
-            }, { merge: true }).catch(() => {});
-          }
-
           // 3. Existing friends list: strictly from cloud/user drawer (never touch guest drawer!)
           try {
-            const storedPriorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
             const pastPlayersSnap = await getDocs(collection(db, "users", uid, "past_players"));
             let loadedPlayers: Array<{
               id: string;
@@ -3927,8 +3964,7 @@ useEffect(() => {
                   d.id !== "USER_88201" && 
                   d.id !== "GUEST_99210" && 
                   d.id !== "USER_33104" &&
-                  d.id !== uid &&
-                  (!storedPriorGuestId || d.id !== storedPriorGuestId)
+                  d.id !== uid
                 ) {
                   loadedPlayers.push({
                     id: d.id,
@@ -3949,8 +3985,7 @@ useEffect(() => {
                   p.id !== "USER_88201" && 
                   p.id !== "GUEST_99210" && 
                   p.id !== "USER_33104" &&
-                  p.id !== uid &&
-                  (!storedPriorGuestId || p.id !== storedPriorGuestId)
+                  p.id !== uid
                 )
                 .map((p: any) => ({
                   id: p.id,
@@ -4222,51 +4257,84 @@ useEffect(() => {
 
           currentHydratedUidRef.current = uid;
         } else {
-          // Document does not exist in Firestore yet: initialize it from current vault
-          const currentVault = loadVault(uid);
-
-          const currentProfile = userProfileRef.current;
-          let resolvedDisplayName = "";
+          // Document does not exist in Firestore yet: initialize clean default vault for this new user,
+          // preserving any local games played under this same UID if present
+          const localVault = loadVault(uid);
           const isGenericPlaceholderNew = (n?: string | null): boolean => {
             if (!n) return true;
             const t = n.trim();
             return !t || ["Anonymous", "Guest", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Player"].includes(t);
           };
+
+          let resolvedDisplayName = "";
           if (authUser?.displayName && !isGenericPlaceholderNew(authUser.displayName)) {
             resolvedDisplayName = authUser.displayName.trim().slice(0, 15);
+          } else if (localVault.profile.displayName && !isGenericPlaceholderNew(localVault.profile.displayName)) {
+            resolvedDisplayName = localVault.profile.displayName.trim().slice(0, 15);
           } else if (authUser?.email && typeof authUser.email === "string" && authUser.email.includes("@")) {
             resolvedDisplayName = authUser.email.split("@")[0].trim().slice(0, 15);
-          } else if (currentVault.profile.displayName && !isGenericPlaceholderNew(currentVault.profile.displayName)) {
-            resolvedDisplayName = currentVault.profile.displayName.trim().slice(0, 15);
-          } else if (currentProfile?.name && !isGenericPlaceholderNew(currentProfile.name) && currentProfile.isSynced && currentProfile.id === uid) {
-            resolvedDisplayName = currentProfile.name.trim().slice(0, 15);
           } else {
-            resolvedDisplayName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
+            resolvedDisplayName = `Player_${Math.floor(1000 + Math.random() * 9000)}`;
           }
 
-          const updatedVault: UserVault = {
-            ...currentVault,
+          const localCompleted = Array.isArray(localVault.completedGames) ? localVault.completedGames : [];
+          const reconciledBestTimes = reconcileBestTimesFromHistory(localCompleted, localVault.bestTimes);
+          const finalGames = Math.max(localVault.stats?.totalGamesPlayed || 0, localCompleted.length);
+          const finalWins = Math.max(
+            localVault.stats?.totalWinsCount || 0,
+            localCompleted.filter(g => g && (g.isWon === true || g.result === "win" || g.outcome === "win")).length
+          );
+          const finalStreak = localVault.stats?.winStreak || 0;
+
+          const newVault: UserVault = {
             profile: {
               id: uid,
               displayName: resolvedDisplayName,
-              avatarColor: currentProfile?.avatarColor || currentVault.profile.avatarColor || "#8B5CF6",
+              avatarColor: localVault.profile.avatarColor || "#8B5CF6",
               isSynced: true,
-              email: authUser?.email || currentProfile?.email || currentVault.profile.email
-            }
+              email: authUser?.email || localVault.profile.email || undefined
+            },
+            stats: {
+              totalGamesPlayed: finalGames,
+              totalWinsCount: finalWins,
+              winStreak: finalStreak
+            },
+            bestTimes: reconciledBestTimes,
+            completedGames: localCompleted,
+            savedGames: Array.isArray(localVault.savedGames) ? localVault.savedGames : []
           };
 
-          saveVault(updatedVault, uid);
+          saveVault(newVault, uid);
 
-          const updatedProfile = {
+          const newProfile = {
             id: uid,
             name: resolvedDisplayName,
             displayName: resolvedDisplayName,
-            avatarColor: updatedVault.profile.avatarColor,
+            avatarColor: newVault.profile.avatarColor,
             isSynced: true,
-            email: updatedVault.profile.email
+            email: newVault.profile.email
           };
-          userProfileRef.current = updatedProfile;
-          setUserProfile(updatedProfile);
+          userProfileRef.current = newProfile;
+          setUserProfile(newProfile);
+
+          // Atomic flush to React state:
+          setTotalGamesPlayed(newVault.stats.totalGamesPlayed);
+          setTotalWinsCount(newVault.stats.totalWinsCount);
+          setWinStreak(newVault.stats.winStreak);
+          setPersonalBestTimes(newVault.bestTimes);
+          personalBestTimesRef.current = newVault.bestTimes;
+          setCompletedGames(newVault.completedGames);
+          completedGamesRef.current = newVault.completedGames;
+          setSavedGames(newVault.savedGames);
+          savedGamesRef.current = newVault.savedGames;
+
+          // New user gets clean isolated friends/recent players:
+          setFriends([]);
+          setRecentPlayers([]);
+          setMultiplayerPlayers([]);
+          friendsRef.current = [];
+          recentPlayersRef.current = [];
+          multiplayerPlayersRef.current = [];
 
           const currentSettings = settingsStateRef.current;
           const currentSettingsPayload = {
@@ -4298,18 +4366,6 @@ useEffect(() => {
             activeTheme: currentSettings.activeTheme
           };
 
-          const safeCompleted = JSON.parse(JSON.stringify((updatedVault.completedGames || []).slice(0, 50)));
-
-          // Promote active guest friends and recent players into user drawer
-          const currentPlayers = multiplayerPlayersRef.current || multiplayerPlayers;
-          const activeFriends = friendsRef.current || currentPlayers.filter(p => p.isFriend);
-          const activeRecent = recentPlayersRef.current || currentPlayers.filter(p => !p.isFriend);
-          try {
-            localStorage.setItem(getScopedKey("friends", uid), JSON.stringify(activeFriends));
-            localStorage.setItem(getScopedKey("recent_players", uid), JSON.stringify(activeRecent));
-            localStorage.setItem(getScopedKey("past_players", uid), JSON.stringify(currentPlayers));
-          } catch {}
-
           const themePayload = {
             activeTheme: currentSettings.activeTheme || "Original",
             darkMode: !!currentSettings.darkMode
@@ -4317,18 +4373,20 @@ useEffect(() => {
 
           await setDoc(userDocRef, {
             name: resolvedDisplayName,
+            displayName: resolvedDisplayName,
             email: authUser?.email || null,
             authUid: uid,
             isSynced: true,
-            avatarColor: updatedProfile.avatarColor,
-            totalGamesPlayed: updatedVault.stats.totalGamesPlayed,
-            totalWinsCount: updatedVault.stats.totalWinsCount,
-            winStreak: updatedVault.stats.winStreak,
-            bestTimes: updatedVault.bestTimes,
-            completedGames: safeCompleted,
-            savedGames: updatedVault.savedGames,
-            friends: activeFriends,
-            pastPlayers: currentPlayers,
+            avatarColor: newProfile.avatarColor,
+            totalGamesPlayed: newVault.stats.totalGamesPlayed,
+            totalWinsCount: newVault.stats.totalWinsCount,
+            winStreak: newVault.stats.winStreak,
+            stats: newVault.stats,
+            bestTimes: newVault.bestTimes,
+            completedGames: newVault.completedGames,
+            savedGames: newVault.savedGames,
+            friends: [],
+            pastPlayers: [],
             settings: { ...currentSettingsPayload, theme: themePayload },
             theme: themePayload,
             "settings.theme": themePayload,
@@ -4341,29 +4399,6 @@ useEffect(() => {
             localStorage.setItem(getScopedKey("darkMode", uid), String(themePayload.darkMode));
             saveSettings(themePayload);
           } catch {}
-
-          // Also populate users/{uid}/past_players subcollection for all active multiplayerPlayers
-          if (currentPlayers.length > 0) {
-            const writes = currentPlayers
-              .filter(opp => opp && opp.id && opp.id !== uid)
-              .map(opp => setDoc(doc(db, "users", uid, "past_players", opp.id), {
-                id: opp.id,
-                name: opp.name || "Player",
-                isFriend: !!opp.isFriend,
-                timestamp: serverTimestamp()
-              }, { merge: true }).catch(() => {}));
-            await Promise.all(writes);
-          }
-
-          setTotalGamesPlayed(updatedVault.stats.totalGamesPlayed);
-          setTotalWinsCount(updatedVault.stats.totalWinsCount);
-          setWinStreak(updatedVault.stats.winStreak);
-          setPersonalBestTimes(updatedVault.bestTimes);
-          personalBestTimesRef.current = updatedVault.bestTimes;
-          setCompletedGames(updatedVault.completedGames);
-          completedGamesRef.current = updatedVault.completedGames;
-          setSavedGames(updatedVault.savedGames);
-          savedGamesRef.current = updatedVault.savedGames;
 
           currentHydratedUidRef.current = uid;
         }
@@ -4456,39 +4491,39 @@ useEffect(() => {
         // --- 0ms SYNCHRONOUS LOCAL CACHE HYDRATION (STEP A) FROM CANONICAL VAULT ---
         try {
           const uid = user.uid;
+          const userHasVault = hasVault(uid);
           const cachedVault = loadVault(uid);
 
-          const isGenericName = (n?: string | null): boolean => {
-            if (!n) return true;
-            const t = n.trim();
-            return !t || ["Anonymous", "Guest", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Player"].includes(t);
-          };
+          // Cold-boot protection: Do NOT eagerly set userProfile to generic "Player" on cold cache.
+          // Wait for hydrateUserFromCloud to resolve the Firestore document before committing profile.
+          const cachedName = cachedVault.profile.displayName;
+          const hasValidCustomName = userHasVault && Boolean(cachedName) && !isGenericDisplayName(cachedName);
 
-          let activeName = cachedVault.profile.displayName;
-          if (isGenericName(activeName) && (user.displayName || user.email)) {
-            activeName = (user.displayName || (user.email ? user.email.split("@")[0] : "Player")).trim().slice(0, 15);
+          if (hasValidCustomName) {
+            const activeName = cachedName.trim().slice(0, 15);
+            const cachedProfile = {
+              id: uid,
+              name: activeName,
+              displayName: activeName,
+              avatarColor: cachedVault.profile.avatarColor || "#8B5CF6",
+              isSynced: true,
+              email: user.email || cachedVault.profile.email || undefined
+            };
+            setUserProfile(cachedProfile);
+            userProfileRef.current = cachedProfile;
           }
 
-          const cachedProfile = {
-            id: uid,
-            name: activeName,
-            displayName: activeName,
-            avatarColor: cachedVault.profile.avatarColor || "#8B5CF6",
-            isSynced: true,
-            email: user.email || cachedVault.profile.email || undefined
-          };
-          setUserProfile(cachedProfile);
-          userProfileRef.current = cachedProfile;
-
-          setTotalGamesPlayed(cachedVault.stats.totalGamesPlayed);
-          setTotalWinsCount(cachedVault.stats.totalWinsCount);
-          setWinStreak(cachedVault.stats.winStreak);
-          setCompletedGames(cachedVault.completedGames);
-          completedGamesRef.current = cachedVault.completedGames;
-          setSavedGames(cachedVault.savedGames);
-          savedGamesRef.current = cachedVault.savedGames;
-          setPersonalBestTimes(cachedVault.bestTimes);
-          personalBestTimesRef.current = cachedVault.bestTimes;
+          if (userHasVault) {
+            setTotalGamesPlayed(cachedVault.stats.totalGamesPlayed);
+            setTotalWinsCount(cachedVault.stats.totalWinsCount);
+            setWinStreak(cachedVault.stats.winStreak);
+            setCompletedGames(cachedVault.completedGames);
+            completedGamesRef.current = cachedVault.completedGames;
+            setSavedGames(cachedVault.savedGames);
+            savedGamesRef.current = cachedVault.savedGames;
+            setPersonalBestTimes(cachedVault.bestTimes);
+            personalBestTimesRef.current = cachedVault.bestTimes;
+          }
 
           // Theme Cache: 0ms synchronous local cache hydration for authenticated user
           const cachedActiveTheme = localStorage.getItem(getScopedKey("activeTheme", uid))
@@ -4775,7 +4810,6 @@ useEffect(() => {
       const wasAnonymous = !credentialUser || credentialUser.isAnonymous;
       const priorProfileId = userProfile?.id;
       const isPriorGuest = wasAnonymous || Boolean(priorProfileId && (priorProfileId.startsWith("GUEST_") || !userProfile?.isSynced));
-      const priorGuestId = isPriorGuest ? (priorProfileId || (credentialUser?.isAnonymous ? credentialUser.uid : null)) : null;
 
       // Real-time pre-snapshot of guest state before external auth flow triggers.
       // This is the ONLY point where a full guest snapshot is taken (live state is still 100% guest).
@@ -4880,97 +4914,14 @@ useEffect(() => {
         addLog(`🔒 Connected Google Account: ${finalUser.email}`);
         showToast(t("connectedGoogleToast"));
 
-        // TASK 1: STRICT ACCOUNT ISOLATION - Check if Google account already exists in cloud
-        const userDocRef = doc(db, "users", finalUser.uid);
-        let existingUserDoc: any = null;
-        try {
-          existingUserDoc = await getDoc(userDocRef);
-        } catch (fetchErr) {
-          console.warn("[Auth] Failed to check existing user doc:", fetchErr);
-        }
-
-        const isReturningUser = Boolean(existingUserDoc?.exists());
-
-        // Airtight Dual-Vault Isolation: The guest vault and offline drawer are preserved intact,
-        // allowing the guest profile and offline history to be seamlessly restored upon logout.
-
-        // If Returning User: strictly load the Google cloud profile. Zero data/name push from local guest into Google Firestore.
-        if (isReturningUser) {
-          const cloudData = existingUserDoc.data();
-          const cloudCustomName = cloudData?.displayName || cloudData?.name;
-          const returningProfile = {
-            id: finalUser.uid,
-            name: (cloudCustomName || finalUser.displayName || (finalUser.email ? finalUser.email.split("@")[0] : "Player")).trim().slice(0, 15),
-            avatarColor: cloudData?.avatarColor || "#8B5CF6",
-            isSynced: true,
-            email: finalUser.email || cloudData?.email || undefined
-          };
-          setUserProfile(returningProfile);
-          userProfileRef.current = returningProfile;
-          try {
-            localStorage.setItem("sudoku_userProfile", JSON.stringify(returningProfile));
-            localStorage.setItem("sudoku_user_profile", JSON.stringify(returningProfile));
-            localStorage.setItem(getScopedKey("userProfile", finalUser.uid), JSON.stringify(returningProfile));
-          } catch {}
-          console.log("[Auth] Returning Google user recognized. Preserved cloud profile:", returningProfile.name);
-        }
-
-        // GUEST-TO-GMAIL IDENTITY MIGRATION & GHOST CLEANUP (non-blocking)
-        if (priorGuestId && priorGuestId !== finalUser.uid) {
-          (async () => {
-            try {
-              localStorage.setItem("sudoku_prior_guest_id", priorGuestId);
-              const guestDocRef = doc(db, "users", priorGuestId);
-              await setDoc(guestDocRef, {
-                status: "offline",
-                isMigrated: true,
-                updatedAt: serverTimestamp(),
-                migratedTo: finalUser.uid
-              }, { merge: true });
-              console.log(`[Auth] Prior guest ID ${priorGuestId} marked as migrated & offline to ${finalUser.uid}`);
-            } catch (migErr) {
-              console.warn("[Auth] Failed to mark prior guest as migrated in Firestore:", migErr);
-            }
-
-            // Immediately mark guest as left in any active rooms to prevent lobby ghost participant leak
-            try {
-              if (rematchGameId) {
-                await setDoc(doc(db, "rooms", rematchGameId, "players", priorGuestId), {
-                  status: "left",
-                  isMigrated: true,
-                  leftAt: serverTimestamp()
-                }, { merge: true });
-              }
-            } catch {}
-
-            // Clean up prior guest ID and current UID from past_players subcollection in Firestore
-            try {
-              await deleteDoc(doc(db, "users", finalUser.uid, "past_players", priorGuestId));
-              await deleteDoc(doc(db, "users", finalUser.uid, "past_players", finalUser.uid));
-            } catch {}
-
-            // Immediately filter out prior guest and self from multiplayerPlayers in-memory roster
-            setMultiplayerPlayers(prev => prev.filter(p => p.id !== priorGuestId && p.id !== finalUser.uid));
-
-            // Remove prior guest ID and current UID from local rematchInviteStates to prevent ghost 60s cooldowns
-            setRematchInviteStates(prev => {
-              if (!prev[priorGuestId] && !prev[finalUser.uid]) return prev;
-              const next = { ...prev };
-              delete next[priorGuestId];
-              delete next[finalUser.uid];
-              return next;
-            });
-
-            // Clean up accepted lobby user IDs
-            setLobbyAcceptedUserIds(prev => {
-              if (!prev.has(priorGuestId) && !prev.has(finalUser.uid)) return prev;
-              const next = new Set(prev);
-              next.delete(priorGuestId);
-              next.delete(finalUser.uid);
-              return next;
-            });
-          })().catch((err) => console.warn("[Auth] Background guest migration notice:", err));
-        }
+        // Clean Atomic Cloud Mount: Immediately flush in-memory guest stats before cloud hydration
+        setCompletedGames([]);
+        completedGamesRef.current = [];
+        setPersonalBestTimes({});
+        personalBestTimesRef.current = {};
+        setTotalGamesPlayed(0);
+        setTotalWinsCount(0);
+        setWinStreak(0);
 
         // Await full cloud hydration so all Firestore reads (profile, stats, settings, friends) commit to localStorage
         try {
@@ -5075,7 +5026,6 @@ useEffect(() => {
         "sudoku_friends",
         "sudoku_recent_players",
         "sudoku_winStreak",
-        "sudoku_prior_guest_id",
         "sudoku_is_display_name_configured",
         "sudoku_last_auth_uid",
         "sudoku_userProfile",
@@ -5258,8 +5208,7 @@ useEffect(() => {
         "sudoku_pending_challenges",
         "sudoku_active_invite",
         "sudoku_past_players",
-        "sudoku_winStreak",
-        "sudoku_prior_guest_id"
+        "sudoku_winStreak"
       ];
       sessionKeysToWipe.forEach((key) => {
         try {
@@ -6194,18 +6143,13 @@ useEffect(() => {
   const saveOpponentsToPastPlayers = async (opponents: Array<{ id: string, name: string }>) => {
     const currentUserId = userProfile?.id;
     if (!currentUserId) return;
-    let priorGuestId: string | null = null;
-    try {
-      priorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
-    } catch {}
 
-    // Filter out self, prior guest persona, and anonymous guests
+    // Filter out self and anonymous guests
     const filteredOpponents = opponents.filter(opp => 
       opp.id && 
       opp.id !== currentUserId && 
       opp.id !== "GUEST_ANON" && 
-      opp.id !== "me" &&
-      (!priorGuestId || opp.id !== priorGuestId)
+      opp.id !== "me"
     );
     if (filteredOpponents.length === 0) return;
 
@@ -9466,11 +9410,7 @@ useEffect(() => {
 
   // Standardized invite cooldown helper with strict safety caps (30s sent / 60s declined / 60s left)
   const getInviteCooldownState = (playerId: string) => {
-    let priorGuestId: string | null = null;
-    try {
-      priorGuestId = typeof window !== "undefined" ? localStorage.getItem("sudoku_prior_guest_id") : null;
-    } catch {}
-    if (!playerId || playerId === userProfile?.id || (priorGuestId && playerId === priorGuestId)) {
+    if (!playerId || playerId === userProfile?.id) {
       return { isJoined: false, isPendingSent: false, isDeclined: false, isLeft: false, remainingSeconds: 0, joinedAt: undefined };
     }
 
@@ -9755,9 +9695,11 @@ useEffect(() => {
     const isMultiplayerMatch = challengeMode || Boolean(activeGameId) || Boolean(rematchGameId);
     const resolvedParts = isMultiplayerMatch ? (resolveParticipantsForSave({ id: finalGameId, seed: gameSeed } as CompletedGame) || []) : [];
 
-    const effectiveUid = (auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null)
-      || (userProfileRef.current?.isSynced && userProfileRef.current.id && !userProfileRef.current.id.startsWith("GUEST_") ? userProfileRef.current.id : null);
-    const targetUid = getActiveAuthUid() || effectiveUid || "guest";
+    const authUser = auth.currentUser;
+    const isGuest = !authUser || authUser.isAnonymous || userProfile?.isSynced === false;
+    const targetUid = (!authUser || authUser.isAnonymous)
+      ? (getActiveAuthUid() || "guest")
+      : authUser.uid;
 
     const completedGameRecord: CompletedGame = {
       id: finalGameId,
@@ -9821,12 +9763,14 @@ useEffect(() => {
     setPersonalBestTimes(updatedVault.bestTimes);
     personalBestTimesRef.current = updatedVault.bestTimes;
 
-    syncGuestSnapshotInRealtime({
-      completedGames: updatedVault.completedGames,
-      totalGamesPlayed: updatedVault.stats.totalGamesPlayed,
-      totalWinsCount: updatedVault.stats.totalWinsCount,
-      winStreak: updatedVault.stats.winStreak
-    });
+    if (targetUid === "guest" || targetUid.startsWith("GUEST_")) {
+      syncGuestSnapshotInRealtime({
+        completedGames: updatedVault.completedGames,
+        totalGamesPlayed: updatedVault.stats.totalGamesPlayed,
+        totalWinsCount: updatedVault.stats.totalWinsCount,
+        winStreak: updatedVault.stats.winStreak
+      });
+    }
 
     // Remove from pendingchallenges list if matches active ID to keep cleanly in sync
     setPendingChallenges(prev => {
@@ -9851,26 +9795,20 @@ useEffect(() => {
 
     submitGameResult(rBody);
 
-    // Continuous stats persistence: Sync updated career stats directly to Firestore for authenticated users
-    const authUser = auth.currentUser;
-    if (authUser && !authUser.isAnonymous) {
-      const currentUid = authUser.uid;
-      const userDocRef = doc(db, "users", currentUid);
-      const safeRecord = JSON.parse(JSON.stringify(completedGameRecord));
-      const updatePayload: Record<string, any> = {
-        completedGames: arrayUnion(safeRecord),
-        totalGamesPlayed: increment(1),
-        totalWinsCount: isWon ? increment(1) : increment(0),
-        bestTimes: updatedVault.bestTimes,
-        winStreak: updatedVault.stats.winStreak,
-        lastUpdated: serverTimestamp()
-      };
+    // Continuous stats persistence: Direct Firestore write for authenticated user
+    if (authUser?.uid && !isGuest && targetUid !== "guest") {
       try {
-        await updateDoc(userDocRef, updatePayload);
-      } catch (err) {
-        await setDoc(userDocRef, updatePayload, { merge: true }).catch(syncErr => {
-          console.warn("[Firestore] Failed to persist career stats during gameplay:", syncErr);
-        });
+        await setDoc(doc(db, "users", authUser.uid), {
+          stats: updatedVault.stats,
+          completedGames: updatedVault.completedGames,
+          bestTimes: updatedVault.bestTimes,
+          totalGamesPlayed: updatedVault.stats.totalGamesPlayed,
+          totalWinsCount: updatedVault.stats.totalWinsCount,
+          winStreak: updatedVault.stats.winStreak,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (syncErr) {
+        console.warn("[Firestore] Failed to persist game completion to Firestore:", syncErr);
       }
     }
 
@@ -10701,11 +10639,6 @@ useEffect(() => {
   useEffect(() => {
     if (!showCreateChallengeModal || !isOnline || !rematchGameId) return;
 
-    let priorGuestId: string | null = null;
-    try {
-      priorGuestId = localStorage.getItem("sudoku_prior_guest_id");
-    } catch {}
-
     const roomPlayersCol = collection(db, "rooms", rematchGameId, "players");
     const unsub = onSnapshot(roomPlayersCol, (snapshot) => {
       const joined: Array<{ id: string; name: string; updatedAt?: any }> = [];
@@ -10714,7 +10647,7 @@ useEffect(() => {
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         const uId = data.id || docSnap.id;
-        if (!uId || uId === userProfile?.id || (priorGuestId && uId === priorGuestId)) return;
+        if (!uId || uId === userProfile?.id) return;
 
         const isLeft = data.status === "left" || data.status === "abandoned" || data.status === "disconnected";
         const isActive = data.status === "active" || data.status === "joined";
@@ -10734,7 +10667,7 @@ useEffect(() => {
           let next = [...prev];
           let changed = false;
           joined.forEach(({ id, name }) => {
-            if (id === userProfile?.id || (priorGuestId && id === priorGuestId)) return;
+            if (id === userProfile?.id) return;
             const existing = next.findIndex(p => p.id === id);
             if (existing === -1) {
               next.push({ id, name, isFriend: false, status: "online" as const, inviteStatus: "idle" as const, lastPlayedAt: now });

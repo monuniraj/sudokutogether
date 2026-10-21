@@ -237,8 +237,8 @@ export function migrateLegacyToVault(uid?: string | null): UserVault {
 
   try {
     // 1. Recover Profile
-    const profileRaw = localStorage.getItem("sudoku_userProfile") 
-      || localStorage.getItem("sudoku_user_profile")
+    const profileRaw = (isGuest ? localStorage.getItem("sudoku_userProfile") : null) 
+      || (isGuest ? localStorage.getItem("sudoku_user_profile") : null)
       || (uid ? localStorage.getItem(`sudoku_user_${uid}_userProfile`) : null)
       || (uid ? localStorage.getItem(`sudoku_usr_${uid}_userProfile`) : null);
 
@@ -262,7 +262,7 @@ export function migrateLegacyToVault(uid?: string | null): UserVault {
       || (uid ? localStorage.getItem(`sudoku_usr_${uid}_completed_games`) : null)
       || (uid ? localStorage.getItem(`sudoku_usr_${uid}_history`) : null)
       || (isGuest ? localStorage.getItem("sudoku_guest_completed_games") : null)
-      || localStorage.getItem("sudoku_completed_games");
+      || (isGuest ? localStorage.getItem("sudoku_completed_games") : null);
 
     if (historyRaw) {
       try {
@@ -274,7 +274,7 @@ export function migrateLegacyToVault(uid?: string | null): UserVault {
     // 3. Recover Saved Puzzles
     const savedRaw = (uid ? localStorage.getItem(`sudoku_user_${uid}_saved_games`) : null)
       || (isGuest ? localStorage.getItem("sudoku_guest_saved_games") : null)
-      || localStorage.getItem("sudoku_saved_games");
+      || (isGuest ? localStorage.getItem("sudoku_saved_games") : null);
 
     if (savedRaw) {
       try {
@@ -289,21 +289,21 @@ export function migrateLegacyToVault(uid?: string | null): UserVault {
       || (uid ? localStorage.getItem(`sudoku_usr_${uid}_gamesPlayed`) : null)
       || (isGuest ? localStorage.getItem("sudoku_guest_total_games_played") : null)
       || (isGuest ? localStorage.getItem("sudoku_guest_gamesPlayed") : null)
-      || localStorage.getItem("sudoku_total_games_played")
-      || localStorage.getItem("sudoku_gamesPlayed");
+      || (isGuest ? localStorage.getItem("sudoku_total_games_played") : null)
+      || (isGuest ? localStorage.getItem("sudoku_gamesPlayed") : null);
 
     const winsRaw = (uid ? localStorage.getItem(`sudoku_user_${uid}_total_wins_count`) : null)
       || (uid ? localStorage.getItem(`sudoku_user_${uid}_winsCount`) : null)
       || (uid ? localStorage.getItem(`sudoku_usr_${uid}_winsCount`) : null)
       || (isGuest ? localStorage.getItem("sudoku_guest_total_wins_count") : null)
       || (isGuest ? localStorage.getItem("sudoku_guest_winsCount") : null)
-      || localStorage.getItem("sudoku_total_wins_count")
-      || localStorage.getItem("sudoku_winsCount");
+      || (isGuest ? localStorage.getItem("sudoku_total_wins_count") : null)
+      || (isGuest ? localStorage.getItem("sudoku_winsCount") : null);
 
     const streakRaw = (uid ? localStorage.getItem(`sudoku_user_${uid}_winStreak`) : null)
       || (uid ? localStorage.getItem(`sudoku_usr_${uid}_winStreak`) : null)
       || (isGuest ? localStorage.getItem("sudoku_guest_winStreak") : null)
-      || localStorage.getItem("sudoku_winStreak");
+      || (isGuest ? localStorage.getItem("sudoku_winStreak") : null);
 
     const gamesNum = gamesRaw !== null ? parseInt(gamesRaw, 10) : 0;
     const winsNum = winsRaw !== null ? parseInt(winsRaw, 10) : 0;
@@ -323,7 +323,7 @@ export function migrateLegacyToVault(uid?: string | null): UserVault {
     const bestTimesRaw = (uid ? localStorage.getItem(`sudoku_user_${uid}_best_times`) : null)
       || (uid ? localStorage.getItem(`sudoku_usr_${uid}_best_times`) : null)
       || (isGuest ? localStorage.getItem("sudoku_guest_best_times") : null)
-      || localStorage.getItem("sudoku_best_times");
+      || (isGuest ? localStorage.getItem("sudoku_best_times") : null);
 
     let parsedBestTimes: any = null;
     if (bestTimesRaw) {
@@ -542,6 +542,19 @@ export function clearVault(uid?: string | null): void {
   try {
     localStorage.removeItem(key);
   } catch {}
+}
+
+/**
+ * Checks whether a persistent vault exists in localStorage for a given user identifier.
+ */
+export function hasVault(uid?: string | null): boolean {
+  if (typeof window === "undefined") return false;
+  const key = getVaultKey(uid);
+  try {
+    return localStorage.getItem(key) !== null;
+  } catch {
+    return false;
+  }
 }
 
 // ============================================================================

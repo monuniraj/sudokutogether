@@ -109,10 +109,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   const { t } = useTranslation();
   const [activeListTab, setActiveListTab] = useState<'recent' | 'friends'>('recent');
   const sanitizedPlayers = useMemo(() => {
-    let priorGuestId: string | null = null;
     let myId: string | null = userProfile?.id || null;
     try {
-      priorGuestId = localStorage.getItem("sudoku_prior_guest_id");
       if (!myId) {
         const userProfileStr = localStorage.getItem("sudoku_userProfile");
         if (userProfileStr) {
@@ -124,7 +122,6 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
     return (multiplayerPlayers || []).filter((p: any) => {
       if (!p || !p.id) return false;
       if (myId && p.id === myId) return false;
-      if (priorGuestId && p.id === priorGuestId) return false;
       if (p.id === "GUEST_ANON" || p.id === "me") return false;
       return true;
     });
