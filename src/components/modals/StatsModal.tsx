@@ -41,6 +41,7 @@ export interface StatsModalProps {
   handleAddRecentFriend: (player: any) => void;
   formatTimer: (seconds: number) => string;
   isAuthHydrating?: boolean;
+  isSyncingCloudData?: boolean;
 }
 
 export const StatsModal: React.FC<StatsModalProps> = ({
@@ -60,8 +61,10 @@ export const StatsModal: React.FC<StatsModalProps> = ({
   handleToggleFriend,
   handleAddRecentFriend,
   formatTimer,
-  isAuthHydrating = false
+  isAuthHydrating = false,
+  isSyncingCloudData
 }) => {
+  const isSyncing = isSyncingCloudData ?? isAuthHydrating;
   const { t } = useTranslation();
   const [activePlayersTab, setActivePlayersTab] = React.useState<"recent" | "friends">("recent");
   const sanitizedPlayers = React.useMemo(() => {
@@ -94,62 +97,50 @@ export const StatsModal: React.FC<StatsModalProps> = ({
     >
       {/* Content list */}
       <div
-        className="flex-1 w-full max-w-sm mx-auto flex flex-col gap-6 justify-center items-center pb-6"
+        className="flex-1 w-full max-w-sm mx-auto flex flex-col gap-6 justify-center items-center pb-6 relative"
         id="status-screen-inner-container"
       >
-        {isAuthHydrating ? (
-          <div className="w-full flex flex-col gap-6 animate-pulse select-none py-2">
-            {/* Bento-Grid Skeletons */}
-            <div className="w-full grid grid-cols-2 gap-4 shrink-0">
-              <div
-                className={`p-5 flex flex-col items-center justify-center text-center rounded-2xl h-48 transition-all ${
-                  darkMode ? "bg-zinc-900/60 border border-zinc-800" : "bg-stone-200/60 border border-stone-200"
-                }`}
-              >
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-3 ${darkMode ? "bg-zinc-800/80" : "bg-stone-300/80"}`}>
-                  <RefreshCw className="w-6 h-6 animate-spin text-stone-400" />
-                </div>
-                <div className={`w-20 h-3 rounded-md ${darkMode ? "bg-zinc-700/60" : "bg-stone-300/70"}`} />
-              </div>
-
-              <div
-                className={`p-5 flex flex-col justify-between rounded-2xl h-48 transition-all ${
-                  darkMode ? "bg-zinc-900/60 border border-zinc-800" : "bg-stone-200/60 border border-stone-200"
-                }`}
-              >
-                <div className={`w-24 h-3.5 rounded-md self-center ${darkMode ? "bg-zinc-700/60" : "bg-stone-300/70"} mb-3`} />
-                <div className="flex flex-col gap-3">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="flex justify-between items-center">
-                      <div className={`w-12 h-2.5 rounded ${darkMode ? "bg-zinc-700/50" : "bg-stone-300/60"}`} />
-                      <div className={`w-10 h-2.5 rounded ${darkMode ? "bg-zinc-700/50" : "bg-stone-300/60"}`} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* History Module Skeleton */}
+        {/* Shimmer & Frost Blur Overlay while isSyncing is true */}
+        {isSyncing && (
+          <div
+            className={`absolute inset-0 z-30 flex flex-col items-center justify-center p-6 rounded-3xl transition-all duration-300 backdrop-blur-xs select-none ${
+              darkMode ? "bg-zinc-950/45 text-sky-400" : "bg-[#FDFBF7]/45 text-[#0369A1]"
+            }`}
+          >
             <div
-              className={`w-full rounded-2xl p-4 flex flex-col gap-3 transition-all ${
-                darkMode ? "bg-zinc-900/40 border border-zinc-800/80" : "bg-stone-200/40 border border-stone-200/60"
+              className={`p-6 rounded-2xl flex flex-col items-center justify-center gap-3.5 shadow-lg border animate-pulse ${
+                darkMode
+                  ? "bg-zinc-900/90 border-zinc-800 text-stone-200"
+                  : "bg-white/95 border-stone-200/80 text-stone-800"
               }`}
             >
-              <div className="grid grid-cols-3 gap-2 p-1">
-                <div className={`h-8 rounded-xl ${darkMode ? "bg-zinc-700/50" : "bg-stone-300/60"}`} />
-                <div className={`h-8 rounded-xl ${darkMode ? "bg-zinc-700/50" : "bg-stone-300/60"}`} />
-                <div className={`h-8 rounded-xl ${darkMode ? "bg-zinc-700/50" : "bg-stone-300/60"}`} />
+              <div
+                className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xs ${
+                  darkMode ? "bg-sky-950/60 text-sky-400" : "bg-[#E0F2FE] text-[#0369A1]"
+                }`}
+              >
+                <RefreshCw className="w-6 h-6 animate-spin stroke-[2.2]" />
               </div>
-              <div className="flex flex-col gap-2.5 mt-2">
-                <div className={`h-16 rounded-xl ${darkMode ? "bg-zinc-700/30" : "bg-stone-300/40"}`} />
-                <div className={`h-16 rounded-xl ${darkMode ? "bg-zinc-700/30" : "bg-stone-300/40"}`} />
+              <div className="flex flex-col items-center gap-1.5">
+                <span className="font-sans font-bold text-xs uppercase tracking-wider">
+                  {t("syncingStats") || "Syncing Cloud Records..."}
+                </span>
+                <div className="flex items-center justify-center gap-1.5 h-3 px-1" aria-label="Loading">
+                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "160ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-luxury-dot-wave" style={{ animationDelay: "320ms" }} />
+                </div>
               </div>
             </div>
           </div>
-        ) : (
-          <>
-            {/* 📊 Player Statistics Bento-Grid (All visual, beautifully crafted!) */}
-            <div className="w-full grid grid-cols-2 gap-4 shrink-0">
+        )}
+
+        {/* 📊 Player Statistics Layout with smooth frosted blur transition */}
+        <div className={`w-full flex flex-col gap-6 transition-all duration-500 ${
+          isSyncing ? "filter blur-[4px] opacity-65 pointer-events-none select-none" : "filter-none opacity-100"
+        }`}>
+          {/* 📊 Player Statistics Bento-Grid (All visual, beautifully crafted!) */}
+          <div className="w-full grid grid-cols-2 gap-4 shrink-0">
           {/* Gauge Card: Win Rate */}
           <div
             className={`p-5 flex flex-col items-center justify-center text-center relative rounded-2xl border-none transition-all duration-300 ${
@@ -804,8 +795,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
             )}
           </div>
         </div>
-          </>
-        )}
+        </div>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation, getCurrentLanguage, setGlobalLanguage } from "./i18n/useTranslation";
 import type { TranslationKey, Language } from "./i18n/translations";
 import { db, auth, GoogleAuthProvider } from "./firebase";
-import { signInAnonymously, linkWithPopup, signInWithPopup, signInWithCredential, linkWithCredential, onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
+import { signInAnonymously, linkWithPopup, signInWithPopup, signInWithRedirect, signInWithCredential, linkWithCredential, onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
 import { RulesModal } from "./components/modals/RulesModal";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { StatsModal } from "./components/modals/StatsModal";
@@ -1528,6 +1528,14 @@ export const getScopedKey = (baseKey: string, uid?: string | null): string => {
           }
         }
       } catch {}
+      if (!effectiveUid && typeof window !== "undefined") {
+        try {
+          const lastAuth = localStorage.getItem("sudoku_last_auth_uid");
+          if (lastAuth && !lastAuth.startsWith("GUEST_") && lastAuth !== "GUEST" && lastAuth !== "guest") {
+            effectiveUid = lastAuth;
+          }
+        } catch {}
+      }
       if (!effectiveUid) effectiveUid = "guest";
     }
   }
@@ -1615,7 +1623,23 @@ useEffect(() => {
   const [activeAppInviteTab, setActiveAppInviteTab] = useState<"recent" | "friends">("recent");
 
   // Auth hydration status guard
-  const [isAuthHydrating, setIsAuthHydrating] = useState<boolean>(false);
+  const [isAuthHydrating, setIsAuthHydrating] = useState<boolean>(() => {
+    try {
+      const stored = typeof window !== "undefined" ? (localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile")) : null;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.isSynced && parsed?.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  });
+  const [isConnectingGoogle, setIsConnectingGoogle] = useState<boolean>(false);
+  const isConnectingRef = useRef<boolean>(false);
+  const loginCancelledRef = useRef<boolean>(false);
+  const loginTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isSyncingCloudData = isConnectingGoogle || isAuthHydrating;
 
   // Forward ref for non-blocking Firestore settings writer before its declaration
   const syncSettingsToCloudRef = useRef<(updatedPartial: Partial<UserSettings> & Record<string, any>) => void>(() => {});
@@ -1834,6 +1858,16 @@ useEffect(() => {
   };
 
   const getActiveDisplayName = (): string => {
+    if (isSyncingCloudData) {
+      if (auth.currentUser?.displayName) {
+        return auth.currentUser.displayName.trim().slice(0, 15);
+      }
+      if (auth.currentUser?.email) {
+        return auth.currentUser.email.split("@")[0].slice(0, 15);
+      }
+      return "Syncing...";
+    }
+
     const raw = (userProfile?.name || "").trim();
     const isGenericGuestName =
       !raw ||
@@ -2025,6 +2059,9 @@ useEffect(() => {
   const [joinRoomPinInput, setJoinRoomPinInput] = useState<string>("");
   const [joinRoomError, setJoinRoomError] = useState<string | null>(null);
   const [isJoiningRoomLoading, setIsJoiningRoomLoading] = useState<boolean>(false);
+  const isJoiningRoomRef = useRef<boolean>(false);
+  const lastJoinedRoomRef = useRef<{ code: string; timestamp: number } | null>(null);
+  const lastViewResultsTimeRef = useRef<{ code: string; timestamp: number } | null>(null);
   
   // List of past players/friends to present under 'Invite Friends'
   const [multiplayerPlayers, setMultiplayerPlayers] = useState<Array<{
@@ -2386,8 +2423,47 @@ useEffect(() => {
 
   const [completedGames, setCompletedGames] = useState<CompletedGame[]>(() => {
     try {
-      const scopedKey = getScopedKey("completed_games");
-      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_completed_games");
+      const stored = typeof window !== "undefined" ? (localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile")) : null;
+      let effectiveUid: string | null = null;
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed?.isSynced && parsed?.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
+            effectiveUid = parsed.id;
+          }
+        } catch {}
+      }
+      if (!effectiveUid && typeof window !== "undefined") {
+        try {
+          const lastAuth = localStorage.getItem("sudoku_last_auth_uid");
+          if (lastAuth && !lastAuth.startsWith("GUEST_") && lastAuth !== "GUEST" && lastAuth !== "guest") {
+            effectiveUid = lastAuth;
+          }
+        } catch {}
+      }
+      const scopedKey = getScopedKey("completed_games", effectiveUid);
+      const scopedHistoryKey = getScopedKey("history", effectiveUid);
+
+      let saved = localStorage.getItem(scopedKey) 
+        || localStorage.getItem(scopedHistoryKey)
+        || (effectiveUid ? (localStorage.getItem(`sudoku_usr_${effectiveUid}_completed_games`) || localStorage.getItem(`sudoku_usr_${effectiveUid}_history`)) : null);
+
+      if (!saved && effectiveUid) {
+        const statsRaw = localStorage.getItem(getScopedKey("stats", effectiveUid)) || localStorage.getItem(`sudoku_usr_${effectiveUid}_stats`);
+        if (statsRaw) {
+          try {
+            const p = JSON.parse(statsRaw);
+            const historyList = p?.completedGames || p?.history;
+            if (Array.isArray(historyList) && historyList.length > 0) {
+              saved = JSON.stringify(historyList);
+            }
+          } catch {}
+        }
+      }
+
+      if (!saved) {
+        saved = localStorage.getItem("sudoku_completed_games");
+      }
       if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -2403,7 +2479,7 @@ useEffect(() => {
             }
             return true;
           });
-          return filtered.slice(0, 10);
+          return filtered.slice(0, 50);
         }
       }
       return [];
@@ -2450,10 +2526,6 @@ useEffect(() => {
     showToast(t("journalStatsMergedToast"));
   };
 
-  const [isConnectingGoogle, setIsConnectingGoogle] = useState<boolean>(false);
-  const isConnectingRef = useRef<boolean>(false);
-  const loginCancelledRef = useRef<boolean>(false);
-  const loginTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // --- DYNAMIC RESUME GAME STATE LOOP ---
   const [savedSessionInfo, setSavedSessionInfo] = useState<{ difficulty: Difficulty; seconds: number; isMultiplayer?: boolean; roomCode?: string } | null>(null);
@@ -2645,7 +2717,7 @@ useEffect(() => {
         setSavedSessionInfo(null);
       }
     }
-  }, [currentScreen, userProfile?.id]);
+  }, [currentScreen, userProfile?.id, isSyncingCloudData]);
 
   // Helper to extract 6-digit canonical room code from any challenge object
   const extractRoomCodeFromChallenge = useCallback((item: any): string => {
@@ -3039,8 +3111,8 @@ useEffect(() => {
     if (!notificationsEnabled) return; // settings guard cond
     const now = Date.now();
     const lastGlobalChime = lastPlayedInviteChimesRef.current.get("__global__") || 0;
-    if (now - lastGlobalChime < 1200) {
-      console.log("[Audio] Suppressed rapid repeated invite chime (<1.2s)");
+    if (now - lastGlobalChime < 2000) {
+      console.log("[Audio] Suppressed rapid repeated invite chime (<2s)");
       return;
     }
     if (inviteId) {
@@ -3168,24 +3240,34 @@ useEffect(() => {
     }, 1800);
   }, [playBellChime]);
 
-  // Route incoming invites: if actively in-game and sender is muted, route silently to Bell
+  // Route incoming invites: if actively in-game, route quietly to Bell counter to avoid disrupting solving
   const routeInviteNotification = useCallback((payload: any) => {
     if (!payload) return;
     const senderId = String(payload.fromUserId || payload.senderId || payload.fromName || "").trim();
-    const inGame = isActivelyInGame();
-    const isMuted = inGame && Boolean(senderId && (
+    const inGame = isActivelyInGame() || currentScreenRef.current === "game";
+
+    // STRICT FOREGROUND IN-GAME PUSH SUPPRESSION:
+    // If the user is actively inside a puzzle, suppress intrusive banner and external push audio chimes,
+    // routing the event quietly to the in-app Bell counter so solving remains 100% undisturbed.
+    if (inGame) {
+      console.log(`[Invite Guard] In-game suppressed intrusive invite banner from '${senderId}'. Routing quietly to Bell.`);
+      triggerBellWiggle(true);
+      return;
+    }
+
+    const isMuted = Boolean(senderId && (
       mutedSendersInGameRef.current.has(senderId) ||
       (payload.fromName && mutedSendersInGameRef.current.has(String(payload.fromName).trim())) ||
       (payload.fromUserId && mutedSendersInGameRef.current.has(String(payload.fromUserId).trim()))
     ));
 
     if (isMuted) {
-      console.log(`[Invite Guard] In-game suppressed invite from muted sender '${senderId}'. Routing to Bell quietly.`);
+      console.log(`[Invite Guard] Suppressed invite from muted sender '${senderId}'. Routing to Bell quietly.`);
       triggerBellWiggle(true);
       return;
     }
 
-    playInviteChime(payload.id);
+    playInviteChime(payload.id || payload.roomCode || payload.gameId);
     setActiveInviteNotification(payload);
   }, [isActivelyInGame, triggerBellWiggle, playInviteChime]);
 
@@ -3275,16 +3357,44 @@ useEffect(() => {
   // Decoupled cumulative statistics counters that persist across match completions and history caps
   const [totalGamesPlayed, setTotalGamesPlayed] = useState<number>(() => {
     try {
-      const scopedKey = getScopedKey("total_games_played");
-      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_total_games_played");
+      const stored = typeof window !== "undefined" ? (localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile")) : null;
+      let effectiveUid: string | null = null;
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed?.isSynced && parsed?.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
+            effectiveUid = parsed.id;
+          }
+        } catch {}
+      }
+      if (!effectiveUid && typeof window !== "undefined") {
+        try {
+          const lastAuth = localStorage.getItem("sudoku_last_auth_uid");
+          if (lastAuth && !lastAuth.startsWith("GUEST_") && lastAuth !== "GUEST" && lastAuth !== "guest") {
+            effectiveUid = lastAuth;
+          }
+        } catch {}
+      }
+
+      const scopedKey = getScopedKey("total_games_played", effectiveUid);
+      const saved = localStorage.getItem(scopedKey)
+        || (effectiveUid ? localStorage.getItem(getScopedKey("gamesPlayed", effectiveUid)) : null)
+        || (effectiveUid ? localStorage.getItem(`sudoku_usr_${effectiveUid}_gamesPlayed`) : null)
+        || localStorage.getItem("sudoku_total_games_played")
+        || localStorage.getItem("sudoku_gamesPlayed");
       if (saved !== null) {
         const val = parseInt(saved, 10);
         if (!isNaN(val) && val >= 0) return Math.max(val, completedGames.length);
       }
-      const legacy = localStorage.getItem(getScopedKey("gamesPlayed")) || localStorage.getItem("sudoku_gamesPlayed");
-      if (legacy !== null) {
-        const val = parseInt(legacy, 10);
-        if (!isNaN(val) && val >= 0) return Math.max(val, completedGames.length);
+      const statsRaw = localStorage.getItem(getScopedKey("stats", effectiveUid))
+        || (effectiveUid ? localStorage.getItem(`sudoku_usr_${effectiveUid}_stats`) : null)
+        || localStorage.getItem("sudoku_stats");
+      if (statsRaw) {
+        try {
+          const p = JSON.parse(statsRaw);
+          const gp = p?.totalGamesPlayed ?? p?.gamesPlayed;
+          if (typeof gp === "number" && !isNaN(gp) && gp >= 0) return Math.max(gp, completedGames.length);
+        } catch {}
       }
     } catch {}
     return completedGames.length;
@@ -3293,16 +3403,44 @@ useEffect(() => {
   const [totalWinsCount, setTotalWinsCount] = useState<number>(() => {
     const winsInHistory = completedGames.filter(g => g.isWon).length;
     try {
-      const scopedKey = getScopedKey("total_wins_count");
-      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_total_wins_count");
+      const stored = typeof window !== "undefined" ? (localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile")) : null;
+      let effectiveUid: string | null = null;
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed?.isSynced && parsed?.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
+            effectiveUid = parsed.id;
+          }
+        } catch {}
+      }
+      if (!effectiveUid && typeof window !== "undefined") {
+        try {
+          const lastAuth = localStorage.getItem("sudoku_last_auth_uid");
+          if (lastAuth && !lastAuth.startsWith("GUEST_") && lastAuth !== "GUEST" && lastAuth !== "guest") {
+            effectiveUid = lastAuth;
+          }
+        } catch {}
+      }
+
+      const scopedKey = getScopedKey("total_wins_count", effectiveUid);
+      const saved = localStorage.getItem(scopedKey)
+        || (effectiveUid ? localStorage.getItem(getScopedKey("winsCount", effectiveUid)) : null)
+        || (effectiveUid ? localStorage.getItem(`sudoku_usr_${effectiveUid}_winsCount`) : null)
+        || localStorage.getItem("sudoku_total_wins_count")
+        || localStorage.getItem("sudoku_winsCount");
       if (saved !== null) {
         const val = parseInt(saved, 10);
         if (!isNaN(val) && val >= 0) return Math.max(val, winsInHistory);
       }
-      const legacy = localStorage.getItem(getScopedKey("winsCount")) || localStorage.getItem("sudoku_winsCount");
-      if (legacy !== null) {
-        const val = parseInt(legacy, 10);
-        if (!isNaN(val) && val >= 0) return Math.max(val, winsInHistory);
+      const statsRaw = localStorage.getItem(getScopedKey("stats", effectiveUid))
+        || (effectiveUid ? localStorage.getItem(`sudoku_usr_${effectiveUid}_stats`) : null)
+        || localStorage.getItem("sudoku_stats");
+      if (statsRaw) {
+        try {
+          const p = JSON.parse(statsRaw);
+          const gw = p?.totalWinsCount ?? p?.wins ?? p?.gamesWon;
+          if (typeof gw === "number" && !isNaN(gw) && gw >= 0) return Math.max(gw, winsInHistory);
+        } catch {}
       }
     } catch {}
     return winsInHistory;
@@ -3310,11 +3448,42 @@ useEffect(() => {
 
   const [winStreak, setWinStreak] = useState<number>(() => {
     try {
-      const scopedKey = getScopedKey("winStreak");
-      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_winStreak");
+      const stored = typeof window !== "undefined" ? (localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile")) : null;
+      let effectiveUid: string | null = null;
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed?.isSynced && parsed?.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
+            effectiveUid = parsed.id;
+          }
+        } catch {}
+      }
+      if (!effectiveUid && typeof window !== "undefined") {
+        try {
+          const lastAuth = localStorage.getItem("sudoku_last_auth_uid");
+          if (lastAuth && !lastAuth.startsWith("GUEST_") && lastAuth !== "GUEST" && lastAuth !== "guest") {
+            effectiveUid = lastAuth;
+          }
+        } catch {}
+      }
+
+      const scopedKey = getScopedKey("winStreak", effectiveUid);
+      const saved = localStorage.getItem(scopedKey)
+        || (effectiveUid ? localStorage.getItem(`sudoku_usr_${effectiveUid}_winStreak`) : null)
+        || localStorage.getItem("sudoku_winStreak");
       if (saved !== null) {
         const val = parseInt(saved, 10);
         if (!isNaN(val) && val >= 0) return val;
+      }
+      const statsRaw = localStorage.getItem(getScopedKey("stats", effectiveUid))
+        || (effectiveUid ? localStorage.getItem(`sudoku_usr_${effectiveUid}_stats`) : null)
+        || localStorage.getItem("sudoku_stats");
+      if (statsRaw) {
+        try {
+          const p = JSON.parse(statsRaw);
+          const ws = p?.winStreak ?? p?.streak;
+          if (typeof ws === "number" && !isNaN(ws) && ws >= 0) return ws;
+        } catch {}
       }
     } catch {}
     return 0;
@@ -3349,12 +3518,33 @@ useEffect(() => {
     
     // 1. Read existing saved best times from localStorage (case-insensitive for tiers)
     try {
-      const scopedKey = getScopedKey("best_times");
-      const saved = localStorage.getItem(scopedKey) || localStorage.getItem("sudoku_best_times");
+      const stored = typeof window !== "undefined" ? (localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile")) : null;
+      let effectiveUid: string | null = null;
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed?.isSynced && parsed?.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
+            effectiveUid = parsed.id;
+          }
+        } catch {}
+      }
+      if (!effectiveUid && typeof window !== "undefined") {
+        try {
+          const lastAuth = localStorage.getItem("sudoku_last_auth_uid");
+          if (lastAuth && !lastAuth.startsWith("GUEST_") && lastAuth !== "GUEST" && lastAuth !== "guest") {
+            effectiveUid = lastAuth;
+          }
+        } catch {}
+      }
+
+      const scopedKey = getScopedKey("best_times", effectiveUid);
+      const saved = localStorage.getItem(scopedKey)
+        || (effectiveUid ? localStorage.getItem(`sudoku_usr_${effectiveUid}_best_times`) : null)
+        || localStorage.getItem("sudoku_best_times");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === "object") {
-          (["EASY", "MEDIUM", "HARD", "EXPERT"] as Difficulty[]).forEach(tier => {
+          (["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"] as const).forEach(tier => {
             const rawVal = parsed[tier] ?? parsed[tier.toLowerCase()] ?? parsed[tier.charAt(0) + tier.slice(1).toLowerCase()];
             const secs = parseTimeToSeconds(rawVal);
             if (secs > 0) {
@@ -3362,6 +3552,23 @@ useEffect(() => {
             }
           });
         }
+      }
+      const statsRaw = localStorage.getItem(getScopedKey("stats", effectiveUid))
+        || (effectiveUid ? localStorage.getItem(`sudoku_usr_${effectiveUid}_stats`) : null)
+        || localStorage.getItem("sudoku_stats");
+      if (statsRaw) {
+        try {
+          const pStats = JSON.parse(statsRaw);
+          if (pStats?.bestTimes && typeof pStats.bestTimes === "object") {
+            (["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"] as const).forEach(tier => {
+              if (!records[tier]) {
+                const rawVal = pStats.bestTimes[tier] ?? pStats.bestTimes[tier.toLowerCase()];
+                const secs = parseTimeToSeconds(rawVal);
+                if (secs > 0) records[tier] = secs;
+              }
+            });
+          }
+        } catch {}
       }
     } catch (e) {
       console.error("Error reading sudoku_best_times:", e);
@@ -3378,7 +3585,7 @@ useEffect(() => {
               if (!g || !g.isWon) return;
 
               const diffUpper = String(g.difficulty || "").toUpperCase();
-              if (!["EASY", "MEDIUM", "HARD", "EXPERT"].includes(diffUpper)) return;
+              if (!["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"].includes(diffUpper)) return;
               const diffKey = diffUpper as Difficulty;
 
               // Qualification rule:
@@ -3420,7 +3627,7 @@ useEffect(() => {
         if (vaultRaw) {
           const vault = JSON.parse(vaultRaw);
           if (vault && vault.bestTimes && typeof vault.bestTimes === "object") {
-            (["EASY", "MEDIUM", "HARD", "EXPERT"] as Difficulty[]).forEach(tier => {
+            (["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"] as const).forEach(tier => {
               const rawVal = vault.bestTimes[tier] ?? vault.bestTimes[tier.toLowerCase()] ?? vault.bestTimes[tier.charAt(0) + tier.slice(1).toLowerCase()];
               const secs = parseTimeToSeconds(rawVal);
               if (secs > 0) {
@@ -3434,9 +3641,12 @@ useEffect(() => {
       console.error("Error reading bestTimes from sudoku_guest_vault:", e);
     }
 
-    // 3. Immediately write back reconciled best times so they are permanently saved
+    // 3. Write back reconciled best times only if valid records exist
     try {
-      localStorage.setItem(getScopedKey("best_times"), JSON.stringify(records));
+      const hasAnyTime = Object.values(records).some(v => v !== null && v > 0);
+      if (hasAnyTime) {
+        localStorage.setItem(getScopedKey("best_times"), JSON.stringify(records));
+      }
     } catch {}
 
     return records;
@@ -3673,8 +3883,30 @@ useEffect(() => {
       personalBestTimesRef.current = updated;
       setPersonalBestTimes(updated);
       try {
+        const activeUid = (auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null)
+          || (userProfileRef.current?.isSynced && userProfileRef.current.id && !userProfileRef.current.id.startsWith("GUEST_") ? userProfileRef.current.id : null);
         localStorage.setItem("sudoku_best_times", JSON.stringify(updated));
         localStorage.setItem(getScopedKey("best_times"), JSON.stringify(updated));
+        if (activeUid) {
+          localStorage.setItem(getScopedKey("best_times", activeUid), JSON.stringify(updated));
+          localStorage.setItem(`sudoku_usr_${activeUid}_best_times`, JSON.stringify(updated));
+          const existingStatsRaw = localStorage.getItem(getScopedKey("stats", activeUid)) || localStorage.getItem(`sudoku_usr_${activeUid}_stats`);
+          let baseStats: any = {};
+          if (existingStatsRaw) {
+            try { baseStats = JSON.parse(existingStatsRaw); } catch {}
+          }
+          const updatedCompound = {
+            ...baseStats,
+            totalGamesPlayed: totalGamesPlayed,
+            gamesPlayed: totalGamesPlayed,
+            totalWinsCount: totalWinsCount,
+            gamesWon: totalWinsCount,
+            winStreak: winStreak,
+            bestTimes: updated
+          };
+          localStorage.setItem(getScopedKey("stats", activeUid), JSON.stringify(updatedCompound));
+          localStorage.setItem(`sudoku_usr_${activeUid}_stats`, JSON.stringify(updatedCompound));
+        }
         syncGuestSnapshotInRealtime({ bestTimes: updated });
       } catch {}
       setIsNewRecordAchieved(true);
@@ -3762,15 +3994,20 @@ useEffect(() => {
     winStreak?: number;
   }
 
-  const setStats = useCallback((stats: UserCareerStats) => {
+  const setStats = useCallback((stats: UserCareerStats, targetUid?: string | null) => {
+    const activeUid = targetUid || (auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null) || (userProfileRef.current?.isSynced ? userProfileRef.current.id : null);
+
     if (typeof stats.totalGamesPlayed === "number" || typeof stats.gamesPlayed === "number") {
       const gp = stats.totalGamesPlayed ?? stats.gamesPlayed ?? 0;
       setTotalGamesPlayed(gp);
       try {
         localStorage.setItem("sudoku_total_games_played", String(gp));
         localStorage.setItem("sudoku_gamesPlayed", String(gp));
-        localStorage.setItem(getScopedKey("total_games_played"), String(gp));
-        localStorage.setItem(getScopedKey("gamesPlayed"), String(gp));
+        localStorage.setItem(getScopedKey("total_games_played", activeUid), String(gp));
+        localStorage.setItem(getScopedKey("gamesPlayed", activeUid), String(gp));
+        if (activeUid && !activeUid.startsWith("GUEST_") && activeUid !== "guest") {
+          localStorage.setItem(`sudoku_usr_${activeUid}_gamesPlayed`, String(gp));
+        }
       } catch {}
     }
 
@@ -3780,8 +4017,11 @@ useEffect(() => {
       try {
         localStorage.setItem("sudoku_total_wins_count", String(gw));
         localStorage.setItem("sudoku_winsCount", String(gw));
-        localStorage.setItem(getScopedKey("total_wins_count"), String(gw));
-        localStorage.setItem(getScopedKey("winsCount"), String(gw));
+        localStorage.setItem(getScopedKey("total_wins_count", activeUid), String(gw));
+        localStorage.setItem(getScopedKey("winsCount", activeUid), String(gw));
+        if (activeUid && !activeUid.startsWith("GUEST_") && activeUid !== "guest") {
+          localStorage.setItem(`sudoku_usr_${activeUid}_winsCount`, String(gw));
+        }
       } catch {}
     }
 
@@ -3797,7 +4037,10 @@ useEffect(() => {
       personalBestTimesRef.current = loadedPB;
       try {
         localStorage.setItem("sudoku_best_times", JSON.stringify(loadedPB));
-        localStorage.setItem(getScopedKey("best_times"), JSON.stringify(loadedPB));
+        localStorage.setItem(getScopedKey("best_times", activeUid), JSON.stringify(loadedPB));
+        if (activeUid && !activeUid.startsWith("GUEST_") && activeUid !== "guest") {
+          localStorage.setItem(`sudoku_usr_${activeUid}_best_times`, JSON.stringify(loadedPB));
+        }
       } catch {}
     }
 
@@ -3805,9 +4048,43 @@ useEffect(() => {
       setWinStreak(stats.winStreak);
       try {
         localStorage.setItem("sudoku_winStreak", String(stats.winStreak));
-        localStorage.setItem(getScopedKey("winStreak"), String(stats.winStreak));
+        localStorage.setItem(getScopedKey("winStreak", activeUid), String(stats.winStreak));
+        if (activeUid && !activeUid.startsWith("GUEST_") && activeUid !== "guest") {
+          localStorage.setItem(`sudoku_usr_${activeUid}_winStreak`, String(stats.winStreak));
+        }
       } catch {}
     }
+
+    const inputHistory = (stats as any).completedGames || (stats as any).history;
+    if (Array.isArray(inputHistory)) {
+      setCompletedGames(inputHistory);
+      completedGamesRef.current = inputHistory;
+      try {
+        localStorage.setItem("sudoku_completed_games", JSON.stringify(inputHistory));
+        localStorage.setItem(getScopedKey("completed_games", activeUid), JSON.stringify(inputHistory));
+        localStorage.setItem(getScopedKey("history", activeUid), JSON.stringify(inputHistory));
+        if (activeUid && !activeUid.startsWith("GUEST_") && activeUid !== "guest") {
+          localStorage.setItem(`sudoku_usr_${activeUid}_completed_games`, JSON.stringify(inputHistory));
+          localStorage.setItem(`sudoku_usr_${activeUid}_history`, JSON.stringify(inputHistory));
+        }
+      } catch {}
+    }
+
+    try {
+      const compoundStats = {
+        gamesPlayed: stats.gamesPlayed ?? stats.totalGamesPlayed ?? 0,
+        totalGamesPlayed: stats.totalGamesPlayed ?? stats.gamesPlayed ?? 0,
+        gamesWon: stats.gamesWon ?? stats.totalWinsCount ?? 0,
+        totalWinsCount: stats.totalWinsCount ?? stats.gamesWon ?? 0,
+        bestTimes: stats.bestTimes || personalBestTimesRef.current || {},
+        winStreak: typeof stats.winStreak === "number" ? stats.winStreak : 0,
+        completedGames: inputHistory || completedGamesRef.current || []
+      };
+      localStorage.setItem(getScopedKey("stats", activeUid), JSON.stringify(compoundStats));
+      if (activeUid && !activeUid.startsWith("GUEST_") && activeUid !== "guest") {
+        localStorage.setItem(`sudoku_usr_${activeUid}_stats`, JSON.stringify(compoundStats));
+      }
+    } catch {}
   }, []);
 
   // In-memory reference of current settings state for zero-waste event-driven cloud syncing & live hydration payloads
@@ -3894,111 +4171,254 @@ useEffect(() => {
           try {
             const cachedGamesRaw = localStorage.getItem(getScopedKey("total_games_played", uid)) || localStorage.getItem(`sudoku_usr_${uid}_gamesPlayed`) || localStorage.getItem(getScopedKey("gamesPlayed", uid));
             const cachedWinsRaw = localStorage.getItem(getScopedKey("total_wins_count", uid)) || localStorage.getItem(`sudoku_usr_${uid}_winsCount`) || localStorage.getItem(getScopedKey("winsCount", uid));
-            const cachedCompletedRaw = localStorage.getItem(getScopedKey("completed_games", uid)) || localStorage.getItem(`sudoku_usr_${uid}_completed_games`);
+            const cachedCompletedRaw = localStorage.getItem(getScopedKey("completed_games", uid)) 
+              || localStorage.getItem(getScopedKey("history", uid))
+              || localStorage.getItem(`sudoku_usr_${uid}_completed_games`)
+              || localStorage.getItem(`sudoku_usr_${uid}_history`);
             const cachedBestTimesRaw = localStorage.getItem(getScopedKey("best_times", uid)) || localStorage.getItem(`sudoku_usr_${uid}_best_times`);
             const cachedWinStreakRaw = localStorage.getItem(getScopedKey("winStreak", uid)) || localStorage.getItem(`sudoku_usr_${uid}_winStreak`);
 
+            const cachedStatsRaw = localStorage.getItem(getScopedKey("stats", uid)) || localStorage.getItem(`sudoku_usr_${uid}_stats`);
+            let parsedStatsObj: any = null;
+            if (cachedStatsRaw) {
+              try { parsedStatsObj = JSON.parse(cachedStatsRaw); } catch {}
+            }
+
+            let resolvedTotalGames = 0;
             if (cachedGamesRaw !== null && !isNaN(parseInt(cachedGamesRaw, 10))) {
-              setTotalGamesPlayed(parseInt(cachedGamesRaw, 10));
+              resolvedTotalGames = parseInt(cachedGamesRaw, 10);
+            } else if (parsedStatsObj?.totalGamesPlayed || parsedStatsObj?.gamesPlayed) {
+              resolvedTotalGames = Number(parsedStatsObj.totalGamesPlayed ?? parsedStatsObj.gamesPlayed) || 0;
             }
+
+            let resolvedTotalWins = 0;
             if (cachedWinsRaw !== null && !isNaN(parseInt(cachedWinsRaw, 10))) {
-              setTotalWinsCount(parseInt(cachedWinsRaw, 10));
+              resolvedTotalWins = parseInt(cachedWinsRaw, 10);
+            } else if (parsedStatsObj?.totalWinsCount || parsedStatsObj?.wins || parsedStatsObj?.gamesWon) {
+              resolvedTotalWins = Number(parsedStatsObj.totalWinsCount ?? parsedStatsObj.wins ?? parsedStatsObj.gamesWon) || 0;
             }
+
+            let resolvedStreak = 0;
             if (cachedWinStreakRaw !== null && !isNaN(parseInt(cachedWinStreakRaw, 10))) {
-              setWinStreak(parseInt(cachedWinStreakRaw, 10));
+              resolvedStreak = parseInt(cachedWinStreakRaw, 10);
+            } else if (typeof parsedStatsObj?.winStreak === "number") {
+              resolvedStreak = parsedStatsObj.winStreak;
             }
+
+            let resolvedCompleted: CompletedGame[] = [];
             if (cachedCompletedRaw) {
-              const parsed = JSON.parse(cachedCompletedRaw);
-              if (Array.isArray(parsed)) {
-                setCompletedGames(parsed);
-                completedGamesRef.current = parsed;
-              }
+              try {
+                const parsed = JSON.parse(cachedCompletedRaw);
+                if (Array.isArray(parsed)) resolvedCompleted = parsed;
+              } catch {}
+            } else if (parsedStatsObj?.completedGames || parsedStatsObj?.history) {
+              const hist = parsedStatsObj.completedGames || parsedStatsObj.history;
+              if (Array.isArray(hist)) resolvedCompleted = hist;
             }
+
+            let resolvedPB: Record<string, number | null> = { EASY: null, MEDIUM: null, HARD: null, EXPERT: null, MASTER: null };
+            let rawOfflinePB: any = null;
             if (cachedBestTimesRaw) {
-              const parsed = JSON.parse(cachedBestTimesRaw);
-              if (parsed && typeof parsed === "object") {
-                setPersonalBestTimes(parsed);
-                personalBestTimesRef.current = parsed;
-              }
+              try {
+                const parsed = JSON.parse(cachedBestTimesRaw);
+                if (parsed && typeof parsed === "object") rawOfflinePB = parsed;
+              } catch {}
+            } else if (parsedStatsObj?.bestTimes && typeof parsedStatsObj.bestTimes === "object") {
+              rawOfflinePB = parsedStatsObj.bestTimes;
             }
+            if (rawOfflinePB) {
+              (["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"] as const).forEach(tier => {
+                const val = rawOfflinePB[tier] ?? rawOfflinePB[tier.toLowerCase()];
+                const secs = parseTimeToSeconds(val);
+                if (secs > 0) resolvedPB[tier] = secs;
+              });
+            }
+            if (resolvedCompleted.length > 0) {
+              resolvedCompleted.forEach((g: any) => {
+                if (!g) return;
+                const isWonGame = Boolean(g.isWon === true || g.result === "win" || g.outcome === "win");
+                if (!isWonGame) return;
+                const diffUpper = String(g.difficulty || "").toUpperCase();
+                if (!["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"].includes(diffUpper)) return;
+                const diffKey = diffUpper;
+                const timeSec = parseTimeToSeconds(g.timeSec ?? g.time ?? g.durationSeconds ?? g.elapsedSeconds);
+                if (timeSec > 0) {
+                  const current = resolvedPB[diffKey];
+                  if (!current || current === 0 || timeSec < current) {
+                    resolvedPB[diffKey] = timeSec;
+                  }
+                }
+              });
+            }
+
+            setTotalGamesPlayed(resolvedTotalGames);
+            setTotalWinsCount(resolvedTotalWins);
+            setWinStreak(resolvedStreak);
+            setCompletedGames(resolvedCompleted);
+            completedGamesRef.current = resolvedCompleted;
+            setPersonalBestTimes(resolvedPB);
+            personalBestTimesRef.current = resolvedPB;
+
+            // Explicitly sync individual keys in addition to compound stats
+            localStorage.setItem(getScopedKey("total_games_played", uid), String(resolvedTotalGames));
+            localStorage.setItem(getScopedKey("gamesPlayed", uid), String(resolvedTotalGames));
+            localStorage.setItem(getScopedKey("total_wins_count", uid), String(resolvedTotalWins));
+            localStorage.setItem(getScopedKey("winsCount", uid), String(resolvedTotalWins));
+            localStorage.setItem(getScopedKey("winStreak", uid), String(resolvedStreak));
+            localStorage.setItem(getScopedKey("best_times", uid), JSON.stringify(resolvedPB));
+            localStorage.setItem(getScopedKey("completed_games", uid), JSON.stringify(resolvedCompleted));
+            localStorage.setItem(getScopedKey("history", uid), JSON.stringify(resolvedCompleted));
+            localStorage.setItem(getScopedKey("stats", uid), JSON.stringify({
+              totalGamesPlayed: resolvedTotalGames,
+              gamesPlayed: resolvedTotalGames,
+              totalWinsCount: resolvedTotalWins,
+              gamesWon: resolvedTotalWins,
+              winStreak: resolvedStreak,
+              bestTimes: resolvedPB,
+              completedGames: resolvedCompleted
+            }));
           } catch {}
           currentHydratedUidRef.current = uid;
           return;
         }
 
         if (userSnap.exists()) {
-          const cloudDocData = userSnap.data();
+          const cloudDocData = userSnap.data() || {};
 
-          const cloudCompleted: CompletedGame[] = Array.isArray(cloudDocData?.completedGames)
-            ? cloudDocData.completedGames
-            : [];
+          // Read history supporting BOTH top-level & nested Firestore conventions:
+          const rawHistory = cloudDocData.completedGames 
+            || cloudDocData.history 
+            || cloudDocData.completed_games 
+            || cloudDocData.stats?.completedGames 
+            || cloudDocData.stats?.history 
+            || cloudDocData.stats?.completed_games
+            || [];
+          const cloudCompleted: CompletedGame[] = Array.isArray(rawHistory) ? rawHistory : [];
 
-          const cloudGames = typeof cloudDocData?.totalGamesPlayed === "number" 
-            ? cloudDocData.totalGamesPlayed 
-            : (typeof cloudDocData?.gamesPlayed === "number" ? cloudDocData.gamesPlayed : 0);
+          // Read Games supporting BOTH conventions:
+          const rawGames = cloudDocData.totalGamesPlayed 
+            ?? cloudDocData.gamesPlayed 
+            ?? cloudDocData.stats?.gamesPlayed 
+            ?? cloudDocData.stats?.totalGamesPlayed 
+            ?? cloudDocData.totalGames 
+            ?? cloudDocData.stats?.totalGames;
+          const cloudGames = typeof rawGames === "number" && !isNaN(rawGames) ? rawGames : (Number(rawGames) || 0);
 
-          const cloudWins = typeof cloudDocData?.totalWinsCount === "number" 
-            ? cloudDocData.totalWinsCount 
-            : (typeof cloudDocData?.gamesWon === "number" 
-              ? cloudDocData.gamesWon 
-              : (typeof cloudDocData?.winsCount === "number" ? cloudDocData.winsCount : 0));
+          // Read Wins supporting BOTH conventions:
+          const rawWins = cloudDocData.totalWinsCount 
+            ?? cloudDocData.wins 
+            ?? cloudDocData.stats?.wins 
+            ?? cloudDocData.gamesWon 
+            ?? cloudDocData.winsCount 
+            ?? cloudDocData.stats?.totalWinsCount 
+            ?? cloudDocData.stats?.gamesWon 
+            ?? cloudDocData.stats?.winsCount;
+          const cloudWins = typeof rawWins === "number" && !isNaN(rawWins) ? rawWins : (Number(rawWins) || 0);
 
-          const cloudStreak = typeof cloudDocData?.winStreak === "number" ? cloudDocData.winStreak : 0;
+          // Read Win Streak supporting BOTH conventions:
+          const rawStreak = cloudDocData.winStreak 
+            ?? cloudDocData.stats?.winStreak 
+            ?? cloudDocData.streak 
+            ?? cloudDocData.stats?.streak;
+          const cloudStreak = typeof rawStreak === "number" && !isNaN(rawStreak) ? rawStreak : (Number(rawStreak) || 0);
 
-          // Strictly derive career statistics 100% from cloud document (never merge with local guest!)
-          const finalTotalGames = Math.max(cloudGames, cloudCompleted.length);
-          const finalTotalWins = Math.max(cloudWins, cloudCompleted.filter((g: any) => g && g.isWon).length);
-          const finalWinStreak = cloudStreak;
+          // Read Best Times supporting BOTH conventions:
+          const rawBestTimes = cloudDocData.bestTimes 
+            || cloudDocData.stats?.bestTimes 
+            || cloudDocData.best_times 
+            || cloudDocData.stats?.best_times 
+            || {};
 
-          const resolvedBestTimes: Record<string, number | null> = {
-            EASY: Number(cloudDocData?.bestTimes?.EASY ?? cloudDocData?.bestTimes?.easy) || null,
-            MEDIUM: Number(cloudDocData?.bestTimes?.MEDIUM ?? cloudDocData?.bestTimes?.medium) || null,
-            HARD: Number(cloudDocData?.bestTimes?.HARD ?? cloudDocData?.bestTimes?.hard) || null,
-            EXPERT: Number(cloudDocData?.bestTimes?.EXPERT ?? cloudDocData?.bestTimes?.expert) || null,
-            MASTER: Number(cloudDocData?.bestTimes?.MASTER ?? cloudDocData?.bestTimes?.master) || null,
+          // Read local cache for this specific user to safeguard against wiping out unsynced local career stats
+          const localUserGamesRaw = localStorage.getItem(getScopedKey("total_games_played", uid))
+            || localStorage.getItem(getScopedKey("gamesPlayed", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_gamesPlayed`);
+          const localUserGames = (localUserGamesRaw !== null && !isNaN(parseInt(localUserGamesRaw, 10))) ? parseInt(localUserGamesRaw, 10) : 0;
+
+          const localUserWinsRaw = localStorage.getItem(getScopedKey("total_wins_count", uid))
+            || localStorage.getItem(getScopedKey("winsCount", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_winsCount`);
+          const localUserWins = (localUserWinsRaw !== null && !isNaN(parseInt(localUserWinsRaw, 10))) ? parseInt(localUserWinsRaw, 10) : 0;
+
+          const localUserStreakRaw = localStorage.getItem(getScopedKey("winStreak", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_winStreak`);
+          const localUserStreak = (localUserStreakRaw !== null && !isNaN(parseInt(localUserStreakRaw, 10))) ? parseInt(localUserStreakRaw, 10) : 0;
+
+          const localUserCompletedRaw = localStorage.getItem(getScopedKey("completed_games", uid))
+            || localStorage.getItem(getScopedKey("history", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_completed_games`)
+            || localStorage.getItem(`sudoku_usr_${uid}_history`);
+          let localUserCompleted: CompletedGame[] = [];
+          if (localUserCompletedRaw) {
+            try {
+              const parsed = JSON.parse(localUserCompletedRaw);
+              if (Array.isArray(parsed)) localUserCompleted = parsed;
+            } catch {}
+          }
+
+          // Merge history lists by id so any locally completed match not yet written to Firestore is retained
+          const mergedCompletedMap = new Map<string, CompletedGame>();
+          cloudCompleted.forEach(g => { if (g && g.id) mergedCompletedMap.set(g.id, g); });
+          localUserCompleted.forEach(g => { if (g && g.id && !mergedCompletedMap.has(g.id)) mergedCompletedMap.set(g.id, g); });
+          const finalCompleted = mergedCompletedMap.size > 0 ? Array.from(mergedCompletedMap.values()) : cloudCompleted;
+
+          const finalTotalGames = Math.max(cloudGames, cloudCompleted.length, localUserGames, finalCompleted.length);
+          const finalTotalWins = Math.max(cloudWins, cloudCompleted.filter((g: any) => g && g.isWon).length, localUserWins, finalCompleted.filter((g: any) => g && g.isWon).length);
+          const finalWinStreak = Math.max(cloudStreak, localUserStreak);
+
+          const parseTimeValue = (val: any): number | null => {
+            if (val === undefined || val === null) return null;
+            const parsed = parseTimeToSeconds(val);
+            return parsed > 0 ? parsed : null;
           };
 
-          // Scan STRICTLY cloudCompleted games for fastest qualifying times (never local guest completed games!)
-          cloudCompleted.forEach((g: any) => {
-            if (!g || !g.isWon) return;
+          const resolvedBestTimes: Record<string, number | null> = {
+            EASY: parseTimeValue(rawBestTimes?.EASY ?? rawBestTimes?.easy),
+            MEDIUM: parseTimeValue(rawBestTimes?.MEDIUM ?? rawBestTimes?.medium),
+            HARD: parseTimeValue(rawBestTimes?.HARD ?? rawBestTimes?.hard),
+            EXPERT: parseTimeValue(rawBestTimes?.EXPERT ?? rawBestTimes?.expert),
+            MASTER: parseTimeValue(rawBestTimes?.MASTER ?? rawBestTimes?.master),
+          };
+
+          // Scan finalCompleted games for fastest qualifying times (any winning match with valid positive duration)
+          finalCompleted.forEach((g: any) => {
+            if (!g) return;
+            const isWonGame = Boolean(g.isWon === true || g.result === "win" || g.outcome === "win");
+            if (!isWonGame) return;
+
             const diffUpper = String(g.difficulty || "").toUpperCase();
             if (!["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"].includes(diffUpper)) return;
             const diffKey = diffUpper;
 
-            const maxMistakes = Number(g.maxMistakes);
-            const mistakes = Number(g.mistakes ?? 0);
-            const isUnlimited = !isNaN(maxMistakes) && maxMistakes >= 999;
-            const isAbove3 = !isNaN(maxMistakes) && maxMistakes > 3;
-            const withinLimit = mistakes < 3;
-
-            const hintsUsed = Number(g.hints ?? g.hintsCount ?? 0);
-            const maxHints = Number(g.maxHints ?? g.maxHintsLimit ?? 3);
-            const isHintsDisqualified = hintsUsed > 3 || maxHints > 3;
-
-            if (isUnlimited || isAbove3 || !withinLimit || isHintsDisqualified) return;
-
-            const timeSec = parseTimeToSeconds(g.timeSec ?? g.time);
+            const timeSec = parseTimeToSeconds(g.timeSec ?? g.time ?? g.durationSeconds ?? g.elapsedSeconds);
             if (timeSec > 0) {
               const current = resolvedBestTimes[diffKey];
-              if (!current || timeSec < current) {
+              if (!current || current === 0 || timeSec < current) {
                 resolvedBestTimes[diffKey] = timeSec;
               }
             }
           });
 
-          // 1. Career stats via setStats
-          setStats({
+          const unpackedStats: UserCareerStats = {
             totalGamesPlayed: finalTotalGames,
+            gamesPlayed: finalTotalGames,
             totalWinsCount: finalTotalWins,
+            gamesWon: finalTotalWins,
             bestTimes: resolvedBestTimes,
             winStreak: finalWinStreak
-          });
+          };
+
+          // 1. Career stats via setStats immediately upon reading
+          setStats(unpackedStats, uid);
           setTotalGamesPlayed(finalTotalGames);
           setTotalWinsCount(finalTotalWins);
           setWinStreak(finalWinStreak);
           setPersonalBestTimes(resolvedBestTimes);
           personalBestTimesRef.current = resolvedBestTimes;
           try {
+            // Save unpacked values immediately to the user-scoped localStorage key getScopedKey('stats', uid)
+            localStorage.setItem(getScopedKey("stats", uid), JSON.stringify(unpackedStats));
+            localStorage.setItem(`sudoku_usr_${uid}_stats`, JSON.stringify(unpackedStats));
             localStorage.setItem("sudoku_best_times", JSON.stringify(resolvedBestTimes));
             localStorage.setItem(getScopedKey("best_times", uid), JSON.stringify(resolvedBestTimes));
             localStorage.setItem(`sudoku_usr_${uid}_best_times`, JSON.stringify(resolvedBestTimes));
@@ -4017,27 +4437,41 @@ useEffect(() => {
             localStorage.setItem(`sudoku_usr_${uid}_winStreak`, String(finalWinStreak));
           } catch {}
 
-          // 2. Match history (recent games) and saved boards: strictly from cloudDocData
-          setCompletedGames(cloudCompleted);
+          // 2. Match history (recent games) and saved boards: strictly from cloudDocData & local merge
+          setCompletedGames(finalCompleted);
+          completedGamesRef.current = finalCompleted;
           try {
-            localStorage.setItem("sudoku_completed_games", JSON.stringify(cloudCompleted));
-            localStorage.setItem(getScopedKey("completed_games", uid), JSON.stringify(cloudCompleted));
-            localStorage.setItem(`sudoku_usr_${uid}_completed_games`, JSON.stringify(cloudCompleted));
+            localStorage.setItem("sudoku_completed_games", JSON.stringify(finalCompleted));
+            localStorage.setItem(getScopedKey("completed_games", uid), JSON.stringify(finalCompleted));
+            localStorage.setItem(getScopedKey("history", uid), JSON.stringify(finalCompleted));
+            localStorage.setItem(`sudoku_usr_${uid}_completed_games`, JSON.stringify(finalCompleted));
+            localStorage.setItem(`sudoku_usr_${uid}_history`, JSON.stringify(finalCompleted));
           } catch {}
 
           // Self-heal Firestore document ONLY if cloud counters or cloud match times are internally desynchronized
           const hasBetterBestTimes = (["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"] as const).some(diff => {
-            const cloudVal = Number(cloudDocData?.bestTimes?.[diff] ?? cloudDocData?.bestTimes?.[diff.toLowerCase()]) || 0;
+            const cloudVal = Number(rawBestTimes?.[diff] ?? rawBestTimes?.[diff.toLowerCase()]) || 0;
             const resVal = resolvedBestTimes[diff] || 0;
             return resVal > 0 && (cloudVal === 0 || resVal < cloudVal);
           });
 
-          if (cloudGames < finalTotalGames || cloudWins < finalTotalWins || hasBetterBestTimes) {
+          if (cloudGames < finalTotalGames || cloudWins < finalTotalWins || hasBetterBestTimes || cloudCompleted.length < finalCompleted.length) {
             setDoc(userDocRef, {
               totalGamesPlayed: finalTotalGames,
+              gamesPlayed: finalTotalGames,
               totalWinsCount: finalTotalWins,
+              wins: finalTotalWins,
               winStreak: finalWinStreak,
               bestTimes: resolvedBestTimes,
+              completedGames: finalCompleted,
+              stats: {
+                gamesPlayed: finalTotalGames,
+                totalGamesPlayed: finalTotalGames,
+                wins: finalTotalWins,
+                totalWinsCount: finalTotalWins,
+                winStreak: finalWinStreak,
+                bestTimes: resolvedBestTimes,
+              },
               lastUpdated: serverTimestamp()
             }, { merge: true }).catch(() => {});
           }
@@ -4352,12 +4786,20 @@ useEffect(() => {
           // 5. Profile sync: For existing cloud accounts, strictly prefer the cloud profile name
           const currentProfile = userProfileRef.current;
           let resolvedDisplayName = "";
-          if (cloudDocData?.name && !isDefaultOrEmptyPlayerName(cloudDocData.name)) {
-            resolvedDisplayName = cloudDocData.name.trim().slice(0, 15);
-          } else if (authUser?.displayName && !isDefaultOrEmptyPlayerName(authUser.displayName)) {
-            resolvedDisplayName = authUser.displayName.trim().slice(0, 15);
-          } else if (currentProfile?.name && !isDefaultOrEmptyPlayerName(currentProfile.name)) {
+          const isGenericPlaceholder = (n?: string | null): boolean => {
+            if (!n) return true;
+            const t = n.trim();
+            return !t || t === "Anonymous" || t === "Guest" || t === "Guest Voyager" || t === "Anonymous Voyager" || t === "Guest Solver" || t === "Player";
+          };
+          const cloudCustomName = cloudDocData?.displayName || cloudDocData?.name;
+          if (cloudCustomName && !isGenericPlaceholder(cloudCustomName)) {
+            resolvedDisplayName = cloudCustomName.trim().slice(0, 15);
+          } else if (currentProfile?.name && !isGenericPlaceholder(currentProfile.name) && currentProfile.isSynced && currentProfile.id === uid) {
             resolvedDisplayName = currentProfile.name.trim().slice(0, 15);
+          } else if (authUser?.displayName && !isGenericPlaceholder(authUser.displayName)) {
+            resolvedDisplayName = authUser.displayName.trim().slice(0, 15);
+          } else if (authUser?.email && typeof authUser.email === "string" && authUser.email.includes("@")) {
+            resolvedDisplayName = authUser.email.split("@")[0].trim().slice(0, 15);
           } else {
             resolvedDisplayName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
           }
@@ -4404,7 +4846,11 @@ useEffect(() => {
           // Document does not exist in Firestore yet: initialize it with local progress
           let localCompleted: CompletedGame[] = [];
           try {
-            const stored = localStorage.getItem("sudoku_completed_games");
+            const stored = localStorage.getItem(getScopedKey("completed_games", uid))
+              || localStorage.getItem(getScopedKey("history", uid))
+              || localStorage.getItem(`sudoku_usr_${uid}_completed_games`)
+              || localStorage.getItem(`sudoku_usr_${uid}_history`)
+              || localStorage.getItem("sudoku_completed_games");
             if (stored) {
               const parsed = JSON.parse(stored);
               if (Array.isArray(parsed)) localCompleted = parsed;
@@ -4412,24 +4858,41 @@ useEffect(() => {
           } catch {}
 
           const localTotalGames = Math.max(
+            Number(localStorage.getItem(getScopedKey("total_games_played", uid)) || 0),
+            Number(localStorage.getItem(getScopedKey("gamesPlayed", uid)) || 0),
+            Number(localStorage.getItem(`sudoku_usr_${uid}_gamesPlayed`) || 0),
             Number(localStorage.getItem("sudoku_total_games_played") || 0),
             Number(localStorage.getItem("sudoku_gamesPlayed") || 0),
             localCompleted.length
           );
 
           const localTotalWins = Math.max(
+            Number(localStorage.getItem(getScopedKey("total_wins_count", uid)) || 0),
+            Number(localStorage.getItem(getScopedKey("winsCount", uid)) || 0),
+            Number(localStorage.getItem(`sudoku_usr_${uid}_winsCount`) || 0),
             Number(localStorage.getItem("sudoku_total_wins_count") || 0),
             Number(localStorage.getItem("sudoku_winsCount") || 0),
             localCompleted.filter((g: any) => g && g.isWon).length
           );
 
-          const localWinStreak = Number(localStorage.getItem("sudoku_winStreak") || 0);
+          const localWinStreak = Math.max(
+            Number(localStorage.getItem(getScopedKey("winStreak", uid)) || 0),
+            Number(localStorage.getItem(`sudoku_usr_${uid}_winStreak`) || 0),
+            Number(localStorage.getItem("sudoku_winStreak") || 0)
+          );
 
           const currentProfile = userProfileRef.current;
           let resolvedDisplayName = "";
-          if (authUser?.displayName && !isDefaultOrEmptyPlayerName(authUser.displayName)) {
+          const isGenericPlaceholderNew = (n?: string | null): boolean => {
+            if (!n) return true;
+            const t = n.trim();
+            return !t || t === "Anonymous" || t === "Guest" || t === "Guest Voyager" || t === "Anonymous Voyager" || t === "Guest Solver" || t === "Player";
+          };
+          if (authUser?.displayName && !isGenericPlaceholderNew(authUser.displayName)) {
             resolvedDisplayName = authUser.displayName.trim().slice(0, 15);
-          } else if (currentProfile?.name && !isDefaultOrEmptyPlayerName(currentProfile.name)) {
+          } else if (authUser?.email && typeof authUser.email === "string" && authUser.email.includes("@")) {
+            resolvedDisplayName = authUser.email.split("@")[0].trim().slice(0, 15);
+          } else if (currentProfile?.name && !isGenericPlaceholderNew(currentProfile.name) && currentProfile.isSynced && currentProfile.id === uid) {
             resolvedDisplayName = currentProfile.name.trim().slice(0, 15);
           } else {
             resolvedDisplayName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
@@ -4543,10 +5006,26 @@ useEffect(() => {
             totalWinsCount: localTotalWins,
             winStreak: localWinStreak,
             bestTimes: personalBestTimesRef.current
-          });
+          }, uid);
           setCompletedGames(localCompleted);
           try {
+            localStorage.setItem(getScopedKey("total_games_played", uid), String(localTotalGames));
+            localStorage.setItem(getScopedKey("gamesPlayed", uid), String(localTotalGames));
+            localStorage.setItem(getScopedKey("total_wins_count", uid), String(localTotalWins));
+            localStorage.setItem(getScopedKey("winsCount", uid), String(localTotalWins));
+            localStorage.setItem(getScopedKey("winStreak", uid), String(localWinStreak));
+            localStorage.setItem(getScopedKey("best_times", uid), JSON.stringify(personalBestTimesRef.current));
             localStorage.setItem(getScopedKey("completed_games", uid), JSON.stringify(localCompleted));
+            localStorage.setItem(getScopedKey("history", uid), JSON.stringify(localCompleted));
+            localStorage.setItem(getScopedKey("stats", uid), JSON.stringify({
+              totalGamesPlayed: localTotalGames,
+              gamesPlayed: localTotalGames,
+              totalWinsCount: localTotalWins,
+              gamesWon: localTotalWins,
+              winStreak: localWinStreak,
+              bestTimes: personalBestTimesRef.current,
+              completedGames: localCompleted
+            }));
           } catch {}
 
           // Preserve the offline guest vault and drawer so returning/new Google sessions
@@ -4587,61 +5066,71 @@ useEffect(() => {
           const existingStored = localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile");
           const vaultRaw = localStorage.getItem("sudoku_guest_vault");
           let guestProfile: any = null;
+          let hasSyncedUser = false;
 
           if (existingStored) {
-            const parsed = JSON.parse(existingStored);
-            if (parsed && (parsed.id?.startsWith("GUEST_") || !parsed.isSynced)) {
-              guestProfile = parsed;
-            }
-          }
-          if (!guestProfile && vaultRaw) {
-            const vault = JSON.parse(vaultRaw);
-            if (vault?.userProfile) guestProfile = vault.userProfile;
-          }
-          if (!guestProfile) {
-            const drawerStored = localStorage.getItem("sudoku_guest_userProfile");
-            if (drawerStored) {
-              const parsed = JSON.parse(drawerStored);
-              if (parsed?.id) guestProfile = parsed;
-            }
+            try {
+              const parsed = JSON.parse(existingStored);
+              if (parsed && parsed.isSynced && parsed.id && !parsed.id.startsWith("GUEST_") && parsed.id !== "GUEST") {
+                hasSyncedUser = true;
+              } else if (parsed && (parsed.id?.startsWith("GUEST_") || !parsed.isSynced)) {
+                guestProfile = parsed;
+              }
+            } catch {}
           }
 
-          if (guestProfile && guestProfile.id) {
-            const rawName = (guestProfile.name || "").trim();
-            const genericNames = ["Anonymous", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Guest"];
-            const safeName = (!rawName || genericNames.includes(rawName))
-              ? `Pro_${Math.floor(1000 + Math.random() * 9000)}`
-              : rawName.slice(0, 15);
-            const resolvedGuest = {
-              ...guestProfile,
-              name: safeName,
-              isSynced: false
-            };
-            setUserProfile(resolvedGuest);
-            userProfileRef.current = resolvedGuest;
-            try {
-              localStorage.setItem("sudoku_userProfile", JSON.stringify(resolvedGuest));
-              localStorage.setItem("sudoku_user_profile", JSON.stringify(resolvedGuest));
-              localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(resolvedGuest));
-            } catch {}
-          } else {
-            const freshGuestId = "GUEST_" + Math.floor(1000 + Math.random() * 9000);
-            const freshName = `Pro_${freshGuestId.split("_")[1]}`;
-            const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
-            const randColor = colors[Math.floor(Math.random() * colors.length)];
-            const cleanGuest = {
-              id: freshGuestId,
-              name: freshName,
-              avatarColor: randColor,
-              isSynced: false
-            };
-            setUserProfile(cleanGuest);
-            userProfileRef.current = cleanGuest;
-            try {
-              localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuest));
-              localStorage.setItem("sudoku_user_profile", JSON.stringify(cleanGuest));
-              localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(cleanGuest));
-            } catch {}
+          // If there is an active synced user profile in storage and logout wasn't triggered,
+          // do not overwrite the user's profile with guest persona while Firebase auth initializes.
+          if (!hasSyncedUser) {
+            if (!guestProfile && vaultRaw) {
+              const vault = JSON.parse(vaultRaw);
+              if (vault?.userProfile) guestProfile = vault.userProfile;
+            }
+            if (!guestProfile) {
+              const drawerStored = localStorage.getItem("sudoku_guest_userProfile");
+              if (drawerStored) {
+                const parsed = JSON.parse(drawerStored);
+                if (parsed?.id) guestProfile = parsed;
+              }
+            }
+
+            if (guestProfile && guestProfile.id) {
+              const rawName = (guestProfile.name || "").trim();
+              const genericNames = ["Anonymous", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Guest"];
+              const safeName = (!rawName || genericNames.includes(rawName))
+                ? `Pro_${Math.floor(1000 + Math.random() * 9000)}`
+                : rawName.slice(0, 15);
+              const resolvedGuest = {
+                ...guestProfile,
+                name: safeName,
+                isSynced: false
+              };
+              setUserProfile(resolvedGuest);
+              userProfileRef.current = resolvedGuest;
+              try {
+                localStorage.setItem("sudoku_userProfile", JSON.stringify(resolvedGuest));
+                localStorage.setItem("sudoku_user_profile", JSON.stringify(resolvedGuest));
+                localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(resolvedGuest));
+              } catch {}
+            } else {
+              const freshGuestId = "GUEST_" + Math.floor(1000 + Math.random() * 9000);
+              const freshName = `Pro_${freshGuestId.split("_")[1]}`;
+              const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
+              const randColor = colors[Math.floor(Math.random() * colors.length)];
+              const cleanGuest = {
+                id: freshGuestId,
+                name: freshName,
+                avatarColor: randColor,
+                isSynced: false
+              };
+              setUserProfile(cleanGuest);
+              userProfileRef.current = cleanGuest;
+              try {
+                localStorage.setItem("sudoku_userProfile", JSON.stringify(cleanGuest));
+                localStorage.setItem("sudoku_user_profile", JSON.stringify(cleanGuest));
+                localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(cleanGuest));
+              } catch {}
+            }
           }
         } catch (e) {
           console.warn("[Auth] Fallback guest profile recovery error:", e);
@@ -4655,52 +5144,97 @@ useEffect(() => {
         setIsAuthHydrating(false);
 
         const curProfile = userProfileRef.current;
-        const genericNames = ["Anonymous", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Guest"];
-        if (!curProfile || !curProfile.name || genericNames.includes(curProfile.name.trim())) {
-          const safeName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
-          const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
-          const randColor = colors[Math.floor(Math.random() * colors.length)];
-          const sanitizedProfile = {
-            id: curProfile?.id || ("GUEST_" + Math.floor(1000 + Math.random() * 9000)),
-            name: safeName,
-            avatarColor: curProfile?.avatarColor || randColor,
-            isSynced: false
-          };
-          setUserProfile(sanitizedProfile);
-          userProfileRef.current = sanitizedProfile;
-          try {
-            localStorage.setItem("sudoku_userProfile", JSON.stringify(sanitizedProfile));
-            localStorage.setItem("sudoku_user_profile", JSON.stringify(sanitizedProfile));
-            localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(sanitizedProfile));
-          } catch {}
+        if (!curProfile?.isSynced) {
+          const genericNames = ["Anonymous", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Guest"];
+          if (!curProfile || !curProfile.name || genericNames.includes(curProfile.name.trim())) {
+            const safeName = `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
+            const colors = ["#8B5CF6", "#EC4899", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#6366F1", "#14B8A6", "#06B6D4", "#D946EF"];
+            const randColor = colors[Math.floor(Math.random() * colors.length)];
+            const sanitizedProfile = {
+              id: curProfile?.id || ("GUEST_" + Math.floor(1000 + Math.random() * 9000)),
+              name: safeName,
+              avatarColor: curProfile?.avatarColor || randColor,
+              isSynced: false
+            };
+            setUserProfile(sanitizedProfile);
+            userProfileRef.current = sanitizedProfile;
+            try {
+              localStorage.setItem("sudoku_userProfile", JSON.stringify(sanitizedProfile));
+              localStorage.setItem("sudoku_user_profile", JSON.stringify(sanitizedProfile));
+              localStorage.setItem("sudoku_guest_userProfile", JSON.stringify(sanitizedProfile));
+            } catch {}
+          }
         }
       } else if (user && !user.isAnonymous) {
         setGuestNamespaceLock(false);
         setIsAuthHydrating(true);
-        // --- 0ms SYNCHRONOUS LOCAL CACHE HYDRATION ---
+        // --- 0ms SYNCHRONOUS LOCAL CACHE HYDRATION (STEP A) ---
         // Instantly populate the user's isolated local drawer before or while network Firestore loads
         try {
           const uid = user.uid;
+          try {
+            localStorage.setItem("sudoku_last_auth_uid", uid);
+          } catch {}
 
           // 1. User Profile Cache
+          let existingProfileObj: any = null;
+          const isGenericName = (n?: string | null): boolean => {
+            if (!n) return true;
+            const t = n.trim();
+            return !t || t === "Anonymous" || t === "Guest" || t === "Guest Voyager" || t === "Anonymous Voyager" || t === "Guest Solver" || t === "Player";
+          };
+
           const cachedProfileRaw = localStorage.getItem(getScopedKey("userProfile", uid))
             || localStorage.getItem(`sudoku_usr_${uid}_userProfile`);
           if (cachedProfileRaw) {
             try {
               const parsedProfile = JSON.parse(cachedProfileRaw);
-              if (parsedProfile && parsedProfile.id) {
-                setUserProfile(parsedProfile);
-                userProfileRef.current = parsedProfile;
+              if (parsedProfile && parsedProfile.id) existingProfileObj = parsedProfile;
+            } catch {}
+          }
+          if (!existingProfileObj) {
+            try {
+              const globalStored = localStorage.getItem("sudoku_userProfile") || localStorage.getItem("sudoku_user_profile");
+              if (globalStored) {
+                const parsed = JSON.parse(globalStored);
+                if (parsed && (parsed.id === uid || parsed.isSynced)) existingProfileObj = parsed;
               }
             } catch {}
-          } else if (user.displayName || user.email) {
-            setUserProfile(prev => ({
-              ...(prev || { avatarColor: "#8B5CF6" }),
+          }
+          if (!existingProfileObj && userProfileRef.current?.id === uid) {
+            existingProfileObj = userProfileRef.current;
+          }
+
+          if (existingProfileObj && !isGenericName(existingProfileObj.name)) {
+            const preservedProfile = {
+              ...existingProfileObj,
               id: uid,
-              name: (user.displayName || prev?.name || "Player").trim().slice(0, 15),
-              email: user.email || prev?.email,
-              isSynced: true
-            }));
+              isSynced: true,
+              email: user.email || existingProfileObj.email || undefined
+            };
+            setUserProfile(preservedProfile);
+            userProfileRef.current = preservedProfile;
+            try {
+              localStorage.setItem("sudoku_userProfile", JSON.stringify(preservedProfile));
+              localStorage.setItem("sudoku_user_profile", JSON.stringify(preservedProfile));
+              localStorage.setItem(getScopedKey("userProfile", uid), JSON.stringify(preservedProfile));
+            } catch {}
+          } else if (user.displayName || user.email) {
+            const resolvedName = (user.displayName || (user.email ? user.email.split("@")[0] : "Player")).trim().slice(0, 15);
+            const freshProfile = {
+              id: uid,
+              name: resolvedName,
+              avatarColor: existingProfileObj?.avatarColor || userProfileRef.current?.avatarColor || "#8B5CF6",
+              isSynced: true,
+              email: user.email || undefined
+            };
+            setUserProfile(freshProfile);
+            userProfileRef.current = freshProfile;
+            try {
+              localStorage.setItem("sudoku_userProfile", JSON.stringify(freshProfile));
+              localStorage.setItem("sudoku_user_profile", JSON.stringify(freshProfile));
+              localStorage.setItem(getScopedKey("userProfile", uid), JSON.stringify(freshProfile));
+            } catch {}
           }
 
           // 2. Games Played Cache
@@ -4725,7 +5259,9 @@ useEffect(() => {
 
           // 4. Completed Games History Cache
           const cachedCompletedRaw = localStorage.getItem(getScopedKey("completed_games", uid))
-            || localStorage.getItem(`sudoku_usr_${uid}_completed_games`);
+            || localStorage.getItem(getScopedKey("history", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_completed_games`)
+            || localStorage.getItem(`sudoku_usr_${uid}_history`);
           let cachedCompleted: CompletedGame[] | null = null;
           if (cachedCompletedRaw) {
             try {
@@ -4752,6 +5288,36 @@ useEffect(() => {
           if (cachedWinStreakRaw !== null) {
             const val = parseInt(cachedWinStreakRaw, 10);
             if (!isNaN(val) && val >= 0) cachedWinStreak = val;
+          }
+
+          // 6b. Compound Stats Cache Fallback
+          const cachedStatsRaw = localStorage.getItem(getScopedKey("stats", uid))
+            || localStorage.getItem(`sudoku_usr_${uid}_stats`);
+          if (cachedStatsRaw) {
+            try {
+              const parsedStats = JSON.parse(cachedStatsRaw);
+              if (parsedStats && typeof parsedStats === "object") {
+                if (cachedGamesPlayed === null) {
+                  const gp = parsedStats.totalGamesPlayed ?? parsedStats.gamesPlayed;
+                  if (typeof gp === "number" && !isNaN(gp) && gp >= 0) cachedGamesPlayed = gp;
+                }
+                if (cachedWinsCount === null) {
+                  const gw = parsedStats.totalWinsCount ?? parsedStats.wins ?? parsedStats.gamesWon;
+                  if (typeof gw === "number" && !isNaN(gw) && gw >= 0) cachedWinsCount = gw;
+                }
+                if (cachedWinStreak === null) {
+                  const ws = parsedStats.winStreak ?? parsedStats.streak;
+                  if (typeof ws === "number" && !isNaN(ws) && ws >= 0) cachedWinStreak = ws;
+                }
+                if (cachedBestTimes === null && parsedStats.bestTimes && typeof parsedStats.bestTimes === "object") {
+                  cachedBestTimes = parsedStats.bestTimes;
+                }
+                if (cachedCompleted === null && (Array.isArray(parsedStats.completedGames) || Array.isArray(parsedStats.history))) {
+                  const hist = parsedStats.completedGames || parsedStats.history;
+                  if (Array.isArray(hist)) cachedCompleted = hist;
+                }
+              }
+            } catch {}
           }
 
           // Apply cached values immediately if any exist for this uid
@@ -4781,6 +5347,28 @@ useEffect(() => {
             personalBestTimesRef.current = cachedBestTimes;
           }
 
+          // Synchronously persist resolved individual keys back to localStorage
+          try {
+            if (cachedGamesPlayed !== null) {
+              localStorage.setItem(getScopedKey("total_games_played", uid), String(cachedGamesPlayed));
+              localStorage.setItem(getScopedKey("gamesPlayed", uid), String(cachedGamesPlayed));
+            }
+            if (cachedWinsCount !== null) {
+              localStorage.setItem(getScopedKey("total_wins_count", uid), String(cachedWinsCount));
+              localStorage.setItem(getScopedKey("winsCount", uid), String(cachedWinsCount));
+            }
+            if (cachedWinStreak !== null) {
+              localStorage.setItem(getScopedKey("winStreak", uid), String(cachedWinStreak));
+            }
+            if (cachedBestTimes !== null) {
+              localStorage.setItem(getScopedKey("best_times", uid), JSON.stringify(cachedBestTimes));
+            }
+            if (cachedCompleted !== null) {
+              localStorage.setItem(getScopedKey("completed_games", uid), JSON.stringify(cachedCompleted));
+              localStorage.setItem(getScopedKey("history", uid), JSON.stringify(cachedCompleted));
+            }
+          } catch {}
+
           // 7. Theme Cache: 0ms synchronous local cache hydration for authenticated user
           const cachedActiveTheme = localStorage.getItem(getScopedKey("activeTheme", uid))
             || localStorage.getItem(`sudoku_usr_${uid}_activeTheme`);
@@ -4805,8 +5393,9 @@ useEffect(() => {
               totalGamesPlayed: cachedGamesPlayed ?? undefined,
               totalWinsCount: cachedWinsCount ?? undefined,
               winStreak: cachedWinStreak ?? undefined,
-              bestTimes: cachedBestTimes || undefined
-            });
+              bestTimes: cachedBestTimes || undefined,
+              completedGames: cachedCompleted || undefined
+            }, uid);
           }
         } catch (fastHydrateErr) {
           console.warn("[Auth] Fast local cache hydration error in onAuthStateChanged:", fastHydrateErr);
@@ -5098,10 +5687,6 @@ useEffect(() => {
         });
       }
 
-      if (!credentialUser) {
-        credentialUser = (await signInAnonymously(auth)).user;
-      }
-
       if (loginCancelledRef.current) {
         console.log("[Auth] Google Sign-In was cancelled prior to auth trigger.");
         return;
@@ -5126,7 +5711,7 @@ useEffect(() => {
 
         const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
 
-        if (credentialUser.isAnonymous) {
+        if (credentialUser && credentialUser.isAnonymous) {
           try {
             finalUser = (await linkWithCredential(credentialUser, credential)).user;
           } catch (linkError: any) {
@@ -5154,8 +5739,18 @@ useEffect(() => {
           prompt: "select_account"
         });
 
-        const signInResult = await signInWithPopup(auth, provider);
-        finalUser = signInResult.user;
+        // Direct synchronous popup launch preserving user gesture context
+        try {
+          const signInResult = await signInWithPopup(auth, provider);
+          finalUser = signInResult.user;
+        } catch (popupErr: any) {
+          if (popupErr?.code === "auth/popup-blocked") {
+            console.warn("[Auth] Popup blocked by browser policy, falling back to signInWithRedirect");
+            await signInWithRedirect(auth, provider);
+            return;
+          }
+          throw popupErr;
+        }
       }
 
       if (loginCancelledRef.current) {
@@ -5168,10 +5763,6 @@ useEffect(() => {
         clearTimeout(loginTimeoutRef.current);
         loginTimeoutRef.current = null;
       }
-
-      // Promptly unblock UI as soon as Google authentication is verified
-      isConnectingRef.current = false;
-      setIsConnectingGoogle(false);
 
       if (finalUser && finalUser.email) {
         addLog(`🔒 Connected Google Account: ${finalUser.email}`);
@@ -5186,7 +5777,7 @@ useEffect(() => {
           console.warn("[Auth] Failed to check existing user doc:", fetchErr);
         }
 
-        const isReturningUser = Boolean(existingUserDoc?.exists() && existingUserDoc?.data()?.name);
+        const isReturningUser = Boolean(existingUserDoc?.exists());
 
         // Airtight Dual-Vault Isolation: The guest vault and offline drawer are preserved intact,
         // allowing the guest profile and offline history to be seamlessly restored upon logout.
@@ -5194,12 +5785,13 @@ useEffect(() => {
         // If Returning User: strictly load the Google cloud profile. Zero data/name push from local guest into Google Firestore.
         if (isReturningUser) {
           const cloudData = existingUserDoc.data();
+          const cloudCustomName = cloudData?.displayName || cloudData?.name;
           const returningProfile = {
             id: finalUser.uid,
-            name: (cloudData.name || finalUser.displayName || "Pro_Player").trim().slice(0, 15),
-            avatarColor: cloudData.avatarColor || "#8B5CF6",
+            name: (cloudCustomName || finalUser.displayName || (finalUser.email ? finalUser.email.split("@")[0] : "Player")).trim().slice(0, 15),
+            avatarColor: cloudData?.avatarColor || "#8B5CF6",
             isSynced: true,
-            email: finalUser.email || cloudData.email || undefined
+            email: finalUser.email || cloudData?.email || undefined
           };
           setUserProfile(returningProfile);
           userProfileRef.current = returningProfile;
@@ -5268,7 +5860,12 @@ useEffect(() => {
           })().catch((err) => console.warn("[Auth] Background guest migration notice:", err));
         }
 
-        // Cloud hydration is owned exclusively by the reactive onAuthStateChanged listener as single source of truth
+        // Await full cloud hydration so all Firestore reads (profile, stats, settings, friends) commit to localStorage
+        try {
+          await hydrateUserFromCloudRef.current(finalUser.uid, finalUser, true);
+        } catch (hErr) {
+          console.warn("[Auth] Cloud hydration wait notice in handleConnectGoogle:", hErr);
+        }
       }
     } catch (err: any) {
       if (loginCancelledRef.current) {
@@ -5368,6 +5965,7 @@ useEffect(() => {
         "sudoku_winStreak",
         "sudoku_prior_guest_id",
         "sudoku_is_display_name_configured",
+        "sudoku_last_auth_uid",
         "sudoku_userProfile",
         "sudoku_user_profile",
         "sudoku_activeTheme",
@@ -6378,12 +6976,15 @@ useEffect(() => {
   // Sync settings states to localStorage (guarded against clearing during unhydrated initial mount)
   useEffect(() => {
     if (isAuthHydrating) return;
-    if (completedGames.length === 0 && (totalGamesPlayed > 0 || totalWinsCount > 0)) return;
+    // Guard against overwriting cumulative counters with smaller completedGames array length or zero on mount
+    const effectiveWins = Math.max(totalWinsCount, winsCount);
+    const effectiveGames = Math.max(totalGamesPlayed, gamesPlayed);
+    if (effectiveGames === 0 && effectiveWins === 0) return;
     try {
-      localStorage.setItem("sudoku_winsCount", String(winsCount));
-      localStorage.setItem("sudoku_gamesPlayed", String(gamesPlayed));
+      localStorage.setItem("sudoku_winsCount", String(effectiveWins));
+      localStorage.setItem("sudoku_gamesPlayed", String(effectiveGames));
     } catch {}
-  }, [winsCount, gamesPlayed, isAuthHydrating, totalGamesPlayed, totalWinsCount, completedGames.length]);
+  }, [winsCount, gamesPlayed, isAuthHydrating, totalGamesPlayed, totalWinsCount]);
 
   useEffect(() => {
     const authUser = auth.currentUser;
@@ -7161,6 +7762,8 @@ useEffect(() => {
       passwordOverride?: string;
       isDirectInvite?: boolean;
       preloadedRoomData?: any;
+      targetUid?: string;
+      toUserId?: string;
     }
   ): Promise<{ success: boolean; error?: string }> => {
     // 1. Extract canonical 6-digit roomCode
@@ -7184,16 +7787,59 @@ useEffect(() => {
       return { success: false, error: "Please enter a valid 6-digit room code." };
     }
 
-    setIsJoiningRoomLoading(true);
-    try {
-      // 2. Update Firestore invite status if doc ID provided
-    if (options?.inviteDocId) {
-      try {
-        await updateDoc(doc(db, "invites", options.inviteDocId), { status: "accepted" });
-      } catch (err) {
-        console.error("[Firestore] Failed to update invite to accepted:", err);
+    // TARGET ROSTER GUARD: Validate intended recipient if direct targeted invite
+    const currentAuthUid = auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null;
+    const currentProfileId = userProfileRef.current?.id || userProfile?.id;
+    const activePersonaId = currentAuthUid || currentProfileId;
+
+    const expectedTargetUid = options?.targetUid || options?.toUserId;
+    if (expectedTargetUid) {
+      const isTargetMatch = Boolean(
+        (currentAuthUid && currentAuthUid === expectedTargetUid) ||
+        (currentProfileId && currentProfileId === expectedTargetUid)
+      );
+      if (!isTargetMatch) {
+        console.warn(`[RosterGuard] Blocked direct join: room ${roomCode} was targeted to ${expectedTargetUid}, but active persona is ${activePersonaId}`);
+        showToast("This invite is for another account");
+        return { success: false, error: "This invite is for another account" };
       }
     }
+
+    // DEDUPLICATION LOCK: Prevent multiple entry points (Capacitor, URL router) from double-mounting the puzzle within 2 seconds
+    const now = Date.now();
+    if (isJoiningRoomRef.current || (lastJoinedRoomRef.current?.code === roomCode && (now - lastJoinedRoomRef.current.timestamp < 2000))) {
+      console.log(`[RosterGuard/Dedup] Suppressed duplicate join for room ${roomCode} within transition window.`);
+      return { success: true };
+    }
+
+    isJoiningRoomRef.current = true;
+    lastJoinedRoomRef.current = { code: roomCode, timestamp: now };
+    setIsJoiningRoomLoading(true);
+    try {
+      // 2. Validate & Update Firestore invite status if doc ID provided
+      if (options?.inviteDocId) {
+        try {
+          const inviteSnap = await getDoc(doc(db, "invites", options.inviteDocId));
+          if (inviteSnap.exists()) {
+            const invData = inviteSnap.data();
+            const targetRecipient = invData.toUserId || invData.recipientId;
+            if (targetRecipient) {
+              const isTargetMatch = Boolean(
+                (currentAuthUid && currentAuthUid === targetRecipient) ||
+                (currentProfileId && currentProfileId === targetRecipient)
+              );
+              if (!isTargetMatch) {
+                console.warn(`[RosterGuard] Blocked join: invite ${options.inviteDocId} targeted to ${targetRecipient}, active is ${activePersonaId}`);
+                showToast("This invite is for another account");
+                return { success: false, error: "This invite is for another account" };
+              }
+            }
+          }
+          await updateDoc(doc(db, "invites", options.inviteDocId), { status: "accepted" });
+        } catch (err) {
+          console.error("[Firestore] Failed to validate/update invite:", err);
+        }
+      }
 
     // 3. Read canonical session document from Firestore (/rooms/{roomCode}) or use preloaded
     let rData = options?.preloadedRoomData;
@@ -7378,6 +8024,9 @@ useEffect(() => {
       return { success: false, error: err?.message || "Failed to connect to room." };
     } finally {
       setIsJoiningRoomLoading(false);
+      setTimeout(() => {
+        isJoiningRoomRef.current = false;
+      }, 500);
     }
   };
 
@@ -7386,24 +8035,35 @@ useEffect(() => {
     inviteDocId?: string,
     passwordOverride?: string,
     isDirectInvite = false,
-    preloadedRoomData?: any
+    preloadedRoomData?: any,
+    targetUid?: string
   ) => {
+    const cleanCode = sanitizeGameId(targetGameId);
+    const now = Date.now();
+    if (isJoiningRoomRef.current || (cleanCode && lastJoinedRoomRef.current?.code === cleanCode && (now - lastJoinedRoomRef.current.timestamp < 2000))) {
+      console.log(`[Dedup] Suppressed duplicate handleAcceptAndLaunchInvite for room ${cleanCode}`);
+      return;
+    }
     playClickSound();
     const res = await executeJoinRoom(targetGameId, {
       inviteDocId,
       passwordOverride,
       isDirectInvite,
-      preloadedRoomData
+      preloadedRoomData,
+      targetUid
     });
     if (!res.success && res.error) {
-      showToast(`❌ ${res.error}`);
+      if (res.error !== "This invite is for another account") {
+        showToast(`❌ ${res.error}`);
+      }
       navigateToScreen("home");
     }
   };
 
   const handleAcceptAndPlayBellInvite = async (challenge: PendingChallenge) => {
     const code = String(challenge.seed || challenge.id).padStart(6, '0').slice(-6);
-    await handleAcceptAndLaunchInvite(code, challenge.inviteId, challenge.password, true);
+    const targetRecipient = (challenge as any).toUserId || (challenge as any).recipientId;
+    await handleAcceptAndLaunchInvite(code, challenge.inviteId, challenge.password, true, undefined, targetRecipient);
   };
 
   const handleDeclineBellInvite = async (challenge: PendingChallenge) => {
@@ -7433,7 +8093,20 @@ useEffect(() => {
     showToast(t("challengeDeclinedToast"));
   };
 
+  const isViewingResultsRef = useRef<boolean>(false);
+  useEffect(() => {
+    isViewingResultsRef.current = showGameOverModal || Boolean(viewingRankingsGame);
+  }, [showGameOverModal, viewingRankingsGame]);
+
   const handleViewChallengeResults = async (roomCode: string, forceOpenModal = false) => {
+    const rawCode = String(roomCode || "").trim();
+    const now = Date.now();
+    if (lastViewResultsTimeRef.current && lastViewResultsTimeRef.current.code === rawCode && (now - lastViewResultsTimeRef.current.timestamp < 2000)) {
+      console.log(`[Dedup] Suppressed duplicate handleViewChallengeResults for ${rawCode}`);
+      return;
+    }
+    lastViewResultsTimeRef.current = { code: rawCode, timestamp: now };
+    isViewingResultsRef.current = true;
     playClickSound();
     setActiveInviteNotification(null);
     setIsDockingToBell(false);
@@ -7441,7 +8114,6 @@ useEffect(() => {
     if (!roomCode || typeof roomCode !== "string") return;
 
     // Validate and extract 6-digit canonical room code
-    const rawCode = String(roomCode).trim();
     const match6 = rawCode.match(/\b\d{6}\b/);
     let cleanRoomCode = "";
     if (match6) {
@@ -7458,6 +8130,12 @@ useEffect(() => {
     if (!cleanRoomCode || cleanRoomCode.startsWith("sw-completed-") || cleanRoomCode.startsWith("push-")) {
       console.warn("[Results] Cannot view results: invalid or non-numeric roomCode", roomCode);
       showToast(t("matchRoomNotFoundToast"));
+      return;
+    }
+
+    // If results modal is already active for this room, skip redundant room fetch cascade
+    if (showGameOverModal && activeGameId === cleanRoomCode) {
+      console.log(`[Results] GameOverModal already active for room ${cleanRoomCode}. Skipped redundant fetch cascade.`);
       return;
     }
 
@@ -7814,8 +8492,12 @@ useEffect(() => {
                   sentAt: Date.now()
                 };
 
+                let isAlreadyKnown = false;
                 setPendingChallenges(prev => {
-                  if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId)) return prev;
+                  if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId || (completedItem.roomCode && p.roomCode === completedItem.roomCode && p.type === 'challenge_completed'))) {
+                    isAlreadyKnown = true;
+                    return prev;
+                  }
                   const updated = [completedItem, ...prev].slice(0, 10);
                   try {
                     localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
@@ -7823,9 +8505,14 @@ useEffect(() => {
                   return updated;
                 });
 
+                if (isAlreadyKnown) {
+                  console.log(`[Push] Suppressed redundant challenge_completed foreground push for ${targetCode} (already recorded by Firestore listener).`);
+                  return;
+                }
+
                 if (isSuppressed) {
-                  console.log(`[Push] Suppressed intrusive toast banner for room: ${targetCode} (on game screen or results open). Subtle bell reaction.`);
-                  triggerBellWiggle(true);
+                  console.log(`[Push] Suppressed intrusive toast banner for room: ${targetCode} (on game screen or results open). Silent drawer/badge reaction.`);
+                  triggerBellWiggle(false);
                   return;
                 }
 
@@ -7865,26 +8552,41 @@ useEffect(() => {
                   senderName: senderName || "Player",
                   fromName: senderName || "Player",
                   fromUserId: (notification.data as any)?.fromUserId || (notification.data as any)?.senderId,
+                  toUserId: (notification.data as any)?.toUserId || (notification.data as any)?.targetUid,
+                  targetUid: (notification.data as any)?.targetUid || (notification.data as any)?.toUserId,
                   gameId: inviteCode,
                   roomCode: inviteCode,
                   password: password || "",
                   sentAt: Date.now()
                 };
+
+                let isAlreadyKnown = false;
                 setPendingChallenges(prev => {
-                  if (prev.some(p => p.id === inviteCode || p.inviteId === inviteId)) return prev;
+                  if (prev.some(p => p.id === inviteCode || p.inviteId === inviteId || ((notification.data as any)?.inviteId && p.inviteId === (notification.data as any).inviteId))) {
+                    isAlreadyKnown = true;
+                    return prev;
+                  }
                   const updated = [inviteObj as any, ...prev].slice(0, 10);
                   try {
                     localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
                   } catch (e) {}
                   return updated;
                 });
+
+                if (isAlreadyKnown) {
+                  console.log(`[Push] Suppressed redundant foreground push invite for ${inviteCode} (already active in state).`);
+                  return;
+                }
+
                 routeInviteNotification({
                   id: inviteId,
                   fromUserId: (notification.data as any)?.fromUserId || (notification.data as any)?.senderId,
                   fromName: senderName || "Player",
                   gameId: inviteCode,
                   roomCode: inviteCode,
-                  password: password || ""
+                  password: password || "",
+                  targetUid: (notification.data as any)?.targetUid || (notification.data as any)?.toUserId,
+                  toUserId: (notification.data as any)?.toUserId || (notification.data as any)?.targetUid
                 });
               }
             }
@@ -7892,34 +8594,49 @@ useEffect(() => {
 
           pushActListener = await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
             console.log("[Push] Native push action performed:", action);
-            const { gameId, password, type, roomCode } = action.notification.data || {};
+            const { gameId, password, type, roomCode, targetUid, toUserId, inviteId } = action.notification.data || {};
             if (type === 'challenge_completed') {
               handleViewChallengeResults(roomCode || gameId, true);
               return;
             }
             if (roomCode || gameId) {
-              executeJoinRoom(roomCode || gameId, { passwordOverride: password, isDirectInvite: true });
+              executeJoinRoom(roomCode || gameId, { 
+                passwordOverride: password, 
+                isDirectInvite: true,
+                targetUid: targetUid || toUserId,
+                inviteDocId: inviteId
+              });
             }
           });
 
           localActListener = await LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
             console.log("[Push] Native local action performed:", action);
-            const { gameId, password, type, roomCode } = action.notification.extra || {};
+            const { gameId, password, type, roomCode, targetUid, toUserId, inviteId } = action.notification.extra || {};
             if (type === 'challenge_completed') {
               handleViewChallengeResults(roomCode || gameId, true);
               return;
             }
             if (roomCode || gameId) {
-              executeJoinRoom(roomCode || gameId, { passwordOverride: password, isDirectInvite: true });
+              executeJoinRoom(roomCode || gameId, { 
+                passwordOverride: password, 
+                isDirectInvite: true,
+                targetUid: targetUid || toUserId,
+                inviteDocId: inviteId
+              });
             }
           });
         } else {
           const handleServiceWorkerMessage = (event: MessageEvent) => {
             if (event.data && event.data.type === 'navigate_invite') {
               console.log("[Push] Web push action received from SW:", event.data);
-              const { gameId, password, roomCode } = event.data;
+              const { gameId, password, roomCode, targetUid, toUserId, inviteId } = event.data;
               if (roomCode || gameId) {
-                executeJoinRoom(roomCode || gameId, { passwordOverride: password, isDirectInvite: true });
+                executeJoinRoom(roomCode || gameId, { 
+                  passwordOverride: password, 
+                  isDirectInvite: true,
+                  targetUid: targetUid || toUserId,
+                  inviteDocId: inviteId
+                });
               }
             } else if (event.data && event.data.type === 'challenge_completed') {
               console.log("[Push] Web push challenge completed received from SW:", event.data);
@@ -7937,8 +8654,12 @@ useEffect(() => {
                 sentAt: Date.now()
               };
 
+              let isAlreadyKnown = false;
               setPendingChallenges(prev => {
-                if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId)) return prev;
+                if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId || (completedItem.roomCode && p.roomCode === completedItem.roomCode && p.type === 'challenge_completed'))) {
+                  isAlreadyKnown = true;
+                  return prev;
+                }
                 const updated = [completedItem, ...prev].slice(0, 10);
                 try {
                   localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
@@ -7946,11 +8667,16 @@ useEffect(() => {
                 return updated;
               });
 
+              if (isAlreadyKnown) {
+                console.log(`[Push] Suppressed redundant SW challenge_completed message for ${targetCode}.`);
+                return;
+              }
+
               const isSuppressed = shouldSuppressToastForRoom(targetCode);
 
               if (isSuppressed) {
-                console.log(`[Push] Suppressed intrusive SW banner for room: ${targetCode} (on game screen or results open). Subtle bell reaction.`);
-                triggerBellWiggle(true);
+                console.log(`[Push] Suppressed intrusive SW banner for room: ${targetCode} (on game screen or results open). Silent drawer/badge reaction.`);
+                triggerBellWiggle(false);
                 return;
               }
 
@@ -8007,8 +8733,12 @@ useEffect(() => {
                     sentAt: Date.now()
                   };
 
+                  let isAlreadyKnown = false;
                   setPendingChallenges(prev => {
-                    if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId)) return prev;
+                    if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId || (completedItem.roomCode && p.roomCode === completedItem.roomCode && p.type === 'challenge_completed'))) {
+                      isAlreadyKnown = true;
+                      return prev;
+                    }
                     const updated = [completedItem, ...prev].slice(0, 10);
                     try {
                       localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
@@ -8016,11 +8746,16 @@ useEffect(() => {
                     return updated;
                   });
 
+                  if (isAlreadyKnown) {
+                    console.log(`[Push] Suppressed redundant challenge_completed web FCM for ${roomCode} (already recorded by Firestore listener).`);
+                    return;
+                  }
+
                   const isSuppressed = shouldSuppressToastForRoom(roomCode);
 
                   if (isSuppressed) {
-                    console.log(`[Push] Suppressed intrusive FCM banner for room: ${roomCode} (on game screen or results open). Subtle bell reaction.`);
-                    triggerBellWiggle(true);
+                    console.log(`[Push] Suppressed intrusive FCM banner for room: ${roomCode} (on game screen or results open). Silent bell reaction.`);
+                    triggerBellWiggle(false);
                     return;
                   }
 
@@ -8054,26 +8789,41 @@ useEffect(() => {
                     senderName: fromName,
                     fromName: fromName,
                     fromUserId: data.fromUserId || data.senderId,
+                    toUserId: data.toUserId || data.targetUid,
+                    targetUid: data.targetUid || data.toUserId,
                     gameId: inviteCode,
                     roomCode: inviteCode,
                     password: data.password || "",
                     sentAt: Date.now()
                   };
+
+                  let isAlreadyKnown = false;
                   setPendingChallenges(prev => {
-                    if (prev.some(p => p.id === inviteCode || p.inviteId === inviteId)) return prev;
+                    if (prev.some(p => p.id === inviteCode || p.inviteId === inviteId || (data.inviteId && p.inviteId === data.inviteId))) {
+                      isAlreadyKnown = true;
+                      return prev;
+                    }
                     const updated = [inviteObj as any, ...prev].slice(0, 10);
                     try {
                       localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
                     } catch (e) {}
                     return updated;
                   });
+
+                  if (isAlreadyKnown) {
+                    console.log(`[Push] Suppressed redundant web FCM invite for ${inviteCode} (already active in state).`);
+                    return;
+                  }
+
                   routeInviteNotification({
                     id: inviteId,
                     fromUserId: data.fromUserId || data.senderId,
                     fromName: fromName,
                     gameId: inviteCode,
                     roomCode: inviteCode,
-                    password: data.password || ""
+                    password: data.password || "",
+                    targetUid: data.targetUid || data.toUserId,
+                    toUserId: data.toUserId || data.targetUid
                   });
                 }
               });
@@ -9300,7 +10050,7 @@ useEffect(() => {
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
   // Parser and state populator for incoming challenge links with spam control, sanitization, and queue handling
-  const handleLoadChallengeFromId = (id: string, queryPw?: string, senderName?: string, isDirectUrl = false) => {
+  const handleLoadChallengeFromId = (id: string, queryPw?: string, senderName?: string, isDirectUrl = false, targetUid?: string) => {
     // 1. Sanitize input parameters
     const sanitizedId = sanitizeGameId(id);
     if (!sanitizedId) {
@@ -9308,10 +10058,15 @@ useEffect(() => {
       return;
     }
 
+    const now = Date.now();
+    if (isJoiningRoomRef.current || (lastJoinedRoomRef.current?.code === sanitizedId && (now - lastJoinedRoomRef.current.timestamp < 2000))) {
+      console.log(`[Dedup] Suppressed duplicate handleLoadChallengeFromId for room ${sanitizedId}`);
+      return;
+    }
+
     const sanitizedPw = queryPw ? sanitizePassword(queryPw) : undefined;
     const sanitizedSenderParam = senderName ? sanitizeSenderName(senderName) : undefined;
 
-    const now = Date.now();
     const isMuted = now < muteUntil;
     const isAlreadyShowing = showInviteModal;
 
@@ -9338,21 +10093,44 @@ useEffect(() => {
       setInviteQueue(prev => {
         // Prevent duplicate queueing
         if (prev.some(inv => inv.id === sanitizedId)) return prev;
-        return [...prev, { id: sanitizedId, queryPw: sanitizedPw, senderName: finalSender }];
+        return [...prev, { id: sanitizedId, queryPw: sanitizedPw, senderName: finalSender, targetUid } as any];
       });
       addLog(`⏳ Challenge invite from ${finalSender} queued due to Active Mute / Spam Control.`);
       return;
     }
 
-    triggerLoadInviteDirectly(sanitizedId, sanitizedPw, finalSender);
+    triggerLoadInviteDirectly(sanitizedId, sanitizedPw, finalSender, targetUid);
   };
 
-  const triggerLoadInviteDirectly = async (id: string, queryPw?: string, resolvedSenderName?: string) => {
+  const triggerLoadInviteDirectly = async (id: string, queryPw?: string, resolvedSenderName?: string, targetUid?: string) => {
     const validId = sanitizeGameId(id);
     if (!validId) {
       addLog(`⚠️ Attempted challenge load failed: Invalid Game ID format [${id}]`);
       return;
     }
+
+    // DEDUPLICATION LOCK: Prevent multiple entry points from double-mounting the puzzle within 2 seconds
+    const now = Date.now();
+    if (isJoiningRoomRef.current || (lastJoinedRoomRef.current?.code === validId && (now - lastJoinedRoomRef.current.timestamp < 2000))) {
+      console.log(`[Dedup] Suppressed duplicate triggerLoadInviteDirectly for room ${validId}`);
+      return;
+    }
+
+    // TARGET ROSTER GUARD: If this direct invite targets a specific user, verify active persona
+    if (targetUid) {
+      const currentAuthUid = auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null;
+      const currentProfileId = userProfileRef.current?.id || userProfile?.id;
+      const isTargetMatch = Boolean(
+        (currentAuthUid && currentAuthUid === targetUid) ||
+        (currentProfileId && currentProfileId === targetUid)
+      );
+      if (!isTargetMatch) {
+        console.warn(`[RosterGuard] Blocked direct challenge load: target was ${targetUid}, active persona is ${currentAuthUid || currentProfileId}`);
+        showToast("This invite is for another account");
+        return;
+      }
+    }
+
     const cleanSender = sanitizeSenderName(resolvedSenderName || "A Friend");
 
     // 1. Check if validId is a 6-digit room code and fetch settings from Firestore
@@ -9395,8 +10173,19 @@ useEffect(() => {
           }
 
           if (!isLocked || storedPin.length === 0 || isPinMatch) {
-            // Unlocked or authorized via link credentials: mount directly with zero popups, zero error toasts, and zero duplicate fetches!
-            await handleAcceptAndLaunchInvite(code, undefined, storedPin, true, rData);
+            // Unlocked or authorized via link credentials
+            // GUEST PRESERVATION: Check if guest display name needs to be configured first (Public Share Link & Unlocked Room)
+            const isConfigured = checkIsDisplayNameConfigured();
+            if (!isConfigured) {
+              inviteJoinCallbackRef.current = () => {
+                handleAcceptAndLaunchInvite(code, undefined, storedPin, true, rData, targetUid);
+              };
+              setInviteJoinName(getActiveDisplayName());
+              setInviteJoinError(null);
+              setShowInviteJoinNamePopup(true);
+              return;
+            }
+            await handleAcceptAndLaunchInvite(code, undefined, storedPin, true, rData, targetUid);
             return;
           }
 
@@ -10296,6 +11085,9 @@ useEffect(() => {
     const resolvedParts = isMultiplayerMatch ? (resolveParticipantsForSave({ id: finalGameId, seed: gameSeed } as CompletedGame) || []) : [];
 
     // Requirement 4: Unconditionally increment decoupled cumulative statistics on every completed match
+    const effectiveUid = (auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null)
+      || (userProfileRef.current?.isSynced && userProfileRef.current.id && !userProfileRef.current.id.startsWith("GUEST_") ? userProfileRef.current.id : null);
+
     const currentTotalGames = typeof totalGamesPlayed === "number" ? totalGamesPlayed : (completedGames?.length || 0);
     const calculatedNextTotalGames = Math.max(currentTotalGames, completedGames.length) + 1;
     setTotalGamesPlayed(calculatedNextTotalGames);
@@ -10304,6 +11096,11 @@ useEffect(() => {
       localStorage.setItem("sudoku_gamesPlayed", String(calculatedNextTotalGames));
       localStorage.setItem(getScopedKey("total_games_played"), String(calculatedNextTotalGames));
       localStorage.setItem(getScopedKey("gamesPlayed"), String(calculatedNextTotalGames));
+      if (effectiveUid) {
+        localStorage.setItem(getScopedKey("total_games_played", effectiveUid), String(calculatedNextTotalGames));
+        localStorage.setItem(getScopedKey("gamesPlayed", effectiveUid), String(calculatedNextTotalGames));
+        localStorage.setItem(`sudoku_usr_${effectiveUid}_gamesPlayed`, String(calculatedNextTotalGames));
+      }
     } catch {}
 
     const currentTotalWins = typeof totalWinsCount === "number" ? totalWinsCount : (completedGames.filter(g => g.isWon).length || 0);
@@ -10317,6 +11114,11 @@ useEffect(() => {
         localStorage.setItem("sudoku_winsCount", String(calculatedNextTotalWins));
         localStorage.setItem(getScopedKey("total_wins_count"), String(calculatedNextTotalWins));
         localStorage.setItem(getScopedKey("winsCount"), String(calculatedNextTotalWins));
+        if (effectiveUid) {
+          localStorage.setItem(getScopedKey("total_wins_count", effectiveUid), String(calculatedNextTotalWins));
+          localStorage.setItem(getScopedKey("winsCount", effectiveUid), String(calculatedNextTotalWins));
+          localStorage.setItem(`sudoku_usr_${effectiveUid}_winsCount`, String(calculatedNextTotalWins));
+        }
       } catch {}
     }
 
@@ -10327,6 +11129,10 @@ useEffect(() => {
       try {
         localStorage.setItem("sudoku_winStreak", String(calculatedNextStreak));
         localStorage.setItem(getScopedKey("winStreak"), String(calculatedNextStreak));
+        if (effectiveUid) {
+          localStorage.setItem(getScopedKey("winStreak", effectiveUid), String(calculatedNextStreak));
+          localStorage.setItem(`sudoku_usr_${effectiveUid}_winStreak`, String(calculatedNextStreak));
+        }
       } catch {}
     } else {
       calculatedNextStreak = 0;
@@ -10334,6 +11140,10 @@ useEffect(() => {
       try {
         localStorage.setItem("sudoku_winStreak", "0");
         localStorage.setItem(getScopedKey("winStreak"), "0");
+        if (effectiveUid) {
+          localStorage.setItem(getScopedKey("winStreak", effectiveUid), "0");
+          localStorage.setItem(`sudoku_usr_${effectiveUid}_winStreak`, "0");
+        }
       } catch {}
     }
 
@@ -10363,6 +11173,13 @@ useEffect(() => {
           try {
             localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
             localStorage.setItem(getScopedKey("completed_games"), JSON.stringify(updated));
+            localStorage.setItem(getScopedKey("history"), JSON.stringify(updated));
+            if (effectiveUid) {
+              localStorage.setItem(getScopedKey("completed_games", effectiveUid), JSON.stringify(updated));
+              localStorage.setItem(getScopedKey("history", effectiveUid), JSON.stringify(updated));
+              localStorage.setItem(`sudoku_usr_${effectiveUid}_completed_games`, JSON.stringify(updated));
+              localStorage.setItem(`sudoku_usr_${effectiveUid}_history`, JSON.stringify(updated));
+            }
           } catch {}
           syncGuestSnapshotInRealtime({
             completedGames: updated,
@@ -10379,6 +11196,28 @@ useEffect(() => {
       try {
         localStorage.setItem("sudoku_completed_games", JSON.stringify(updated));
         localStorage.setItem(getScopedKey("completed_games"), JSON.stringify(updated));
+        localStorage.setItem(getScopedKey("history"), JSON.stringify(updated));
+        if (effectiveUid) {
+          localStorage.setItem(getScopedKey("completed_games", effectiveUid), JSON.stringify(updated));
+          localStorage.setItem(getScopedKey("history", effectiveUid), JSON.stringify(updated));
+          localStorage.setItem(`sudoku_usr_${effectiveUid}_completed_games`, JSON.stringify(updated));
+          localStorage.setItem(`sudoku_usr_${effectiveUid}_history`, JSON.stringify(updated));
+        }
+        // Also persist updated compound stats
+        const compoundStats = {
+          totalGamesPlayed: calculatedNextTotalGames,
+          gamesPlayed: calculatedNextTotalGames,
+          totalWinsCount: calculatedNextTotalWins,
+          gamesWon: calculatedNextTotalWins,
+          winStreak: calculatedNextStreak,
+          bestTimes: personalBestTimesRef.current || {},
+          completedGames: updated,
+          history: updated
+        };
+        localStorage.setItem(getScopedKey("stats", effectiveUid), JSON.stringify(compoundStats));
+        if (effectiveUid) {
+          localStorage.setItem(`sudoku_usr_${effectiveUid}_stats`, JSON.stringify(compoundStats));
+        }
       } catch {}
       syncGuestSnapshotInRealtime({
         completedGames: updated,
@@ -10922,6 +11761,16 @@ useEffect(() => {
   const registerChallengeJoin = async (challengeId: string) => {
     if (!challengeId) return;
 
+    // TARGET ROSTER GUARD: Never register participant if viewing results or board is game over
+    if (isViewingResultsRef.current || showGameOverModal || Boolean(viewingRankingsGame)) {
+      console.log(`[RosterGuard] Skipped registerChallengeJoin for ${challengeId}: currently viewing results.`);
+      return;
+    }
+    if (boardState?.isGameOver) {
+      console.log(`[RosterGuard] Skipped registerChallengeJoin for ${challengeId}: boardState is game-over.`);
+      return;
+    }
+
     const pName = getActiveDisplayName();
     const userId = userProfile?.id || "GUEST_ANON";
 
@@ -10960,10 +11809,10 @@ useEffect(() => {
 
   // Automatically register a join slot when starting/accepting any challenge
   useEffect(() => {
-    if (challengeMode && activeGameId) {
+    if (challengeMode && activeGameId && !isViewingResultsRef.current && !showGameOverModal && !viewingRankingsGame && boardState && !boardState.isGameOver) {
       registerChallengeJoin(activeGameId);
     }
-  }, [challengeMode, activeGameId]);
+  }, [challengeMode, activeGameId, showGameOverModal, viewingRankingsGame, boardState?.isGameOver]);
 
   // Real-time Firestore listener: auto-updates syncedLeaderboard whenever any player submits/joins
   useEffect(() => {
@@ -11637,6 +12486,7 @@ useEffect(() => {
     let chalParam = params.get("room") || params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("c");
     let queryPw = params.get("pin") || params.get("pw") || params.get("password");
     let senderParam = params.get("sender") || params.get("senderName") || params.get("invitedBy") || params.get("sender_name");
+    let targetUidParam = params.get("targetUid") || params.get("toUserId") || params.get("recipientId") || params.get("to");
     let viewParam = params.get("view");
     
     // Support hash parameters too for static routing structures
@@ -11651,6 +12501,9 @@ useEffect(() => {
         }
         if (!senderParam) {
           senderParam = hashParams.get("sender") || hashParams.get("senderName") || hashParams.get("invitedBy") || hashParams.get("sender_name");
+        }
+        if (!targetUidParam) {
+          targetUidParam = hashParams.get("targetUid") || hashParams.get("toUserId") || hashParams.get("recipientId") || hashParams.get("to");
         }
         if (!viewParam) {
           viewParam = hashParams.get("view");
@@ -11676,11 +12529,13 @@ useEffect(() => {
           chalParam = ssChallenge;
           if (!queryPw) queryPw = sessionStorage.getItem("sudoku_invite_pw") || undefined;
           if (!senderParam) senderParam = sessionStorage.getItem("sudoku_invite_sender") || undefined;
+          if (!targetUidParam) targetUidParam = sessionStorage.getItem("sudoku_invite_target_uid") || undefined;
           if (!viewParam) viewParam = sessionStorage.getItem("sudoku_invite_view") || undefined;
           // Consume immediately so a page refresh doesn't replay the invite
           sessionStorage.removeItem("sudoku_invite_challenge");
           sessionStorage.removeItem("sudoku_invite_pw");
           sessionStorage.removeItem("sudoku_invite_sender");
+          sessionStorage.removeItem("sudoku_invite_target_uid");
           sessionStorage.removeItem("sudoku_invite_view");
         }
       } catch (e) {}
@@ -11693,7 +12548,7 @@ useEffect(() => {
       if (viewParam === "results" && sanitizedChallenge) {
         handleViewChallengeResults(sanitizedChallenge, true);
       } else if (sanitizedChallenge) {
-        handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true);
+        handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true, targetUidParam || undefined);
       }
     }
     // Zero-state on startup: Do NOT auto-generate a background puzzle.
@@ -11716,6 +12571,7 @@ useEffect(() => {
             let chalParam = params.get("room") || params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("c");
             let queryPw = params.get("pin") || params.get("pw") || params.get("password");
             let senderParam = params.get("sender") || params.get("senderName") || params.get("invitedBy") || params.get("sender_name");
+            let targetUidParam = params.get("targetUid") || params.get("toUserId") || params.get("recipientId") || params.get("to");
             let viewParam = params.get("view");
             
             if (!chalParam && urlObj.hash) {
@@ -11730,6 +12586,9 @@ useEffect(() => {
                 if (!senderParam) {
                   senderParam = hashParams.get("sender") || hashParams.get("senderName") || hashParams.get("invitedBy") || hashParams.get("sender_name");
                 }
+                if (!targetUidParam) {
+                  targetUidParam = hashParams.get("targetUid") || hashParams.get("toUserId") || hashParams.get("recipientId") || hashParams.get("to");
+                }
                 if (!viewParam) {
                   viewParam = hashParams.get("view");
                 }
@@ -11743,7 +12602,7 @@ useEffect(() => {
               if (viewParam === "results" && sanitizedChallenge) {
                 handleViewChallengeResults(sanitizedChallenge, true);
               } else if (sanitizedChallenge) {
-                handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true);
+                handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true, targetUidParam || undefined);
               }
             }
           } catch (e) {
@@ -13673,7 +14532,7 @@ useEffect(() => {
                   {(() => {
                     const hasActiveGame = (Boolean(savedSessionInfo) || Boolean(boardState && !boardState.isGameOver)) && !boardState?.isGameOver;
                     const hasReviewGame = !hasActiveGame && (Boolean(boardState?.isGameOver) || Boolean(lastCompletedSession));
-                    const isActionDisabled = !hasActiveGame && !hasReviewGame;
+                    const isActionDisabled = isSyncingCloudData || (!hasActiveGame && !hasReviewGame);
                     const actionButtonText = hasReviewGame ? (t("reviewGame") || "Review") : (t("resumeGame") || "Resume");
 
                     return (
@@ -13722,7 +14581,14 @@ useEffect(() => {
                                 : "bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)] cursor-pointer active:scale-[0.98] active:translate-y-px")
                         }`}
                       >
-                        {hasReviewGame ? (
+                        {isSyncingCloudData ? (
+                          <>
+                            <RotateCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0 animate-spin opacity-40" />
+                            <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none opacity-50">
+                              {actionButtonText}
+                            </span>
+                          </>
+                        ) : hasReviewGame ? (
                           <>
                             <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5] shrink-0" />
                             <span className="font-sans font-black text-2xs sm:text-xs md:text-sm tracking-wider uppercase leading-none">
@@ -15002,6 +15868,7 @@ useEffect(() => {
               onOpenResetSettingsModal={() => setShowResetSettingsModal(true)}
               onConnectGoogle={handleConnectGoogle}
               isConnectingGoogle={isConnectingGoogle}
+              isSyncingCloudData={isSyncingCloudData}
               onCancelConnectGoogle={handleCancelGoogleLogin}
               onLogout={handleLogout}
               isOnline={isOnline}
@@ -15027,7 +15894,8 @@ useEffect(() => {
               handleToggleFriend={handleToggleFriend}
               handleAddRecentFriend={handleAddRecentFriend}
               formatTimer={formatTimer}
-              isAuthHydrating={isAuthHydrating}
+              isAuthHydrating={isSyncingCloudData}
+              isSyncingCloudData={isSyncingCloudData}
             />
           )}
 
@@ -15659,7 +16527,7 @@ useEffect(() => {
 
                   {/* Active Google Sync Action States */}
                   <div className="flex flex-col gap-1.5 w-full select-none">
-                    {isConnectingGoogle ? (
+                    {isSyncingCloudData ? (
                       <div className="flex items-center gap-2 w-full">
                         <button
                           type="button"
@@ -18279,7 +19147,7 @@ useEffect(() => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="font-sans font-black text-[#2B6CB0] text-sm truncate">
-                          {userProfile?.name || "Voyager_Guest"}
+                          {isSyncingCloudData ? "Syncing..." : (userProfile?.name || "Voyager_Guest")}
                         </span>
                         <span className={`text-[8.5px] font-mono font-black px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0 ${
                           userProfile?.isSynced ? "bg-[#E6F4EA] text-[#135236]" : "bg-[#F3E8FF] text-[#6B21A8]"
@@ -18295,7 +19163,7 @@ useEffect(() => {
                         </span>
                       </div>
                       <p className="text-[10.5px] text-[#2B6CB0] font-mono uppercase mt-0.5 tracking-wide leading-none">
-                        ID: {userProfile?.id || "N/A"}
+                        ID: {isSyncingCloudData ? "..." : (userProfile?.id || "N/A")}
                       </p>
                       {userProfile?.email && (
                         <p className="text-xs text-stone-650 font-sans mt-1 flex items-center gap-1.5">
@@ -18321,7 +19189,7 @@ useEffect(() => {
                       <div className="flex flex-col gap-3.5 pt-1">
                         {/* Google Sign-in */}
                         <div className="flex flex-col gap-1 w-full select-none">
-                          {isConnectingGoogle ? (
+                          {isSyncingCloudData ? (
                             <div className="flex items-center gap-2 w-full">
                               <button
                                 type="button"
@@ -19127,7 +19995,8 @@ useEffect(() => {
                         e.stopPropagation();
                         if (isJoiningRoomLoading) return;
                         const { gameId, roomCode, id, password } = activeInviteNotification;
-                        await handleAcceptAndLaunchInvite(roomCode || gameId, id, password, true);
+                        const targetRecipient = activeInviteNotification?.targetUid || activeInviteNotification?.toUserId;
+                        await handleAcceptAndLaunchInvite(roomCode || gameId, id, password, true, undefined, targetRecipient);
                       }}
                       className={`flex-1 py-2 px-3 rounded-xl font-semibold text-xs sm:text-sm text-center shadow-md transition-all border-none text-white flex items-center justify-center gap-1.5 active:scale-95 ${
                         isJoiningRoomLoading

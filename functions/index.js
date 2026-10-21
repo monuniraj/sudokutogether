@@ -219,7 +219,7 @@ exports.onInviteCreated = onDocumentCreated("invites/{inviteId}", async (event) 
           tag: "sudoku-duel-alert"
         },
         fcmOptions: {
-          link: `/?room=${encodeURIComponent(roomCode)}`
+          link: `/?room=${encodeURIComponent(roomCode)}&toUserId=${encodeURIComponent(toUserId)}&inviteId=${encodeURIComponent(inviteId)}`
         }
       }
     };

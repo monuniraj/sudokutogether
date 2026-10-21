@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown, WifiOff, Check } from "lucide-react";
+import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown, WifiOff, Check, RefreshCw } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -54,6 +54,7 @@ export interface SettingsModalProps {
   onOpenResetSettingsModal: () => void;
   onConnectGoogle?: () => void;
   isConnectingGoogle?: boolean;
+  isSyncingCloudData?: boolean;
   onCancelConnectGoogle?: () => void;
   onLogout?: () => void;
   onLanguageChange?: (lang: Language) => void;
@@ -101,11 +102,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenResetSettingsModal,
   onConnectGoogle,
   isConnectingGoogle,
+  isSyncingCloudData,
   onCancelConnectGoogle,
   onLogout,
   onLanguageChange,
   isOnline = true
 }) => {
+  const isConnecting = isSyncingCloudData ?? isConnectingGoogle;
   const { t, language, setLanguage, languages } = useTranslation();
   const { isIncognito, toggleIncognito } = useFriendPresence(userProfile?.id);
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
@@ -163,7 +166,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div
                 className="w-10 h-10 rounded-full border-none flex items-center justify-center text-md font-sans font-black text-white shrink-0 shadow-sm bg-purple-600 select-none"
               >
-                {userProfile?.name ? String(Array.from(userProfile.name)[0]).toUpperCase() : "V"}
+                {isConnecting ? (
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                ) : userProfile?.name ? (
+                  String(Array.from(userProfile.name)[0]).toUpperCase()
+                ) : (
+                  "V"
+                )}
               </div>
               <div className="flex flex-col min-w-0 flex-1">
                 <span
@@ -171,7 +180,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     darkMode ? "text-stone-100" : "text-purple-950"
                   }`}
                 >
-                  {userProfile?.name &&
+                  {isConnecting ? (
+                    <span className="opacity-75 animate-pulse">
+                      {userProfile?.email ? userProfile.email.split("@")[0] : "Syncing..."}
+                    </span>
+                  ) : userProfile?.name &&
                   userProfile.name !== "Anonymous Voyager" &&
                   userProfile.name !== "Guest Voyager" &&
                   userProfile.name !== "Guest Solver"
@@ -315,7 +328,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               {t("logOut")}
             </button>
-          ) : isConnectingGoogle ? (
+          ) : isConnecting ? (
             <div className="flex items-center gap-2 w-full">
               <button
                 type="button"
@@ -372,14 +385,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           ) : (
             <button
               type="button"
-              disabled={isConnectingGoogle}
+              disabled={isConnecting}
               onClick={(e) => {
                 e.stopPropagation();
                 playClickSound();
                 if (onConnectGoogle) onConnectGoogle();
               }}
               className={`w-full min-h-[42px] lg:min-h-[48px] flex items-center justify-center gap-2 font-sans text-[10.5px] lg:text-[13px] font-black uppercase tracking-wider py-2.5 lg:py-3.5 px-4 rounded-xl transition-all text-center border-none cursor-pointer active:scale-[0.98] shadow-sm ${
-                isConnectingGoogle ? "opacity-70 cursor-wait" : ""
+                isConnecting ? "opacity-70 cursor-wait" : ""
               } ${
                 darkMode
                   ? "bg-white text-stone-900 hover:bg-stone-100"

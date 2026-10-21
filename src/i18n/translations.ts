@@ -417,6 +417,7 @@ export type TranslationKey =
   | "friendAddedToast"
   | "roomJoinedToast"
   | "challengeDeclinedToast"
+  | "challengeNotForYouToast"
   | "matchRoomNotFoundToast"
   | "journalStatsMergedToast"
   | "connectedGoogleToast"
@@ -826,6 +827,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     friendAddedToast: "✓ Added {name} as a persistent friend!",
     roomJoinedToast: "✓ Joined Room {code}!",
     challengeDeclinedToast: "Challenge invitation declined.",
+    challengeNotForYouToast: "This invitation was intended for a different player.",
     matchRoomNotFoundToast: "Match room not found.",
     journalStatsMergedToast: "Journal stats merged into database successfully!",
     connectedGoogleToast: "Connected to Google Account!",
@@ -1234,6 +1236,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     friendAddedToast: "✓ {name} को दोस्त के रूप में जोड़ा गया!",
     roomJoinedToast: "✓ रूम {code} में शामिल हुए!",
     challengeDeclinedToast: "चुनौती का निमंत्रण अस्वीकार कर दिया गया।",
+    challengeNotForYouToast: "यह निमंत्रण किसी अन्य खिलाड़ी के लिए था।",
     matchRoomNotFoundToast: "मैच रूम नहीं मिला।",
     journalStatsMergedToast: "आँकड़े डेटाबेस में सफलतापूर्वक सिंक हो गए!",
     connectedGoogleToast: "Google खाते से कनेक्ट हो गया!",
@@ -1642,6 +1645,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     friendAddedToast: "✓ {name} als Freund hinzugefügt!",
     roomJoinedToast: "✓ Raum {code} beigetreten!",
     challengeDeclinedToast: "Herausforderungseinladung abgelehnt.",
+    challengeNotForYouToast: "Diese Einladung war für einen anderen Spieler bestimmt.",
     matchRoomNotFoundToast: "Spielraum nicht gefunden.",
     journalStatsMergedToast: "Statistiken erfolgreich synchronisiert!",
     connectedGoogleToast: "Mit Google-Konto verbunden!",
@@ -2050,6 +2054,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     friendAddedToast: "✓ {name} をフレンドに追加しました！",
     roomJoinedToast: "✓ ルーム {code} に参加しました！",
     challengeDeclinedToast: "対戦への招待を辞退しました。",
+    challengeNotForYouToast: "この招待は別のプレイヤー宛てです。",
     matchRoomNotFoundToast: "対戦ルームが見つかりません。",
     journalStatsMergedToast: "プレイ記録が正常に同期されました！",
     connectedGoogleToast: "Googleアカウントに接続しました！",
@@ -2458,6 +2463,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     friendAddedToast: "✓ {name} 님을 친구로 추가했습니다!",
     roomJoinedToast: "✓ {code}번 방에 참여했습니다!",
     challengeDeclinedToast: "대결 초대를 거절했습니다.",
+    challengeNotForYouToast: "이 초대는 다른 플레이어를 위한 것입니다.",
     matchRoomNotFoundToast: "매치 방을 찾을 수 없습니다.",
     journalStatsMergedToast: "기록 통계가 성공적으로 동기화되었습니다!",
     connectedGoogleToast: "Google 계정에 연결되었습니다!",
@@ -2866,6 +2872,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     friendAddedToast: "✓ ¡Se añadió a {name} a tus amigos!",
     roomJoinedToast: "✓ ¡Te has unido a la sala {code}!",
     challengeDeclinedToast: "Invitación al reto rechazada.",
+    challengeNotForYouToast: "Esta invitación era para otro jugador.",
     matchRoomNotFoundToast: "Sala de juego no encontrada.",
     journalStatsMergedToast: "¡Estadísticas sincronizadas con éxito!",
     connectedGoogleToast: "¡Conectado a la cuenta de Google!",
@@ -3274,6 +3281,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     friendAddedToast: "✓ {name} a été ajouté(e) en ami !",
     roomJoinedToast: "✓ Vous avez rejoint le salon {code} !",
     challengeDeclinedToast: "Invitation au défi déclinée.",
+    challengeNotForYouToast: "Cette invitation était destinée à un autre joueur.",
     matchRoomNotFoundToast: "Salon de jeu introuvable.",
     journalStatsMergedToast: "Statistiques synchronisées avec succès !",
     connectedGoogleToast: "Connecté au compte Google !",
@@ -3682,6 +3690,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     friendAddedToast: "✓ {name} aggiunto come amico!",
     roomJoinedToast: "✓ Accesso alla stanza {code} completato!",
     challengeDeclinedToast: "Invito alla sfida rifiutato.",
+    challengeNotForYouToast: "Questo invito era destinato a un altro giocatore.",
     matchRoomNotFoundToast: "Stanza della partita non trovata.",
     journalStatsMergedToast: "Statistiche sincronizzate con successo!",
     connectedGoogleToast: "Connesso all'Account Google!",
@@ -4090,6 +4099,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     friendAddedToast: "✓ {name} adicionado como amigo!",
     roomJoinedToast: "✓ Entrou na Sala {code}!",
     challengeDeclinedToast: "Convite de desafio recusado.",
+    challengeNotForYouToast: "Este convite foi enviado para outro jogador.",
     matchRoomNotFoundToast: "Sala da partida não encontrada.",
     journalStatsMergedToast: "Estatísticas sincronizadas com sucesso!",
     connectedGoogleToast: "Conectado à Conta Google!",
