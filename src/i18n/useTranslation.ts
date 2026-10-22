@@ -68,57 +68,57 @@ export const INCOGNITO_TRANSLATIONS: Record<string, { incognitoMode: string; inc
   en: {
     incognitoMode: "Ghost Mode",
     incognitoDesc: "Hide your online visibility",
-    setPin: "SET 4-DIGIT PIN:",
+    setPin: "SET PIN:",
   },
   hi: {
     incognitoMode: "घोस्ट मोड",
     incognitoDesc: "अपनी ऑनलाइन मौजूदगी छुपाएँ",
-    setPin: "4-अंकों का पिन सेट करें:",
+    setPin: "पिन सेट करें:",
   },
   es: {
     incognitoMode: "Modo Fantasma",
     incognitoDesc: "Oculta tu visibilidad en línea",
-    setPin: "PIN DE 4 DÍGITOS:",
+    setPin: "ESTABLECER PIN:",
   },
   fr: {
     incognitoMode: "Mode Fantôme",
     incognitoDesc: "Masquez votre visibilité en ligne",
-    setPin: "CODE PIN À 4 CHIFFRES :",
+    setPin: "DÉFINIR LE PIN :",
   },
   de: {
     incognitoMode: "Geist-Modus",
     incognitoDesc: "Verberge deine Online-Sichtbarkeit",
-    setPin: "4-STELLIGE PIN FESTLEGEN:",
+    setPin: "PIN FESTLEGEN:",
   },
   it: {
     incognitoMode: "Modalità Fantasma",
     incognitoDesc: "Nascondi la tua visibilità online",
-    setPin: "IMPOSTA PIN A 4 CIFRE:",
+    setPin: "IMPOSTA PIN:",
   },
   pt: {
     incognitoMode: "Modo Fantasma",
     incognitoDesc: "Oculte sua visibilidade online",
-    setPin: "DEFINIR PIN DE 4 DÍGITOS:",
+    setPin: "DEFINIR PIN:",
   },
   'pt-BR': {
     incognitoMode: "Modo Fantasma",
     incognitoDesc: "Oculte sua visibilidade online",
-    setPin: "DEFINIR PIN DE 4 DÍGITOS:",
+    setPin: "DEFINIR PIN:",
   },
   ja: {
     incognitoMode: "ゴースト モード",
     incognitoDesc: "オンライン状態を非表示にする",
-    setPin: "4桁のPINを設定:",
+    setPin: "PINを設定:",
   },
   ru: {
     incognitoMode: "Режим невидимки",
     incognitoDesc: "Скрыть видимость в сети",
-    setPin: "УСТАНОВИТЬ 4-ЗНАЧНЫЙ PIN:",
+    setPin: "УСТАНОВИТЬ PIN:",
   },
   ko: {
     incognitoMode: "고스트 모드",
     incognitoDesc: "온라인 상태 숨기기",
-    setPin: "4자리 PIN 설정:",
+    setPin: "PIN 설정:",
   },
 };
 

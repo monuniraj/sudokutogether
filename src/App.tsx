@@ -1555,6 +1555,10 @@ export const persistGuestThemeToVault = (themeUpdates: Partial<{ activeTheme: "O
   }
 };
 
+// Module-level audio throttle & deduplication state (enforces 1000ms cooldown)
+let lastNotificationSoundTime = 0;
+const lastPlayedSoundKeys = new Map<string, number>();
+
 export default function App() {
   const { t, language } = useTranslation();
   const [googleClientId, setGoogleClientId] = useState<string | null>(() => {
@@ -1712,6 +1716,7 @@ useEffect(() => {
   const initialVault = initialVaultRef.current;
 
   // --- HYBRID AUTHENTICATION LAYER STATE ---
+  const [authUser, setAuthUser] = useState<any>(() => auth.currentUser);
   const [userProfile, setUserProfile] = useState<{
     id: string;
     name: string;
@@ -2159,7 +2164,7 @@ useEffect(() => {
       .map((p: any) => p.id)
       .filter((id: string) => Boolean(id) && id !== myId);
   }, [multiplayerPlayers, userProfile?.id]);
-  const { getFriendStatus: getDrawerFriendStatus, getFriendLastActive: getDrawerFriendLastActive } = useFriendPresence(userProfile?.id, drawerPlayerIds);
+  const { getFriendStatus: getDrawerFriendStatus, getFriendLastActive: getDrawerFriendLastActive } = useFriendPresence(authUser?.uid || userProfile?.id, drawerPlayerIds);
 
   const [privacyEnabled, setPrivacyEnabled] = useState<boolean>(() => {
     try {
@@ -2978,6 +2983,7 @@ useEffect(() => {
     }
   }, [currentScreen]);
 
+  // Enforce 1000ms cooldown between notification sounds to eliminate race-condition audio double chimes
   const lastPlayedInviteChimesRef = useRef<Map<string, number>>(new Map());
 
   // Play a pleasant ascending invitation chime (C5 -> E5) using Web Audio API
@@ -2985,13 +2991,13 @@ useEffect(() => {
     if (!notificationsEnabled) return; // settings guard cond
     const now = Date.now();
     const lastGlobalChime = lastPlayedInviteChimesRef.current.get("__global__") || 0;
-    if (now - lastGlobalChime < 2000) {
-      console.log("[Audio] Suppressed rapid repeated invite chime (<2s)");
+    if (now - lastGlobalChime < 1000) {
+      console.log("[Audio] Suppressed rapid repeated invite chime (<1s)");
       return;
     }
     if (inviteId) {
       const lastIdChime = lastPlayedInviteChimesRef.current.get(inviteId) || 0;
-      if (now - lastIdChime < 10000) {
+      if (now - lastIdChime < 5000) {
         console.log(`[Audio] Suppressed duplicate invite chime for ID: ${inviteId}`);
         return;
       }
@@ -3032,6 +3038,34 @@ useEffect(() => {
       console.error("Audio Chime Error:", e);
     }
   }, [notificationsEnabled]);
+
+  // Industry-standard audio debounce & throttle guard (1000ms cooldown)
+  const playThrottledNotificationSound = useCallback((soundFn: () => void, soundKey?: string, cooldownMs = 1000) => {
+    const now = Date.now();
+    if (now - lastNotificationSoundTime < cooldownMs) {
+      console.log(`[Audio] Suppressed rapid overlapping notification sound (<${cooldownMs}ms)`);
+      return;
+    }
+    if (soundKey) {
+      const lastKeyTime = lastPlayedSoundKeys.get(soundKey) || 0;
+      if (now - lastKeyTime < 5000) {
+        console.log(`[Audio] Suppressed duplicate notification sound for key '${soundKey}'`);
+        return;
+      }
+      lastPlayedSoundKeys.set(soundKey, now);
+      if (lastPlayedSoundKeys.size > 50) {
+        for (const [k, ts] of lastPlayedSoundKeys.entries()) {
+          if (now - ts > 30000) lastPlayedSoundKeys.delete(k);
+        }
+      }
+    }
+    lastNotificationSoundTime = now;
+    try {
+      soundFn();
+    } catch (err) {
+      console.warn("[Audio] Error playing throttled notification sound:", err);
+    }
+  }, []);
 
   // Synthesize a subtle, luxury harmonic glass chime (~1400Hz with smooth 350ms exponential decay)
   const playBellChime = useCallback(() => {
@@ -3098,7 +3132,7 @@ useEffect(() => {
   const triggerBellWiggle = useCallback((options?: { playSound?: boolean } | boolean) => {
     const shouldPlaySound = typeof options === "boolean" ? options : (options?.playSound ?? true);
     if (shouldPlaySound) {
-      playBellChime();
+      playThrottledNotificationSound(playBellChime, "bell_chime");
     }
     setIsBellWiggling(true);
     setBellPing(true);
@@ -3112,11 +3146,38 @@ useEffect(() => {
       setBellPing(false);
       bellWiggleTimerRef.current = null;
     }, 1800);
-  }, [playBellChime]);
+  }, [playBellChime, playThrottledNotificationSound]);
 
-  // Route incoming invites: if actively in-game, route quietly to Bell counter to avoid disrupting solving
-  const routeInviteNotification = useCallback((payload: any) => {
+  // Invite ids already surfaced this session (prevents replay on listener re-subscribe)
+  const surfacedInviteIdsRef = useRef<Set<string>>(new Set());
+  // Always-fresh handle to the OS/background notifier (declared later in the component)
+  const triggerBackgroundNotificationRef = useRef<(d: any) => any>(() => {});
+  useEffect(() => {
+    triggerBackgroundNotificationRef.current = triggerBackgroundNotification;
+  });
+
+  // Route incoming invites: single router for visibility, self-echo, dedupe and in-game quiet routing
+  const routeInviteNotification = useCallback((payload: any, rawInvite?: any) => {
     if (!payload) return;
+
+    // Listener-originated invites only: self-echo guard, dedupe, and visibility routing
+    if (rawInvite) {
+      const ownIds = [userProfileRef.current?.id, auth.currentUser?.uid].filter(Boolean).map(String);
+      if (payload.fromUserId && ownIds.includes(String(payload.fromUserId))) {
+        console.warn("[Invite Router] Ignored self-originated invite.");
+        return;
+      }
+      const dedupeKey = String(payload.id || payload.roomCode || payload.gameId || "");
+      if (dedupeKey) {
+        if (surfacedInviteIdsRef.current.has(dedupeKey)) return;
+        surfacedInviteIdsRef.current.add(dedupeKey);
+      }
+      if (document.visibilityState === "hidden") {
+        // Background: OS notification path only
+        triggerBackgroundNotificationRef.current(rawInvite);
+        return;
+      }
+    }
     const senderId = String(payload.fromUserId || payload.senderId || payload.fromName || "").trim();
     const inGame = isActivelyInGame() || currentScreenRef.current === "game";
 
@@ -3141,9 +3202,14 @@ useEffect(() => {
       return;
     }
 
-    playInviteChime(payload.id || payload.roomCode || payload.gameId);
+    const soundKey = payload.id || payload.roomCode || payload.gameId;
     setActiveInviteNotification(payload);
-  }, [isActivelyInGame, triggerBellWiggle, playInviteChime]);
+    try {
+      playThrottledNotificationSound(() => {
+        playInviteChime(soundKey);
+      }, soundKey);
+    } catch (e) {}
+  }, [isActivelyInGame, triggerBellWiggle, playInviteChime, playThrottledNotificationSound]);
 
   const activeInviteNotificationRef = useRef<any | null>(activeInviteNotification);
   activeInviteNotificationRef.current = activeInviteNotification;
@@ -3697,16 +3763,21 @@ useEffect(() => {
 
   const currentHydratedUidRef = useRef<string | null>(null);
   const hydrationPromiseRef = useRef<Promise<void> | null>(null);
+  const hydrationUidRef = useRef<string | null>(null);
 
   const hydrateUserFromCloud = useCallback(async (uid: string, authUser?: any, force = false) => {
     if (!uid) return;
     if (!force && currentHydratedUidRef.current === uid) {
       return;
     }
-    // If a hydration is already in-flight for this user, join and return that active promise.
+    // If a hydration is already in-flight for THIS user, join and return that active promise.
     // This prevents concurrent callers from launching parallel runs that tear down loading state prematurely.
+    // A hydration in flight for a DIFFERENT uid is awaited first, so we never join another user's run.
     if (hydrationPromiseRef.current) {
-      return hydrationPromiseRef.current;
+      if (hydrationUidRef.current === uid) {
+        return hydrationPromiseRef.current;
+      }
+      try { await hydrationPromiseRef.current; } catch {}
     }
 
     const runHydration = async () => {
@@ -4423,10 +4494,14 @@ useEffect(() => {
         console.warn("[Auth] Hydration error:", err);
       } finally {
         setIsAuthHydrating(false);
-        hydrationPromiseRef.current = null;
+        if (hydrationUidRef.current === uid) {
+          hydrationPromiseRef.current = null;
+          hydrationUidRef.current = null;
+        }
       }
     };
 
+    hydrationUidRef.current = uid;
     hydrationPromiseRef.current = runHydration();
     return hydrationPromiseRef.current;
   }, [setStats]);
@@ -4444,6 +4519,7 @@ useEffect(() => {
         console.log("[Auth] onAuthStateChanged ignored because logout is actively executing.");
         return;
       }
+      setAuthUser(user);
       if (!user) {
         currentHydratedUidRef.current = null;
         setIsAuthHydrating(false);
@@ -4576,11 +4652,17 @@ useEffect(() => {
           console.warn("[Auth] Fast local cache hydration error in onAuthStateChanged:", fastHydrateErr);
         }
 
-        // Unified Cloud Data Hydration: onAuthStateChanged is the single driver of cloud-to-local hydration
-        try {
-          await hydrateUserFromCloudRef.current(user.uid, user, true);
-        } catch (err) {
-          console.warn("[Auth] Unified hydration error in onAuthStateChanged:", err);
+        // Unified Cloud Data Hydration: onAuthStateChanged is the single driver of cloud-to-local hydration.
+        // Exception: while an interactive Google login is in flight, handleConnectGoogle sequences
+        // (guest-stat flush -> hydrate) itself, so a parallel run here would be wiped by that flush.
+        if (isConnectingRef.current) {
+          console.log("[Auth] Hydration deferred to handleConnectGoogle (login in flight).");
+        } else {
+          try {
+            await hydrateUserFromCloudRef.current(user.uid, user, true);
+          } catch (err) {
+            console.warn("[Auth] Unified hydration error in onAuthStateChanged:", err);
+          }
         }
       }
     });
@@ -4931,6 +5013,10 @@ useEffect(() => {
 
       if (loginCancelledRef.current) {
         console.log("[Auth] Google Sign-In completed after cancel/timeout. Discarding result.");
+        // Auth state already changed and the listener deferred to us: hydrate so the session isn't left empty.
+        if (finalUser && !finalUser.isAnonymous) {
+          hydrateUserFromCloudRef.current(finalUser.uid, finalUser, true).catch(() => {});
+        }
         return;
       }
 
@@ -4941,6 +5027,7 @@ useEffect(() => {
       }
 
       if (finalUser && finalUser.email) {
+        setAuthUser(finalUser);
         addLog(`🔒 Connected Google Account: ${finalUser.email}`);
         showToast(t("connectedGoogleToast"));
 
@@ -5083,6 +5170,7 @@ useEffect(() => {
       };
       setUserProfile(guestProfile);
       userProfileRef.current = guestProfile;
+      setAuthUser(null);
 
       setTotalGamesPlayed(restoredVault.stats.totalGamesPlayed);
       setTotalWinsCount(restoredVault.stats.totalWinsCount);
@@ -5745,11 +5833,12 @@ useEffect(() => {
 
   // Real-time listener for incoming invites from Firestore
   useEffect(() => {
-    const effectiveUid = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid();
-    if (!effectiveUid) return;
-    const user = { uid: effectiveUid };
+    // Unified identity: listen on every ID this device owns (Firebase auth uid + profile id)
+    const ownIds = Array.from(new Set([authUser?.uid, userProfile?.id].filter(Boolean) as string[]));
+    if (ownIds.length === 0) return;
+    const user = { uid: ownIds[0] };
 
-    console.log(`[Firestore] Subscribing to incoming invites for user: ${user.uid}`);
+    console.log(`[Firestore] Subscribing to incoming invites for: ${ownIds.join(", ")}`);
     const invitesCol = collection(db, "invites");
     
     const handleSnapshot = (snapshot: any) => {
@@ -5801,29 +5890,24 @@ useEffect(() => {
             return updated;
           });
 
-          if (inviteTime > sessionStartTime - 5000) {
-            if (notificationsEnabled) {
-              if (document.visibilityState === "hidden") {
-                triggerBackgroundNotification(inviteData);
-              } else {
-                routeInviteNotification({
-                  id: inviteId,
-                  fromUserId: inviteData.fromUserId || inviteData.senderId,
-                  fromName: inviteData.fromName || "Player",
-                  gameId: roomCode || gameId,
-                  roomCode: roomCode,
-                  password: inviteData.password || "",
-                  recipientId: inviteData.recipientId || inviteData.toUserId || user.uid,
-                  toUserId: inviteData.toUserId || inviteData.recipientId || user.uid,
-                  status: inviteData.status || "pending",
-                  difficulty,
-                  seed,
-                  maxMistakes,
-                  hintLimit,
-                  timerEnabled
-                });
-              }
-            }
+          if (inviteTime > sessionStartTime - 600000) {
+            // Single router: visible -> in-app modal + sound, hidden -> OS notification path
+            routeInviteNotification({
+              id: inviteId,
+              fromUserId: inviteData.fromUserId || inviteData.senderId,
+              fromName: inviteData.fromName || "Player",
+              gameId: roomCode || gameId,
+              roomCode: roomCode,
+              password: inviteData.password || "",
+              recipientId: inviteData.recipientId || inviteData.toUserId || user.uid,
+              toUserId: inviteData.toUserId || inviteData.recipientId || user.uid,
+              status: inviteData.status || "pending",
+              difficulty,
+              seed,
+              maxMistakes,
+              hintLimit,
+              timerEnabled
+            }, inviteData);
           }
         } else if (change.type === "modified") {
           if (inviteData.status !== "pending") {
@@ -5847,16 +5931,20 @@ useEffect(() => {
       });
     };
 
-    const q = query(invitesCol, where("toUserId", "==", user.uid), where("status", "==", "pending"));
+    const q = query(
+      invitesCol,
+      ownIds.length === 1 ? where("toUserId", "==", ownIds[0]) : where("toUserId", "in", ownIds),
+      where("status", "==", "pending")
+    );
     const unsubscribe = onSnapshot(q, handleSnapshot, (err) => {
       console.warn("[Firestore] Incoming invites listener notice:", err);
     });
 
     return () => {
-      console.log(`[Firestore] Unsubscribing from incoming invites for user: ${user.uid}`);
+      console.log(`[Firestore] Unsubscribing from incoming invites for: ${ownIds.join(", ")}`);
       unsubscribe();
     };
-  }, [userProfile?.id, notificationsEnabled, sessionStartTime]);
+  }, [authUser?.uid, userProfile?.id, notificationsEnabled, sessionStartTime, routeInviteNotification]);
 
   // Dynamically update friends & past players to "online/live" if another app instance/tab is open in the browser
   useEffect(() => {
@@ -6500,14 +6588,14 @@ useEffect(() => {
       if (expectedPin.length > 0) {
         const enteredPin = (options?.passwordOverride || "").trim();
         if (!enteredPin) {
-          return { success: false, error: "This room is locked. Please enter the 4-digit PIN." };
+          return { success: false, error: "This room is locked. Please enter the room PIN." };
         }
         let isMatch = enteredPin === expectedPin || decodePass(enteredPin) === expectedPin;
         try {
           if (decodeURIComponent(enteredPin) === expectedPin) isMatch = true;
         } catch (e) {}
         if (!isMatch) {
-          return { success: false, error: "Incorrect 4-digit PIN." };
+          return { success: false, error: "Incorrect room PIN." };
         }
       }
     }
@@ -7128,16 +7216,24 @@ useEffect(() => {
               if (type === 'challenge_completed') {
                 const notifData = (notification.data as any) || {};
                 const completedByUid = notifData.completedByUid || notifData.finisherUid || notifData.senderId || notifData.fromUserId;
-                const recipientUid = notifData.recipientUid || notifData.toUserId || notifData.targetUid || userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "";
+                const recipientUid = authUser?.uid || notifData.recipientUid || notifData.toUserId || notifData.targetUid || userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "";
                 if (completedByUid && recipientUid && completedByUid === recipientUid) {
                   console.log(`[Push] Self-notification suppressed in pushRecListener: completedByUid (${completedByUid}) === recipientUid (${recipientUid})`);
                   return;
                 }
 
-                const notifId = notification.id || `push-${Date.now()}`;
+                const cleanCode = (targetCode || "").toUpperCase().trim();
+                const canonicalId = `puzzle_race_${cleanCode}`;
+
+                // If results modal for matching room is already open or game over is active, ignore secondary push delivery payloads
+                if (showGameOverModalRef.current && isMatchingRoom(cleanCode)) {
+                  console.log(`[Push] Suppressed secondary challenge_completed push for ${cleanCode} because GameOverModal is active.`);
+                  return;
+                }
+
                 const completedItem: PendingChallenge = {
-                  id: `${targetCode}_completed_${notifId || Date.now()}`,
-                  inviteId: notifId,
+                  id: canonicalId,
+                  inviteId: canonicalId,
                   type: 'challenge_completed',
                   title: "Puzzle Race Finished",
                   fromName: fromName || senderName || "Opponent",
@@ -7149,7 +7245,7 @@ useEffect(() => {
 
                 let isAlreadyKnown = false;
                 setPendingChallenges(prev => {
-                  if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId || (completedItem.roomCode && p.roomCode === completedItem.roomCode && p.type === 'challenge_completed'))) {
+                  if (prev.some(p => p.id === canonicalId || p.inviteId === canonicalId || (p.roomCode === targetCode && p.type === 'challenge_completed') || (cleanCode && p.roomCode && p.roomCode.toUpperCase().trim() === cleanCode && p.type === 'challenge_completed'))) {
                     isAlreadyKnown = true;
                     return prev;
                   }
@@ -7161,7 +7257,7 @@ useEffect(() => {
                 });
 
                 if (isAlreadyKnown) {
-                  console.log(`[Push] Suppressed redundant challenge_completed foreground push for ${targetCode} (already recorded by Firestore listener).`);
+                  console.log(`[Push] Suppressed redundant challenge_completed foreground push for ${targetCode} (already recorded).`);
                   return;
                 }
 
@@ -7171,16 +7267,17 @@ useEffect(() => {
                   return;
                 }
 
-                const cleanCode = (targetCode || "").toUpperCase().trim();
                 const isMuted = cleanCode && (
                   dismissedCompletionRoomsRef.current.has(cleanCode) ||
                   dismissedCompletionRoomsRef.current.has(targetCode) ||
                   dismissedCompletionRoomsRef.current.has(cleanCode.slice(-6))
                 );
                 if (!isMuted) {
-                  playInviteChime(notifId);
+                  playThrottledNotificationSound(() => {
+                    playInviteChime(canonicalId);
+                  }, canonicalId);
                   setActiveInviteNotification({
-                    id: notifId,
+                    id: canonicalId,
                     type: 'challenge_completed',
                     title: "Puzzle Race Finished",
                     fromName: fromName || senderName || "Opponent",
@@ -7297,7 +7394,7 @@ useEffect(() => {
             } else if (event.data && event.data.type === 'challenge_completed') {
               console.log("[Push] Web push challenge completed received from SW:", event.data);
               const completedByUid = event.data.completedByUid || event.data.finisherUid || event.data.senderId || event.data.fromUserId;
-              const recipientUid = event.data.recipientUid || event.data.toUserId || event.data.targetUid || userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "";
+              const recipientUid = authUser?.uid || event.data.recipientUid || event.data.toUserId || event.data.targetUid || userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "";
               if (completedByUid && recipientUid && completedByUid === recipientUid) {
                 console.log(`[Push] Self-notification suppressed in SW message handler: completedByUid (${completedByUid}) === recipientUid (${recipientUid})`);
                 return;
@@ -7305,10 +7402,17 @@ useEffect(() => {
 
               const { roomCode, gameId, senderName, fromName } = event.data;
               const targetCode = roomCode || gameId || "";
-              const notifId = `sw-completed-${Date.now()}`;
+              const cleanCode = (targetCode || "").toUpperCase().trim();
+              const canonicalId = `puzzle_race_${cleanCode}`;
+
+              if (showGameOverModalRef.current && isMatchingRoom(cleanCode)) {
+                console.log(`[Push] Suppressed secondary challenge_completed SW message for ${cleanCode} because GameOverModal is active.`);
+                return;
+              }
+
               const completedItem: PendingChallenge = {
-                id: `${targetCode}_completed_${notifId || Date.now()}`,
-                inviteId: notifId,
+                id: canonicalId,
+                inviteId: canonicalId,
                 type: 'challenge_completed',
                 title: "Puzzle Race Finished",
                 fromName: fromName || senderName || "Opponent",
@@ -7320,7 +7424,7 @@ useEffect(() => {
 
               let isAlreadyKnown = false;
               setPendingChallenges(prev => {
-                if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId || (completedItem.roomCode && p.roomCode === completedItem.roomCode && p.type === 'challenge_completed'))) {
+                if (prev.some(p => p.id === canonicalId || p.inviteId === canonicalId || (p.roomCode === targetCode && p.type === 'challenge_completed') || (cleanCode && p.roomCode && p.roomCode.toUpperCase().trim() === cleanCode && p.type === 'challenge_completed'))) {
                   isAlreadyKnown = true;
                   return prev;
                 }
@@ -7344,16 +7448,17 @@ useEffect(() => {
                 return;
               }
 
-              const cleanCode = (targetCode || "").toUpperCase().trim();
               const isMuted = cleanCode && (
                 dismissedCompletionRoomsRef.current.has(cleanCode) ||
                 dismissedCompletionRoomsRef.current.has(targetCode) ||
                 dismissedCompletionRoomsRef.current.has(cleanCode.slice(-6))
               );
               if (!isMuted) {
-                playInviteChime(notifId);
+                playThrottledNotificationSound(() => {
+                  playInviteChime(canonicalId);
+                }, canonicalId);
                 setActiveInviteNotification({
-                  id: notifId,
+                  id: canonicalId,
                   type: 'challenge_completed',
                   title: "Puzzle Race Finished",
                   fromName: fromName || senderName || "Opponent",
@@ -7387,28 +7492,36 @@ useEffect(() => {
 
                 if (type === 'challenge_completed') {
                   const completedByUid = data.completedByUid || data.finisherUid || data.senderId || data.fromUserId;
-                  const recipientUid = data.recipientUid || data.toUserId || data.targetUid || userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "";
+                  const recipientUid = authUser?.uid || data.recipientUid || data.toUserId || data.targetUid || userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "";
                   if (completedByUid && recipientUid && completedByUid === recipientUid) {
                     console.log(`[Push] Self-notification suppressed in onMessage: completedByUid (${completedByUid}) === recipientUid (${recipientUid})`);
                     return;
                   }
 
-                  const notifId = `fcm-completed-${Date.now()}`;
+                  const targetCode = roomCode || "";
+                  const cleanCode = (targetCode || "").toUpperCase().trim();
+                  const canonicalId = `puzzle_race_${cleanCode}`;
+
+                  if (showGameOverModalRef.current && isMatchingRoom(cleanCode)) {
+                    console.log(`[Push] Suppressed secondary challenge_completed onMessage for ${cleanCode} because GameOverModal is active.`);
+                    return;
+                  }
+
                   const completedItem: PendingChallenge = {
-                    id: `${roomCode}_completed_${notifId || Date.now()}`,
-                    inviteId: notifId,
+                    id: canonicalId,
+                    inviteId: canonicalId,
                     type: 'challenge_completed',
                     title: "Puzzle Race Finished",
                     fromName: finisherName,
                     senderName: finisherName,
-                    roomCode: roomCode,
-                    gameId: roomCode,
+                    roomCode: targetCode,
+                    gameId: targetCode,
                     sentAt: Date.now()
                   };
 
                   let isAlreadyKnown = false;
                   setPendingChallenges(prev => {
-                    if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId || (completedItem.roomCode && p.roomCode === completedItem.roomCode && p.type === 'challenge_completed'))) {
+                    if (prev.some(p => p.id === canonicalId || p.inviteId === canonicalId || (p.roomCode === targetCode && p.type === 'challenge_completed') || (cleanCode && p.roomCode && p.roomCode.toUpperCase().trim() === cleanCode && p.type === 'challenge_completed'))) {
                       isAlreadyKnown = true;
                       return prev;
                     }
@@ -7420,7 +7533,7 @@ useEffect(() => {
                   });
 
                   if (isAlreadyKnown) {
-                    console.log(`[Push] Suppressed redundant challenge_completed web FCM for ${roomCode} (already recorded by Firestore listener).`);
+                    console.log(`[Push] Suppressed redundant challenge_completed web FCM for ${roomCode} (already recorded).`);
                     return;
                   }
 
@@ -7432,7 +7545,6 @@ useEffect(() => {
                     return;
                   }
 
-                  const cleanCode = (roomCode || "").toUpperCase().trim();
                   const isMuted = cleanCode && (
                     dismissedCompletionRoomsRef.current.has(cleanCode) ||
                     dismissedCompletionRoomsRef.current.has(roomCode) ||
@@ -7440,9 +7552,11 @@ useEffect(() => {
                   );
 
                   if (!isMuted) {
-                    playInviteChime(notifId);
+                    playThrottledNotificationSound(() => {
+                      playInviteChime(canonicalId);
+                    }, canonicalId);
                     setActiveInviteNotification({
-                      id: notifId,
+                      id: canonicalId,
                       type: 'challenge_completed',
                       title: "Puzzle Race Finished",
                       fromName: finisherName,
@@ -7557,32 +7671,48 @@ useEffect(() => {
     }
   }, [language, userProfile?.id]);
 
-  // Click sound generator (tactile crisp feedback)
-  const playClickSound = () => {
+  // Decoupled Click sound generator (tactile crisp feedback, immune to modal mount unmount/re-render)
+  const playClickSound = useCallback(() => {
     if (!soundEffects) return; // settings guard cond
     try {
       const audioCtx = getAudioCtx();
       if (!audioCtx) return;
       
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+
+      const now = audioCtx.currentTime;
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
+      
+      osc.type = "sine";
+      // Smooth frequency glide from 850Hz down to 120Hz for tactile click feel
+      osc.frequency.setValueAtTime(850, now);
+      osc.frequency.exponentialRampToValueAtTime(120, now + 0.13);
+      
+      // Natural acoustic exponential gain envelope down to 0.0001 over complete natural duration (~150ms)
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
       
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
-      
-      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-      
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.1);
+      // Start immediately and stop naturally after full duration
+      osc.start(now);
+      osc.stop(now + 0.155);
+
+      // Fire-and-forget self-cleanup: disconnect nodes once finished on audio thread
+      osc.onended = () => {
+        try {
+          osc.disconnect();
+          gain.disconnect();
+        } catch (_) {}
+      };
     } catch (e) {
       console.error("Audio Web Synth Click Error:", e);
     }
-  };
+  }, [soundEffects]);
 
   // Erase sound generator (clear, punchy acoustic feedback matching utility buttons presence)
   const playEraseSound = () => {
@@ -9519,6 +9649,12 @@ useEffect(() => {
 
   // Handles multiplayer invite process and dynamic join simulation
   const handleInviteFriend = async (playerId: string) => {
+    const guardSenderId = userProfile?.id || authUser?.uid;
+    if (!playerId || playerId === guardSenderId || playerId === authUser?.uid) {
+      console.warn("[INVITE BLOCKED] Target user is invalid or identical to sender UID.");
+      return;
+    }
+
     playClickSound();
 
     if (!isOnline) {
@@ -9562,19 +9698,22 @@ useEffect(() => {
 
     // Resolve target player ID if target has migrated to Google UID
     let targetPlayerId = playerId;
-    if (playerId.startsWith("GUEST_") || !playerId.includes("-")) {
-      try {
-        const targetDoc = await getDoc(doc(db, "users", playerId));
-        if (targetDoc.exists()) {
-          const targetData = targetDoc.data();
-          if (targetData?.migratedTo) {
-            targetPlayerId = targetData.migratedTo;
-            console.log(`[Firestore] Target player ${playerId} resolved to migrated UID: ${targetPlayerId}`);
-          }
-        }
-      } catch (checkErr) {
-        console.debug("[Firestore] Notice resolving target player migration:", checkErr);
+    try {
+      // Follow migratedTo chains (max 3 hops) for ANY target id, not just GUEST_-prefixed ones
+      for (let hop = 0; hop < 3; hop++) {
+        const targetDoc = await getDoc(doc(db, "users", targetPlayerId));
+        const migrated = targetDoc.exists() ? targetDoc.data()?.migratedTo : null;
+        if (!migrated || typeof migrated !== "string" || migrated === targetPlayerId) break;
+        console.log(`[Firestore] Target player ${targetPlayerId} resolved to migrated UID: ${migrated}`);
+        targetPlayerId = migrated;
       }
+    } catch (checkErr) {
+      console.debug("[Firestore] Notice resolving target player migration:", checkErr);
+    }
+
+    if (!targetPlayerId || targetPlayerId === currentUserId || targetPlayerId === guardSenderId || targetPlayerId === authUser?.uid) {
+      console.warn("[INVITE BLOCKED] Resolved target is identical to sender UID.");
+      return;
     }
 
     // Write to Firestore invites collection with canonical payload directly bound to active roomCode
@@ -10627,15 +10766,16 @@ useEffect(() => {
     const notifiedOpponents = new Set<string>();
 
     const recordOpponentCompletion = (oppUid: string, oppName: string) => {
-      const recipientUid = currentUid || currentAuthUid || currentUserProfileId;
+      const recipientUid = authUser?.uid || currentUid || currentAuthUid || currentUserProfileId;
       if (!oppUid || oppUid === recipientUid || isSelfUser(oppUid, oppName)) return;
       if (notifiedOpponents.has(oppUid)) return;
       notifiedOpponents.add(oppUid);
 
-      const notifId = `realtime-${oppUid}-${Date.now()}`;
+      const cleanUpper = cleanRoomCode.toUpperCase().trim();
+      const canonicalId = `puzzle_race_${cleanUpper}`;
       const completedItem: PendingChallenge = {
-        id: `${cleanRoomCode}_completed_${oppUid}`,
-        inviteId: notifId,
+        id: canonicalId,
+        inviteId: canonicalId,
         type: 'challenge_completed',
         title: "Puzzle Race Finished",
         fromName: oppName || "Opponent",
@@ -10646,14 +10786,20 @@ useEffect(() => {
       };
 
       // 1. ALWAYS add to pending challenges list (updates unread count badge & bell drawer)
+      let isAlreadyKnown = false;
       setPendingChallenges(prev => {
-        if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId)) return prev;
+        if (prev.some(p => p.id === canonicalId || p.inviteId === canonicalId || (p.roomCode === cleanRoomCode && p.type === 'challenge_completed') || (cleanUpper && p.roomCode && p.roomCode.toUpperCase().trim() === cleanUpper && p.type === 'challenge_completed'))) {
+          isAlreadyKnown = true;
+          return prev;
+        }
         const updated = [completedItem, ...prev].slice(0, 10);
         try {
           localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
         } catch (e) {}
         return updated;
       });
+
+      if (isAlreadyKnown) return;
 
       const isSuppressed = shouldSuppressToastForRoom(cleanRoomCode);
       if (isSuppressed) {
@@ -10663,7 +10809,6 @@ useEffect(() => {
         triggerBellWiggle(false);
       } else {
         // Global non-game screen (Home, Stats, Settings)
-        const cleanUpper = cleanRoomCode.toUpperCase().trim();
         const isMuted = cleanUpper && (
           dismissedCompletionRoomsRef.current.has(cleanUpper) ||
           dismissedCompletionRoomsRef.current.has(cleanRoomCode) ||
@@ -10672,9 +10817,11 @@ useEffect(() => {
 
         if (!isMuted) {
           console.log(`[Firestore Realtime] Opponent ${oppName} completed duel ${cleanRoomCode} on screen '${currentScreenRef.current}'. Triggering toast banner.`);
-          playInviteChime(notifId);
+          playThrottledNotificationSound(() => {
+            playInviteChime(canonicalId);
+          }, canonicalId);
           setActiveInviteNotification({
-            id: notifId,
+            id: canonicalId,
             type: 'challenge_completed',
             title: "Puzzle Race Finished",
             fromName: oppName || "Opponent",
@@ -10694,7 +10841,7 @@ useEffect(() => {
       const data = snap.data();
       if (!data) return;
 
-      const recipientUid = currentUid || currentAuthUid || currentUserProfileId;
+      const recipientUid = authUser?.uid || currentUid || currentAuthUid || currentUserProfileId;
       const finisherUid = data.lastCompletedUid || data.winner || data.completedBy;
       const finisherName = data.lastCompletedBy || data.winnerName || data.completedByName || "Opponent";
       if (finisherUid && finisherUid !== recipientUid && !isSelfUser(finisherUid, finisherName)) {
@@ -10714,7 +10861,7 @@ useEffect(() => {
 
     // 2. Real-time listener on room players subcollection for instant status changes
     const unsubRoomPlayers = onSnapshot(roomPlayersCol, (snapshot) => {
-      const recipientUid = currentUid || currentAuthUid || currentUserProfileId;
+      const recipientUid = authUser?.uid || currentUid || currentAuthUid || currentUserProfileId;
       snapshot.docChanges().forEach((change) => {
         if (change.type === "added" || change.type === "modified") {
           const pData = change.doc.data();
@@ -10734,7 +10881,7 @@ useEffect(() => {
       unsubRoom();
       unsubRoomPlayers();
     };
-  }, [challengeMode, activeGameId, userProfile?.id, shouldSuppressToastForRoom, triggerBellWiggle, playInviteChime]);
+  }, [challengeMode, activeGameId, authUser?.uid, userProfile?.id, shouldSuppressToastForRoom, triggerBellWiggle, playInviteChime, playThrottledNotificationSound]);
 
   // Real-time synchronization of canonical room document (Lock badge, PIN) while in-game invite modal is open
   useEffect(() => {
