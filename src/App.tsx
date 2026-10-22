@@ -5233,6 +5233,22 @@ export default function App() {
 
       addLog("👤 Returned to clean local guest session.");
       showToast(t("loggedOutToast"));
+
+      // TOP-NOTCH FIX: Targeted Wipe. 
+      // यह सिर्फ अकाउंट-मिक्स करने वाली चाबियों को डिलीट करेगा। तुम्हारा नाम, सेटिंग्स और जीता हुआ गेम सुरक्षित रहेगा।
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("sudoku_user_") || key === "sudoku_active_user" || key === "sudoku_last_auth_uid")) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+
+      // सुरक्षित रूप से पुरानी मेमोरी साफ करने के लिए हल्का सा रीफ्रेश
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (err: any) {
       const friendlyMsg = getSanitizedAuthErrorMessage(err);
       console.warn("[Auth] Logout notice:", err?.code || "unknown_error");
