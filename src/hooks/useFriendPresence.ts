@@ -3,7 +3,7 @@ import { doc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { getTimestampMillis, PRESENCE_TIMEOUT_MS } from "../utils/formatTimestamp";
-import { getActiveAuthUid, loadVault } from "../utils/storageEngine";
+import { getActiveAuthUid, loadVault, isHydrationWriteLocked } from "../utils/storageEngine";
 
 const INCOGNITO_STORAGE_KEY = "sudoku_is_incognito";
 const INCOGNITO_EVENT = "sudoku_incognito_change";
@@ -133,19 +133,21 @@ export function useFriendPresence(
   useEffect(() => {
     const prevId = prevUserIdRef.current;
     if (prevId && prevId !== userId) {
-      console.log(`[useFriendPresence] User ID transitioned from ${prevId} to ${userId || "none"}. Broadcasting offline for ${prevId}.`);
-      const prevRef = doc(db, "users", prevId);
-      setDoc(
-        prevRef,
-        {
-          status: "offline",
-          isMigrated: true,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      ).catch((err) => {
-        console.warn("[useFriendPresence] Failed to broadcast offline for previous user ID:", err);
-      });
+      if (!prevId.startsWith("GUEST_") && prevId !== "GUEST" && prevId !== "guest" && !isHydrationWriteLocked(prevId)) {
+        console.log(`[useFriendPresence] User ID transitioned from ${prevId} to ${userId || "none"}. Broadcasting offline for ${prevId}.`);
+        const prevRef = doc(db, "users", prevId);
+        setDoc(
+          prevRef,
+          {
+            status: "offline",
+            isMigrated: true,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        ).catch((err) => {
+          console.warn("[useFriendPresence] Failed to broadcast offline for previous user ID:", err);
+        });
+      }
     }
     prevUserIdRef.current = userId || null;
   }, [userId]);
@@ -153,7 +155,7 @@ export function useFriendPresence(
   // Broadcast presence to Firestore
   const broadcastStatus = useCallback(async (status: "online" | "offline") => {
     const currentId = userId || getStoredUserId();
-    if (!currentId) return;
+    if (!currentId || currentId.startsWith("GUEST_") || currentId === "GUEST" || currentId === "guest" || isHydrationWriteLocked(currentId)) return;
 
     try {
       const userRef = doc(db, "users", currentId);

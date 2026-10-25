@@ -90,7 +90,7 @@ function resolveLanguage(lang) {
 }
 
 /**
- * Extract valid FCM tokens from a user document
+ * Extract valid FCM tokens from a user document (Hybrid Architecture: Array + Platform Slots + Legacy Scalar)
  */
 function extractTokens(userData) {
   const tokens = new Set();
@@ -99,6 +99,12 @@ function extractTokens(userData) {
       userData.fcmTokens.forEach((t) => {
         if (typeof t === "string" && t.trim()) tokens.add(t.trim());
       });
+    }
+    if (typeof userData.fcmToken_native === "string" && userData.fcmToken_native.trim()) {
+      tokens.add(userData.fcmToken_native.trim());
+    }
+    if (typeof userData.fcmToken_web === "string" && userData.fcmToken_web.trim()) {
+      tokens.add(userData.fcmToken_web.trim());
     }
     if (typeof userData.fcmToken === "string" && userData.fcmToken.trim()) {
       tokens.add(userData.fcmToken.trim());
@@ -126,9 +132,18 @@ async function pruneBadTokens(userId, tokenList, sendResponse) {
   });
   if (badTokens.length > 0) {
     try {
-      await db.collection("users").doc(userId).update({
+      const userDoc = await db.collection("users").doc(userId).get();
+      const updates = {
         fcmTokens: admin.firestore.FieldValue.arrayRemove(...badTokens)
-      });
+      };
+      if (userDoc.exists) {
+        const data = userDoc.data() || {};
+        const badSet = new Set(badTokens);
+        if (badSet.has(data.fcmToken)) updates.fcmToken = "";
+        if (badSet.has(data.fcmToken_native)) updates.fcmToken_native = "";
+        if (badSet.has(data.fcmToken_web)) updates.fcmToken_web = "";
+      }
+      await db.collection("users").doc(userId).update(updates);
       console.log(`[Push] Pruned ${badTokens.length} stale FCM token(s) for user ${userId}`);
     } catch (e) {
       console.warn(`[Push] Failed to prune bad tokens for user ${userId}:`, e);
@@ -196,7 +211,7 @@ exports.onInviteCreated = onDocumentCreated("invites/{inviteId}", async (event) 
       },
       android: {
         priority: "high",
-        ttl: 172800 * 1000, // 48 hours in milliseconds
+        ttl: 604800 * 1000, // 7 days in milliseconds
         notification: {
           channelId: "sudoku_duels",
           sound: "default",
@@ -312,7 +327,7 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
         },
         android: {
           priority: "high",
-          ttl: 172800 * 1000, // 48 hours in milliseconds
+          ttl: 604800 * 1000, // 7 days in milliseconds
           notification: {
             channelId: "sudoku_duels",
             sound: "default",

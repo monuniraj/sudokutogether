@@ -33,6 +33,8 @@ import {
   isGenericDisplayName,
   saveSettings,
   getSettings,
+  isHydrationWriteLocked,
+  setHydrationWriteLock,
   type UserVault,
   type UserVaultBestTimes
 } from "./utils/storageEngine";
@@ -40,6 +42,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocFromServer,
   collection,
   onSnapshot,
   serverTimestamp,
@@ -286,11 +289,14 @@ interface PendingChallenge {
   senderName?: string;
   fromName?: string;
   fromUserId?: string;
+  toUserId?: string;
+  recipientId?: string;
   sentAt?: number;
   type?: 'invite' | 'challenge_completed';
   title?: string;
   roomCode?: string;
   gameId?: string;
+  expiresAt?: number;
   isGrouped?: boolean;
   finisherNames?: string[];
   finisherCount?: number;
@@ -300,8 +306,8 @@ interface PendingChallenge {
 const INITIAL_GUEST_STATE = {
   userProfile: {
     id: "GUEST_" + Math.random().toString(36).substring(2, 9),
-    name: `Pro_${Math.floor(1000 + Math.random() * 9000)}`,
-    displayName: `Pro_${Math.floor(1000 + Math.random() * 9000)}`,
+    name: "Player",
+    displayName: "Player",
     avatarColor: "#6B7280",
     isSynced: false
   },
@@ -1602,6 +1608,45 @@ export default function App() {
   const [isAuthHydrating, setIsAuthHydrating] = useState<boolean>(() => {
     return Boolean(getActiveAuthUid());
   });
+  const [isAppReady, setIsAppReady] = useState<boolean>(() => {
+    return !getActiveAuthUid();
+  });
+  const isExplicitLogoutRef = useRef<boolean>(false);
+  const isHydrationCompleteRef = useRef<boolean>(!getActiveAuthUid());
+
+  const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const clearSafetyTimeout = useCallback(() => {
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+      safetyTimeoutRef.current = null;
+    }
+  }, []);
+  const clearSafetyTimeoutRef = useRef(clearSafetyTimeout);
+  clearSafetyTimeoutRef.current = clearSafetyTimeout;
+
+  // 3.5s safety timeout to ensure app UI is never permanently blocked
+  useEffect(() => {
+    if (isAppReady) {
+      clearSafetyTimeout();
+      return;
+    }
+    safetyTimeoutRef.current = setTimeout(() => {
+      console.log("[Auth] 3.5s initial auth resolution safety timeout reached. Unlocking app UI.");
+      setIsAppReady(true);
+      setIsAuthHydrating(false);
+      isHydrationCompleteRef.current = true;
+      const curUid = auth.currentUser?.uid;
+      if (curUid) setHydrationWriteLock(curUid, false);
+      safetyTimeoutRef.current = null;
+    }, 3500);
+    return () => {
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+        safetyTimeoutRef.current = null;
+      }
+    };
+  }, [isAppReady, clearSafetyTimeout]);
+
   const [isConnectingGoogle, setIsConnectingGoogle] = useState<boolean>(false);
   const isConnectingRef = useRef<boolean>(false);
   const loginCancelledRef = useRef<boolean>(false);
@@ -1651,7 +1696,7 @@ export default function App() {
           localStorage.setItem(getScopedKey("activeTheme", authUser.uid), activeTheme);
         }
       } catch { }
-      if (!isAuthHydrating) {
+      if (!isAuthHydrating && isHydrationCompleteRef.current && !isHydrationWriteLocked(authUser?.uid)) {
         syncSettingsToCloudRef.current({
           activeTheme,
           theme: { activeTheme, darkMode: !!settingsStateRef.current?.darkMode }
@@ -1834,19 +1879,28 @@ export default function App() {
     }
 
     // 3. Cold boot / syncing check:
-    // If cold boot (empty cache) or currently syncing, DO NOT render interim fallback names (email or "Player").
+    // If cold boot (empty cache) or currently syncing, DO NOT render interim fallback names (Google displayName, email or "Player").
     // Return empty string so UI callers can render clean skeleton placeholders until Firestore hydration commits.
     if (isSyncingCloudData || isAuthHydrating) {
       return "";
     }
 
-    // 4. Fallback for pure offline guest only
-    if (profileName && profileName.length <= 15) {
+    // 4. If authenticated user has Google displayName (only when hydration is complete and no custom name exists)
+    const authUser = auth.currentUser;
+    if (authUser?.displayName && !isGenericDisplayName(authUser.displayName)) {
+      return authUser.displayName.trim().slice(0, 15);
+    }
+
+    // 5. Fallback for pure offline guest only
+    if (profileName && profileName.length <= 15 && !isGenericDisplayName(profileName)) {
       return profileName;
     }
 
-    const randNum = (userProfile?.id || "").replace(/[^0-9]/g, "").slice(-4) || String(Math.floor(1000 + Math.random() * 9000));
-    return `Pro_${randNum}`;
+    if (authUser?.email && authUser.email.includes("@")) {
+      return authUser.email.split("@")[0].slice(0, 15);
+    }
+
+    return "Player";
   };
 
   const handleAcceptInvitationWithProfileCheck = (onConfirm: () => void) => {
@@ -1884,9 +1938,10 @@ export default function App() {
     localStorage.setItem("sudoku_is_display_name_configured", "true");
     syncGuestSnapshotInRealtimeRef.current?.({ userProfile: updatedProfile });
 
-    if (auth.currentUser && !auth.currentUser.isAnonymous) {
-      const userDocRef = doc(db, "users", auth.currentUser.uid);
-      setDoc(userDocRef, { name: finalName, displayName: finalName }, { merge: true }).catch(err => {
+    const effectiveCloudUid = (auth.currentUser && !auth.currentUser.isAnonymous) ? auth.currentUser.uid : (activeUid !== "guest" && !activeUid.startsWith("GUEST_") ? activeUid : null);
+    if (effectiveCloudUid) {
+      const userDocRef = doc(db, "users", effectiveCloudUid);
+      setDoc(userDocRef, { name: finalName, displayName: finalName, updatedAt: serverTimestamp() }, { merge: true }).catch(err => {
         console.warn("[Profile] Non-blocking name sync from invite failed:", err);
       });
     }
@@ -2164,7 +2219,10 @@ export default function App() {
       .map((p: any) => p.id)
       .filter((id: string) => Boolean(id) && id !== myId);
   }, [multiplayerPlayers, userProfile?.id]);
-  const { getFriendStatus: getDrawerFriendStatus, getFriendLastActive: getDrawerFriendLastActive } = useFriendPresence(authUser?.uid || userProfile?.id, drawerPlayerIds);
+  const effectivePresenceId = (isSyncingCloudData || !isHydrationCompleteRef.current || isHydrationWriteLocked(authUser?.uid || userProfile?.id))
+    ? null
+    : (authUser?.uid || userProfile?.id);
+  const { getFriendStatus: getDrawerFriendStatus, getFriendLastActive: getDrawerFriendLastActive } = useFriendPresence(effectivePresenceId, drawerPlayerIds);
 
   const [privacyEnabled, setPrivacyEnabled] = useState<boolean>(() => {
     try {
@@ -2364,7 +2422,7 @@ export default function App() {
 
   const [pendingChallenges, setPendingChallenges] = useState<PendingChallenge[]>(() => {
     try {
-      const saved = localStorage.getItem("sudoku_pending_challenges");
+      const saved = localStorage.getItem(getScopedKey("pending_challenges")) ?? localStorage.getItem("sudoku_pending_challenges");
       if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -2634,11 +2692,41 @@ export default function App() {
 
   // Memoized top-10 sorted bell invites with room-level grouping for completed duels
   const sortedBellInvites = useMemo(() => {
+    const now = Date.now();
+    const currentCompleted = completedGamesRef.current || completedGames || [];
+    const completedRoomCodes = new Set<string>();
+    currentCompleted.forEach((g: any) => {
+      if (g) {
+        if (g.seed) completedRoomCodes.add(String(g.seed).padStart(6, '0').slice(-6));
+        if (g.id) {
+          const m = extractRoomCodeFromChallenge(g);
+          if (m) completedRoomCodes.add(m);
+        }
+      }
+    });
+
     const validInvites = pendingChallenges.filter((invite: any) => {
       if (!invite) return false;
       const hasId = Boolean(invite.id || invite.inviteId || invite.roomCode || invite.gameId);
       const hasSender = Boolean(invite.senderName || invite.fromName || invite.hostName);
-      return hasId || hasSender;
+      if (!hasId && !hasSender) return false;
+
+      // 1. Expiration Filter: discard if 7-day lifespan passed
+      const itemSentAt = typeof invite.sentAt === "number" ? invite.sentAt : getInviteTimestampMs(invite);
+      const expiresAt = typeof invite.expiresAt === "number" ? invite.expiresAt : (itemSentAt ? itemSentAt + (7 * 24 * 60 * 60 * 1000) : 0);
+      if (expiresAt && now > expiresAt) {
+        return false;
+      }
+
+      // 2. Receiver Completion Filter: If current user already completed this room, do not show 'invite' card (they can only view results)
+      if (invite.type !== "challenge_completed") {
+        const room = extractRoomCodeFromChallenge(invite) || invite.roomCode || invite.gameId;
+        if (room && completedRoomCodes.has(room)) {
+          return false;
+        }
+      }
+
+      return true;
     });
 
     const standardInvites: PendingChallenge[] = [];
@@ -3156,6 +3244,85 @@ export default function App() {
     triggerBackgroundNotificationRef.current = triggerBackgroundNotification;
   });
 
+  const activeInviteNotificationRef = useRef<any | null>(activeInviteNotification);
+  activeInviteNotificationRef.current = activeInviteNotification;
+
+  // Unified single-source-of-truth helper to upsert an invite or race completion into pendingChallenges
+  const upsertBellChallenge = useCallback((payload: any) => {
+    if (!payload) return;
+
+    const rawCode = payload.roomCode || payload.gameId || payload.id;
+    const cleanRoomCode = extractRoomCodeFromChallenge(payload) || (rawCode ? String(rawCode).padStart(6, '0').slice(-6) : "");
+    const isCompleted = payload.type === "challenge_completed";
+    const canonicalId = isCompleted ? `puzzle_race_${cleanRoomCode}` : `invite_${cleanRoomCode}`;
+    const rawInviteId = payload.inviteId || payload.id || canonicalId;
+
+    const incomingName = (payload.fromName || payload.senderName || payload.finisherName || "").trim();
+
+    setPendingChallenges(prev => {
+      // Find any existing challenge for this room or ID to protect real names
+      const existing = prev.find(p =>
+        p.id === canonicalId ||
+        p.inviteId === rawInviteId ||
+        (cleanRoomCode && (p.roomCode === cleanRoomCode || p.gameId === cleanRoomCode || p.id === cleanRoomCode)) ||
+        (activeInviteNotificationRef.current && (
+          activeInviteNotificationRef.current.id === canonicalId ||
+          activeInviteNotificationRef.current.roomCode === cleanRoomCode
+        ))
+      );
+
+      const existingName = (existing?.fromName || existing?.senderName || activeInviteNotificationRef.current?.fromName || activeInviteNotificationRef.current?.senderName || "").trim();
+      const hasRealExistingName = Boolean(existingName && !isGenericDisplayName(existingName) && existingName !== "Opponent" && existingName !== "Player");
+      const isIncomingGeneric = !incomingName || isGenericDisplayName(incomingName) || incomingName === "Player" || incomingName === "Opponent";
+
+      const finalName = (hasRealExistingName && isIncomingGeneric)
+        ? existingName
+        : (incomingName || (isCompleted ? "Opponent" : "Player"));
+
+      const resolvedSeed = Number(payload.seed) || (cleanRoomCode ? Number(cleanRoomCode) : 0);
+
+      const itemToUpsert: PendingChallenge = {
+        id: canonicalId,
+        inviteId: rawInviteId,
+        type: isCompleted ? "challenge_completed" : "invite",
+        roomCode: cleanRoomCode,
+        gameId: cleanRoomCode,
+        fromName: finalName,
+        senderName: finalName,
+        fromUserId: payload.fromUserId || payload.senderId || payload.completedByUid || "",
+        toUserId: payload.toUserId || payload.recipientId || payload.targetUid || "",
+        password: payload.password || "",
+        difficulty: payload.difficulty || "MEDIUM",
+        seed: resolvedSeed,
+        maxMistakes: payload.maxMistakes ?? 3,
+        hintLimit: payload.hintLimit ?? 3,
+        timerEnabled: payload.timerEnabled ?? true,
+        sentAt: typeof payload.sentAt === "number" ? payload.sentAt : (Date.now()),
+        expiresAt: typeof payload.expiresAt === "number" ? payload.expiresAt : (Date.now() + (7 * 24 * 60 * 60 * 1000))
+      };
+
+      // Filter out previous entry for same canonicalId, cleanRoomCode (for same type), or rawInviteId
+      const filtered = prev.filter(p => {
+        if (p.id === canonicalId || p.inviteId === rawInviteId) return false;
+        if (cleanRoomCode && p.type === itemToUpsert.type && (p.roomCode === cleanRoomCode || p.gameId === cleanRoomCode || p.id === cleanRoomCode)) {
+          return false;
+        }
+        return true;
+      });
+
+      const updated = [itemToUpsert, ...filtered]
+        .sort((a, b) => getInviteTimestampMs(b) - getInviteTimestampMs(a))
+        .slice(0, 10);
+
+      try {
+        localStorage.setItem(getScopedKey("pending_challenges"), JSON.stringify(updated));
+        localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+      } catch (e) { }
+
+      return updated;
+    });
+  }, [extractRoomCodeFromChallenge, getInviteTimestampMs]);
+
   // Route incoming invites: single router for visibility, self-echo, dedupe and in-game quiet routing
   const routeInviteNotification = useCallback((payload: any, rawInvite?: any) => {
     if (!payload) return;
@@ -3172,12 +3339,31 @@ export default function App() {
         if (surfacedInviteIdsRef.current.has(dedupeKey)) return;
         surfacedInviteIdsRef.current.add(dedupeKey);
       }
-      if (document.visibilityState === "hidden") {
-        // Background: OS notification path only
-        triggerBackgroundNotificationRef.current(rawInvite);
-        return;
+    }
+
+    // ALWAYS store in bell drawer FIRST (SSOT) so mid-game or background invites are never lost
+    upsertBellChallenge(payload);
+
+    if (rawInvite && document.visibilityState === "hidden") {
+      // Background: OS notification path only
+      triggerBackgroundNotificationRef.current(rawInvite);
+      return;
+    }
+
+    // Name Protection for currently active toast banner:
+    const incomingName = (payload.fromName || payload.senderName || "").trim();
+    if (activeInviteNotificationRef.current) {
+      const activeCode = extractRoomCodeFromChallenge(activeInviteNotificationRef.current);
+      const incomingCode = extractRoomCodeFromChallenge(payload);
+      if (activeCode && incomingCode && activeCode === incomingCode) {
+        const curName = (activeInviteNotificationRef.current.fromName || activeInviteNotificationRef.current.senderName || "").trim();
+        if (curName && !isGenericDisplayName(curName) && curName !== "Player" && curName !== "Opponent" && (!incomingName || isGenericDisplayName(incomingName) || incomingName === "Player" || incomingName === "Opponent")) {
+          payload.fromName = curName;
+          payload.senderName = curName;
+        }
       }
     }
+
     const senderId = String(payload.fromUserId || payload.senderId || payload.fromName || "").trim();
     const inGame = isActivelyInGame() || currentScreenRef.current === "game";
 
@@ -3209,10 +3395,7 @@ export default function App() {
         playInviteChime(soundKey);
       }, soundKey);
     } catch (e) { }
-  }, [isActivelyInGame, triggerBellWiggle, playInviteChime, playThrottledNotificationSound]);
-
-  const activeInviteNotificationRef = useRef<any | null>(activeInviteNotification);
-  activeInviteNotificationRef.current = activeInviteNotification;
+  }, [isActivelyInGame, triggerBellWiggle, playInviteChime, playThrottledNotificationSound, upsertBellChallenge, extractRoomCodeFromChallenge]);
 
   const dockInviteToBell = useCallback(() => {
     setIsDockingToBell(true);
@@ -3230,36 +3413,8 @@ export default function App() {
         dismissedCompletionRoomsRef.current.add(clean.slice(-6));
       }
 
-      setPendingChallenges(prev => {
-        const uniqueId = isCompleted ? `${targetCode}_completed_${notifId || Date.now()}` : targetCode;
-        if (prev.some(p => p.id === uniqueId || p.inviteId === notifId || (currentNotif.id && p.id === currentNotif.id))) {
-          return prev;
-        }
-
-        const pendingItem: PendingChallenge = {
-          id: uniqueId,
-          inviteId: notifId,
-          type: isCompleted ? 'challenge_completed' : 'invite',
-          senderName: currentNotif.fromName || currentNotif.senderName || "Player",
-          fromName: currentNotif.fromName || currentNotif.senderName || "Player",
-          fromUserId: currentNotif.fromUserId || currentNotif.senderId,
-          roomCode: currentNotif.roomCode || targetCode,
-          gameId: currentNotif.gameId || targetCode,
-          difficulty: currentNotif.difficulty || "MEDIUM",
-          seed: currentNotif.seed || 123456,
-          maxMistakes: currentNotif.maxMistakes ?? 3,
-          hintLimit: currentNotif.hintLimit ?? 3,
-          timerEnabled: currentNotif.timerEnabled ?? true,
-          password: currentNotif.password || "",
-          sentAt: Date.now()
-        };
-
-        const updated = [pendingItem, ...prev].slice(0, 10);
-        try {
-          localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
-        } catch (e) { }
-        return updated;
-      });
+      // Safely upsert into Bell state without duplicate or name downgrade
+      upsertBellChallenge(currentNotif);
     }
 
     setTimeout(() => {
@@ -3269,7 +3424,7 @@ export default function App() {
       setActiveInviteNotification(null);
       setIsDockingToBell(false);
     }, 500);
-  }, [triggerBellWiggle]);
+  }, [triggerBellWiggle, upsertBellChallenge]);
 
   useEffect(() => {
     if (!activeInviteNotification) return;
@@ -3782,13 +3937,22 @@ export default function App() {
 
     const runHydration = async () => {
       setIsAuthHydrating(true);
+      isHydrationCompleteRef.current = false;
+      setHydrationWriteLock(uid, true);
       try {
         const userDocRef = doc(db, "users", uid);
         let userSnap: any = null;
         try {
-          userSnap = await getDoc(userDocRef);
+          try {
+            userSnap = await getDocFromServer(userDocRef);
+          } catch (serverErr: any) {
+            console.warn("[Auth] getDocFromServer failed or offline, falling back to cached getDoc:", serverErr);
+            userSnap = await getDoc(userDocRef);
+          }
         } catch (netErr: any) {
           console.warn("[Auth] Offline or network failure fetching Firestore user document. Retaining local cached vault for uid:", uid, netErr);
+          setHydrationWriteLock(uid, false);
+          isHydrationCompleteRef.current = true;
           const localVault = loadVault(uid);
           setTotalGamesPlayed(localVault.stats.totalGamesPlayed);
           setTotalWinsCount(localVault.stats.totalWinsCount);
@@ -3811,6 +3975,9 @@ export default function App() {
           setUserProfile(localProfile);
           userProfileRef.current = localProfile;
           currentHydratedUidRef.current = uid;
+          clearSafetyTimeoutRef.current();
+          setIsAuthHydrating(false);
+          setIsAppReady(true);
           return;
         }
 
@@ -3864,7 +4031,14 @@ export default function App() {
           const isGenericPlaceholder = (n?: string | null): boolean => {
             if (!n) return true;
             const t = n.trim();
-            return !t || ["Anonymous", "Guest", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Player"].includes(t);
+            return (
+              !t ||
+              ["Anonymous", "Guest", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Player"].includes(t) ||
+              /^Player[_\s-]?\d*$/i.test(t) ||
+              /^Pro[_\s-]?\d*$/i.test(t) ||
+              /^Guest[_\s-]?\d*$/i.test(t) ||
+              t.startsWith("Bold Voyager")
+            );
           };
 
           // 1. Strict ZERO-MERGE isolation with Guest: Read ONLY this Google user's local vault (sudoku_vault_${uid})
@@ -3978,12 +4152,12 @@ export default function App() {
           // 6. Profile Name: Firestore is SSOT. The custom name in Firestore takes absolute precedence.
           let resolvedDisplayName = "";
           const cloudCustomName = cloudDocData?.displayName || cloudDocData?.name;
-          if (cloudCustomName && typeof cloudCustomName === "string" && cloudCustomName.trim()) {
+          if (cloudCustomName && typeof cloudCustomName === "string" && !isGenericPlaceholder(cloudCustomName)) {
             resolvedDisplayName = cloudCustomName.trim().slice(0, 15);
-          } else if (localVault.profile.displayName && !isGenericPlaceholder(localVault.profile.displayName)) {
-            resolvedDisplayName = localVault.profile.displayName.trim().slice(0, 15);
           } else if (authUser?.displayName && !isGenericPlaceholder(authUser.displayName)) {
             resolvedDisplayName = authUser.displayName.trim().slice(0, 15);
+          } else if (localVault.profile.displayName && !isGenericPlaceholder(localVault.profile.displayName)) {
+            resolvedDisplayName = localVault.profile.displayName.trim().slice(0, 15);
           } else if (authUser?.email && typeof authUser.email === "string" && authUser.email.includes("@")) {
             resolvedDisplayName = authUser.email.split("@")[0].trim().slice(0, 15);
           } else {
@@ -4008,8 +4182,21 @@ export default function App() {
             savedGames: finalSaved
           };
 
+          // Disengage hydration write-lock for this UID so the reconciled vault can be committed
+          setHydrationWriteLock(uid, false);
+          isHydrationCompleteRef.current = true;
+
           // Persist the unified single vault object to sudoku_vault_${uid}
           saveVault(updatedVault, uid);
+
+          const updatedProfile = {
+            id: uid,
+            name: updatedVault.profile.displayName,
+            displayName: updatedVault.profile.displayName,
+            avatarColor: updatedVault.profile.avatarColor,
+            isSynced: true,
+            email: updatedVault.profile.email
+          };
 
           // Atomically update React states simultaneously from reconciled payload
           setTotalGamesPlayed(updatedVault.stats.totalGamesPlayed);
@@ -4022,16 +4209,18 @@ export default function App() {
           setSavedGames(updatedVault.savedGames);
           savedGamesRef.current = updatedVault.savedGames;
 
-          const updatedProfile = {
-            id: uid,
-            name: updatedVault.profile.displayName,
-            displayName: updatedVault.profile.displayName,
-            avatarColor: updatedVault.profile.avatarColor,
-            isSynced: true,
-            email: updatedVault.profile.email
-          };
           userProfileRef.current = updatedProfile;
           setUserProfile(updatedProfile);
+
+          // Fast-path unlock: Core user profile and stats are committed to React state.
+          // Unlock UI immediately and cancel the safety timeout so subsequent network calls (past_players, FCM token)
+          // run in the background without blocking the UI or risking the 3.5s timeout.
+          clearSafetyTimeoutRef.current();
+          setIsAuthHydrating(false);
+          setIsAppReady(true);
+          isHydrationCompleteRef.current = true;
+          setHydrationWriteLock(uid, false);
+          currentHydratedUidRef.current = uid;
 
           // 3. Existing friends list: strictly from cloud/user drawer (never touch guest drawer!)
           try {
@@ -4324,18 +4513,20 @@ export default function App() {
           // 6. Sync current FCM push token & preference to users/{user.uid}
           const currentFcmToken = localStorage.getItem("sudoku_fcm_token");
           const isNotifsEnabled = localStorage.getItem("sudoku_notificationsEnabled") !== "false";
+          const platformField = Capacitor.isNativePlatform() ? "fcmToken_native" : "fcmToken_web";
           try {
             if (!isNotifsEnabled) {
               const payload: any = { notificationsEnabled: false };
               if (currentFcmToken) {
                 payload.fcmTokens = arrayRemove(currentFcmToken);
-                payload.fcmToken = "";
+                payload[platformField] = "";
               }
               await setDoc(userDocRef, payload, { merge: true });
             } else if (currentFcmToken) {
               await setDoc(userDocRef, {
                 notificationsEnabled: true,
                 fcmToken: currentFcmToken,
+                [platformField]: currentFcmToken,
                 fcmTokens: arrayUnion(currentFcmToken)
               }, { merge: true });
             }
@@ -4351,7 +4542,14 @@ export default function App() {
           const isGenericPlaceholderNew = (n?: string | null): boolean => {
             if (!n) return true;
             const t = n.trim();
-            return !t || ["Anonymous", "Guest", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Player"].includes(t);
+            return (
+              !t ||
+              ["Anonymous", "Guest", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Player"].includes(t) ||
+              /^Player[_\s-]?\d*$/i.test(t) ||
+              /^Pro[_\s-]?\d*$/i.test(t) ||
+              /^Guest[_\s-]?\d*$/i.test(t) ||
+              t.startsWith("Bold Voyager")
+            );
           };
 
           let resolvedDisplayName = "";
@@ -4362,7 +4560,7 @@ export default function App() {
           } else if (authUser?.email && typeof authUser.email === "string" && authUser.email.includes("@")) {
             resolvedDisplayName = authUser.email.split("@")[0].trim().slice(0, 15);
           } else {
-            resolvedDisplayName = `Player_${Math.floor(1000 + Math.random() * 9000)}`;
+            resolvedDisplayName = "Player";
           }
 
           const localCompleted = Array.isArray(localVault.completedGames) ? localVault.completedGames : [];
@@ -4392,7 +4590,31 @@ export default function App() {
             savedGames: Array.isArray(localVault.savedGames) ? localVault.savedGames : []
           };
 
+          // Disengage hydration write-lock for this UID so initialized vault can be committed
+          setHydrationWriteLock(uid, false);
+          isHydrationCompleteRef.current = true;
+
           saveVault(newVault, uid);
+
+          // Cloud-First SSOT: Immediately create user doc in Firestore so it is never missing
+          const userDocRef = doc(db, "users", uid);
+          setDoc(userDocRef, {
+            name: resolvedDisplayName,
+            displayName: resolvedDisplayName,
+            email: authUser?.email || null,
+            avatarColor: newVault.profile.avatarColor,
+            stats: newVault.stats,
+            completedGames: newVault.completedGames,
+            bestTimes: newVault.bestTimes,
+            totalGamesPlayed: newVault.stats.totalGamesPlayed,
+            totalWinsCount: newVault.stats.totalWinsCount,
+            winStreak: newVault.stats.winStreak,
+            wins: newVault.stats.totalWinsCount,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }, { merge: true }).catch(err => {
+            console.warn("[Firestore] Failed to initialize cloud user document:", err);
+          });
 
           const newProfile = {
             id: uid,
@@ -4415,6 +4637,14 @@ export default function App() {
           completedGamesRef.current = newVault.completedGames;
           setSavedGames(newVault.savedGames);
           savedGamesRef.current = newVault.savedGames;
+
+          // Fast-path unlock for fresh user:
+          clearSafetyTimeoutRef.current();
+          setIsAuthHydrating(false);
+          setIsAppReady(true);
+          isHydrationCompleteRef.current = true;
+          setHydrationWriteLock(uid, false);
+          currentHydratedUidRef.current = uid;
 
           // New user gets clean isolated friends/recent players:
           setFriends([]);
@@ -4493,7 +4723,10 @@ export default function App() {
       } catch (err) {
         console.warn("[Auth] Hydration error:", err);
       } finally {
+        setHydrationWriteLock(uid, false);
+        isHydrationCompleteRef.current = true;
         setIsAuthHydrating(false);
+        setIsAppReady(true);
         if (hydrationUidRef.current === uid) {
           hydrationPromiseRef.current = null;
           hydrationUidRef.current = null;
@@ -4552,19 +4785,28 @@ export default function App() {
           console.warn("[Auth] Guest vault load error:", e);
         }
 
-        signInAnonymously(auth).catch((err) => {
-          console.warn("[Auth] Background anonymous session init error:", err);
-        });
+        if (isExplicitLogoutRef.current) {
+          console.log("[Auth] Suppressed background anonymous session initialization following explicit logout.");
+          isExplicitLogoutRef.current = false;
+          setIsAppReady(true);
+        } else {
+          signInAnonymously(auth).catch((err) => {
+            console.warn("[Auth] Background anonymous session init error:", err);
+          }).finally(() => {
+            setIsAppReady(true);
+          });
+        }
       } else if (user.isAnonymous) {
         currentHydratedUidRef.current = user.uid;
         setIsAuthHydrating(false);
+        setIsAppReady(true);
 
         const curProfile = userProfileRef.current;
         if (!curProfile?.isSynced) {
           const genericNames = ["Anonymous", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Guest"];
           if (!curProfile || !curProfile.name || genericNames.includes(curProfile.name.trim())) {
             const guestVault = loadVault("guest");
-            const safeName = guestVault.profile.displayName || `Pro_${Math.floor(1000 + Math.random() * 9000)}`;
+            const safeName = guestVault.profile.displayName && !isGenericDisplayName(guestVault.profile.displayName) ? guestVault.profile.displayName : "Player";
             const sanitizedProfile = {
               id: curProfile?.id || guestVault.profile.id || ("GUEST_" + Math.floor(1000 + Math.random() * 9000)),
               name: safeName,
@@ -4577,8 +4819,18 @@ export default function App() {
           }
         }
       } else if (user && !user.isAnonymous) {
+        // Re-entrance guard: if user is already hydrated in memory, prevent re-zeroing and unlock immediately
+        if (currentHydratedUidRef.current === user.uid && userProfileRef.current?.id === user.uid && userProfileRef.current?.isSynced) {
+          clearSafetyTimeoutRef.current();
+          setIsAuthHydrating(false);
+          setIsAppReady(true);
+          return;
+        }
+
         setGuestNamespaceLock(false);
         setIsAuthHydrating(true);
+        isHydrationCompleteRef.current = false;
+        setHydrationWriteLock(user.uid, true);
         setActiveAuthUid(user.uid);
 
         // --- 0ms SYNCHRONOUS LOCAL CACHE HYDRATION (STEP A) FROM CANONICAL VAULT ---
@@ -4592,7 +4844,7 @@ export default function App() {
           const hasValidCustomName = userHasVault && Boolean(cachedName) && !isGenericDisplayName(cachedName);
 
           if (hasValidCustomName) {
-            const activeName = cachedName.trim().slice(0, 15);
+            const activeName = cachedName!.trim().slice(0, 15);
             const cachedProfile = {
               id: uid,
               name: activeName,
@@ -4603,8 +4855,8 @@ export default function App() {
             };
             setUserProfile(cachedProfile);
             userProfileRef.current = cachedProfile;
-          } else if (!userHasVault) {
-            // Cold boot (empty cache): Do NOT render interim fallback names ("Player" or email).
+          } else {
+            // Cold boot (empty cache / unhydrated account): Do NOT render interim fallback names (Google displayName, "Player" or email).
             // Show a clean loading skeleton/placeholder until hydrateUserFromCloud resolves the Firestore custom name.
             setUserProfile((prev) => {
               if (prev && prev.name && !isGenericDisplayName(prev.name)) return prev;
@@ -4629,6 +4881,49 @@ export default function App() {
             savedGamesRef.current = cachedVault.savedGames;
             setPersonalBestTimes(cachedVault.bestTimes);
             personalBestTimesRef.current = cachedVault.bestTimes;
+
+            // Load authenticated user's own scoped in-progress game (if any)
+            const userSaved = localStorage.getItem(getScopedKey("savedSession", uid));
+            if (userSaved) {
+              try {
+                const parsed = JSON.parse(userSaved);
+                if (parsed && !parsed.isGameOver) {
+                  const isMultiplayerRoom = Boolean(parsed.isMultiplayer && parsed.roomCode);
+                  const elapsed = (isMultiplayerRoom && parsed.timestamp)
+                    ? Math.max(0, Math.floor((Date.now() - parsed.timestamp) / 1000))
+                    : 0;
+                  const baseSecs = Math.max(0, Number(parsed.sessionSeconds) || 0);
+                  setSavedSessionInfo({
+                    difficulty: parsed.difficulty,
+                    seconds: baseSecs + (isMultiplayerRoom ? elapsed : 0),
+                    isMultiplayer: isMultiplayerRoom,
+                    roomCode: parsed.roomCode || undefined
+                  });
+                } else {
+                  setSavedSessionInfo(null);
+                }
+              } catch {
+                setSavedSessionInfo(null);
+              }
+            } else {
+              setSavedSessionInfo(null);
+              setBoardState(null);
+              setSessionSeconds(0);
+            }
+          } else {
+            // Cold-boot protection: Zero out memory states and sanitize guest in-progress games so Guest data does not leak into the authenticated session before cloud hydration finishes
+            setTotalGamesPlayed(0);
+            setTotalWinsCount(0);
+            setWinStreak(0);
+            setCompletedGames([]);
+            completedGamesRef.current = [];
+            setSavedGames([]);
+            savedGamesRef.current = [];
+            setPersonalBestTimes({});
+            personalBestTimesRef.current = {};
+            setSavedSessionInfo(null);
+            setBoardState(null);
+            setSessionSeconds(0);
           }
 
           // Theme Cache: 0ms synchronous local cache hydration for authenticated user
@@ -4676,6 +4971,9 @@ export default function App() {
   const syncSettingsToCloud = useCallback((updatedPartial: Partial<UserSettings> & Record<string, any>) => {
     const currentUid = auth.currentUser?.uid;
     if (!currentUid || auth.currentUser?.isAnonymous) {
+      return;
+    }
+    if (isHydrationWriteLocked(currentUid) || !isHydrationCompleteRef.current || isConnectingRef.current) {
       return;
     }
 
@@ -5027,18 +5325,13 @@ export default function App() {
       }
 
       if (finalUser && finalUser.email) {
+        // Clean Atomic Cloud Mount: Engage write lock & hydration state BEFORE authUser triggers reactive effects
+        isHydrationCompleteRef.current = false;
+        setHydrationWriteLock(finalUser.uid, true);
+        setIsAuthHydrating(true);
         setAuthUser(finalUser);
         addLog(`🔒 Connected Google Account: ${finalUser.email}`);
         showToast(t("connectedGoogleToast"));
-
-        // Clean Atomic Cloud Mount: Immediately flush in-memory guest stats before cloud hydration
-        setCompletedGames([]);
-        completedGamesRef.current = [];
-        setPersonalBestTimes({});
-        personalBestTimesRef.current = {};
-        setTotalGamesPlayed(0);
-        setTotalWinsCount(0);
-        setWinStreak(0);
 
         // Await full cloud hydration so all Firestore reads (profile, stats, settings, friends) commit to localStorage
         try {
@@ -5078,6 +5371,7 @@ export default function App() {
 
   const handleLogout = async () => {
     isLoggingOutRef.current = true;
+    isExplicitLogoutRef.current = true;
     try {
       addLog("🔒 Disconnecting session...");
       const currentUid = auth.currentUser?.uid || userProfile?.id;
@@ -5093,8 +5387,9 @@ export default function App() {
             updatedAt: serverTimestamp()
           };
           if (cachedFcmToken) {
+            const platformField = Capacitor.isNativePlatform() ? "fcmToken_native" : "fcmToken_web";
             updateData.fcmTokens = arrayRemove(cachedFcmToken);
-            updateData.fcmToken = "";
+            updateData[platformField] = "";
           }
           await setDoc(userRef, updateData, { merge: true }).catch(() => { });
         } catch (err) {
@@ -5125,32 +5420,13 @@ export default function App() {
       setRecentPlayersState([]);
       setMultiplayerPlayers([]);
 
-      // 3. Purge all shared session localStorage keys BEFORE sign-out
-      const sessionKeysToWipe = [
-        "sudoku_completed_games",
-        "sudoku_total_games_played",
-        "sudoku_gamesPlayed",
-        "sudoku_total_wins_count",
-        "sudoku_winsCount",
-        "sudoku_saved_games",
+      // 3. Purge only ephemeral session caches (never vault or user-scoped keys)
+      const ephemeralKeysToWipe = [
         "sudoku_savedSession",
         "sudoku_lastCompletedSession",
-        "sudoku_history",
-        "sudoku_best_times",
-        "sudoku_pending_challenges",
-        "sudoku_active_invite",
-        "sudoku_past_players",
-        "sudoku_friends",
-        "sudoku_recent_players",
-        "sudoku_winStreak",
-        "sudoku_is_display_name_configured",
-        "sudoku_last_auth_uid",
-        "sudoku_userProfile",
-        "sudoku_user_profile",
-        "sudoku_activeTheme",
-        "sudoku_darkMode"
+        "sudoku_active_invite"
       ];
-      sessionKeysToWipe.forEach(key => {
+      ephemeralKeysToWipe.forEach(key => {
         try {
           localStorage.removeItem(key);
         } catch { }
@@ -5234,28 +5510,18 @@ export default function App() {
       addLog("👤 Returned to clean local guest session.");
       showToast(t("loggedOutToast"));
 
-      // TOP-NOTCH FIX: Targeted Wipe. 
-      // यह सिर्फ अकाउंट-मिक्स करने वाली चाबियों को डिलीट करेगा। तुम्हारा नाम, सेटिंग्स और जीता हुआ गेम सुरक्षित रहेगा।
-      const keysToRemove = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith("sudoku_user_") || key === "sudoku_active_user" || key === "sudoku_last_auth_uid")) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(k => localStorage.removeItem(k));
 
-      // सुरक्षित रूप से पुरानी मेमोरी साफ करने के लिए हल्का सा रीफ्रेश
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
     } catch (err: any) {
       const friendlyMsg = getSanitizedAuthErrorMessage(err);
       console.warn("[Auth] Logout notice:", err?.code || "unknown_error");
       showToast(friendlyMsg);
     } finally {
       setGuestNamespaceLock(false);
-      isLoggingOutRef.current = false;
+      setIsAppReady(true);
+      setTimeout(() => {
+        isLoggingOutRef.current = false;
+        isExplicitLogoutRef.current = false;
+      }, 150);
     }
   };
 
@@ -5739,7 +6005,7 @@ export default function App() {
           localStorage.setItem(getScopedKey("darkMode", authUser.uid), String(darkMode));
         }
       } catch { }
-      if (!isAuthHydrating) {
+      if (!isAuthHydrating && isHydrationCompleteRef.current && !isHydrationWriteLocked(authUser?.uid)) {
         syncSettingsToCloud({
           darkMode,
           theme: { activeTheme: settingsStateRef.current?.activeTheme || "Original", darkMode }
@@ -5784,11 +6050,16 @@ export default function App() {
     } catch { }
     const uid = userProfile?.id;
     if (!uid) return;
+    const isAuthUser = Boolean(auth.currentUser && !auth.currentUser.isAnonymous);
+    if (isAuthUser && isAuthHydrating) return;
+    if (isHydrationWriteLocked(uid) || !isHydrationCompleteRef.current || isConnectingRef.current || isSyncingCloudData) return;
 
     const syncPushPreference = async () => {
       try {
         const userRef = doc(db, "users", uid);
         const cachedToken = localStorage.getItem("sudoku_fcm_token");
+
+        const platformField = Capacitor.isNativePlatform() ? "fcmToken_native" : "fcmToken_web";
 
         if (!notificationsEnabled) {
           console.log(`[Push] Notifications disabled. Pruning token from Firestore for user ${uid}.`);
@@ -5797,7 +6068,7 @@ export default function App() {
           };
           if (cachedToken) {
             updateData.fcmTokens = arrayRemove(cachedToken);
-            updateData.fcmToken = "";
+            updateData[platformField] = "";
           }
           await setDoc(userRef, updateData, { merge: true });
         } else {
@@ -5807,6 +6078,7 @@ export default function App() {
           };
           if (cachedToken) {
             updateData.fcmTokens = arrayUnion(cachedToken);
+            updateData[platformField] = cachedToken;
             updateData.fcmToken = cachedToken;
           }
           await setDoc(userRef, updateData, { merge: true });
@@ -5868,39 +6140,74 @@ export default function App() {
           const roomCode = inviteData.roomCode || inviteData.gameId;
           const difficulty = inviteData.difficulty || "MEDIUM";
           const gameId = inviteData.gameId || roomCode;
-          const seed = inviteData.seed || Date.now();
+          const cleanRoom = extractRoomCodeFromChallenge(inviteData) || String(roomCode || gameId || "").trim();
+          const seed = Number(inviteData.seed) || (cleanRoom ? Number(cleanRoom) : Date.now());
           const maxMistakes = inviteData.maxMistakes ?? 3;
           const hintLimit = inviteData.hintLimit ?? 3;
           const timerEnabled = inviteData.timerEnabled ?? true;
 
+          const invitePayload = {
+            id: inviteId,
+            inviteId: inviteId,
+            fromUserId: inviteData.fromUserId || inviteData.senderId,
+            fromName: inviteData.fromName || "Player",
+            gameId: cleanRoom || roomCode || gameId,
+            roomCode: cleanRoom || roomCode,
+            password: inviteData.password || "",
+            recipientId: inviteData.recipientId || inviteData.toUserId || activeId,
+            toUserId: inviteData.toUserId || inviteData.recipientId || activeId,
+            status: inviteData.status || "pending",
+            difficulty,
+            seed,
+            maxMistakes,
+            hintLimit,
+            timerEnabled,
+            sentAt: inviteTime
+          };
+
+          // Always upsert to Bell challenges so app launch immediately loads all pending invites
+          upsertBellChallenge(invitePayload);
+
+          // Only trigger live foreground toast/sound if invite was created within the last 10 minutes
           if (inviteTime > sessionStartTime - 600000) {
-            routeInviteNotification({
-              id: inviteId,
-              fromUserId: inviteData.fromUserId || inviteData.senderId,
-              fromName: inviteData.fromName || "Player",
-              gameId: roomCode || gameId,
-              roomCode: roomCode,
-              password: inviteData.password || "",
-              recipientId: inviteData.recipientId || inviteData.toUserId || activeId,
-              toUserId: inviteData.toUserId || inviteData.recipientId || activeId,
-              status: inviteData.status || "pending",
-              difficulty,
-              seed,
-              maxMistakes,
-              hintLimit,
-              timerEnabled
-            }, inviteData);
+            routeInviteNotification(invitePayload, inviteData);
           }
         } else if (change.type === "modified") {
           if (inviteData.status !== "pending") {
-            setPendingChallenges((prev) => prev.filter((p) => p.inviteId !== inviteId && p.id !== inviteId));
-            if (activeInviteNotificationRef.current?.id === inviteId) {
+            const cleanRoom = extractRoomCodeFromChallenge(inviteData) || String(inviteData.roomCode || inviteData.gameId || "").trim();
+            setPendingChallenges((prev) => {
+              const updated = prev.filter((p) =>
+                p.inviteId !== inviteId &&
+                p.id !== inviteId &&
+                p.id !== `invite_${cleanRoom}` &&
+                !(cleanRoom && p.roomCode === cleanRoom && p.type !== "challenge_completed")
+              );
+              try {
+                localStorage.setItem(getScopedKey("pending_challenges"), JSON.stringify(updated));
+                localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+              } catch (e) { }
+              return updated;
+            });
+            if (activeInviteNotificationRef.current?.id === inviteId || activeInviteNotificationRef.current?.roomCode === cleanRoom) {
               setActiveInviteNotification(null);
             }
           }
         } else if (change.type === "removed") {
-          setPendingChallenges((prev) => prev.filter((p) => p.inviteId !== inviteId && p.id !== inviteId));
-          if (activeInviteNotificationRef.current?.id === inviteId) {
+          const cleanRoom = extractRoomCodeFromChallenge(inviteData) || String(inviteData.roomCode || inviteData.gameId || "").trim();
+          setPendingChallenges((prev) => {
+            const updated = prev.filter((p) =>
+              p.inviteId !== inviteId &&
+              p.id !== inviteId &&
+              p.id !== `invite_${cleanRoom}` &&
+              !(cleanRoom && p.roomCode === cleanRoom && p.type !== "challenge_completed")
+            );
+            try {
+              localStorage.setItem(getScopedKey("pending_challenges"), JSON.stringify(updated));
+              localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+            } catch (e) { }
+            return updated;
+          });
+          if (activeInviteNotificationRef.current?.id === inviteId || activeInviteNotificationRef.current?.roomCode === cleanRoom) {
             setActiveInviteNotification(null);
           }
         }
@@ -5917,7 +6224,7 @@ export default function App() {
       console.log(`[Firestore] Unsubscribing from incoming invites for user: ${activeId}`);
       unsubscribe();
     };
-  }, [authUser?.uid, userProfile?.id, notificationsEnabled, sessionStartTime, routeInviteNotification]);
+  }, [authUser?.uid, userProfile?.id, notificationsEnabled, sessionStartTime, routeInviteNotification, upsertBellChallenge, extractRoomCodeFromChallenge]);
 
   // Dynamically update friends & past players to "online/live" if another app instance/tab is open in the browser
   useEffect(() => {
@@ -6412,17 +6719,19 @@ export default function App() {
       localStorage.setItem("sudoku_fcm_token", token);
       if (userProfile?.id) {
         const userRef = doc(db, "users", userProfile.id);
+        const platformField = Capacitor.isNativePlatform() ? "fcmToken_native" : "fcmToken_web";
         if (notificationsEnabled) {
           await setDoc(userRef, {
             notificationsEnabled: true,
             fcmToken: token,
+            [platformField]: token,
             fcmTokens: arrayUnion(token)
           }, { merge: true });
         } else {
           await setDoc(userRef, {
             notificationsEnabled: false,
             fcmTokens: arrayRemove(token),
-            fcmToken: ""
+            [platformField]: ""
           }, { merge: true });
         }
       }
@@ -6553,6 +6862,11 @@ export default function App() {
 
       if (rData.status === "closed" || rData.isClosed) {
         return { success: false, error: t("roomSessionClosedToast") };
+      }
+
+      // Validate 7-day room lifespan: reject if expired
+      if (rData.expiresAt && typeof rData.expiresAt === "number" && Date.now() > rData.expiresAt) {
+        return { success: false, error: "This challenge has expired (7-day limit passed)." };
       }
 
       // 4. Security check for locked rooms if PIN is set (Bypassed if direct in-game invite)
@@ -6755,7 +7069,8 @@ export default function App() {
   };
 
   const handleAcceptAndPlayBellInvite = async (challenge: PendingChallenge) => {
-    const code = String(challenge.seed || challenge.id).padStart(6, '0').slice(-6);
+    const rawTarget = challenge.roomCode || challenge.gameId || challenge.seed || challenge.id;
+    const code = extractRoomCodeFromChallenge(challenge) || String(rawTarget).padStart(6, '0').slice(-6);
     const targetRecipient = (challenge as any).toUserId || (challenge as any).recipientId;
     await handleAcceptAndLaunchInvite(code, challenge.inviteId, challenge.password, true, undefined, targetRecipient);
   };
@@ -6778,8 +7093,9 @@ export default function App() {
       }
     }
     setPendingChallenges(prev => {
-      const updated = prev.filter(p => p.id !== challenge.id);
+      const updated = prev.filter(p => p.id !== challenge.id && p.inviteId !== challenge.inviteId);
       try {
+        localStorage.setItem(getScopedKey("pending_challenges"), JSON.stringify(updated));
         localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
       } catch (e) { }
       return updated;
@@ -6844,8 +7160,8 @@ export default function App() {
     );
 
     if (isActivelyPlayingSolo) {
-      const completedItem: PendingChallenge = {
-        id: cleanRoomCode,
+      upsertBellChallenge({
+        id: `puzzle_race_${cleanRoomCode}`,
         inviteId: `completed-${cleanRoomCode}`,
         type: 'challenge_completed',
         fromName: "Opponent",
@@ -6853,15 +7169,6 @@ export default function App() {
         roomCode: cleanRoomCode,
         gameId: cleanRoomCode,
         sentAt: Date.now()
-      };
-
-      setPendingChallenges(prev => {
-        if (prev.some(p => p.id === completedItem.id || p.inviteId === completedItem.inviteId)) return prev;
-        const updated = [completedItem, ...prev].slice(0, 10);
-        try {
-          localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
-        } catch (e) { }
-        return updated;
       });
 
       setBellPing(true);
@@ -6917,10 +7224,15 @@ export default function App() {
     setChallengeMode(true);
     setEndGameStep(1);
 
-    // Dismiss any pending challenge notification for this room immediately
+    // Dismiss ONLY completed-result notifications for this room and NEVER delete an active game invite
     setPendingChallenges(prev => {
-      const updated = prev.filter(c => c.id !== cleanRoomCode && c.roomCode !== cleanRoomCode && c.gameId !== cleanRoomCode);
+      const updated = prev.filter(c => {
+        const matchesRoom = c.id === cleanRoomCode || c.roomCode === cleanRoomCode || c.gameId === cleanRoomCode || c.id === `puzzle_race_${cleanRoomCode}` || c.inviteId === `puzzle_race_${cleanRoomCode}` || c.inviteId === `completed-${cleanRoomCode}`;
+        if (matchesRoom && c.type === "challenge_completed") return false;
+        return true;
+      });
       try {
+        localStorage.setItem(getScopedKey("pending_challenges"), JSON.stringify(updated));
         localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
       } catch (e) { }
       return updated;
@@ -6935,10 +7247,11 @@ export default function App() {
     (async () => {
       try {
         const docId = getSeedDocId(cleanRoomCode);
-        const [roomSnap, playersSnap, resultsSnap] = await Promise.all([
+        const [roomSnap, playersSnap, resultsSnap, invitesSnap] = await Promise.all([
           getDoc(doc(db, "rooms", cleanRoomCode)),
           getDocs(collection(db, "rooms", cleanRoomCode, "players")),
-          getDocs(collection(db, "challenge_results", docId, "participants")).catch(() => ({ docs: [] } as any))
+          getDocs(collection(db, "challenge_results", docId, "participants")).catch(() => ({ docs: [] } as any)),
+          getDocs(query(collection(db, "invites"), where("roomCode", "==", cleanRoomCode))).catch(() => ({ docs: [] } as any))
         ]);
         const roomData = roomSnap.exists() ? roomSnap.data() : null;
 
@@ -6962,6 +7275,27 @@ export default function App() {
             isPending: !isLeft && !isFinished
           });
         });
+
+        // Surface invited opponents who haven't completed yet as pending
+        if (invitesSnap && invitesSnap.docs) {
+          invitesSnap.docs.forEach((d: any) => {
+            const inv = d.data();
+            const invToId = inv.toUserId || inv.recipientId;
+            if (invToId && !mergedMap.has(invToId)) {
+              mergedMap.set(invToId, {
+                userId: invToId,
+                playerName: inv.toUserName || inv.fromName || "Invited Friend",
+                timeSec: 0,
+                elapsedTime: 0,
+                mistakes: 0,
+                hints: 0,
+                isWon: false,
+                status: "pending",
+                isPending: true
+              });
+            }
+          });
+        }
 
         // Also query /challenge_results/{docId}/participants for full parity
         if (resultsSnap && resultsSnap.docs) {
@@ -7204,7 +7538,7 @@ export default function App() {
                   return;
                 }
 
-                const completedItem: PendingChallenge = {
+                upsertBellChallenge({
                   id: canonicalId,
                   inviteId: canonicalId,
                   type: 'challenge_completed',
@@ -7214,25 +7548,7 @@ export default function App() {
                   roomCode: targetCode,
                   gameId: targetCode,
                   sentAt: Date.now()
-                };
-
-                let isAlreadyKnown = false;
-                setPendingChallenges(prev => {
-                  if (prev.some(p => p.id === canonicalId || p.inviteId === canonicalId || (p.roomCode === targetCode && p.type === 'challenge_completed') || (cleanCode && p.roomCode && p.roomCode.toUpperCase().trim() === cleanCode && p.type === 'challenge_completed'))) {
-                    isAlreadyKnown = true;
-                    return prev;
-                  }
-                  const updated = [completedItem, ...prev].slice(0, 10);
-                  try {
-                    localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
-                  } catch (e) { }
-                  return updated;
                 });
-
-                if (isAlreadyKnown) {
-                  console.log(`[Push] Suppressed redundant challenge_completed foreground push for ${targetCode} (already recorded).`);
-                  return;
-                }
 
                 if (isSuppressed) {
                   console.log(`[Push] Suppressed intrusive toast banner for room: ${targetCode} (on game screen or results open). Silent drawer/badge reaction.`);
@@ -7272,38 +7588,6 @@ export default function App() {
               const inviteCode = roomCode || gameId;
               const inviteId = (notification.data as any)?.inviteId || notification.id || (inviteCode ? `invite-${inviteCode}` : `push-${Date.now()}`);
               if (gameId || roomCode) {
-                const inviteObj = {
-                  id: inviteCode,
-                  inviteId: inviteId,
-                  senderName: senderName || "Player",
-                  fromName: senderName || "Player",
-                  fromUserId: (notification.data as any)?.fromUserId || (notification.data as any)?.senderId,
-                  toUserId: (notification.data as any)?.toUserId || (notification.data as any)?.targetUid,
-                  targetUid: (notification.data as any)?.targetUid || (notification.data as any)?.toUserId,
-                  gameId: inviteCode,
-                  roomCode: inviteCode,
-                  password: password || "",
-                  sentAt: Date.now()
-                };
-
-                let isAlreadyKnown = false;
-                setPendingChallenges(prev => {
-                  if (prev.some(p => p.id === inviteCode || p.inviteId === inviteId || ((notification.data as any)?.inviteId && p.inviteId === (notification.data as any).inviteId))) {
-                    isAlreadyKnown = true;
-                    return prev;
-                  }
-                  const updated = [inviteObj as any, ...prev].slice(0, 10);
-                  try {
-                    localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
-                  } catch (e) { }
-                  return updated;
-                });
-
-                if (isAlreadyKnown) {
-                  console.log(`[Push] Suppressed redundant foreground push invite for ${inviteCode} (already active in state).`);
-                  return;
-                }
-
                 routeInviteNotification({
                   id: inviteId,
                   fromUserId: (notification.data as any)?.fromUserId || (notification.data as any)?.senderId,
@@ -7312,7 +7596,10 @@ export default function App() {
                   roomCode: inviteCode,
                   password: password || "",
                   targetUid: (notification.data as any)?.targetUid || (notification.data as any)?.toUserId,
-                  toUserId: (notification.data as any)?.toUserId || (notification.data as any)?.targetUid
+                  toUserId: (notification.data as any)?.toUserId || (notification.data as any)?.targetUid,
+                  difficulty: (notification.data as any)?.difficulty || "MEDIUM",
+                  seed: (notification.data as any)?.seed,
+                  sentAt: Date.now()
                 });
               }
             }
@@ -7383,7 +7670,7 @@ export default function App() {
                 return;
               }
 
-              const completedItem: PendingChallenge = {
+              upsertBellChallenge({
                 id: canonicalId,
                 inviteId: canonicalId,
                 type: 'challenge_completed',
@@ -7393,25 +7680,7 @@ export default function App() {
                 roomCode: targetCode,
                 gameId: targetCode,
                 sentAt: Date.now()
-              };
-
-              let isAlreadyKnown = false;
-              setPendingChallenges(prev => {
-                if (prev.some(p => p.id === canonicalId || p.inviteId === canonicalId || (p.roomCode === targetCode && p.type === 'challenge_completed') || (cleanCode && p.roomCode && p.roomCode.toUpperCase().trim() === cleanCode && p.type === 'challenge_completed'))) {
-                  isAlreadyKnown = true;
-                  return prev;
-                }
-                const updated = [completedItem, ...prev].slice(0, 10);
-                try {
-                  localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
-                } catch (e) { }
-                return updated;
               });
-
-              if (isAlreadyKnown) {
-                console.log(`[Push] Suppressed redundant SW challenge_completed message for ${targetCode}.`);
-                return;
-              }
 
               const isSuppressed = shouldSuppressToastForRoom(targetCode);
 
@@ -7480,7 +7749,7 @@ export default function App() {
                     return;
                   }
 
-                  const completedItem: PendingChallenge = {
+                  upsertBellChallenge({
                     id: canonicalId,
                     inviteId: canonicalId,
                     type: 'challenge_completed',
@@ -7490,25 +7759,7 @@ export default function App() {
                     roomCode: targetCode,
                     gameId: targetCode,
                     sentAt: Date.now()
-                  };
-
-                  let isAlreadyKnown = false;
-                  setPendingChallenges(prev => {
-                    if (prev.some(p => p.id === canonicalId || p.inviteId === canonicalId || (p.roomCode === targetCode && p.type === 'challenge_completed') || (cleanCode && p.roomCode && p.roomCode.toUpperCase().trim() === cleanCode && p.type === 'challenge_completed'))) {
-                      isAlreadyKnown = true;
-                      return prev;
-                    }
-                    const updated = [completedItem, ...prev].slice(0, 10);
-                    try {
-                      localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
-                    } catch (e) { }
-                    return updated;
                   });
-
-                  if (isAlreadyKnown) {
-                    console.log(`[Push] Suppressed redundant challenge_completed web FCM for ${roomCode} (already recorded).`);
-                    return;
-                  }
 
                   const isSuppressed = shouldSuppressToastForRoom(roomCode);
 
@@ -7544,37 +7795,6 @@ export default function App() {
                   const fromName = data.fromName || "Player";
                   const inviteCode = roomCode || data.gameId;
                   const inviteId = data.inviteId || `fcm-inv-${Date.now()}`;
-                  const inviteObj = {
-                    id: inviteCode,
-                    inviteId: inviteId,
-                    senderName: fromName,
-                    fromName: fromName,
-                    fromUserId: data.fromUserId || data.senderId,
-                    toUserId: data.toUserId || data.targetUid,
-                    targetUid: data.targetUid || data.toUserId,
-                    gameId: inviteCode,
-                    roomCode: inviteCode,
-                    password: data.password || "",
-                    sentAt: Date.now()
-                  };
-
-                  let isAlreadyKnown = false;
-                  setPendingChallenges(prev => {
-                    if (prev.some(p => p.id === inviteCode || p.inviteId === inviteId || (data.inviteId && p.inviteId === data.inviteId))) {
-                      isAlreadyKnown = true;
-                      return prev;
-                    }
-                    const updated = [inviteObj as any, ...prev].slice(0, 10);
-                    try {
-                      localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
-                    } catch (e) { }
-                    return updated;
-                  });
-
-                  if (isAlreadyKnown) {
-                    console.log(`[Push] Suppressed redundant web FCM invite for ${inviteCode} (already active in state).`);
-                    return;
-                  }
 
                   routeInviteNotification({
                     id: inviteId,
@@ -7584,7 +7804,10 @@ export default function App() {
                     roomCode: inviteCode,
                     password: data.password || "",
                     targetUid: data.targetUid || data.toUserId,
-                    toUserId: data.toUserId || data.targetUid
+                    toUserId: data.toUserId || data.targetUid,
+                    difficulty: data.difficulty || "MEDIUM",
+                    seed: data.seed,
+                    sentAt: Date.now()
                   });
                 }
               });
@@ -7617,6 +7840,10 @@ export default function App() {
 
   // Trigger push registration when setting is enabled or active user profile changes
   useEffect(() => {
+    const isAuthUser = Boolean(auth.currentUser && !auth.currentUser.isAnonymous);
+    if (isAuthUser && isAuthHydrating) return;
+    if (isHydrationWriteLocked(userProfile?.id) || !isHydrationCompleteRef.current || isConnectingRef.current || isSyncingCloudData) return;
+
     if (notificationsEnabled && userProfile?.id) {
       registerPushNotifications();
 
@@ -7625,24 +7852,30 @@ export default function App() {
       const cachedToken = localStorage.getItem("sudoku_fcm_token");
       if (cachedToken) {
         const userRef = doc(db, "users", userProfile.id);
+        const platformField = Capacitor.isNativePlatform() ? "fcmToken_native" : "fcmToken_web";
         setDoc(userRef, {
           notificationsEnabled: true,
           fcmToken: cachedToken,
+          [platformField]: cachedToken,
           fcmTokens: arrayUnion(cachedToken),
           language: language,
           updatedAt: serverTimestamp()
         }, { merge: true }).catch(err => console.error("Token sync error:", err));
       }
     }
-  }, [notificationsEnabled, userProfile?.id, language]);
+  }, [notificationsEnabled, userProfile?.id, language, isAuthHydrating]);
 
   // Sync active language preference to Firestore user document for localized push notifications
   useEffect(() => {
+    const isAuthUser = Boolean(auth.currentUser && !auth.currentUser.isAnonymous);
+    if (isAuthUser && isAuthHydrating) return;
+    if (isHydrationWriteLocked(userProfile?.id) || !isHydrationCompleteRef.current || isConnectingRef.current || isSyncingCloudData) return;
+
     if (userProfile?.id && language) {
       const userRef = doc(db, "users", userProfile.id);
       setDoc(userRef, { language }, { merge: true }).catch(() => { });
     }
-  }, [language, userProfile?.id]);
+  }, [language, userProfile?.id, isAuthHydrating]);
 
   // Decoupled Click sound generator (tactile crisp feedback, immune to modal mount unmount/re-render)
   const playClickSound = useCallback(() => {
@@ -9659,7 +9892,7 @@ export default function App() {
     const seed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
     const activeRoomCode = String(seed).padStart(6, '0').slice(-6);
     const currentUserId = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "GUEST_ANON";
-    const currentUserName = getActiveDisplayName();
+    const currentUserName = getActiveDisplayName() || userProfileRef.current?.displayName || userProfileRef.current?.name || loadVault(getActiveAuthUid() || "guest").profile.displayName || "Player";
 
     // Ensure room is synced with current settings before invite is dispatched
     await updateRoomSettingsInFirestore({
@@ -9701,7 +9934,7 @@ export default function App() {
         gameId: activeRoomCode,
         status: "pending",
         timestamp: Date.now(),
-        expiresAt: Date.now() + (48 * 60 * 60 * 1000)
+        expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
       });
       console.log(`[Firestore] Dispatched real-time invite to player ${targetPlayerId} (orig: ${playerId}) for canonical room ${activeRoomCode}`);
     } catch (err) {
@@ -9999,9 +10232,19 @@ export default function App() {
     }
 
     // Remove from pendingchallenges list if matches active ID to keep cleanly in sync
+    const cleanRoomCode = extractRoomCodeFromChallenge({ id: finalGameId, seed: gameSeed });
     setPendingChallenges(prev => {
-      const updated = prev.filter(c => c.id !== finalGameId);
+      const updated = prev.filter(c => {
+        if (c.id === finalGameId) return false;
+        if (cleanRoomCode && c.type !== "challenge_completed") {
+          if (c.roomCode === cleanRoomCode || c.gameId === cleanRoomCode || c.id === `invite_${cleanRoomCode}` || c.inviteId === `invite_${cleanRoomCode}`) {
+            return false;
+          }
+        }
+        return true;
+      });
       try {
+        localStorage.setItem(getScopedKey("pending_challenges"), JSON.stringify(updated));
         localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
       } catch { }
       return updated;
@@ -10022,15 +10265,17 @@ export default function App() {
     submitGameResult(rBody);
 
     // Continuous stats persistence: Direct Firestore write for authenticated user
-    if (authUser?.uid && !isGuest && targetUid !== "guest") {
+    const effectiveCloudUid = authUser?.uid || (targetUid && targetUid !== "guest" && !targetUid.startsWith("GUEST_") ? targetUid : null);
+    if (effectiveCloudUid && !isGuest) {
       try {
-        await setDoc(doc(db, "users", authUser.uid), {
+        await setDoc(doc(db, "users", effectiveCloudUid), {
           stats: updatedVault.stats,
           completedGames: updatedVault.completedGames,
           bestTimes: updatedVault.bestTimes,
           totalGamesPlayed: updatedVault.stats.totalGamesPlayed,
           totalWinsCount: updatedVault.stats.totalWinsCount,
           winStreak: updatedVault.stats.winStreak,
+          wins: updatedVault.stats.totalWinsCount,
           updatedAt: serverTimestamp()
         }, { merge: true });
       } catch (syncErr) {
@@ -10406,9 +10651,10 @@ export default function App() {
           updatedAt: serverTimestamp()
         }, { merge: true });
 
-        // Synchronize canonical room document so room listeners receive instant real-time completion signal
+        // Synchronize canonical room document so room listeners receive instant real-time completion signal while keeping challenge room active for 7-day lifespan
         const roomDocRef = doc(db, "rooms", rBody.challengeId);
         await setDoc(roomDocRef, {
+          status: "active",
           lastCompletedUid: rBody.userId,
           lastCompletedBy: rBody.playerName,
           lastCompletedTime: Number(rBody.timeSec) || 0,
@@ -12028,8 +12274,9 @@ export default function App() {
           updatedAt: serverTimestamp(),
         };
         if (cachedFcmToken) {
+          const platformField = Capacitor.isNativePlatform() ? "fcmToken_native" : "fcmToken_web";
           updateData.fcmTokens = arrayRemove(cachedFcmToken);
-          updateData.fcmToken = "";
+          updateData[platformField] = "";
         }
         await setDoc(userRef, updateData, { merge: true });
       } catch (err) {
@@ -13043,6 +13290,33 @@ export default function App() {
     <div className={`min-h-screen ${darkMode ? "bg-[#121212] text-[#E5E5E5] selection:bg-[#312E81]" : "bg-[#F3EFE9] text-[#1E1E1E] selection:bg-[#E0F2FE]"} flex flex-col font-sans overflow-hidden pb-[env(safe-area-inset-bottom,0px)]`}>
       {/* Studio Splash Transition */}
       <StudioSplash duration={3000} />
+
+      {/* Pastel Sync Loading Wall */}
+      {!isAppReady && (
+        <div
+          id="sync-loading-wall"
+          className={`fixed inset-0 z-[99999] flex flex-col items-center justify-center transition-colors duration-300 ${
+            darkMode ? "bg-[#121212] text-[#E5E5E5]" : "bg-[#F3EFE9] text-[#1E1E1E]"
+          }`}
+        >
+          <div
+            className={`p-8 rounded-3xl shadow-[0_10px_35px_rgba(0,0,0,0.04)] flex flex-col items-center max-w-xs text-center border-none ${
+              darkMode ? "bg-zinc-900/95 text-zinc-100" : "bg-white/95 text-stone-800"
+            }`}
+          >
+            <div className="relative w-14 h-14 mb-4 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-4 border-emerald-400/20 border-t-emerald-400 animate-spin" />
+              <Sparkles className="w-6 h-6 text-emerald-500 animate-pulse" />
+            </div>
+            <h3 className="text-base font-bold tracking-tight mb-1 text-stone-800 dark:text-zinc-100">
+              Syncing Profile
+            </h3>
+            <p className="text-xs font-medium text-stone-500 dark:text-zinc-400">
+              Connecting to cloud vault...
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       <AnimatePresence>
@@ -17631,9 +17905,10 @@ export default function App() {
                         localStorage.setItem("sudoku_is_display_name_configured", "true");
                         syncGuestSnapshotInRealtime({ userProfile: updatedProfile });
 
-                        if (auth.currentUser && !auth.currentUser.isAnonymous) {
-                          const userDocRef = doc(db, "users", auth.currentUser.uid);
-                          setDoc(userDocRef, { name: finalName, displayName: finalName }, { merge: true }).catch(err => {
+                        const effectiveCloudUid = (auth.currentUser && !auth.currentUser.isAnonymous) ? auth.currentUser.uid : (activeUid !== "guest" && !activeUid.startsWith("GUEST_") ? activeUid : null);
+                        if (effectiveCloudUid) {
+                          const userDocRef = doc(db, "users", effectiveCloudUid);
+                          setDoc(userDocRef, { name: finalName, displayName: finalName, updatedAt: serverTimestamp() }, { merge: true }).catch(err => {
                             console.warn("[Profile] Non-blocking name sync from settings modal failed:", err);
                           });
                         }

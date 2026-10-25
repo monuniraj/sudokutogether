@@ -43,6 +43,33 @@ export interface UserVault {
 }
 
 // ============================================================================
+// 1b. HYDRATION WRITE LOCK (CLOUD SSOT GUARD)
+// ============================================================================
+const hydrationWriteLockedUids = new Set<string>();
+
+/**
+ * Sets the cloud hydration write lock for an authenticated user UID.
+ * While locked, all saveVault and updateVault writes to disk for this UID are BLOCKED,
+ * preventing empty/cold-boot data or race conditions from overwriting localStorage or Firestore.
+ */
+export function setHydrationWriteLock(uid: string | null | undefined, locked: boolean): void {
+  if (!uid || uid === "guest" || uid === "GUEST" || uid.startsWith("GUEST_")) return;
+  if (locked) {
+    hydrationWriteLockedUids.add(uid);
+  } else {
+    hydrationWriteLockedUids.delete(uid);
+  }
+}
+
+/**
+ * Checks whether the cloud hydration write lock is active for a given UID.
+ */
+export function isHydrationWriteLocked(uid?: string | null): boolean {
+  if (!uid || uid === "guest" || uid === "GUEST" || uid.startsWith("GUEST_")) return false;
+  return hydrationWriteLockedUids.has(uid);
+}
+
+// ============================================================================
 // 2. STORAGE KEYS
 // ============================================================================
 
@@ -116,7 +143,10 @@ export function isGenericDisplayName(name?: string | null): boolean {
   return (
     !trimmed ||
     genericPlaceholders.includes(trimmed) ||
-    trimmed.startsWith("Bold Voyager")
+    trimmed.startsWith("Bold Voyager") ||
+    /^Player[_\s-]?\d*$/i.test(trimmed) ||
+    /^Pro[_\s-]?\d*$/i.test(trimmed) ||
+    /^Guest[_\s-]?\d*$/i.test(trimmed)
   );
 }
 
@@ -126,7 +156,7 @@ export function isGenericDisplayName(name?: string | null): boolean {
 export function createDefaultVault(options?: Partial<UserVaultProfile>): UserVault {
   const isGuest = !options?.id || options.id.startsWith("GUEST_") || options.id === "guest";
   const defaultId = options?.id || (isGuest ? `GUEST_${Math.floor(1000 + Math.random() * 9000)}` : "GUEST");
-  const defaultName = options?.displayName || `Pro_${defaultId.includes("_") ? defaultId.split("_")[1] : Math.floor(1000 + Math.random() * 9000)}`;
+  const defaultName = options?.displayName || (isGuest ? "Player" : (options?.email ? options.email.split("@")[0].slice(0, 15) : "Player"));
 
   return {
     profile: {
@@ -399,8 +429,20 @@ export function migrateLegacyToVault(uid?: string | null): UserVault {
     );
 
     // Save canonical vault & purge legacy keys to prevent disk bloat
-    saveVault(defaultVault, uid);
-    purgeLegacyKeys(uid);
+    // For authenticated users, do NOT save a blank/default vault to disk during cold boot.
+    // Cloud Firestore is the SSOT and will supply the authoritative vault during hydrateUserFromCloud.
+    const isAuthUser = Boolean(uid && uid !== "guest" && uid !== "GUEST" && !uid.startsWith("GUEST_"));
+    const hasRecoveredData = defaultVault.completedGames.length > 0
+      || defaultVault.stats.totalGamesPlayed > 0
+      || defaultVault.stats.totalWinsCount > 0
+      || (defaultVault.profile.displayName && !isGenericDisplayName(defaultVault.profile.displayName));
+
+    if (!isAuthUser || hasRecoveredData) {
+      if (!isHydrationWriteLocked(uid)) {
+        saveVault(defaultVault, uid);
+        purgeLegacyKeys(uid);
+      }
+    }
   } catch (err) {
     console.warn("[StorageEngine] Legacy data migration notice:", err);
   }
@@ -419,7 +461,10 @@ export function loadVault(uid?: string | null): UserVault {
   }
 
   try {
-    const raw = localStorage.getItem(key);
+    let raw = localStorage.getItem(key);
+    if (!raw && key === STORAGE_KEYS.VAULT_GUEST) {
+      raw = localStorage.getItem("sudoku_guest_vault");
+    }
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object" && parsed.profile && parsed.stats) {
@@ -478,7 +523,6 @@ export function purgeLegacyKeys(uid?: string | null): void {
 
   if (!targetUid) {
     keysToRemove.push(
-      "sudoku_guest_vault",
       "sudoku_guest_theme",
       "sudoku_guest_activeTheme",
       "sudoku_guest_darkMode",
@@ -553,11 +597,20 @@ export function saveVault(
     return false;
   }
 
-  const key = getVaultKey(uid || vault.profile?.id);
+  const targetUid = uid || vault.profile?.id;
+  if (isHydrationWriteLocked(targetUid)) {
+    console.warn(`[StorageEngine] Suppressed saveVault for uid "${targetUid}" — Cloud hydration write-lock is active.`);
+    return false;
+  }
+
+  const key = getVaultKey(targetUid);
 
   try {
     const serialized = JSON.stringify(vault);
     localStorage.setItem(key, serialized);
+    if (key === STORAGE_KEYS.VAULT_GUEST) {
+      localStorage.setItem("sudoku_guest_vault", serialized);
+    }
     return true;
   } catch (err) {
     console.error(`[StorageEngine] Failed to write vault to key "${key}":`, err);
