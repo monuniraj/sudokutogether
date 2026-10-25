@@ -70,6 +70,7 @@ export type TranslationKey =
   | "disconnectSync"
   | "connectGoogleAccount"
   | "connectGoogle"
+  | "syncDevicesSaveProgress"
   | "cloudSyncActive"
   | "cloudSyncUpcoming"
   | "logOut"
@@ -481,6 +482,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     disconnectSync: "Disconnect sync",
     connectGoogleAccount: "Connect Google Account",
     connectGoogle: "Connect Google",
+    syncDevicesSaveProgress: "Sync devices • Save progress",
     cloudSyncActive: "Cloud sync active across devices",
     cloudSyncUpcoming: "Sign in to save your progress.",
     logOut: "Log Out",
@@ -890,6 +892,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     disconnectSync: "सिंक डिस्कनेक्ट करें",
     connectGoogleAccount: "Google खाता जोड़ें",
     connectGoogle: "Google से कनेक्ट करें",
+    syncDevicesSaveProgress: "डिवाइस सिंक करें • प्रोग्रेस सुरक्षित रखें",
     cloudSyncActive: "क्लाउड सिंक चालू है (सभी डिवाइस पर)",
     cloudSyncUpcoming: "गेम प्रोग्रेस सुरक्षित रखने के लिए साइन इन करें।",
     logOut: "लॉग आउट",
@@ -1299,6 +1302,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     disconnectSync: "Synchronisierung trennen",
     connectGoogleAccount: "Google-Konto verbinden",
     connectGoogle: "Mit Google verbinden",
+    syncDevicesSaveProgress: "Geräte synchronisieren • Fortschritt speichern",
     cloudSyncActive: "Cloud-Synchronisierung aktiv",
     cloudSyncUpcoming: "Melde dich an, um deinen Fortschritt zu speichern.",
     logOut: "Abmelden",
@@ -1708,6 +1712,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     disconnectSync: "同期を解除",
     connectGoogleAccount: "Googleアカウントと連携",
     connectGoogle: "Googleで連携",
+    syncDevicesSaveProgress: "デバイス同期 • 進行状況を保存",
     cloudSyncActive: "クラウド同期が有効です",
     cloudSyncUpcoming: "進行状況を保存するにはサインインしてください",
     logOut: "ログアウト",
@@ -2117,6 +2122,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     disconnectSync: "동기화 해제",
     connectGoogleAccount: "Google 계정 연결",
     connectGoogle: "Google 계정 연동",
+    syncDevicesSaveProgress: "기기 동기화 • 진행 상황 저장",
     cloudSyncActive: "클라우드 동기화 완료",
     cloudSyncUpcoming: "진행 상황을 저장하려면 로그인하세요",
     logOut: "로그아웃",
@@ -2526,6 +2532,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     disconnectSync: "Desconectar sincronización",
     connectGoogleAccount: "Conectar cuenta de Google",
     connectGoogle: "Conectar con Google",
+    syncDevicesSaveProgress: "Sincroniza dispositivos • Guarda tu progreso",
     cloudSyncActive: "Sincronización en la nube activa",
     cloudSyncUpcoming: "Inicia sesión para guardar tu progreso.",
     logOut: "Cerrar sesión",
@@ -2935,6 +2942,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     disconnectSync: "Déconnecter la synchro",
     connectGoogleAccount: "Connecter un compte Google",
     connectGoogle: "Se connecter avec Google",
+    syncDevicesSaveProgress: "Synchroniser vos appareils • Sauvegarder vos progrès",
     cloudSyncActive: "Synchronisation cloud active",
     cloudSyncUpcoming: "Connectez-vous pour enregistrer votre progression.",
     logOut: "Se déconnecter",
@@ -3344,6 +3352,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     disconnectSync: "Disconnetti sincronizzazione",
     connectGoogleAccount: "Collega account Google",
     connectGoogle: "Connetti con Google",
+    syncDevicesSaveProgress: "Sincronizza dispositivi • Salva i progressi",
     cloudSyncActive: "Sincronizzazione cloud attiva tra i dispositivi",
     cloudSyncUpcoming: "Accedi per salvare i tuoi progressi.",
     logOut: "Disconnetti",
@@ -3753,6 +3762,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     disconnectSync: "Desconectar sincronização",
     connectGoogleAccount: "Conectar conta do Google",
     connectGoogle: "Conectar com o Google",
+    syncDevicesSaveProgress: "Sincronize dispositivos • Salve seu progresso",
     cloudSyncActive: "Sincronização na nuvem ativa",
     cloudSyncUpcoming: "Faça login para salvar seu progresso.",
     logOut: "Sair",

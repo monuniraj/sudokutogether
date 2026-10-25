@@ -144,7 +144,7 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
                   key={`room-slot-${idx}`}
                   className={`h-12 sm:h-13 rounded-xl flex items-center justify-center font-mono text-lg sm:text-xl transition-all duration-150 select-none ${
                     isSlotActive
-                      ? "border-2 border-sky-500 ring-2 ring-sky-500/40 shadow-[0_0_12px_rgba(14,165,233,0.35)] bg-sky-500/10 dark:bg-sky-500/15 scale-[1.03]"
+                      ? "border-2 border-sky-500 ring-2 ring-sky-500/40 bg-sky-500/10 dark:bg-sky-500/15 scale-[1.03]"
                       : hasDigit
                       ? (darkMode 
                           ? "border border-sky-500/40 bg-zinc-900 shadow-sm" 
@@ -226,7 +226,7 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
                   key={`pin-slot-${idx}`}
                   className={`h-11 sm:h-12 rounded-xl flex items-center justify-center font-mono text-base sm:text-lg transition-all duration-150 select-none ${
                     isSlotActive
-                      ? "border-2 border-sky-500 ring-2 ring-sky-500/40 shadow-[0_0_12px_rgba(14,165,233,0.35)] bg-sky-500/10 dark:bg-sky-500/15 scale-[1.03]"
+                      ? "border-2 border-sky-500 ring-2 ring-sky-500/40 bg-sky-500/10 dark:bg-sky-500/15 scale-[1.03]"
                       : hasDigit
                       ? (darkMode 
                           ? "border border-sky-500/40 bg-zinc-900 shadow-sm" 
@@ -281,7 +281,7 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
             playClickSound();
             onJoinRoom();
           }}
-          className={`flex-2 py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer transition-all shadow-md active:scale-98 flex items-center justify-center gap-2 ${
+          className={`flex-2 py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer transition-all shadow-none active:scale-98 flex items-center justify-center gap-2 ${
             roomCodeInput.trim().length === 6 && !isJoiningRoomLoading
               ? (darkMode ? "bg-[#0c4a6e] hover:bg-[#0369a1] text-sky-100" : "bg-[#E0F2FE] hover:bg-[#bae6fd] text-[#0369a1]")
               : "opacity-50 cursor-not-allowed bg-stone-200 dark:bg-zinc-800 text-stone-400"
