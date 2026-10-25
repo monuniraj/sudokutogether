@@ -31,6 +31,7 @@ import {
   setActiveAuthUid,
   reconcileBestTimesFromHistory,
   isGenericDisplayName,
+  getOrCreateGuestIdentity,
   saveSettings,
   getSettings,
   isHydrationWriteLocked,
@@ -257,6 +258,77 @@ const DIFFICULTY_GRID_THEMES: Record<Difficulty, {
   },
 };
 
+export const normalizeDifficulty = (raw?: any): Difficulty => {
+  if (!raw || typeof raw !== "string") return "MEDIUM";
+  const clean = raw.trim().toUpperCase();
+  if (clean === "EASY") return "EASY";
+  if (clean === "HARD") return "HARD";
+  if (clean === "EXPERT") return "EXPERT";
+  return "MEDIUM";
+};
+
+export const getDifficultyColorTheme = (diff: Difficulty, darkMode: boolean) => {
+  switch (diff) {
+    case "EASY":
+      return {
+        cardBg: darkMode
+          ? "bg-[#022c22]/30 border-emerald-900/40 text-stone-200"
+          : "bg-[#D1FAE5]/30 border-emerald-200/60 text-stone-850",
+        badgeBg: darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]",
+        badgeText: "text-emerald-500",
+        iconBg: darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]",
+        iconText: darkMode ? "text-[#d1fae5]" : "text-[#065F46]",
+        primaryBtn: darkMode
+          ? "bg-[#022c22] hover:bg-[#022c22]/80 text-[#d1fae5] font-black"
+          : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46] font-black shadow-sm",
+        progressBarGradient: "bg-gradient-to-r from-emerald-400 to-teal-500"
+      };
+    case "HARD":
+      return {
+        cardBg: darkMode
+          ? "bg-[#2e1065]/30 border-purple-900/40 text-stone-200"
+          : "bg-[#F3E8FF]/30 border-purple-200/60 text-stone-850",
+        badgeBg: darkMode ? "bg-[#2e1065] text-[#e9d5ff]" : "bg-[#F3E8FF] text-[#6B21A8]",
+        badgeText: "text-purple-500",
+        iconBg: darkMode ? "bg-[#2e1065] text-[#e9d5ff]" : "bg-[#F3E8FF] text-[#6B21A8]",
+        iconText: darkMode ? "text-[#e9d5ff]" : "text-[#6B21A8]",
+        primaryBtn: darkMode
+          ? "bg-[#2e1065] hover:bg-[#2e1065]/80 text-[#e9d5ff] font-black"
+          : "bg-[#F3E8FF] hover:bg-[#e9d5ff] text-[#6B21A8] font-black shadow-sm",
+        progressBarGradient: "bg-gradient-to-r from-purple-400 to-indigo-500"
+      };
+    case "EXPERT":
+      return {
+        cardBg: darkMode
+          ? "bg-[#4c0519]/30 border-rose-900/40 text-stone-200"
+          : "bg-[#FFE4E6]/30 border-rose-200/60 text-stone-850",
+        badgeBg: darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]",
+        badgeText: "text-rose-500",
+        iconBg: darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]",
+        iconText: darkMode ? "text-[#fecdd3]" : "text-[#9D174D]",
+        primaryBtn: darkMode
+          ? "bg-[#4c0519] hover:bg-[#4c0519]/80 text-[#fecdd3] font-black"
+          : "bg-[#FFE4E6] hover:bg-[#fecdd3] text-[#9D174D] font-black shadow-sm",
+        progressBarGradient: "bg-gradient-to-r from-rose-400 to-pink-500"
+      };
+    case "MEDIUM":
+    default:
+      return {
+        cardBg: darkMode
+          ? "bg-[#451a03]/30 border-amber-900/40 text-stone-200"
+          : "bg-[#FFF99D]/30 border-amber-200/60 text-stone-850",
+        badgeBg: darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]",
+        badgeText: "text-amber-500",
+        iconBg: darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]",
+        iconText: darkMode ? "text-[#fef08a]" : "text-[#854D0E]",
+        primaryBtn: darkMode
+          ? "bg-[#451a03] hover:bg-[#451a03]/80 text-[#fef08a] font-black"
+          : "bg-[#FFF99D] hover:bg-[#ffffbf] text-[#854D0E] font-black shadow-sm",
+        progressBarGradient: "bg-gradient-to-r from-amber-400 to-yellow-500"
+      };
+  }
+};
+
 interface CompletedGame {
   id: string;
   difficulty: Difficulty;
@@ -303,13 +375,20 @@ interface PendingChallenge {
   groupedIds?: string[];
 }
 
-const INITIAL_GUEST_STATE = {
-  userProfile: {
-    id: "GUEST_" + Math.random().toString(36).substring(2, 9),
-    name: "Player",
-    displayName: "Player",
-    avatarColor: "#6B7280",
+const getInitialGuestProfile = () => {
+  const identity = getOrCreateGuestIdentity();
+  return {
+    id: identity.id,
+    name: identity.displayName,
+    displayName: identity.displayName,
+    avatarColor: "#8B5CF6",
     isSynced: false
+  };
+};
+
+const INITIAL_GUEST_STATE = {
+  get userProfile() {
+    return getInitialGuestProfile();
   },
   completedGames: [] as CompletedGame[],
   totalGamesPlayed: 0,
@@ -1798,10 +1877,18 @@ export default function App() {
       };
     }
 
+    const guestIdentity = getOrCreateGuestIdentity();
+    const guestName = (p.displayName && p.displayName !== "Player" && p.displayName !== "Anonymous")
+      ? p.displayName
+      : guestIdentity.displayName;
+    const guestId = (p.id && p.id !== "GUEST" && p.id !== "guest" && p.id !== "GUEST_ANON")
+      ? p.id
+      : guestIdentity.id;
+
     return {
-      id: p.id,
-      name: p.displayName || "Player",
-      displayName: p.displayName || "Player",
+      id: guestId,
+      name: guestName,
+      displayName: guestName,
       avatarColor: p.avatarColor || "#8B5CF6",
       isSynced: false,
       email: null
@@ -1892,7 +1979,7 @@ export default function App() {
     }
 
     // 5. Fallback for pure offline guest only
-    if (profileName && profileName.length <= 15 && !isGenericDisplayName(profileName)) {
+    if (profileName && profileName.length <= 15 && profileName !== "Player" && profileName !== "Anonymous") {
       return profileName;
     }
 
@@ -1900,7 +1987,7 @@ export default function App() {
       return authUser.email.split("@")[0].slice(0, 15);
     }
 
-    return "Player";
+    return getOrCreateGuestIdentity().displayName;
   };
 
   const handleAcceptInvitationWithProfileCheck = (onConfirm: () => void) => {
@@ -2219,9 +2306,12 @@ export default function App() {
       .map((p: any) => p.id)
       .filter((id: string) => Boolean(id) && id !== myId);
   }, [multiplayerPlayers, userProfile?.id]);
-  const effectivePresenceId = (isSyncingCloudData || !isHydrationCompleteRef.current || isHydrationWriteLocked(authUser?.uid || userProfile?.id))
-    ? null
-    : (authUser?.uid || userProfile?.id);
+  const isGuestSession = !authUser || authUser.isAnonymous || (userProfile?.id && userProfile.id.startsWith("GUEST_"));
+  const effectivePresenceId = isGuestSession
+    ? (userProfile?.id || auth.currentUser?.uid || null)
+    : ((isSyncingCloudData || !isHydrationCompleteRef.current || isHydrationWriteLocked(authUser?.uid || userProfile?.id))
+      ? null
+      : (authUser?.uid || userProfile?.id));
   const { getFriendStatus: getDrawerFriendStatus, getFriendLastActive: getDrawerFriendLastActive } = useFriendPresence(effectivePresenceId, drawerPlayerIds);
 
   const [privacyEnabled, setPrivacyEnabled] = useState<boolean>(() => {
@@ -3292,7 +3382,7 @@ export default function App() {
         fromUserId: payload.fromUserId || payload.senderId || payload.completedByUid || "",
         toUserId: payload.toUserId || payload.recipientId || payload.targetUid || "",
         password: payload.password || "",
-        difficulty: payload.difficulty || "MEDIUM",
+        difficulty: normalizeDifficulty(payload.difficulty),
         seed: resolvedSeed,
         maxMistakes: payload.maxMistakes ?? 3,
         hintLimit: payload.hintLimit ?? 3,
@@ -4803,12 +4893,15 @@ export default function App() {
 
         const curProfile = userProfileRef.current;
         if (!curProfile?.isSynced) {
-          const genericNames = ["Anonymous", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Guest"];
+          const genericNames = ["Anonymous", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Guest", "Player"];
           if (!curProfile || !curProfile.name || genericNames.includes(curProfile.name.trim())) {
             const guestVault = loadVault("guest");
-            const safeName = guestVault.profile.displayName && !isGenericDisplayName(guestVault.profile.displayName) ? guestVault.profile.displayName : "Player";
+            const guestIdentity = getOrCreateGuestIdentity();
+            const safeName = (guestVault.profile.displayName && !genericNames.includes(guestVault.profile.displayName))
+              ? guestVault.profile.displayName
+              : guestIdentity.displayName;
             const sanitizedProfile = {
-              id: curProfile?.id || guestVault.profile.id || ("GUEST_" + Math.floor(1000 + Math.random() * 9000)),
+              id: guestIdentity.id,
               name: safeName,
               displayName: safeName,
               avatarColor: curProfile?.avatarColor || guestVault.profile.avatarColor || "#8B5CF6",
@@ -4841,7 +4934,7 @@ export default function App() {
 
           // If hasVault(uid) is true, render the saved vault profile name immediately without delay
           const cachedName = cachedVault.profile.displayName;
-          const hasValidCustomName = userHasVault && Boolean(cachedName) && !isGenericDisplayName(cachedName);
+          const hasValidCustomName = userHasVault && Boolean(cachedName) && !isGenericDisplayName(cachedName) && !cachedName.startsWith("Guest_");
 
           if (hasValidCustomName) {
             const activeName = cachedName!.trim().slice(0, 15);
@@ -6138,7 +6231,7 @@ export default function App() {
 
           const inviteTime = inviteData.timestamp || Date.now();
           const roomCode = inviteData.roomCode || inviteData.gameId;
-          const difficulty = inviteData.difficulty || "MEDIUM";
+          const difficulty = normalizeDifficulty(inviteData.difficulty);
           const gameId = inviteData.gameId || roomCode;
           const cleanRoom = extractRoomCodeFromChallenge(inviteData) || String(roomCode || gameId || "").trim();
           const seed = Number(inviteData.seed) || (cleanRoom ? Number(cleanRoom) : Date.now());
@@ -7597,7 +7690,7 @@ export default function App() {
                   password: password || "",
                   targetUid: (notification.data as any)?.targetUid || (notification.data as any)?.toUserId,
                   toUserId: (notification.data as any)?.toUserId || (notification.data as any)?.targetUid,
-                  difficulty: (notification.data as any)?.difficulty || "MEDIUM",
+                  difficulty: normalizeDifficulty((notification.data as any)?.difficulty),
                   seed: (notification.data as any)?.seed,
                   sentAt: Date.now()
                 });
@@ -7805,7 +7898,7 @@ export default function App() {
                     password: data.password || "",
                     targetUid: data.targetUid || data.toUserId,
                     toUserId: data.toUserId || data.targetUid,
-                    difficulty: data.difficulty || "MEDIUM",
+                    difficulty: normalizeDifficulty(data.difficulty),
                     seed: data.seed,
                     sentAt: Date.now()
                   });
@@ -9554,10 +9647,17 @@ export default function App() {
 
     // Only write Firestore room record when online — offline sessions are solo-only and need no room document
     if (isOnline) {
+      const activeHostId = userProfile?.id || auth.currentUser?.uid || getOrCreateGuestIdentity().id;
+      const activeHostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
+
       setDoc(doc(db, "rooms", roomCode), {
         roomCode: roomCode,
         seed: canonicalSeed,
         difficulty: initialDifficulty,
+        hostId: activeHostId,
+        hostName: activeHostName,
+        createdById: activeHostId,
+        createdByName: activeHostName,
         puzzleFlat: generated.puzzleFlat,
         solutionFlat: generated.solutionFlat,
         mistakesLimit: 3,
@@ -9735,6 +9835,10 @@ export default function App() {
             roomCode: roomCode,
             seed: seed,
             difficulty: difficulty,
+            hostId: uId,
+            hostName: pName,
+            createdById: uId,
+            createdByName: pName,
             ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
             ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
             mistakesLimit: mistakeLimitEnabled ? (boardState.maxMistakesLimit || 3) : 999,
@@ -9854,7 +9958,7 @@ export default function App() {
   };
 
   // Handles multiplayer invite process and dynamic join simulation
-  const handleInviteFriend = async (playerId: string) => {
+  const handleInviteFriend = async (playerId: string, overrideDifficulty?: Difficulty) => {
     const guardSenderId = userProfile?.id || authUser?.uid;
     if (!playerId || playerId === guardSenderId || playerId === authUser?.uid) {
       console.warn("[INVITE BLOCKED] Target user is invalid or identical to sender UID.");
@@ -9875,6 +9979,11 @@ export default function App() {
       return;
     }
 
+    const currentDifficulty = normalizeDifficulty(
+      overrideDifficulty ||
+      (showCreateChallengeModal ? challengeDifficulty : ((boardState as any)?.difficulty || challengeDifficulty || difficulty || "EASY"))
+    );
+
     const now = Date.now();
     setLobbyTickTime(now);
     setMultiplayerPlayers(prev => prev.map(p => {
@@ -9891,12 +10000,12 @@ export default function App() {
 
     const seed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
     const activeRoomCode = String(seed).padStart(6, '0').slice(-6);
-    const currentUserId = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "GUEST_ANON";
-    const currentUserName = getActiveDisplayName() || userProfileRef.current?.displayName || userProfileRef.current?.name || loadVault(getActiveAuthUid() || "guest").profile.displayName || "Player";
+    const currentUserId = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || getOrCreateGuestIdentity().id;
+    const currentUserName = getActiveDisplayName() || userProfileRef.current?.displayName || userProfileRef.current?.name || getOrCreateGuestIdentity().displayName;
 
     // Ensure room is synced with current settings before invite is dispatched
     await updateRoomSettingsInFirestore({
-      difficulty: challengeDifficulty,
+      difficulty: currentDifficulty,
       mistakesLimit: challengeMistakeLimit,
       hintsLimit: challengeHintLimit,
       timerEnabled: challengeTimerEnabled
@@ -9930,8 +10039,16 @@ export default function App() {
         toUserId: targetPlayerId,
         fromUserId: currentUserId,
         fromName: currentUserName,
+        senderName: currentUserName,
+        hostName: currentUserName,
+        hostId: currentUserId,
         roomCode: activeRoomCode,
         gameId: activeRoomCode,
+        difficulty: currentDifficulty,
+        seed: seed,
+        maxMistakes: challengeMistakeLimit,
+        hintLimit: challengeHintLimit,
+        timerEnabled: challengeTimerEnabled,
         status: "pending",
         timestamp: Date.now(),
         expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
@@ -10634,7 +10751,7 @@ export default function App() {
         isWon: !!rBody.isWon,
         isPending: false,
         status: rBody.status || (rBody.isWon ? "completed" : "mistake_game_over"),
-        date: rBody.date || new Date().toLocaleDateString(),
+        date: rBody.date || new Date().toISOString(),
         timestamp: serverTimestamp()
       };
 
@@ -10730,7 +10847,7 @@ export default function App() {
             isWon: !!payload.isWon,
             isPending: false,
             status: payload.status || (payload.isWon ? "completed" : "mistake_game_over"),
-            date: payload.date || new Date().toLocaleDateString(),
+            date: payload.date || new Date().toISOString(),
             timestamp: serverTimestamp()
           });
           console.log(`[Firestore] Offline queue item synced: ${payload.challengeId}`);
@@ -10785,7 +10902,7 @@ export default function App() {
     }
 
     const pName = getActiveDisplayName();
-    const userId = userProfile?.id || "GUEST_ANON";
+    const userId = userProfile?.id || getOrCreateGuestIdentity().id;
 
     try {
       const docId = getSeedDocId(challengeId);
@@ -10801,7 +10918,7 @@ export default function App() {
           isWon: false,
           status: "solving",
           isPending: true,
-          date: new Date().toLocaleDateString(),
+          date: new Date().toISOString(),
           timestamp: serverTimestamp()
         }, { merge: true });
         console.log(`[Firestore] Registered join for ${userId} (${pName}) on ${challengeId}`);
@@ -12102,13 +12219,18 @@ export default function App() {
     setChallengeDifficulty(boardState?.difficulty || difficulty);
     setChallengeMistakeLimit(midMistakes);
     setChallengeHintLimit(midHints);
-    setChallengeTimerEnabled(timerEnabled);
+    const activeHostId = userProfile?.id || auth.currentUser?.uid || getOrCreateGuestIdentity().id;
+    const activeHostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
 
     // Write canonical room to Firestore with flat arrays (safe against nested array errors)
     setDoc(doc(db, "rooms", liveRoomCode), {
       roomCode: liveRoomCode,
       seed: liveSeed,
       difficulty: boardState?.difficulty || difficulty,
+      hostId: activeHostId,
+      hostName: activeHostName,
+      createdById: activeHostId,
+      createdByName: activeHostName,
       ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
       ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
       mistakesLimit: midMistakes,
@@ -14398,10 +14520,17 @@ export default function App() {
                         ? (boardState as any).solutionGrid.flat()
                         : (solutionGrid && solutionGrid.length === 9 ? solutionGrid.flat() : null);
 
+                      const hostId = userProfile?.id || authUser?.uid || getOrCreateGuestIdentity().id;
+                      const hostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
+
                       await setDoc(doc(db, "rooms", roomCode), {
                         roomCode: roomCode,
                         seed: seed,
                         difficulty: challengeDifficulty,
+                        hostId: hostId,
+                        hostName: hostName,
+                        createdById: hostId,
+                        createdByName: hostName,
                         ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
                         ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
                         mistakesLimit: challengeMistakeLimit,
@@ -18545,7 +18674,8 @@ export default function App() {
                 ) : (
                   sortedBellInvites.map((challenge) => {
                     const senderDisplayName = challenge.senderName || (challenge as any).fromName || (challenge as any).hostName || "Player";
-                    const challengeDifficulty = challenge.difficulty || "MEDIUM";
+                    const challengeDifficulty = normalizeDifficulty(challenge.difficulty);
+                    const diffTheme = getDifficultyColorTheme(challengeDifficulty, darkMode);
                     const timestampVal = challenge.sentAt ?? (challenge as any).timestamp ?? (challenge as any).createdAt ?? challenge.receivedAt;
 
                     if (challenge.type === 'challenge_completed') {
@@ -18667,29 +18797,27 @@ export default function App() {
                     return (
                       <div
                         key={challenge.inviteId || challenge.id || `inv-${Math.random()}`}
-                        className={`p-4 rounded-2xl flex flex-col gap-3 border transition-all ${darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-300" : "bg-slate-50/80 border-stone-200/60 text-stone-850"
-                          }`}
+                        className={`p-4 rounded-2xl flex flex-col gap-3 transition-all shadow-[0_4px_16px_rgba(0,0,0,0.03)] border-none ${diffTheme.cardBg}`}
                       >
                         <div className="flex justify-between items-start">
                           <div className="flex flex-col text-left">
-                            <span className={`text-[10px] font-black uppercase tracking-wider ${challengeDifficulty === "EASY" ? "text-emerald-500" :
-                              challengeDifficulty === "MEDIUM" ? "text-amber-500" :
-                                challengeDifficulty === "HARD" ? "text-purple-500" : "text-rose-500"
-                              }`}>
-                              {t("duel_difficulty", { difficulty: t(challengeDifficulty.toLowerCase() as TranslationKey) || challengeDifficulty })}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[10px] font-mono font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${diffTheme.badgeBg}`}>
+                                {`${(challenge.difficulty || challengeDifficulty || "MEDIUM").toUpperCase()} RACE`}
+                              </span>
+                            </div>
                             {(() => {
                               const text = t("invited_by", { name: "___NAME___" });
                               const parts = text.split("___NAME___");
                               if (parts.length === 2) {
                                 return (
-                                  <span className="font-sans text-xs font-bold mt-0.5">
+                                  <span className="font-sans text-xs font-bold mt-1">
                                     {parts[0]}<strong className="font-extrabold">{senderDisplayName}</strong>{parts[1]}
                                   </span>
                                 );
                               }
                               return (
-                                <span className="font-sans text-xs font-bold mt-0.5">
+                                <span className="font-sans text-xs font-bold mt-1">
                                   {t("invited_by", { name: senderDisplayName })}
                                 </span>
                               );
@@ -18730,8 +18858,8 @@ export default function App() {
                           <button
                             disabled={isJoiningRoomLoading}
                             onClick={() => handleAcceptAndPlayBellInvite(challenge)}
-                            className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border-none transition-all active:scale-95 text-white flex items-center justify-center gap-1.5 ${isJoiningRoomLoading ? "opacity-80 cursor-not-allowed bg-indigo-700" : "cursor-pointer bg-indigo-600 hover:bg-indigo-700"
-                              }`}
+                            className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border-none transition-all active:scale-95 flex items-center justify-center gap-1.5 ${isJoiningRoomLoading ? "opacity-80 cursor-not-allowed" : "cursor-pointer"
+                              } ${diffTheme.primaryBtn}`}
                           >
                             {isJoiningRoomLoading ? (
                               <>
@@ -18856,19 +18984,22 @@ export default function App() {
                     </button>
                   </div>
                 </>
-              ) : (
+              ) : (() => {
+                const notifDifficulty = normalizeDifficulty(activeInviteNotification.difficulty);
+                const notifTheme = getDifficultyColorTheme(notifDifficulty, darkMode);
+                return (
                 <>
                   {/* Tier 1: Top Message Row */}
                   <div className="flex items-center gap-3 w-full min-w-0">
-                    <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-purple-950/50 text-purple-300" : "bg-purple-50 text-purple-600"}`}>
+                    <div className={`p-2.5 rounded-xl shrink-0 ${notifTheme.iconBg}`}>
                       <Users className="w-5 h-5 shrink-0" strokeWidth={2.5} />
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col text-left">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-purple-400" : "text-purple-700"}`}>
-                          {t("sudoku_invite_title")}
+                        <span className={`text-[10px] font-mono font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${notifTheme.badgeBg}`}>
+                          {`${(activeInviteNotification.difficulty || notifDifficulty || "MEDIUM").toUpperCase()} RACE`}
                         </span>
-                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-purple-500/15 text-purple-500">
+                        <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ${notifTheme.badgeBg}`}>
                           {inviteCountdown}s
                         </span>
                       </div>
@@ -18927,10 +19058,10 @@ export default function App() {
                         const targetRecipient = activeInviteNotification?.targetUid || activeInviteNotification?.toUserId;
                         await handleAcceptAndLaunchInvite(roomCode || gameId, id, password, true, undefined, targetRecipient);
                       }}
-                      className={`flex-1 py-2 px-3 rounded-xl font-semibold text-xs sm:text-sm text-center shadow-md transition-all border-none text-white flex items-center justify-center gap-1.5 active:scale-95 ${isJoiningRoomLoading
-                        ? "opacity-80 cursor-not-allowed bg-emerald-700"
-                        : "cursor-pointer bg-emerald-600 hover:bg-emerald-500"
-                        }`}
+                      className={`flex-1 py-2 px-3 rounded-xl font-semibold text-xs sm:text-sm text-center shadow-md transition-all border-none flex items-center justify-center gap-1.5 active:scale-95 ${isJoiningRoomLoading
+                        ? "opacity-80 cursor-not-allowed"
+                        : "cursor-pointer"
+                        } ${notifTheme.primaryBtn}`}
                     >
                       {isJoiningRoomLoading ? (
                         <>
@@ -18943,7 +19074,8 @@ export default function App() {
                     </button>
                   </div>
                 </>
-              )}
+                );
+              })()}
 
               {/* 5-second countdown progress bar */}
               <div className="w-full h-1 bg-stone-200/50 dark:bg-zinc-800/50 rounded-full overflow-hidden mt-0.5">
@@ -18953,7 +19085,7 @@ export default function App() {
                   transition={{ duration: 5, ease: "linear" }}
                   className={`h-full ${activeInviteNotification.type === 'challenge_completed'
                     ? "bg-gradient-to-r from-emerald-500 to-teal-500"
-                    : "bg-gradient-to-r from-purple-500 to-indigo-500"
+                    : getDifficultyColorTheme(normalizeDifficulty(activeInviteNotification.difficulty), darkMode).progressBarGradient
                     }`}
                 />
               </div>

@@ -26,32 +26,34 @@
 | Line Range | Section / Function Name | Purpose |
 | :--- | :--- | :--- |
 | **1 – 149** | Imports & `getAudioCtx()` | Module imports, global Web Audio Context singleton, and gesture auto-unlock listeners. |
-| **151 – 295** | Core Types & Theme Constants | `SudokuCell`, `BoardState`, `Difficulty`, `DEFAULT_SETTINGS`, `DIFFICULTY_GRID_THEMES`, `CompletedGame`, `PendingChallenge`, `INITIAL_GUEST_STATE`. |
-| **297 – 405** | Pure Sudoku Generator Engine | `createPRNG`, `isValidPlacementPure`, `solveSudokuRecursivePure`, `countSolutionsPure`, `generateFlatBoardForSeed`. |
-| **407 – 660** | URL, Sanitizer & Share Helpers | `getSharedOrigin`, `encodePass`, `decodePass`, `sanitizeText`, `sanitizeGameId`, `sanitizePassword`, `copyToClipboard`, `shareOrCopyContent`. |
-| **662 – 692** | Storage Namespace Resolver | `setGuestNamespaceLock`, `getScopedKey(baseKey, uid)`, `persistGuestThemeToVault`. |
-| **698 – 815** | `App()` Entry, Theme & Navigation | `activeTheme` state, `navigateToScreen`, `navigatorPop` (stack-based screen navigation). |
-| **823 – 885** | 0ms Synchronous Bootstrap | Reads `getActiveAuthUid()`, `loadVault()`, initializes `authUser` and `userProfile` without flicker. |
-| **893 – 1018** | Display Name Guards | `checkIsDisplayNameConfigured`, `getActiveDisplayName`, `handleAcceptInvitationWithProfileCheck`, `saveAndExecuteName`. |
-| **1042 – 1185** | Multiplayer & Friends State | `multiplayerPlayers`, `friends`, `recentPlayers`, scoped localStorage sync effect, `useFriendPresence` hook call (line 1179). |
-| **1615 – 1640** | `isAppReady` & Cancellable 3.5s Safety Timeout | Gates initial rendering with `isAppReady`, manages `safetyTimeoutRef` & `clearSafetyTimeout` to ensure UI is never stuck while cancelling safely when cloud data resolves. |
-| **2365 – 2400** | Leaderboard Cache, Vault Sync & `pendingChallenges` | `challengeLeaderboardCache`, `savedGames`, `completedGames`, `pendingChallenges` (initialized via `getScopedKey("pending_challenges")` with legacy fallback). |
-| **2602 – 2706** | Bell Notification Grouping | `extractRoomCodeFromChallenge`, `getInviteTimestampMs`, `sortedBellInvites` (groups `challenge_completed` by room), `unreadNotificationCount`. |
-| **2708 – 2870** | User Settings States | `darkMode`, `soundEffects`, `vibrations`, `timerEnabled`, `mistakeLimitEnabled`, `isNumberFirstInputMode`, `autoSwitchCompletedNumber`, `isAutoRemoveNotesEnabled`. |
-| **3150 – 3275** | Unified Invite & Bell Router | **SSOT BELL FUNNEL:** `upsertBellChallenge` (canonical ID + real-name protection + dual-write scoped storage), `routeInviteNotification`, `dockInviteToBell`, `activeInviteNotificationRef`. |
-| **3915 – 4700** | `hydrateUserFromCloud` | Resolves profile name and cloud stats from Firestore, writes local vault, triggers Fast-Path Early Unlock (`clearSafetyTimeout`, `setIsAuthHydrating(false)`, `setIsAppReady(true)`), and syncs players/FCM in background. |
-| **4715 – 4945** | `onAuthStateChanged` | Contains `currentHydratedUidRef` re-entrance guard, suppresses `signInAnonymously` on explicit logout (`isExplicitLogoutRef`), zeroes cold-boot stats when `userHasVault` is false, and triggers cloud hydration. |
-| **5180 – 5375** | `handleConnectGoogle` | Interactive Google sign-in & anonymous account linking flow with Global Execution Tracer (`[+XXms]`). Sequences guest snapshot, popup, in-memory flush, and cloud hydration. |
-| **5376 – 5495** | `handleLogout` | Safe Logout SSOT: sets `isExplicitLogoutRef`, wipes session tokens, sets guest drawer, unlocks `isAppReady`, and releases logout locks after 150ms. |
-| **5920 – 5986** | Incoming Invites Listener #1 | Firestore `onSnapshot` on `/invites` (`toUserId == activeId`), automatically upserts pending invites to Bell on app load, cleans up invites on accept/decline. |
-| **6510 – 6535** | `saveFcmToken` | Saves `fcmToken`, `fcmTokens` array, and platform-specific `fcmToken_native` / `fcmToken_web` so Android and Web APKs do not overwrite each other. |
-| **6860 – 6895** | Bell Invite Actions | `handleAcceptAndPlayBellInvite` (resolves canonical room code via `extractRoomCodeFromChallenge`) and `handleDeclineBellInvite` (dual-write scoped storage). |
-| **6900 – 7160** | `handleViewChallengeResults` | Zero-latency modal open + 7-day partial standings sync (Host completed, Guest pending). Result dismissal filter ONLY removes `type === "challenge_completed"`, preserving active game invites. |
-| **7260 – 7700** | Push Notifications & FCM Listeners | Native FCM (`PushNotifications`), Local Notifications, Service Worker `message` listener, and Web FCM (`onMessage`), all unified through `upsertBellChallenge`. |
-| **9695 – 9785** | Direct Invite Dispatch (`handleInviteFriend`) | Resolves `fromName` via `getActiveDisplayName()` with robust profile ref and vault fallback, dispatching to `/invites` with canonical 7-day `expiresAt`. |
-| **9887 – 10115** | `saveGameToHistory` | Updates local vault, direct Firestore cloud sync on `/users/{uid}`, and cleans up receiver's `invite_${cleanRoomCode}` while preserving `challenge_completed` cards. |
-| **10452 – 10520** | `submitGameResult` | Writes player match result to `/rooms/{roomCode}/players/{userId}` and `/challenge_results/{docId}/participants/{userId}` while strictly keeping `/rooms/{roomCode}` `status: "active"`. |
-| **13170 – 13205** | Root Layout & Pastel Sync Loading Wall | Renders borderless Pastel Sync Loading Wall (`!isAppReady`) with rounded corners, soft shadow, and animated sparkles indicator. |
+| **151 – 365** | Core Types & Theme Constants | `SudokuCell`, `BoardState`, `Difficulty`, `normalizeDifficulty`, `getDifficultyColorTheme` (pastel color tokens), `DEFAULT_SETTINGS`, `DIFFICULTY_GRID_THEMES`, `CompletedGame`, `PendingChallenge`, `INITIAL_GUEST_STATE`. |
+| **367 – 475** | Pure Sudoku Generator Engine | `createPRNG`, `isValidPlacementPure`, `solveSudokuRecursivePure`, `countSolutionsPure`, `generateFlatBoardForSeed`. |
+| **477 – 730** | URL, Sanitizer & Share Helpers | `getSharedOrigin`, `encodePass`, `decodePass`, `sanitizeText`, `sanitizeGameId`, `sanitizePassword`, `copyToClipboard`, `shareOrCopyContent`. |
+| **732 – 762** | Storage Namespace Resolver | `setGuestNamespaceLock`, `getScopedKey(baseKey, uid)`, `persistGuestThemeToVault`. |
+| **768 – 885** | `App()` Entry, Theme & Navigation | `activeTheme` state, `navigateToScreen`, `navigatorPop` (stack-based screen navigation). |
+| **893 – 955** | 0ms Synchronous Bootstrap | Reads `getActiveAuthUid()`, `loadVault()`, initializes `authUser` and `userProfile` without flicker. |
+| **963 – 1088** | Display Name Guards | `checkIsDisplayNameConfigured`, `getActiveDisplayName`, `handleAcceptInvitationWithProfileCheck`, `saveAndExecuteName`. |
+| **1112 – 1255** | Multiplayer & Friends State | `multiplayerPlayers`, `friends`, `recentPlayers`, scoped localStorage sync effect, `useFriendPresence` hook call. |
+| **1685 – 1710** | `isAppReady` & Cancellable 3.5s Safety Timeout | Gates initial rendering with `isAppReady`, manages `safetyTimeoutRef` & `clearSafetyTimeout` to ensure UI is never stuck while cancelling safely when cloud data resolves. |
+| **2435 – 2470** | Leaderboard Cache, Vault Sync & `pendingChallenges` | `challengeLeaderboardCache`, `savedGames`, `completedGames`, `pendingChallenges` (initialized via `getScopedKey("pending_challenges")` with legacy fallback). |
+| **2672 – 2776** | Bell Notification Grouping | `extractRoomCodeFromChallenge`, `getInviteTimestampMs`, `sortedBellInvites` (groups `challenge_completed` by room), `unreadNotificationCount`. |
+| **2778 – 2940** | User Settings States | `darkMode`, `soundEffects`, `vibrations`, `timerEnabled`, `mistakeLimitEnabled`, `isNumberFirstInputMode`, `autoSwitchCompletedNumber`, `isAutoRemoveNotesEnabled`. |
+| **3220 – 3390** | Unified Invite & Bell Router | **SSOT BELL FUNNEL:** `upsertBellChallenge` (canonical ID + real-name protection + `normalizeDifficulty` + dual-write scoped storage), `routeInviteNotification`, `dockInviteToBell`, `activeInviteNotificationRef`. |
+| **3980 – 4770** | `hydrateUserFromCloud` | Resolves profile name and cloud stats from Firestore, writes local vault, triggers Fast-Path Early Unlock (`clearSafetyTimeout`, `setIsAuthHydrating(false)`, `setIsAppReady(true)`), and syncs players/FCM in background. |
+| **4785 – 5015** | `onAuthStateChanged` | Contains `currentHydratedUidRef` re-entrance guard, suppresses `signInAnonymously` on explicit logout (`isExplicitLogoutRef`), zeroes cold-boot stats when `userHasVault` is false, and triggers cloud hydration. |
+| **5250 – 5445** | `handleConnectGoogle` | Interactive Google sign-in & anonymous account linking flow with Global Execution Tracer (`[+XXms]`). Sequences guest snapshot, popup, in-memory flush, and cloud hydration. |
+| **5446 – 5565** | `handleLogout` | Safe Logout SSOT: sets `isExplicitLogoutRef`, wipes session tokens, sets guest drawer, unlocks `isAppReady`, and releases logout locks after 150ms. |
+| **6190 – 6270** | Incoming Invites Listener #1 | Firestore `onSnapshot` on `/invites` (`toUserId == activeId`), automatically normalizes difficulty via `normalizeDifficulty`, upserts pending invites to Bell on app load, cleans up invites on accept/decline. |
+| **6580 – 6605** | `saveFcmToken` | Saves `fcmToken`, `fcmTokens` array, and platform-specific `fcmToken_native` / `fcmToken_web` so Android and Web APKs do not overwrite each other. |
+| **6930 – 6965** | Bell Invite Actions | `handleAcceptAndPlayBellInvite` (resolves canonical room code via `extractRoomCodeFromChallenge`) and `handleDeclineBellInvite` (dual-write scoped storage). |
+| **6970 – 7230** | `handleViewChallengeResults` | Zero-latency modal open + 7-day partial standings sync (Host completed, Guest pending). Result dismissal filter ONLY removes `type === "challenge_completed"`, preserving active game invites. |
+| **7330 – 7890** | Push Notifications & FCM Listeners | Native FCM (`PushNotifications`), Local Notifications, Service Worker `message` listener, and Web FCM (`onMessage`), all unified through `upsertBellChallenge` and normalized with `normalizeDifficulty`. |
+| **9920 – 10015** | Direct Invite Dispatch (`handleInviteFriend`) | Resolves `fromName` via `getActiveDisplayName()`, passes dynamic `difficulty`, `seed`, `maxMistakes`, `hintLimit`, `timerEnabled` to `/invites` with canonical 7-day `expiresAt`. |
+| **10016 – 10245** | `saveGameToHistory` | Updates local vault, direct Firestore cloud sync on `/users/{uid}`, and cleans up receiver's `invite_${cleanRoomCode}` while preserving `challenge_completed` cards. |
+| **10580 – 10650** | `submitGameResult` | Writes player match result to `/rooms/{roomCode}/players/{userId}` and `/challenge_results/{docId}/participants/{userId}` while strictly keeping `/rooms/{roomCode}` `status: "active"`. |
+| **13300 – 13335** | Root Layout & Pastel Sync Loading Wall | Renders borderless Pastel Sync Loading Wall (`!isAppReady`) with rounded corners, soft shadow, and animated sparkles indicator. |
+| **18610 – 18810** | Bell Modal Invite Card Rendering | Renders dynamic difficulty badges, difficulty-matched pastel cards (`diffTheme.cardBg`), and buttons (`diffTheme.primaryBtn`). |
+| **18820 – 19040** | Toast Banner (`activeInviteNotification`) | Renders 5s countdown banner with difficulty-matched icon (`notifTheme.iconBg`), badge, button (`notifTheme.primaryBtn`), and countdown gradient (`notifTheme.progressBarGradient`). |
 
 ---
 
@@ -117,29 +119,37 @@
     2. Cloud-First SSOT Write (`lines 10070-10086`): If user is authenticated (`effectiveCloudUid`), writes directly to Firestore `/users/{effectiveCloudUid}` with `{ merge: true }`: `stats`, `completedGames`, `bestTimes`, `totalGamesPlayed`, `totalWinsCount`, `winStreak`, `wins`, `updatedAt: serverTimestamp()`.
 
 ### C. Multiplayer Room, Invite & Result Pipeline
-* **Room Creation (`openCreateRoomModal` at `line 6913` & `updateRoomSettingsInFirestore` at `line 7004`)**
+* **Room Creation (`openCreateRoomModal` & `updateRoomSettingsInFirestore`)**
   * `⬅️ Receives From:` Host UI actions in `CreateChallengeModal`.
-  * `➡️ Sends To:` `generateFlatBoardForSeed()` -> writes `/rooms/{roomCode}` with `puzzleFlat` (81 numbers), `solutionFlat` (81 numbers), `status: "active"`, and canonical 7-day `expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)`.
-* **Invite Dispatch (`handleInviteFriend` at `line 9695` & `setDoc` at `line 9768`)**
+  * `➡️ Sends To:` `generateFlatBoardForSeed()` -> writes `/rooms/{roomCode}` with `puzzleFlat` (81 numbers), `solutionFlat` (81 numbers), `difficulty`, `mistakesLimit`, `hintsLimit`, `timerEnabled`, `status: "active"`, and canonical 7-day `expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)`.
+* **Invite Dispatch (`handleInviteFriend` at `src/App.tsx:9920`)**
   * `⬅️ Receives From:` Host clicking "Invite" in `CreateChallengeModal` or Rematch Lobby.
-  * `➡️ Sends To:` Firestore `/invites/{id}` (`toUserId`, `fromUserId`, `fromName`, `roomCode`, `seed`, `difficulty`, `status: "pending"`, and canonical 7-day `expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)`).
-* **Invite Reception & SSOT Bell Pipeline (`upsertBellChallenge` at `line 3210`, `routeInviteNotification` at `line 3275`)**
-  * `⬅️ Receives From:` Firestore `/invites` query `where("toUserId", "==", activeId), where("status", "==", "pending")` (`line 6027`), Capacitor Native Push (`line 7280`), Service Worker `message` event (`line 7460`), Web FCM `onMessage` (`line 7510`), or local game completion.
+  * `➡️ Sends To:` Firestore `/invites/{id}` (`toUserId`, `fromUserId`, `fromName`, `roomCode`, `gameId`, `difficulty: challengeDifficulty`, `seed`, `maxMistakes: challengeMistakeLimit`, `hintLimit: challengeHintLimit`, `timerEnabled: challengeTimerEnabled`, `status: "pending"`, and canonical 7-day `expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)`).
+* **Cloud Function Notification (`onInviteCreated` in `functions/index.js:180`)**
+  * `⬅️ Receives From:` Firestore `/invites/{inviteId}` onCreate trigger.
+  * `➡️ Sends To:` FCM multicast payload containing `difficulty: String(invite.difficulty || "MEDIUM")`, `seed: String(invite.seed || "")`, `maxMistakes`, `hintLimit`, `timerEnabled`, localized notification titles, and click action links.
+* **Invite Reception & SSOT Bell Pipeline (`upsertBellChallenge` at `src/App.tsx:3220`, `routeInviteNotification` at `src/App.tsx:3340`)**
+  * `⬅️ Receives From:` Firestore `/invites` query `where("toUserId", "==", activeId), where("status", "==", "pending")`, Capacitor Native Push (`pushNotificationReceived`), Service Worker `message` event, Web FCM `onMessage`, or local game completion.
   * `➡️ Sends To:`
+    * **`normalizeDifficulty(raw)`:** Canonical sanitizer normalizing any input (`"easy"`, `"EASY"`, `"Medium"`, etc.) strictly to `"EASY" | "MEDIUM" | "HARD" | "EXPERT"`.
     * **`upsertBellChallenge(payload)` (SSOT):** Immediately upserts invite or race result into `pendingChallenges` state and persists to both `getScopedKey("pending_challenges")` and `sudoku_pending_challenges` (deduplicated by `invite_${roomCode}` or `puzzle_race_${roomCode}`, protecting real sender names from generic downgrades, with 7-day `expiresAt`).
-    * **`sortedBellInvites` (`line 2663`):** 7-Day Universal Lifespan filter (`now > expiresAt`) and Receiver Completion Filter (`completedRoomCodes.has(room)`). Bell drawer keeps invites accessible for 7 days even after the host/sender completes their game.
+    * **`sortedBellInvites`:** 7-Day Universal Lifespan filter (`now > expiresAt`) and Receiver Completion Filter (`completedRoomCodes.has(room)`). Bell drawer keeps invites accessible for 7 days even after the host/sender completes their game.
     * If actively in-game (`isActivelyInGame()` or `currentScreen === "game"`): suppresses banner/audio and routes quietly to Bell drawer (`triggerBellWiggle(true)`).
     * If not in-game & foreground: sets `activeInviteNotification` (5s countdown toast) with protected sender name.
+* **Invite UI Presentation & Pastel Theming**
+  * **Bell Invites Modal Card:** Renders dynamic difficulty badge (`{difficulty} DUEL`), soft difficulty-matched card background (`diffTheme.cardBg`), and theme-matched primary accept button (`diffTheme.primaryBtn`).
+  * **In-App Toast Banner (`activeInviteNotification`):** Renders dynamic difficulty pill badge, matching pastel icon background (`notifTheme.iconBg`), theme-matched primary accept button (`notifTheme.primaryBtn`), and difficulty gradient progress countdown bar (`notifTheme.progressBarGradient`).
+  * **Incoming Invite Modal (`IncomingInviteModal.tsx`):** Renders dynamic difficulty pastel badge and theme-matched accept button for direct PIN / join prompt.
 * **Room Join (`executeJoinRoom` at `line 6701`)**
-  * `⬅️ Receives From:` Join Room modal, Bell Invite accept (`handleAcceptAndPlayBellInvite` at `line 6921`), Deep-link URL, or Push notification tap.
+  * `⬅️ Receives From:` Join Room modal, Bell Invite accept (`handleAcceptAndPlayBellInvite`), Deep-link URL, or Push notification tap.
   * `➡️ Sends To:` Validates 7-day lifespan (`rData.expiresAt`), reads `/rooms/{roomCode}` -> populates `boardState` & `solutionGrid` -> calls `registerChallengeJoin(roomCode)` -> navigates to `"game"`.
-* **Match Result Submission (`submitGameResult` at `line 10452` & `handleViewChallengeResults` at `line 7040`)**
+* **Match Result Submission (`submitGameResult` at `line 10580` & `handleViewChallengeResults`)**
   * `⬅️ Receives From:` Match completion or "View Results" button.
   * `➡️ Sends To:`
     * Writes player match result to `/rooms/{roomCode}/players/{userId}` and `/challenge_results/{docId}/participants/{userId}`.
     * **Decoupled Room State:** Explicitly keeps `/rooms/{roomCode}` `status: "active"` (updating `lastCompletedUid`, `lastCompletedBy`, `lastCompletedTime`, `lastCompletedAt`). Room is NEVER marked completed/closed on single-player finish.
-    * **Receiver Bell Cleanup:** In `saveGameToHistory` (`line 10074`), removes receiver's `invite_${cleanRoomCode}` from `pendingChallenges` upon completion while preserving `challenge_completed` race standings.
-    * **Graceful Asynchronous Standings:** `handleViewChallengeResults` (`line 7095`) queries `/rooms/{roomCode}/players`, `/challenge_results/{docId}/participants`, and `/invites` to display partial standings (Host completed, Guest pending) with animated pulsing status dots in `GameOverModal`.
+    * **Receiver Bell Cleanup:** In `saveGameToHistory`, removes receiver's `invite_${cleanRoomCode}` from `pendingChallenges` upon completion while preserving `challenge_completed` race standings.
+    * **Graceful Asynchronous Standings:** `handleViewChallengeResults` queries `/rooms/{roomCode}/players`, `/challenge_results/{docId}/participants`, and `/invites` to display partial standings (Host completed, Guest pending) with animated pulsing status dots in `GameOverModal`.
 
 ---
 
@@ -211,10 +221,13 @@
 3. **Multi-Source Token Harvesting in Cloud Functions:** Updated `extractTokens` (`functions/index.js:95-115`) to aggregate tokens from `fcmTokens` array, `fcmToken_native`, `fcmToken_web`, and legacy scalar `fcmToken` using `Set` deduplication.
 4. **Dead-Token Purge Protection:** Enhanced `pruneBadTokens` (`functions/index.js:120-145`) so that when unregistered/invalid tokens are removed from `fcmTokens`, any matching platform slots (`fcmToken`, `fcmToken_native`, `fcmToken_web`) are also cleared, preventing dead-token resurrection.
 
+### ✅ Group 6: Guest Identity, Presence, Room Metadata & Full Timestamps (RESOLVED)
+1. **Deterministic Permanent Guest Handle:** Implemented `getOrCreateGuestIdentity()` in `src/utils/storageEngine.ts`. Deterministically generates and caches `Guest_XXXX` / `GUEST_XXXX` under `sudoku_user_profile` and `sudoku_vault_guest` so guest handles survive page refreshes. Removed `Guest_XXXX` from `isGenericDisplayName` placeholder list and completely eliminated generic `"Player"` / `"Anonymous"` fallbacks in `createDefaultVault`, `loadVault`, `INITIAL_GUEST_STATE`, `getActiveDisplayName`, and room/invite payloads.
+2. **Scoped Hydration Write-Lock & Restored Guest Presence:** `isHydrationWriteLocked(uid)` strictly returns `false` for guest/anonymous sessions (`!uid`, `"guest"`, `"GUEST"`, `"GUEST_ANON"`, `uid.startsWith("GUEST_")`). In `useFriendPresence.ts`, enabled `GUEST_XXXX` IDs to write `{ id: currentId, status: "online", lastActive: serverTimestamp() }` to `/users/{currentId}` and mark previous guest IDs offline upon Google login migration. In `src/App.tsx`, `effectivePresenceId` passes guest IDs to `useFriendPresence` directly without waiting for Google hydration lock, restoring green presence dots on guest avatars.
+3. **Full ISO Timestamps for Match History:** Replaced `new Date().toLocaleDateString()` with `new Date().toISOString()` in `submitGameResult` (`App.tsx`), `registerChallengeJoin` (`App.tsx`), and offline queue synchronization. Fixed the "8 hours ago" bug where date-only strings defaulted to local midnight (00:00:00).
+4. **Embedded Host & Sender Identity:** Directly embedded `hostId`, `hostName`, `createdById`, and `createdByName` in room payloads (`openCreateRoomModal`, `handleSoloChallengeFriends`, `openMidGameInviteModal`, `onSameGameReplay`), and `fromName`, `senderName`, `hostName`, `hostId` in `/invites` payloads (`handleInviteFriend`), eliminating reliance on external `/users/{guestId}` profile lookups for guest invitations.
+5. **Dynamic Difficulty Mapping & RACE Title Sync:** In `handleInviteFriend` (`src/App.tsx`), dynamically resolved `currentDifficulty` via `overrideDifficulty || (showCreateChallengeModal ? challengeDifficulty : ((boardState as any)?.difficulty || challengeDifficulty || difficulty || "EASY"))` and explicitly wrote `difficulty: currentDifficulty` to `/rooms` and `/invites`. In `CreateChallengeModal.tsx`, passed `challengeDifficulty` directly to `handleInviteFriend(player.id, challengeDifficulty)`. Updated `IncomingInviteModal.tsx`, Bell drawer cards, and Toast banner to dynamically render the active difficulty title (`${diff} RACE`) matched to pastel theme tokens.
+
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
-1. **`useFriendPresence` Broken by Purged Key (`CreateChallengeModal.tsx:115` & `useFriendPresence.ts:29-38`):**
-   * **Root Cause:** `CreateChallengeModal.tsx` calls `useFriendPresence(undefined, playerIds)` passing `undefined` as `explicitUserId`. `useFriendPresence.ts` falls back to `localStorage.getItem("sudoku_userProfile")`, which was removed by `purgeLegacyKeys()`.
-2. **Invite Target ID Mismatch (`GUEST_XXXX` vs Google `uid`):**
-   * **Root Cause:** `past_players` stores opponent records under ephemeral `GUEST_XXXX` IDs from prior guest matches.
-3. **Same-Account Multi-Device Collision:**
+1. **Same-Account Multi-Device Collision:**
    * **Root Cause:** When testing on Laptop and Phone logged into the same Google account (`uid`), self-exclusion filters hide the other device.

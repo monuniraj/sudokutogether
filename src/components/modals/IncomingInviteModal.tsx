@@ -40,6 +40,26 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
 }) => {
   const { t } = useTranslation();
 
+  const normalizedDiff = (incomingChallengeDetails?.difficulty || "MEDIUM").toUpperCase();
+  const diffKey = (normalizedDiff === "EASY" ? "easy" : normalizedDiff === "HARD" ? "hard" : normalizedDiff === "EXPERT" ? "expert" : "medium") as any;
+  const diffLabel = t(diffKey) || normalizedDiff;
+
+  const diffBadgeStyle = normalizedDiff === "EASY"
+    ? (darkMode ? "bg-[#022c22] text-[#d1fae5]" : "bg-[#D1FAE5] text-[#065F46]")
+    : normalizedDiff === "HARD"
+    ? (darkMode ? "bg-[#2e1065] text-[#e9d5ff]" : "bg-[#F3E8FF] text-[#6B21A8]")
+    : normalizedDiff === "EXPERT"
+    ? (darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-[#FFE4E6] text-[#9D174D]")
+    : (darkMode ? "bg-[#451a03] text-[#fef08a]" : "bg-[#FFF99D] text-[#854D0E]");
+
+  const acceptBtnStyle = normalizedDiff === "EASY"
+    ? (darkMode ? "bg-[#022c22] text-[#d1fae5] hover:bg-[#022c22]/80" : "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]")
+    : normalizedDiff === "HARD"
+    ? (darkMode ? "bg-[#2e1065] text-[#e9d5ff] hover:bg-[#2e1065]/80" : "bg-[#F3E8FF] text-[#6B21A8] hover:bg-[#f3e8ff]/80")
+    : normalizedDiff === "EXPERT"
+    ? (darkMode ? "bg-[#4c0519] text-[#fecdd3] hover:bg-[#4c0519]/80" : "bg-[#FFE4E6] text-[#9D174D] hover:bg-[#ffe4e6]/80")
+    : (darkMode ? "bg-[#451a03] text-[#fef08a] hover:bg-[#451a03]/80" : "bg-[#FFF99D] text-[#854D0E] hover:bg-[#ffffbf]");
+
   return (
     <AnimatePresence>
       {isOpen && incomingChallengeDetails && (
@@ -64,10 +84,10 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
           >
             <div className="flex flex-col items-center gap-1 min-w-0 max-w-full">
               <span className={`text-[12px] font-sans font-bold uppercase tracking-widest ${darkMode ? "text-[#D1D5DB]" : "text-[#9CA3AF]"}`}>
-                {t("gameInvitationTitle")}
+                {`${normalizedDiff} RACE`}
               </span>
               <h3 className={`text-2xl font-sans font-medium tracking-tight mt-1 max-w-full truncate ${darkMode ? "text-[#FDFBF7]" : "text-[#4B5563]"}`}>
-                {incomingChallengeDetails.senderName || t("fellowPlayer")}
+                {incomingChallengeDetails.senderName || incomingChallengeDetails.fromName || t("fellowPlayer")}
               </h3>
               <p className={`text-sm font-sans mt-0.5 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
                 {t("invitedYouMessage")}
@@ -78,7 +98,9 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
             <div className="flex items-center justify-center gap-6 py-2">
               <div className="flex flex-col items-center">
                 <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"}`}>{t("levelLabel")}</span>
-                <span className="text-lg font-mono font-medium">{incomingChallengeDetails.difficulty}</span>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-black uppercase tracking-wider mt-1 ${diffBadgeStyle}`}>
+                  {diffLabel}
+                </span>
               </div>
               <div className={`w-[1px] h-8 ${darkMode ? "bg-[#4B5563]" : "bg-[#E5E7EB]"}`} />
               <div className="flex flex-col items-center">
@@ -144,9 +166,7 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
                   }}
                   className={`flex-1 aspect-[2/1] rounded-[24px] flex items-center justify-center transition-all shadow-[0_4px_12px_rgba(0,0,0,0.02)] active:scale-95 border-none ${
                     isJoiningRoomLoading ? "opacity-90 cursor-not-allowed" : "cursor-pointer"
-                  } ${
-                    darkMode ? "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]" : "bg-[#D1FAE5] text-[#065F46] hover:bg-[#A7F3D0]"
-                  }`}
+                  } ${acceptBtnStyle}`}
                 >
                   {isJoiningRoomLoading ? (
                     <RefreshCw className="w-6 h-6 animate-spin stroke-[2]" />

@@ -205,6 +205,11 @@ exports.onInviteCreated = onDocumentCreated("invites/{inviteId}", async (event) 
         gameId: roomCode,
         inviteId: inviteId,
         fromName: fromName,
+        difficulty: String(invite.difficulty || "MEDIUM"),
+        seed: String(invite.seed || ""),
+        maxMistakes: String(invite.maxMistakes !== undefined ? invite.maxMistakes : 3),
+        hintLimit: String(invite.hintLimit !== undefined ? invite.hintLimit : 3),
+        timerEnabled: String(invite.timerEnabled !== undefined ? invite.timerEnabled : true),
         title: notifTitle,
         body: notifBody,
         lang: targetLang

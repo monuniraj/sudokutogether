@@ -53,7 +53,7 @@ const hydrationWriteLockedUids = new Set<string>();
  * preventing empty/cold-boot data or race conditions from overwriting localStorage or Firestore.
  */
 export function setHydrationWriteLock(uid: string | null | undefined, locked: boolean): void {
-  if (!uid || uid === "guest" || uid === "GUEST" || uid.startsWith("GUEST_")) return;
+  if (!uid || uid === "guest" || uid === "GUEST" || uid === "GUEST_ANON" || uid.startsWith("GUEST_")) return;
   if (locked) {
     hydrationWriteLockedUids.add(uid);
   } else {
@@ -63,9 +63,10 @@ export function setHydrationWriteLock(uid: string | null | undefined, locked: bo
 
 /**
  * Checks whether the cloud hydration write lock is active for a given UID.
+ * Strictly returns false for guest, anonymous, or null IDs.
  */
 export function isHydrationWriteLocked(uid?: string | null): boolean {
-  if (!uid || uid === "guest" || uid === "GUEST" || uid.startsWith("GUEST_")) return false;
+  if (!uid || uid === "guest" || uid === "GUEST" || uid === "GUEST_ANON" || uid.startsWith("GUEST_")) return false;
   return hydrationWriteLockedUids.has(uid);
 }
 
@@ -100,6 +101,72 @@ export function getVaultKey(uid?: string | null): string {
 // ============================================================================
 // 3. SAFE PARSERS & UTILITIES
 // ============================================================================
+
+/**
+ * Deterministically generates or loads a permanent guest handle (e.g. Guest_4821)
+ * stored in localStorage under 'sudoku_user_profile' so it survives reloads.
+ */
+export function getOrCreateGuestIdentity(): { id: string; displayName: string } {
+  if (typeof window === "undefined") {
+    return { id: "GUEST_1001", displayName: "Guest_1001" };
+  }
+
+  try {
+    // 1. Check existing profile in localStorage under sudoku_user_profile
+    const storedProfileRaw = localStorage.getItem("sudoku_user_profile") || localStorage.getItem("sudoku_userProfile");
+    if (storedProfileRaw) {
+      try {
+        const parsed = JSON.parse(storedProfileRaw);
+        if (parsed && typeof parsed === "object") {
+          const rawName = (parsed.displayName || parsed.name || "").trim();
+          const rawId = (parsed.id || "").trim();
+          if (rawName && rawName !== "Player" && rawName !== "Anonymous" && rawId) {
+            return {
+              id: rawId.startsWith("GUEST_") ? rawId : `GUEST_${rawId}`,
+              displayName: rawName
+            };
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Check existing guest vault
+    const guestVaultRaw = localStorage.getItem(STORAGE_KEYS.VAULT_GUEST) || localStorage.getItem("sudoku_guest_vault");
+    if (guestVaultRaw) {
+      try {
+        const parsed = JSON.parse(guestVaultRaw);
+        if (parsed?.profile) {
+          const rawName = (parsed.profile.displayName || parsed.profile.name || "").trim();
+          const rawId = (parsed.profile.id || "").trim();
+          if (rawName && rawName !== "Player" && rawName !== "Anonymous" && rawId) {
+            return {
+              id: rawId.startsWith("GUEST_") ? rawId : `GUEST_${rawId}`,
+              displayName: rawName
+            };
+          }
+        }
+      } catch {}
+    }
+
+    // 3. Generate a permanent guest identity once
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const guestId = `GUEST_${randomSuffix}`;
+    const guestName = `Guest_${randomSuffix}`;
+
+    const newProfile = {
+      id: guestId,
+      name: guestName,
+      displayName: guestName,
+      avatarColor: "#8B5CF6",
+      isSynced: false
+    };
+
+    localStorage.setItem("sudoku_user_profile", JSON.stringify(newProfile));
+    return { id: guestId, displayName: guestName };
+  } catch (e) {
+    return { id: "GUEST_1001", displayName: "Guest_1001" };
+  }
+}
 
 /**
  * Robust duration parser: converts time strings (e.g. "01:45", "02:15:30", "95")
@@ -145,8 +212,7 @@ export function isGenericDisplayName(name?: string | null): boolean {
     genericPlaceholders.includes(trimmed) ||
     trimmed.startsWith("Bold Voyager") ||
     /^Player[_\s-]?\d*$/i.test(trimmed) ||
-    /^Pro[_\s-]?\d*$/i.test(trimmed) ||
-    /^Guest[_\s-]?\d*$/i.test(trimmed)
+    /^Pro[_\s-]?\d*$/i.test(trimmed)
   );
 }
 
@@ -154,9 +220,10 @@ export function isGenericDisplayName(name?: string | null): boolean {
  * Generates an empty default canonical vault with clean initial values.
  */
 export function createDefaultVault(options?: Partial<UserVaultProfile>): UserVault {
-  const isGuest = !options?.id || options.id.startsWith("GUEST_") || options.id === "guest";
-  const defaultId = options?.id || (isGuest ? `GUEST_${Math.floor(1000 + Math.random() * 9000)}` : "GUEST");
-  const defaultName = options?.displayName || (isGuest ? "Player" : (options?.email ? options.email.split("@")[0].slice(0, 15) : "Player"));
+  const isGuest = !options?.id || options.id.startsWith("GUEST_") || options.id === "guest" || options.id === "GUEST" || options.id === "GUEST_ANON";
+  const guestIdentity = isGuest ? getOrCreateGuestIdentity() : null;
+  const defaultId = options?.id || (isGuest ? guestIdentity!.id : "GUEST");
+  const defaultName = options?.displayName || (isGuest ? guestIdentity!.displayName : (options?.email ? options.email.split("@")[0].slice(0, 15) : getOrCreateGuestIdentity().displayName));
 
   return {
     profile: {
@@ -474,10 +541,21 @@ export function loadVault(uid?: string | null): UserVault {
           parsed.bestTimes
         );
 
+        const isGuestVault = key === STORAGE_KEYS.VAULT_GUEST || !uid || uid === "guest" || uid.startsWith("GUEST_") || uid === "GUEST_ANON";
+        let resolvedProfileId = parsed.profile.id || uid || "GUEST";
+        let resolvedProfileName = parsed.profile.displayName || parsed.profile.name || (isGuestVault ? getOrCreateGuestIdentity().displayName : "Player");
+        if (isGuestVault && (resolvedProfileName === "Player" || resolvedProfileName === "Anonymous" || !resolvedProfileName)) {
+          const guestIdentity = getOrCreateGuestIdentity();
+          resolvedProfileName = guestIdentity.displayName;
+          if (!resolvedProfileId || resolvedProfileId === "GUEST" || resolvedProfileId === "guest" || resolvedProfileId === "GUEST_ANON") {
+            resolvedProfileId = guestIdentity.id;
+          }
+        }
+
         return {
           profile: {
-            id: parsed.profile.id || uid || "GUEST",
-            displayName: parsed.profile.displayName || parsed.profile.name || "Player",
+            id: resolvedProfileId,
+            displayName: resolvedProfileName,
             avatarColor: parsed.profile.avatarColor || "#8B5CF6",
             isSynced: Boolean(parsed.profile.isSynced),
             email: parsed.profile.email

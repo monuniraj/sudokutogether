@@ -133,7 +133,7 @@ export function useFriendPresence(
   useEffect(() => {
     const prevId = prevUserIdRef.current;
     if (prevId && prevId !== userId) {
-      if (!prevId.startsWith("GUEST_") && prevId !== "GUEST" && prevId !== "guest" && !isHydrationWriteLocked(prevId)) {
+      if (prevId !== "GUEST" && prevId !== "guest" && prevId !== "GUEST_ANON" && !isHydrationWriteLocked(prevId)) {
         console.log(`[useFriendPresence] User ID transitioned from ${prevId} to ${userId || "none"}. Broadcasting offline for ${prevId}.`);
         const prevRef = doc(db, "users", prevId);
         setDoc(
@@ -155,13 +155,14 @@ export function useFriendPresence(
   // Broadcast presence to Firestore
   const broadcastStatus = useCallback(async (status: "online" | "offline") => {
     const currentId = userId || getStoredUserId();
-    if (!currentId || currentId.startsWith("GUEST_") || currentId === "GUEST" || currentId === "guest" || isHydrationWriteLocked(currentId)) return;
+    if (!currentId || currentId === "GUEST" || currentId === "guest" || currentId === "GUEST_ANON" || isHydrationWriteLocked(currentId)) return;
 
     try {
       const userRef = doc(db, "users", currentId);
       await setDoc(
         userRef,
         {
+          id: currentId,
           status,
           lastActive: serverTimestamp(),
           updatedAt: serverTimestamp(),

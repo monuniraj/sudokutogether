@@ -47,7 +47,7 @@ export interface CreateChallengeModalProps {
   multiplayerPlayers: Array<{ id: string; name: string; status: 'online' | 'offline'; isFriend?: boolean; [key: string]: any }>;
   getInviteCooldownState: (playerId: string) => { isJoined: boolean; isPendingSent: boolean; isDeclined: boolean; isLeft?: boolean; remainingSeconds: number; joinedAt?: number };
   handleToggleFriend: (playerId: string, playerName: string) => void;
-  handleInviteFriend: (playerId: string) => void;
+  handleInviteFriend: (playerId: string, overrideDifficulty?: Difficulty) => void;
   handleReinviteAll: () => void;
   isInvitingAll: boolean;
   onShareLink: () => void;
@@ -669,7 +669,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                               playClickSound();
                               setIsLobbyLocked(true);
                               setOpenDropdown(null);
-                              handleInviteFriend(player.id);
+                              handleInviteFriend(player.id, challengeDifficulty);
                             }}
                             disabled={!isOnline}
                             style={!isOnline ? { opacity: 0.4, pointerEvents: 'none', cursor: 'not-allowed' } : undefined}
