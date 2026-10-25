@@ -31,6 +31,7 @@ export interface SudokuKeypadProps {
   playClickSound: () => void;
   playEraseSound?: () => void;
   vibrations?: boolean;
+  exhaustedNum?: number | null;
 }
 
 export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
@@ -53,7 +54,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   darkMode,
   playClickSound,
   playEraseSound,
-  vibrations = true
+  vibrations = true,
+  exhaustedNum
 }) => {
   const { t } = useTranslation();
   const isGameOver = boardState?.isGameOver ?? false;
@@ -264,6 +266,13 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
 
       {/* 2. NUMBER PAD: 1-9 */}
       <div className="shrink-0 w-full mt-1 lg:mt-0 pb-0.5 overflow-visible px-1 sm:px-0" id="game-number-pad-deck">
+        <style>{`
+          @keyframes sudokuKeypadMicroElevation {
+            0% { transform: scale(1) translateY(0); }
+            40% { transform: scale(1.06) translateY(-2px); }
+            100% { transform: scale(1) translateY(0); }
+          }
+        `}</style>
         <div className="grid grid-cols-9 lg:grid-cols-3 gap-1 sm:gap-1.5 lg:gap-2 xl:gap-2.5 w-full select-none overflow-visible">
           {Array.from({ length: 9 }).map((_, i) => {
             const num = i + 1;
@@ -272,15 +281,28 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               : ((isNumberFirstInputMode && lockedNum === num) || (!isNumberFirstInputMode && activeKeypadNum === num));
             const remainingCount = remainingCounts[num] ?? 0;
 
+            const isJustExhausted = exhaustedNum === num;
+
             return (
               <button
                 key={num}
                 onClick={() => {
-                  playClickSound();
-                  triggerHapticTap(vibrations);
+                  const selRow = boardState?.selectedRow;
+                  const selCol = boardState?.selectedCol;
+                  const hasSelectedEmptyCell = !isNumberFirstInputMode && 
+                    selRow !== null && selRow !== undefined && 
+                    selCol !== null && selCol !== undefined && 
+                    boardState?.grid[selRow]?.[selCol]?.value === 0 && 
+                    !boardState?.grid[selRow]?.[selCol]?.isOriginalClue;
+
+                  if (!hasSelectedEmptyCell) {
+                    playClickSound();
+                    triggerHapticTap(vibrations);
+                  }
                   onNumberSelect(num);
                 }}
                 disabled={!boardState || visualizingBacktrack || (!isGameOver && remainingCount <= 0)}
+                style={isJustExhausted ? { animation: "sudokuKeypadMicroElevation 320ms cubic-bezier(0.16, 1, 0.3, 1) both" } : undefined}
                 className={`aspect-[1/1.55] lg:aspect-[1/1.02] w-full relative flex items-center justify-center cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed select-none transition-all rounded-xl lg:rounded-2xl border-none hover:translate-y-[-1px] active:scale-95 active:shadow-none shadow-md ${
                   isSelected 
                     ? activeKeypadTheme

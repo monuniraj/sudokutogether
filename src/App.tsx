@@ -12,13 +12,20 @@ import { MultiplayerForkModal } from "./components/modals/MultiplayerForkModal";
 import { CreateChallengeModal } from "./components/modals/CreateChallengeModal";
 import { GameOverModal } from "./components/modals/GameOverModal";
 import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
-import { SudokuBoard } from "./components/game/SudokuBoard";
+import { SudokuBoard, CompletionPulse } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
 import { ConfettiBurst } from "./components/common/ConfettiBurst";
 import { ClappingHands } from "./components/common/ClappingHands";
 import { Sudoku3DWatermark } from "./components/common/Sudoku3DWatermark";
 import { StudioSplash } from "./components/common/StudioSplash";
-import { playPartyPopperSound as synthesizePartyPopper } from "./utils/soundEffects";
+import {
+  playPartyPopperSound as synthesizePartyPopper,
+  playKalimbaRevealSound,
+  playMarimbaLineSound,
+  playRhodesBoxSound,
+  playMajor7thComboSound,
+  playBubblePopSound
+} from "./utils/soundEffects";
 import { formatMatchTimestamp, formatInviteTimestamp, formatActiveStatus } from "./utils/formatTimestamp";
 import { useFriendPresence } from "./hooks/useFriendPresence";
 import {
@@ -9007,6 +9014,12 @@ export default function App() {
   const [boardState, setBoardState] = useState<BoardState | null>(null);
   boardStateRef.current = boardState;
 
+  // Audio-visual juice states
+  const [completionPulse, setCompletionPulse] = useState<CompletionPulse | null>(null);
+  const [gameSessionKey, setGameSessionKey] = useState<number>(() => Date.now());
+  const [exhaustedKeypadNum, setExhaustedKeypadNum] = useState<number | null>(null);
+  const [isVictoryActive, setIsVictoryActive] = useState<boolean>(false);
+
   // Clear in-game decline guard when match completes
   useEffect(() => {
     if (boardState?.isGameOver) {
@@ -9020,6 +9033,7 @@ export default function App() {
   const hasTriggeredGameOverRef = useRef(false);
 
   useEffect(() => {
+    let gameOverTimeout: NodeJS.Timeout | null = null;
     if (boardState?.isGameOver) {
       if (!hasTriggeredGameOverRef.current) {
         hasTriggeredGameOverRef.current = true;
@@ -9029,7 +9043,15 @@ export default function App() {
         } else if (!challengeMode) {
           setWasDisconnectedMultiplayer(false);
         }
-        setShowGameOverModal(true);
+
+        const isVictory = !boardState.currentMistakesCount || 
+          (boardState.maxMistakesLimit ? boardState.currentMistakesCount < boardState.maxMistakesLimit : true);
+        const delayMs = isVictory ? 1000 : 0;
+
+        gameOverTimeout = setTimeout(() => {
+          setShowGameOverModal(true);
+        }, delayMs);
+
         if (challengeMode && !isDisconnected) {
           setEndGameStep(1); // Always start on Screen 1 (Results) when game first ends
           setPendingRematchSeed(null);
@@ -9047,6 +9069,9 @@ export default function App() {
     } else {
       hasTriggeredGameOverRef.current = false;
     }
+    return () => {
+      if (gameOverTimeout) clearTimeout(gameOverTimeout);
+    };
   }, [boardState?.isGameOver, challengeMode, isOnline, syncedLeaderboard, userProfile?.id]);
 
   const [pencilMode, setPencilMode] = useState<boolean>(false);
@@ -12086,6 +12111,9 @@ export default function App() {
     setHintInventory(3);
     setSessionSeconds(0);
     setShowGameOverModal(false);
+    setIsVictoryActive(false);
+    setGameSessionKey(Date.now());
+    playKalimbaRevealSound(getAudioCtx(), soundEffects);
 
     // Also update current active challenge states if this started a challenge
     if (isChallengeSession) {
@@ -12345,6 +12373,9 @@ export default function App() {
 
   const handleStartNewGame = () => {
     playClickSound();
+    setIsVictoryActive(false);
+    setGameSessionKey(Date.now());
+    playKalimbaRevealSound(getAudioCtx(), soundEffects);
     generateAndSetNewPuzzle(difficulty);
     setIsTimerPaused(false);
     navigateToScreen("game");
@@ -12727,9 +12758,74 @@ export default function App() {
         }
         const isNumCompleted = totalPlacedOfNum === 9;
 
+        // Check line/box completions for audio-visual juice
+        const rowWasIncomplete = !boardState.grid[selectedRow].every(c => c.value !== 0 && c.value === solutionGrid[selectedRow][c.col]);
+        const colWasIncomplete = !boardState.grid.every(r => r[selectedCol].value !== 0 && r[selectedCol].value === solutionGrid[r[selectedCol].row][selectedCol]);
+
+        const boxR = Math.floor(selectedRow / 3) * 3;
+        const boxC = Math.floor(selectedCol / 3) * 3;
+        let boxWasComplete = true;
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+            if (boardState.grid[boxR + r][boxC + c].value === 0 || boardState.grid[boxR + r][boxC + c].value !== solutionGrid[boxR + r][boxC + c]) {
+              boxWasComplete = false;
+              break;
+            }
+          }
+          if (!boxWasComplete) break;
+        }
+
+        const rowNowComplete = rowWasIncomplete && finalGrid[selectedRow].every(c => c.value !== 0 && c.value === solutionGrid[selectedRow][c.col]);
+        const colNowComplete = colWasIncomplete && finalGrid.every(r => r[selectedCol].value !== 0 && r[selectedCol].value === solutionGrid[r[selectedCol].row][selectedCol]);
+
+        let boxNowComplete = false;
+        if (!boxWasComplete) {
+          let allBoxMatch = true;
+          for (let r = 0; r < 3; r++) {
+            for (let c = 0; c < 3; c++) {
+              if (finalGrid[boxR + r][boxC + c].value === 0 || finalGrid[boxR + r][boxC + c].value !== solutionGrid[boxR + r][boxC + c]) {
+                allBoxMatch = false;
+                break;
+              }
+            }
+            if (!allBoxMatch) break;
+          }
+          boxNowComplete = allBoxMatch;
+        }
+
         // Check game win
         const currentProgress = finalGrid.every(r => r.every(cell => cell.value === solutionGrid[cell.row][cell.col]));
+
+        const completionCount = (rowNowComplete ? 1 : 0) + (colNowComplete ? 1 : 0) + (boxNowComplete ? 1 : 0);
+
+        if (!currentProgress) {
+          if (completionCount >= 2) {
+            playMajor7thComboSound(getAudioCtx(), soundEffects);
+            setCompletionPulse({ type: "combo", row: selectedRow, col: selectedCol, timestamp: Date.now() });
+            addLog("✨ Simultaneous Combo! Major 7th chord chime.");
+          } else if (boxNowComplete) {
+            playRhodesBoxSound(getAudioCtx(), soundEffects);
+            setCompletionPulse({
+              type: "box",
+              row: selectedRow,
+              col: selectedCol,
+              boxIndex: Math.floor(selectedRow / 3) * 3 + Math.floor(selectedCol / 3),
+              timestamp: Date.now()
+            });
+            addLog("✨ 3x3 Box Completed! Warm Rhodes chord bloom.");
+          } else if (rowNowComplete) {
+            playMarimbaLineSound(getAudioCtx(), soundEffects);
+            setCompletionPulse({ type: "row", row: selectedRow, timestamp: Date.now() });
+            addLog(`✨ Row ${selectedRow + 1} Completed! Marimba line sweep.`);
+          } else if (colNowComplete) {
+            playMarimbaLineSound(getAudioCtx(), soundEffects);
+            setCompletionPulse({ type: "col", col: selectedCol, timestamp: Date.now() });
+            addLog(`✨ Column ${selectedCol + 1} Completed! Marimba line sweep.`);
+          }
+        }
+
         if (currentProgress) {
+          setIsVictoryActive(true);
           const terminalWinState: BoardState = {
             ...boardState,
             grid: finalGrid,
@@ -12787,8 +12883,11 @@ export default function App() {
         }
 
         if (!currentProgress && isNumCompleted) {
-          // Requirement 6: Number Completion Audio & Haptic Feedback
+          // Requirement 6: Number Completion Audio & Haptic Feedback + Keypad Pop
           playNumberCompletionSound();
+          playBubblePopSound(getAudioCtx(), soundEffects);
+          setExhaustedKeypadNum(num);
+          setTimeout(() => setExhaustedKeypadNum(null), 400);
           triggerHapticCompletion(vibrations);
           addLog(`🎉 All 9 instances of ${num} placed! Number completed.`);
 
@@ -12841,7 +12940,10 @@ export default function App() {
           if (!isNumberFirstInputMode) {
             setActiveKeypadNum(num);
           }
-          playClickSound();
+          const hasCompletionChime = completionCount > 0 || isNumCompleted;
+          if (!hasCompletionChime) {
+            playClickSound();
+          }
           triggerHapticTap(vibrations);
         }
       }
@@ -14074,6 +14176,9 @@ export default function App() {
                       activeKeypadNum={activeKeypadNum}
                       darkMode={darkMode}
                       playClickSound={playClickSound}
+                      gameSessionKey={gameSessionKey}
+                      completionPulse={completionPulse}
+                      isVictory={isVictoryActive}
                       onCellClick={(r, c) => {
                         if (visualizingBacktrack || (isTimerPaused && !boardState?.isGameOver)) return;
                         if (boardState?.isGameOver) {
@@ -14411,6 +14516,7 @@ export default function App() {
                   playClickSound={playClickSound}
                   playEraseSound={playEraseSound}
                   vibrations={vibrations}
+                  exhaustedNum={exhaustedKeypadNum}
                 />
 
                 {/* 4. ACTION BUTTON: 'New Game' button at the bottom of the right panel, spanning the width of the number pad on desktop */}

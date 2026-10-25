@@ -204,7 +204,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
-              {!isOnline && userProfile?.isSynced && (
+              {!isOnline && (
                 <div
                   className={`p-1.5 flex items-center justify-center shrink-0 ${
                     darkMode ? "text-red-400" : "text-red-600"

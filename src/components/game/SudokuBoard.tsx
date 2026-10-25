@@ -1,5 +1,5 @@
 import React from "react";
-import { RefreshCw, Play } from "lucide-react";
+import { RefreshCw, Play, Check } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
@@ -52,6 +52,14 @@ export interface SudokuBoardState {
   [key: string]: any;
 }
 
+export interface CompletionPulse {
+  type: "row" | "col" | "box" | "combo";
+  row?: number;
+  col?: number;
+  boxIndex?: number;
+  timestamp: number;
+}
+
 export interface SudokuBoardProps {
   boardState: SudokuBoardState | null;
   difficulty: Difficulty;
@@ -67,6 +75,9 @@ export interface SudokuBoardProps {
   darkMode: boolean;
   playClickSound: () => void;
   onCellClick: (r: number, c: number) => void;
+  gameSessionKey?: string | number;
+  completionPulse?: CompletionPulse | null;
+  isVictory?: boolean;
 }
 
 export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
@@ -83,7 +94,10 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   activeKeypadNum,
   darkMode,
   playClickSound,
-  onCellClick
+  onCellClick,
+  gameSessionKey,
+  completionPulse,
+  isVictory
 }) => {
   const { t } = useTranslation();
 
@@ -135,6 +149,8 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
     "text-[#9D174D]"
   );
 
+  const isVictoryActive = Boolean(isVictory || (boardState?.isGameOver && !boardState.currentMistakesCount && solutionGrid?.length && !solutionGrid.some((row, rIdx) => row.some((val, cIdx) => boardState.grid[rIdx][cIdx].value !== val))));
+
   return (
     <div 
       className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-xl sudoku-board transition-colors duration-200 ${darkMode ? "bg-zinc-900 border-[2.4px]" : "bg-white border-[2.4px]"} ${darkMode ? (currentDiff === "EASY" ? "border-[#0b6b52]" : currentDiff === "MEDIUM" ? "border-[#7c3207]" : currentDiff === "HARD" ? "border-[#4c1d95]" : "border-[#881337]") : (currentDiff === "EASY" ? "border-[#065f46]/55" : currentDiff === "MEDIUM" ? "border-[#854d0e]/55" : currentDiff === "HARD" ? "border-[#6b21a8]/55" : "border-[#9d174d]/55")}`}
@@ -145,6 +161,32 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
         margin: "0 auto",
       }}
     >
+      <style>{`
+        @keyframes sudokuCellReveal {
+          0% { opacity: 0; transform: scale(0.85); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes sudokuLineSweep {
+          0% { transform: scale(1); filter: brightness(1); }
+          50% { transform: scale(1.05); filter: brightness(1.35); }
+          100% { transform: scale(1); filter: brightness(1); }
+        }
+        @keyframes sudokuBoxBloom {
+          0% { transform: scale(1); opacity: 0.9; }
+          45% { transform: scale(1.03); filter: brightness(1.25); }
+          100% { transform: scale(1); opacity: 1; filter: brightness(1); }
+        }
+        @keyframes sudokuVictoryWave {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.06); filter: brightness(1.3); }
+          100% { transform: scale(1); }
+        }
+        @keyframes victoryBadgePop {
+          0% { transform: scale(0) rotate(-12deg); opacity: 0; }
+          65% { transform: scale(1.15) rotate(2deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+      `}</style>
       {/* MINIMALIST PAUSE SCREEN OVERLAY */}
       {isTimerPaused && !boardState.isGameOver && (
         <div 
@@ -276,11 +318,58 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
 
           const hasNotesSet = cell.notes instanceof Set ? cell.notes : new Set(cell.notes || []);
 
+          // Juice animation parameters
+          const revealDelayMs = (r + c) * 14;
+          let isPulseActive = false;
+          let pulseAnimation = "";
+          let pulseDelayMs = 0;
+
+          if (completionPulse && (Date.now() - completionPulse.timestamp < 700)) {
+            if (completionPulse.type === "row" && completionPulse.row === r) {
+              isPulseActive = true;
+              pulseAnimation = "sudokuLineSweep 340ms cubic-bezier(0.2, 0.8, 0.2, 1) both";
+              pulseDelayMs = c * 20;
+            } else if (completionPulse.type === "col" && completionPulse.col === c) {
+              isPulseActive = true;
+              pulseAnimation = "sudokuLineSweep 340ms cubic-bezier(0.2, 0.8, 0.2, 1) both";
+              pulseDelayMs = r * 20;
+            } else if (completionPulse.type === "box") {
+              const currentCellBox = Math.floor(r / 3) * 3 + Math.floor(c / 3);
+              if (currentCellBox === completionPulse.boxIndex) {
+                isPulseActive = true;
+                pulseAnimation = "sudokuBoxBloom 360ms cubic-bezier(0.16, 1, 0.3, 1) both";
+                pulseDelayMs = ((r % 3) + (c % 3)) * 25;
+              }
+            } else if (completionPulse.type === "combo") {
+              const originR = completionPulse.row ?? 4;
+              const originC = completionPulse.col ?? 4;
+              const dist = Math.sqrt((r - originR) ** 2 + (c - originC) ** 2);
+              isPulseActive = true;
+              pulseAnimation = "sudokuLineSweep 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both";
+              pulseDelayMs = Math.round(dist * 28);
+            }
+          }
+
+          const cellCombinedStyle: React.CSSProperties = {
+            ...cellBgStyle
+          };
+
+          if (isPulseActive) {
+            cellCombinedStyle.animation = pulseAnimation;
+            cellCombinedStyle.animationDelay = `${pulseDelayMs}ms`;
+          } else if (isVictoryActive) {
+            cellCombinedStyle.animation = `sudokuVictoryWave 480ms cubic-bezier(0.16, 1, 0.3, 1) both`;
+            cellCombinedStyle.animationDelay = `${(r + c) * 16}ms`;
+          } else if (gameSessionKey !== undefined) {
+            cellCombinedStyle.animation = `sudokuCellReveal 250ms cubic-bezier(0.16, 1, 0.3, 1) both`;
+            cellCombinedStyle.animationDelay = `${revealDelayMs}ms`;
+          }
+
           return (
             <div
-              key={`${r}-${c}`}
+              key={`${gameSessionKey || 's'}-${r}-${c}`}
               onClick={() => onCellClick(r, c)}
-              style={cellBgStyle}
+              style={cellCombinedStyle}
               className={`cell aspect-square relative cursor-pointer select-none ${cellBgClass} ${borderClasses} p-0 overflow-hidden flex items-center justify-center`}
             >
               {cell.value !== 0 ? (
@@ -331,6 +420,21 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
             </div>
           );
         })
+      )}
+
+      {/* FINAL GAME VICTORY BADGE */}
+      {isVictoryActive && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none select-none">
+          <div 
+            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center border-none shadow-[0_10px_30px_rgba(0,0,0,0.18)]"
+            style={{
+              backgroundColor: darkMode ? diffTheme.activeCell.dark : diffTheme.activeCell.light,
+              animation: "victoryBadgePop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both"
+            }}
+          >
+            <Check className={`w-8 h-8 sm:w-10 sm:h-10 stroke-[3] ${darkMode ? "text-white" : "text-stone-900"}`} />
+          </div>
+        </div>
       )}
     </div>
   );
