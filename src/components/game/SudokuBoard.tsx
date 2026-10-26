@@ -166,25 +166,26 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           0% { opacity: 0; transform: scale(0.85); }
           100% { opacity: 1; transform: scale(1); }
         }
-        @keyframes sudokuLineSweep {
-          0% { transform: scale(1); filter: brightness(1); }
-          50% { transform: scale(1.05); filter: brightness(1.35); }
-          100% { transform: scale(1); filter: brightness(1); }
+        @keyframes sudokuTileLift {
+          0% { transform: translateY(0) scale(1); }
+          40% { transform: translateY(-2.5px) scale(1.02); }
+          100% { transform: translateY(0) scale(1); }
         }
-        @keyframes sudokuBoxBloom {
-          0% { transform: scale(1); opacity: 0.9; }
-          45% { transform: scale(1.03); filter: brightness(1.25); }
-          100% { transform: scale(1); opacity: 1; filter: brightness(1); }
+        @keyframes sudokuTileGlow {
+          0% { opacity: 0; }
+          40% { opacity: 0.65; }
+          100% { opacity: 0; }
         }
         @keyframes sudokuVictoryWave {
           0% { transform: scale(1); }
           50% { transform: scale(1.06); filter: brightness(1.3); }
           100% { transform: scale(1); }
         }
-        @keyframes victoryBadgePop {
-          0% { transform: scale(0) rotate(-12deg); opacity: 0; }
-          65% { transform: scale(1.15) rotate(2deg); opacity: 1; }
-          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        @keyframes victoryBadgeZen {
+          0% { transform: scale(0.85); opacity: 0; }
+          33.3% { transform: scale(1); opacity: 1; }
+          79.2% { transform: scale(1); opacity: 1; }
+          100% { transform: scale(1.04); opacity: 0; }
         }
       `}</style>
       {/* MINIMALIST PAUSE SCREEN OVERLAY */}
@@ -326,26 +327,33 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
 
           if (completionPulse && (Date.now() - completionPulse.timestamp < 700)) {
             if (completionPulse.type === "row" && completionPulse.row === r) {
+              const epicenterCol = completionPulse.col ?? 4;
+              const dist = Math.abs(c - epicenterCol);
               isPulseActive = true;
-              pulseAnimation = "sudokuLineSweep 340ms cubic-bezier(0.2, 0.8, 0.2, 1) both";
-              pulseDelayMs = c * 20;
+              pulseAnimation = "sudokuTileLift 380ms cubic-bezier(0.16, 1, 0.3, 1) both";
+              pulseDelayMs = dist * 28;
             } else if (completionPulse.type === "col" && completionPulse.col === c) {
+              const epicenterRow = completionPulse.row ?? 4;
+              const dist = Math.abs(r - epicenterRow);
               isPulseActive = true;
-              pulseAnimation = "sudokuLineSweep 340ms cubic-bezier(0.2, 0.8, 0.2, 1) both";
-              pulseDelayMs = r * 20;
+              pulseAnimation = "sudokuTileLift 380ms cubic-bezier(0.16, 1, 0.3, 1) both";
+              pulseDelayMs = dist * 28;
             } else if (completionPulse.type === "box") {
               const currentCellBox = Math.floor(r / 3) * 3 + Math.floor(c / 3);
               if (currentCellBox === completionPulse.boxIndex) {
+                const epicenterRow = completionPulse.row ?? (Math.floor(r / 3) * 3 + 1);
+                const epicenterCol = completionPulse.col ?? (Math.floor(c / 3) * 3 + 1);
+                const dist = Math.hypot(r - epicenterRow, c - epicenterCol);
                 isPulseActive = true;
-                pulseAnimation = "sudokuBoxBloom 360ms cubic-bezier(0.16, 1, 0.3, 1) both";
-                pulseDelayMs = ((r % 3) + (c % 3)) * 25;
+                pulseAnimation = "sudokuTileLift 380ms cubic-bezier(0.16, 1, 0.3, 1) both";
+                pulseDelayMs = Math.round(dist * 28);
               }
             } else if (completionPulse.type === "combo") {
               const originR = completionPulse.row ?? 4;
               const originC = completionPulse.col ?? 4;
-              const dist = Math.sqrt((r - originR) ** 2 + (c - originC) ** 2);
+              const dist = Math.hypot(r - originR, c - originC);
               isPulseActive = true;
-              pulseAnimation = "sudokuLineSweep 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both";
+              pulseAnimation = "sudokuTileLift 380ms cubic-bezier(0.16, 1, 0.3, 1) both";
               pulseDelayMs = Math.round(dist * 28);
             }
           }
@@ -357,6 +365,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           if (isPulseActive) {
             cellCombinedStyle.animation = pulseAnimation;
             cellCombinedStyle.animationDelay = `${pulseDelayMs}ms`;
+            cellCombinedStyle.zIndex = 10;
           } else if (isVictoryActive) {
             cellCombinedStyle.animation = `sudokuVictoryWave 480ms cubic-bezier(0.16, 1, 0.3, 1) both`;
             cellCombinedStyle.animationDelay = `${(r + c) * 16}ms`;
@@ -372,6 +381,16 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
               style={cellCombinedStyle}
               className={`cell aspect-square relative cursor-pointer select-none ${cellBgClass} ${borderClasses} p-0 overflow-hidden flex items-center justify-center`}
             >
+              {isPulseActive && (
+                <div 
+                  className="absolute inset-0 pointer-events-none rounded-[inherit]"
+                  style={{
+                    backgroundColor: darkMode ? diffTheme.activeCell.dark : diffTheme.activeCell.light,
+                    animation: "sudokuTileGlow 380ms cubic-bezier(0.16, 1, 0.3, 1) both",
+                    animationDelay: `${pulseDelayMs}ms`
+                  }}
+                />
+              )}
               {cell.value !== 0 ? (
                 <div 
                   className={`absolute inset-0 flex items-center justify-center text-center select-none ${
@@ -422,17 +441,17 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
         })
       )}
 
-      {/* FINAL GAME VICTORY BADGE */}
+      {/* FINAL GAME VICTORY BADGE (ZEN AUTO-DISSOLVING) */}
       {isVictoryActive && (
         <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none select-none">
           <div 
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center border-none shadow-[0_10px_30px_rgba(0,0,0,0.18)]"
+            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center border-none backdrop-blur-md shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
             style={{
               backgroundColor: darkMode ? diffTheme.activeCell.dark : diffTheme.activeCell.light,
-              animation: "victoryBadgePop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both"
+              animation: "victoryBadgeZen 1200ms cubic-bezier(0.16, 1, 0.3, 1) both"
             }}
           >
-            <Check className={`w-8 h-8 sm:w-10 sm:h-10 stroke-[3] ${darkMode ? "text-white" : "text-stone-900"}`} />
+            <Check className={`w-8 h-8 sm:w-10 sm:h-10 stroke-[2.5] ${darkMode ? "text-white" : "text-stone-900"}`} />
           </div>
         </div>
       )}

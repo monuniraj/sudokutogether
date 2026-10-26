@@ -12815,11 +12815,11 @@ export default function App() {
             addLog("✨ 3x3 Box Completed! Warm Rhodes chord bloom.");
           } else if (rowNowComplete) {
             playMarimbaLineSound(getAudioCtx(), soundEffects);
-            setCompletionPulse({ type: "row", row: selectedRow, timestamp: Date.now() });
+            setCompletionPulse({ type: "row", row: selectedRow, col: selectedCol, timestamp: Date.now() });
             addLog(`✨ Row ${selectedRow + 1} Completed! Marimba line sweep.`);
           } else if (colNowComplete) {
             playMarimbaLineSound(getAudioCtx(), soundEffects);
-            setCompletionPulse({ type: "col", col: selectedCol, timestamp: Date.now() });
+            setCompletionPulse({ type: "col", row: selectedRow, col: selectedCol, timestamp: Date.now() });
             addLog(`✨ Column ${selectedCol + 1} Completed! Marimba line sweep.`);
           }
         }
