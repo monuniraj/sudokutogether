@@ -6233,8 +6233,10 @@ export default function App() {
 
   // Real-time listener for incoming invites from Firestore
   useEffect(() => {
-    // 1. स्मार्ट ID चेकर: पहले Google ID देखो, अगर वो नहीं है तो Guest ID लो
-    const activeId = authUser?.uid || userProfile?.id;
+    // 1. स्मार्ट ID चेकर: अगर Google से लॉग-इन है तो authUser.uid लो; अगर Guest/Anonymous है तो userProfile.id ("GUEST_XXXX") लो
+    const activeId = (authUser && !authUser.isAnonymous && authUser.uid)
+      ? authUser.uid
+      : (userProfile?.id || authUser?.uid);
     if (!activeId) return; // अगर कोई ID नहीं है, तो यहीं रुक जाओ
 
     console.log(`[Firestore] Subscribing to incoming invites for user: ${activeId}`);
@@ -6336,7 +6338,7 @@ export default function App() {
       console.log(`[Firestore] Unsubscribing from incoming invites for user: ${activeId}`);
       unsubscribe();
     };
-  }, [authUser?.uid, userProfile?.id, notificationsEnabled, sessionStartTime, routeInviteNotification, upsertBellChallenge, extractRoomCodeFromChallenge]);
+  }, [authUser?.uid, authUser?.isAnonymous, userProfile?.id, notificationsEnabled, sessionStartTime, routeInviteNotification, upsertBellChallenge, extractRoomCodeFromChallenge]);
 
   // Dynamically update friends & past players to "online/live" if another app instance/tab is open in the browser
   useEffect(() => {
