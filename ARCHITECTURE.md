@@ -577,6 +577,21 @@
     * **Trophy Ambient Stars Permanently Purged (`App.tsx`):**
       * Completely deleted all 3 star SVG elements and `<motion.div>` twinkle wrappers around lines 14925–14990, leaving a clean, minimalist amber metallic trophy icon (`strokeWidth={1.8}`).
 
+28. **Strict Offline Logout Abort & Idempotent Mutex Lock (`App.tsx`):**
+    * **Pre-Flight Offline Execution Abort (`App.tsx:handleLogout`):**
+      * Verified `!navigator.onLine || !isOnline` directly at the top of `handleLogout` before any state mutations or async locks.
+      * If offline, aborts execution synchronously on line 1: triggers `triggerHapticTap(vibrations)` and displays `showToast(t("noInternetConnection"), "offline")`.
+      * Prevents any pending offline Firestore mutations from queuing into IndexedDB and guarantees unauthenticated `permission-denied` replay errors cannot occur upon reconnect.
+    * **Idempotent Single-Flight Mutex (`App.tsx:handleLogout`):**
+      * Guarded by `if (isLoggingOutRef.current) return;` at entry.
+      * Drops any duplicate taps or queued microtasks while logout is already executing.
+
+29. **Multiplayer Mistake Limit Enforcement Decoupling (`App.tsx:handleValueInput`):**
+    * Decoupled match termination (`isOver`) from the player's personal local `mistakeLimitEnabled` state during multiplayer.
+    * Evaluates `isMistakeEnforced = challengeMode ? (boardState.maxMistakesLimit < 999) : mistakeLimitEnabled`.
+    * If `challengeMode` is active and the room has a finite mistake limit (e.g., 3 mistakes), mistake game over triggers strictly according to the authoritative room rule, completely immunizing the match against the guest's local settings.
+    * Solo play remains 100% governed by the player's personal `mistakeLimitEnabled` toggle.
+
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**
    * **Root Cause:** When testing on Laptop and Phone logged into the same Google account (`uid`), self-exclusion filters hide the other device.

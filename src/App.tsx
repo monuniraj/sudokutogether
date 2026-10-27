@@ -5473,11 +5473,16 @@ export default function App() {
   const handleGoogleLogin = handleConnectGoogle;
 
   const handleLogout = async () => {
-    // 0. Pre-Flight Offline Guard: Prevent unhandled promise hangs and provide instant UI feedback
-    if (typeof navigator !== "undefined" && (!navigator.onLine || !isOnline)) {
+    // 0. Pre-Flight Offline Guard: Abort immediately before any logic if offline
+    if (!navigator.onLine || (typeof isOnline !== "undefined" && !isOnline)) {
       triggerHapticTap(vibrations);
       showToast(t("noInternetConnection") || "No internet connection", "offline");
       addLog("⚠️ Cannot sign out while offline. Internet connection required.");
+      return;
+    }
+
+    if (isLoggingOutRef.current) {
+      console.warn("[Auth] Logout already in flight. Aborting duplicate trigger.");
       return;
     }
 
@@ -12714,7 +12719,10 @@ export default function App() {
       }
 
       const newMistakes = isMismatch ? boardState.currentMistakesCount + 1 : boardState.currentMistakesCount;
-      const isOver = mistakeLimitEnabled
+      const isMistakeEnforced = challengeMode 
+        ? (boardState.maxMistakesLimit < 999) 
+        : mistakeLimitEnabled;
+      const isOver = isMistakeEnforced
         ? (boardState.maxMistakesLimit === 0
           ? (newMistakes > 0)
           : (newMistakes >= boardState.maxMistakesLimit))
