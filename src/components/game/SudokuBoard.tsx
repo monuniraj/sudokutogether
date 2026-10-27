@@ -1,5 +1,5 @@
-import React from "react";
-import { RefreshCw, Play, Check } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { RefreshCw, Play } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
@@ -53,10 +53,13 @@ export interface SudokuBoardState {
 }
 
 export interface CompletionPulse {
-  type: "row" | "col" | "box" | "combo";
+  type: "row" | "col" | "box" | "combo" | "structures" | "holy_grail";
   row?: number;
   col?: number;
   boxIndex?: number;
+  hasRow?: boolean;
+  hasCol?: boolean;
+  hasBox?: boolean;
   timestamp: number;
 }
 
@@ -80,6 +83,9 @@ export interface SudokuBoardProps {
   isVictory?: boolean;
 }
 
+// Module-level cache tracking completed board reveal animations per game session
+const revealedSessionKeys = new Set<string | number>();
+
 export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   boardState,
   difficulty,
@@ -100,16 +106,49 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   isVictory
 }) => {
   const { t } = useTranslation();
+  const [isRevealing, setIsRevealing] = useState<boolean>(false);
+
+  const isUnrevealed = Boolean(gameSessionKey && !revealedSessionKeys.has(gameSessionKey));
+
+  useEffect(() => {
+    if (!gameSessionKey) {
+      setIsRevealing(false);
+      return;
+    }
+    if (revealedSessionKeys.has(gameSessionKey)) {
+      setIsRevealing(false);
+      return;
+    }
+    // Startup 150ms Snappy Pause: allow pristine board to visibly settle before wave & audio commence
+    const startTimer = setTimeout(() => {
+      setIsRevealing(true);
+    }, 150);
+
+    const finishTimer = setTimeout(() => {
+      revealedSessionKeys.add(gameSessionKey);
+      setIsRevealing(false);
+    }, 150 + 850);
+
+    return () => {
+      clearTimeout(startTimer);
+      clearTimeout(finishTimer);
+    };
+  }, [gameSessionKey]);
 
   if (!boardState) {
     return (
-      <div className="w-full max-w-[420px] aspect-square flex flex-col items-center justify-center bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-2xl shadow-xl border border-stone-200/50 dark:border-zinc-800 p-8 my-auto select-none">
-        <RefreshCw className="w-10 h-10 animate-spin text-sky-500 mb-3" />
-        <span className="font-mono text-sm font-black tracking-widest text-stone-800 dark:text-stone-100 uppercase">
-          {t("enteringMatch")}
+      <div className="w-full max-w-[420px] aspect-square flex flex-col items-center justify-center bg-white/95 dark:bg-[#121212] backdrop-blur-md rounded-2xl shadow-xl border border-stone-200/50 dark:border-zinc-800 p-8 my-auto select-none">
+        <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-md flex items-center justify-center bg-[#121212] mb-3">
+          <img src="/logo.png" alt="Sudoku Sync" className="w-full h-full object-cover select-none" />
+        </div>
+        <span className="font-sans text-sm font-black tracking-wider text-stone-800 dark:text-zinc-100 uppercase">
+          Sudoku Sync
         </span>
-        <span className="text-xs text-stone-400 dark:text-zinc-500 font-mono mt-1">
-          {t("synchronizingArena")}
+        <span 
+          className="text-[11px] font-semibold text-stone-400 dark:text-zinc-500 font-sans uppercase mt-1"
+          style={{ letterSpacing: "0.22em" }}
+        >
+          By Mologic
         </span>
       </div>
     );
@@ -149,7 +188,32 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
     "text-[#9D174D]"
   );
 
-  const isVictoryActive = Boolean(isVictory || (boardState?.isGameOver && !boardState.currentMistakesCount && solutionGrid?.length && !solutionGrid.some((row, rIdx) => row.some((val, cIdx) => boardState.grid[rIdx][cIdx].value !== val))));
+  const isVictoryActive = Boolean(isVictory !== undefined ? isVictory : (boardState?.isGameOver && !boardState.currentMistakesCount && solutionGrid?.length && !solutionGrid.some((row, rIdx) => row.some((val, cIdx) => boardState.grid[rIdx][cIdx].value !== val))));
+
+  const [isVictoryWaveActive, setIsVictoryWaveActive] = useState<boolean>(false);
+  const [isClearingHighlights, setIsClearingHighlights] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isVictoryActive) {
+      setIsVictoryWaveActive(true);
+      setIsClearingHighlights(true);
+      // Inward wave finishes after outer-to-inner stagger (180ms stagger + 450ms animation = 630ms -> 650ms)
+      const waveTimer = setTimeout(() => {
+        setIsVictoryWaveActive(false);
+      }, 650);
+      // 2-Second Suppression Hold: guarantees highlights stay completely invisible throughout post-wave pause
+      const holdTimer = setTimeout(() => {
+        setIsClearingHighlights(false);
+      }, 2000);
+      return () => {
+        clearTimeout(waveTimer);
+        clearTimeout(holdTimer);
+      };
+    } else {
+      setIsVictoryWaveActive(false);
+      setIsClearingHighlights(false);
+    }
+  }, [isVictoryActive]);
 
   return (
     <div 
@@ -162,30 +226,49 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
       }}
     >
       <style>{`
-        @keyframes sudokuCellReveal {
-          0% { opacity: 0; transform: scale(0.85); }
-          100% { opacity: 1; transform: scale(1); }
+        @keyframes inkWaveSheenLight {
+          0% {
+            background-color: transparent;
+            opacity: 0;
+            transform: translateZ(0);
+          }
+          45% {
+            background-color: ${diffTheme.activeCell.light};
+            opacity: 0.70;
+            transform: translateZ(0);
+          }
+          100% {
+            background-color: transparent;
+            opacity: 0;
+            transform: translateZ(0);
+          }
         }
-        @keyframes sudokuTileLift {
-          0% { transform: translateY(0) scale(1); }
-          40% { transform: translateY(-2.5px) scale(1.02); }
-          100% { transform: translateY(0) scale(1); }
+        @keyframes inkWaveSheenDark {
+          0% {
+            background-color: transparent;
+            opacity: 0;
+            transform: translateZ(0);
+          }
+          45% {
+            background-color: ${diffTheme.activeCell.dark};
+            opacity: 0.70;
+            transform: translateZ(0);
+          }
+          100% {
+            background-color: transparent;
+            opacity: 0;
+            transform: translateZ(0);
+          }
         }
-        @keyframes sudokuTileGlow {
-          0% { opacity: 0; }
-          40% { opacity: 0.65; }
-          100% { opacity: 0; }
-        }
-        @keyframes sudokuVictoryWave {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.06); filter: brightness(1.3); }
-          100% { transform: scale(1); }
-        }
-        @keyframes victoryBadgeZen {
-          0% { transform: scale(0.85); opacity: 0; }
-          33.3% { transform: scale(1); opacity: 1; }
-          79.2% { transform: scale(1); opacity: 1; }
-          100% { transform: scale(1.04); opacity: 0; }
+        @keyframes inkDigitFadeIn {
+          0% {
+            opacity: 0;
+            transform: translateZ(0);
+          }
+          100% {
+            opacity: 1;
+            transform: translateZ(0);
+          }
         }
       `}</style>
       {/* MINIMALIST PAUSE SCREEN OVERLAY */}
@@ -255,7 +338,16 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           let cellBgClass = "";
           let cellBgStyle: React.CSSProperties = {};
 
-          if (isSelected && isMistake) {
+          if (isClearingHighlights) {
+            // Radial wave wash-away deselection: smoothly transition to neutral background
+            if (darkMode) {
+              cellBgClass = "bg-zinc-900";
+            } else {
+              cellBgStyle = {
+                backgroundColor: diffTheme.crosshair.light,
+              };
+            }
+          } else if (isSelected && isMistake) {
             // Distinct deep error highlight for active selected mistake cell
             if (darkMode) {
               cellBgStyle = { backgroundColor: "#881337" };
@@ -276,20 +368,16 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
             cellBgStyle = {
               backgroundColor: darkMode ? diffTheme.activeCell.dark : diffTheme.activeCell.light,
             };
-            cellBgClass = darkMode ? "text-white animate-pulse" : "animate-pulse";
+            cellBgClass = darkMode ? "text-white animate-pulse" : "text-stone-900 animate-pulse";
           } else if (isIdenticalValue) {
             cellBgStyle = {
               backgroundColor: darkMode ? diffTheme.identical.dark : diffTheme.identical.light,
             };
             if (darkMode) cellBgClass = "text-white";
           } else if (isHighlightedSibling) {
-            if (darkMode) {
-              cellBgStyle = {
-                backgroundColor: diffTheme.crosshair.dark,
-              };
-            } else {
-              cellBgClass = "bg-white";
-            }
+            cellBgStyle = {
+              backgroundColor: darkMode ? diffTheme.crosshair.dark : diffTheme.crosshair.light,
+            };
           } else {
             if (darkMode) {
               cellBgClass = "bg-zinc-900";
@@ -319,95 +407,136 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
 
           const hasNotesSet = cell.notes instanceof Set ? cell.notes : new Set(cell.notes || []);
 
-          // Juice animation parameters
-          const revealDelayMs = (r + c) * 14;
+          // Continuous radial micro-staggering from center (4,4)
+          const dist = Math.hypot(r - 4, c - 4);
+          const ringIndex = Math.max(Math.abs(r - 4), Math.abs(c - 4));
+          // Grand Victory (Strictly Inward: Outermost Ring 4 at 0ms, Innermost Center Ring 0 at 180ms)
+          const victoryDelayMs = (4 - ringIndex) * 45;
+          const washDelayMs = (4 - ringIndex) * 45;
+          // Starting Reveal (Inside-Out: Center at 0ms, Corners at ~215ms)
+          const cellDelayMs = Math.round(dist * 38);
+          // Peak Saturation Digit Emergence: offset to hit peak color saturation at 45% of 480ms (~216ms -> 210ms)
+          const digitRevealDelay = cellDelayMs + 210;
           let isPulseActive = false;
           let pulseAnimation = "";
           let pulseDelayMs = 0;
 
-          if (completionPulse && (Date.now() - completionPulse.timestamp < 700)) {
-            if (completionPulse.type === "row" && completionPulse.row === r) {
-              const epicenterCol = completionPulse.col ?? 4;
-              const dist = Math.abs(c - epicenterCol);
-              isPulseActive = true;
-              pulseAnimation = "sudokuTileLift 380ms cubic-bezier(0.16, 1, 0.3, 1) both";
-              pulseDelayMs = dist * 28;
-            } else if (completionPulse.type === "col" && completionPulse.col === c) {
-              const epicenterRow = completionPulse.row ?? 4;
-              const dist = Math.abs(r - epicenterRow);
-              isPulseActive = true;
-              pulseAnimation = "sudokuTileLift 380ms cubic-bezier(0.16, 1, 0.3, 1) both";
-              pulseDelayMs = dist * 28;
-            } else if (completionPulse.type === "box") {
-              const currentCellBox = Math.floor(r / 3) * 3 + Math.floor(c / 3);
-              if (currentCellBox === completionPulse.boxIndex) {
-                const epicenterRow = completionPulse.row ?? (Math.floor(r / 3) * 3 + 1);
-                const epicenterCol = completionPulse.col ?? (Math.floor(c / 3) * 3 + 1);
-                const dist = Math.hypot(r - epicenterRow, c - epicenterCol);
+          if (cell && cell.value !== 0 && cell.value !== null && completionPulse && (Date.now() - completionPulse.timestamp < 1150)) {
+            const sheenAnim = darkMode 
+              ? "inkWaveSheenDark 450ms cubic-bezier(0.25, 1, 0.5, 1) forwards" 
+              : "inkWaveSheenLight 450ms cubic-bezier(0.25, 1, 0.5, 1) forwards";
+
+            const currentCellBox = Math.floor(r / 3) * 3 + Math.floor(c / 3);
+            const targetRow = completionPulse.row ?? 4;
+            const targetCol = completionPulse.col ?? 4;
+            const targetBox = completionPulse.boxIndex ?? (Math.floor(targetRow / 3) * 3 + Math.floor(targetCol / 3));
+
+            const isRowMatch = (completionPulse.type === "row" || Boolean(completionPulse.hasRow)) && targetRow === r;
+            const isColMatch = (completionPulse.type === "col" || Boolean(completionPulse.hasCol)) && targetCol === c;
+            const isBoxMatch = (completionPulse.type === "box" || Boolean(completionPulse.hasBox)) && currentCellBox === targetBox;
+
+            if (completionPulse.type === "holy_grail") {
+              // Strict 3-Way Holy Grail: Animate strictly the completed Row, Column, AND 3x3 Box
+              if (targetRow === r || targetCol === c || currentCellBox === targetBox) {
                 isPulseActive = true;
-                pulseAnimation = "sudokuTileLift 380ms cubic-bezier(0.16, 1, 0.3, 1) both";
-                pulseDelayMs = Math.round(dist * 28);
+                pulseAnimation = sheenAnim;
+                pulseDelayMs = Math.round(Math.hypot(r - targetRow, c - targetCol) * 35);
+              }
+            } else if (isRowMatch || isColMatch || isBoxMatch) {
+              // Strict single or multi-structure isolation: ZERO cross-bleed into uncompleted sectors!
+              isPulseActive = true;
+              pulseAnimation = sheenAnim;
+              if (isRowMatch) {
+                pulseDelayMs = Math.abs(c - targetCol) * 35;
+              } else if (isColMatch) {
+                pulseDelayMs = Math.abs(r - targetRow) * 35;
+              } else {
+                const boxCenterR = Math.floor(r / 3) * 3 + 1;
+                const boxCenterC = Math.floor(c / 3) * 3 + 1;
+                pulseDelayMs = Math.round(Math.hypot(r - boxCenterR, c - boxCenterC) * 38);
               }
             } else if (completionPulse.type === "combo") {
-              const originR = completionPulse.row ?? 4;
-              const originC = completionPulse.col ?? 4;
-              const dist = Math.hypot(r - originR, c - originC);
-              isPulseActive = true;
-              pulseAnimation = "sudokuTileLift 380ms cubic-bezier(0.16, 1, 0.3, 1) both";
-              pulseDelayMs = Math.round(dist * 28);
+              const inSameRow = r === targetRow;
+              const inSameCol = c === targetCol;
+              const inSameBox = currentCellBox === targetBox;
+              if (inSameRow || inSameCol || inSameBox) {
+                isPulseActive = true;
+                pulseAnimation = sheenAnim;
+                pulseDelayMs = Math.round(Math.hypot(r - targetRow, c - targetCol) * 40);
+              }
             }
           }
 
-          const cellCombinedStyle: React.CSSProperties = {
-            ...cellBgStyle
-          };
+          const isSheenOverlayActive = Boolean(isPulseActive || (isVictoryWaveActive && cell && cell.value !== 0) || isRevealing);
+          let overlayAnimation = "";
+          let overlayDelayMs = 0;
 
           if (isPulseActive) {
-            cellCombinedStyle.animation = pulseAnimation;
-            cellCombinedStyle.animationDelay = `${pulseDelayMs}ms`;
-            cellCombinedStyle.zIndex = 10;
-          } else if (isVictoryActive) {
-            cellCombinedStyle.animation = `sudokuVictoryWave 480ms cubic-bezier(0.16, 1, 0.3, 1) both`;
-            cellCombinedStyle.animationDelay = `${(r + c) * 16}ms`;
-          } else if (gameSessionKey !== undefined) {
-            cellCombinedStyle.animation = `sudokuCellReveal 250ms cubic-bezier(0.16, 1, 0.3, 1) both`;
-            cellCombinedStyle.animationDelay = `${revealDelayMs}ms`;
+            overlayAnimation = pulseAnimation;
+            overlayDelayMs = pulseDelayMs;
+          } else if (isVictoryWaveActive && cell && cell.value !== 0) {
+            overlayAnimation = darkMode 
+              ? "inkWaveSheenDark 450ms cubic-bezier(0.25, 1, 0.5, 1) forwards" 
+              : "inkWaveSheenLight 450ms cubic-bezier(0.25, 1, 0.5, 1) forwards";
+            overlayDelayMs = victoryDelayMs;
+          } else if (isRevealing) {
+            overlayAnimation = darkMode 
+              ? "inkWaveSheenDark 450ms cubic-bezier(0.25, 1, 0.5, 1) forwards" 
+              : "inkWaveSheenLight 450ms cubic-bezier(0.25, 1, 0.5, 1) forwards";
+            overlayDelayMs = cellDelayMs;
           }
 
           return (
             <div
               key={`${gameSessionKey || 's'}-${r}-${c}`}
               onClick={() => onCellClick(r, c)}
-              style={cellCombinedStyle}
-              className={`cell aspect-square relative cursor-pointer select-none ${cellBgClass} ${borderClasses} p-0 overflow-hidden flex items-center justify-center`}
+              style={{
+                ...cellBgStyle,
+                transition: isClearingHighlights 
+                  ? "background-color 250ms ease-out var(--wash-delay, 0ms), opacity 250ms ease-out var(--wash-delay, 0ms)" 
+                  : "background-color 200ms ease-out",
+                transform: "translateZ(0)",
+                willChange: "transform, opacity",
+                ["--ring-index" as any]: ringIndex,
+                ["--wash-delay" as any]: `${washDelayMs}ms`
+              }}
+              className={`cell aspect-square relative cursor-pointer select-none ${cellBgClass} ${borderClasses} p-0 overflow-visible flex items-center justify-center`}
             >
-              {isPulseActive && (
+              {/* Isolated Sheen Wave Overlay (Zero State & Style Collision) */}
+              {isSheenOverlayActive && (
                 <div 
-                  className="absolute inset-0 pointer-events-none rounded-[inherit]"
+                  className="absolute inset-0 pointer-events-none rounded-[inherit] z-1"
                   style={{
-                    backgroundColor: darkMode ? diffTheme.activeCell.dark : diffTheme.activeCell.light,
-                    animation: "sudokuTileGlow 380ms cubic-bezier(0.16, 1, 0.3, 1) both",
-                    animationDelay: `${pulseDelayMs}ms`
+                    animation: overlayAnimation,
+                    animationDelay: "var(--reveal-delay, 0ms)",
+                    transform: "translateZ(0)",
+                    willChange: "transform, opacity",
+                    ["--reveal-delay" as any]: `${overlayDelayMs}ms`
                   }}
                 />
               )}
               {cell.value !== 0 ? (
                 <div 
-                  className={`absolute inset-0 flex items-center justify-center text-center select-none ${
+                  className={`absolute inset-0 z-2 flex items-center justify-center text-center select-none ${
                     cell.isOriginalClue 
                       ? (darkMode 
-                          ? ((isSelected || isIdenticalValue) && (currentDiff === "EASY" || currentDiff === "HARD") ? "text-white font-sans font-extrabold" : "text-white font-sans font-normal")
+                          ? ((isSelected || isIdenticalValue) ? "text-[#F8FAFC] font-sans font-extrabold" : "text-[#F8FAFC] font-sans font-normal")
                           : "text-stone-900 font-sans font-normal")
                       : isMistake
                         ? (darkMode ? "text-rose-300 handwriting font-black animate-pulse" : "text-rose-700 handwriting font-black animate-pulse")
                         : (darkMode 
-                            ? ((isSelected || isIdenticalValue) && (currentDiff === "EASY" || currentDiff === "HARD") ? "text-white handwriting font-extrabold" : "text-[#38bdf8] handwriting font-normal")
+                            ? ((isSelected || isIdenticalValue) ? "text-[#38bdf8] handwriting font-extrabold" : "text-[#38bdf8] handwriting font-normal")
                             : "text-[#2B6CB0] handwriting font-normal")
                   }`}
                   style={{
                     fontSize: cell.isOriginalClue 
                       ? "clamp(22px, min(7.5vw, 6.5vh), 42px)" 
-                      : "clamp(26px, min(9.5vw, 8.5vh), 50px)"
+                      : "clamp(26px, min(9.5vw, 8.5vh), 50px)",
+                    opacity: isUnrevealed ? 0 : 1,
+                    animation: isRevealing ? "inkDigitFadeIn 220ms ease-out var(--digit-delay, 0ms) forwards" : undefined,
+                    transform: "translateZ(0)",
+                    willChange: "transform, opacity",
+                    ["--digit-delay" as any]: `${digitRevealDelay}ms`
                   }}
                 >
                   {cell.value}
@@ -415,7 +544,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
               ) : (
                 /* High-legibility candidate note digits */
                 <div 
-                  className="absolute inset-0 grid grid-cols-3 grid-rows-3 p-0.5 leading-none select-none pointer-events-none"
+                  className="absolute inset-0 z-2 grid grid-cols-3 grid-rows-3 p-0.5 leading-none select-none pointer-events-none"
                   style={{
                     fontSize: "clamp(10px, min(2.8vw, 2.4vh), 16px)",
                     lineHeight: 1
@@ -439,21 +568,6 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
             </div>
           );
         })
-      )}
-
-      {/* FINAL GAME VICTORY BADGE (ZEN AUTO-DISSOLVING) */}
-      {isVictoryActive && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none select-none">
-          <div 
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center border-none backdrop-blur-md shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
-            style={{
-              backgroundColor: darkMode ? diffTheme.activeCell.dark : diffTheme.activeCell.light,
-              animation: "victoryBadgeZen 1200ms cubic-bezier(0.16, 1, 0.3, 1) both"
-            }}
-          >
-            <Check className={`w-8 h-8 sm:w-10 sm:h-10 stroke-[2.5] ${darkMode ? "text-white" : "text-stone-900"}`} />
-          </div>
-        </div>
       )}
     </div>
   );

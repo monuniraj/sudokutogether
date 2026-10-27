@@ -255,8 +255,11 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
     .slice(-6);
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {/* Backdrop click dismisser — closes overlay and reveals the board beneath (disabled in Step 2 Rematch/PIN screen to prevent accidental closure) */}
@@ -269,9 +272,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         }}
       />
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 15 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        initial={{ opacity: 0, y: 32 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.50, ease: [0.16, 1, 0.3, 1] }}
         className={`modal card p-4 sm:p-6 md:p-8 w-[92%] sm:w-full max-w-lg max-h-[85vh] sm:max-h-[88vh] my-auto mx-auto relative flex flex-col gap-3 sm:gap-4 rounded-[28px] shadow-[0_24px_50px_rgba(0,0,0,0.2)] overflow-hidden ${
           darkMode ? "bg-zinc-900 border border-zinc-700/50" : "bg-[#FDFBF7] border border-stone-200"
         }`}
@@ -1113,6 +1116,6 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           </>
         )}
       </motion.div>
-    </div>
+    </motion.div>
   );
 };

@@ -24,7 +24,10 @@ import {
   playMarimbaLineSound,
   playRhodesBoxSound,
   playMajor7thComboSound,
-  playBubblePopSound
+  playMajor9thGrandTringSound,
+  playBubblePopSound,
+  playWoodenResonanceSound,
+  playGraphiteTickSound
 } from "./utils/soundEffects";
 import { formatMatchTimestamp, formatInviteTimestamp, formatActiveStatus } from "./utils/formatTimestamp";
 import { useFriendPresence } from "./hooks/useFriendPresence";
@@ -5470,6 +5473,14 @@ export default function App() {
   const handleGoogleLogin = handleConnectGoogle;
 
   const handleLogout = async () => {
+    // 0. Pre-Flight Offline Guard: Prevent unhandled promise hangs and provide instant UI feedback
+    if (typeof navigator !== "undefined" && (!navigator.onLine || !isOnline)) {
+      triggerHapticTap(vibrations);
+      showToast(t("noInternetConnection") || "No internet connection", "offline");
+      addLog("⚠️ Cannot sign out while offline. Internet connection required.");
+      return;
+    }
+
     isLoggingOutRef.current = true;
     isExplicitLogoutRef.current = true;
     try {
@@ -5837,12 +5848,10 @@ export default function App() {
     setShowCelebrationConfetti(true);
     setConfettiMode("cannon-only");
     setConfettiBurstKey(prev => prev + 1);
-    playRecordBreakSound();
 
     // Beat 2: Ascension (Only after initial burst dissipates)
     pbTimers.current.elevate = setTimeout(() => {
       setPbStage("elevating");
-      playWhooshSound?.();
     }, 1600);
 
     // Beat 2b: Odometer Roll
@@ -5850,9 +5859,9 @@ export default function App() {
       runOdometerRollSequence();
     }, 2200);
 
-    // Beat 2c: Time Snap
+    // Beat 2c: Time Snap (Visual state lock without intrusive late chime)
     pbTimers.current.lock = setTimeout(() => {
-      playVictoryChimeSound?.();
+      // Visual odometer settles silently
     }, 3300);
 
     // Beat 3: Docking
@@ -5860,14 +5869,12 @@ export default function App() {
       setPbStage("docked");
     }, 3600);
 
-    // Beat 3b: Dual Blast (Docking Impact)
+    // Beat 3b: Dual Blast (Docking Impact visual transition)
     pbTimers.current.dualBlast = setTimeout(() => {
       setPbStage("completed");
-      playDockingSnapSound?.();
       setConfettiMode("top-two-waves"); // Fires bottom cannons + Wave 1 top rain
       setConfettiBurstKey(prev => prev + 1);
       setShowCelebrationConfetti(true);
-      playApplauseSound(true);
     }, 3800);
 
     // Total lifecycle cleanup timer
@@ -8048,7 +8055,7 @@ export default function App() {
     }
   };
 
-  // Play an immediate, distinct error/alert audio tone (clean negative beep with softened harmonics)
+  // Play an immediate, tactile wood-block knock (220Hz -> 110Hz, 480Hz filter, 80ms decay)
   const playMistakeSound = () => {
     if (!soundEffects) return; // settings guard cond
     try {
@@ -8059,23 +8066,34 @@ export default function App() {
       const filter = audioCtx.createBiquadFilter();
       const gain = audioCtx.createGain();
 
-      // Soften harsh high-frequency harmonics of the sawtooth wave with a gentle lowpass filter
+      // Low-Q damped organic body filter
       filter.type = "lowpass";
-      filter.frequency.setValueAtTime(1600, audioCtx.currentTime);
+      filter.frequency.setValueAtTime(480, audioCtx.currentTime);
+      filter.Q.setValueAtTime(1.8, audioCtx.currentTime);
+
+      // Warm triangle percussive thump dropping from 220Hz down to 110Hz in 45ms
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.045);
+
+      // Tactile damped envelope: fast 2ms attack, rapid 80ms decay
+      gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.16, audioCtx.currentTime + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.080);
 
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(audioCtx.destination);
 
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(220, audioCtx.currentTime); // A3
-      osc.frequency.exponentialRampToValueAtTime(140, audioCtx.currentTime + 0.18);
-
-      gain.gain.setValueAtTime(0.095, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
-
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.18);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.085);
+      osc.onended = () => {
+        try {
+          osc.disconnect();
+          filter.disconnect();
+          gain.disconnect();
+        } catch (_) { }
+      };
     } catch (e) {
       console.error("Audio Mistake Sound Error:", e);
     }
@@ -8762,11 +8780,8 @@ export default function App() {
         osc.connect(gain);
         gain.connect(audioCtx.destination);
 
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(freq, start);
-
-        gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.linearRampToValueAtTime(0.12, start + 0.015);
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.08, start + 0.01);
         gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
 
         osc.start(start);
@@ -8782,7 +8797,7 @@ export default function App() {
     }
   };
 
-  // Subtle, high-frequency crystal shimmer / victory chime when the solo victory trophy settles
+  // Radiant sparkling celebration fanfare synchronized with victory convergence (T=1200ms)
   const playTrophyShimmerSound = useCallback(() => {
     if (!soundEffects) return;
     try {
@@ -8792,33 +8807,50 @@ export default function App() {
       const scheduleShimmer = (ctx: AudioContext) => {
         const now = ctx.currentTime;
 
-        // Subtle 4-note ascending crystal sparkle: E6 (1318.51Hz) -> A6 (1760Hz) -> E7 (2637.02Hz) + celestial harmonic (3520Hz)
+        const subMaster = ctx.createGain();
+        subMaster.gain.setValueAtTime(0.85, now);
+        subMaster.connect(ctx.destination);
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(2800, now);
+        filter.Q.setValueAtTime(0.9, now);
+        filter.connect(subMaster);
+
+        // Sparkling 4-note ascending major cascade: C5 (523.25Hz) -> E5 (659.25Hz) -> G5 (783.99Hz) -> C6 (1046.50Hz)
         const notes = [
-          { freq: 1318.51, start: now + 0.00, dur: 0.35, vol: 0.07 },
-          { freq: 1760.00, start: now + 0.07, dur: 0.45, vol: 0.08 },
-          { freq: 2637.02, start: now + 0.15, dur: 0.65, vol: 0.09 },
-          { freq: 3520.00, start: now + 0.17, dur: 0.50, vol: 0.035 }
+          { freq: 523.25, start: now + 0.00, dur: 0.50, vol: 0.12 },
+          { freq: 659.25, start: now + 0.05, dur: 0.50, vol: 0.13 },
+          { freq: 783.99, start: now + 0.10, dur: 0.52, vol: 0.14 },
+          { freq: 1046.50, start: now + 0.15, dur: 0.65, vol: 0.16 }
         ];
 
         notes.forEach(({ freq, start, dur, vol }) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
-          osc.type = "sine";
+          osc.type = "triangle";
           osc.frequency.setValueAtTime(freq, start);
 
           gain.gain.setValueAtTime(0.0001, start);
-          gain.gain.linearRampToValueAtTime(vol, start + 0.006);
-          gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+          gain.gain.linearRampToValueAtTime(vol, start + 0.008);
+          gain.gain.exponentialRampToValueAtTime(0.00001, start + dur);
 
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(filter);
 
           osc.start(start);
-          osc.stop(start + dur);
+          osc.stop(start + dur + 0.02);
           osc.onended = () => {
             try { osc.disconnect(); gain.disconnect(); } catch { }
           };
         });
+
+        setTimeout(() => {
+          try {
+            filter.disconnect();
+            subMaster.disconnect();
+          } catch { }
+        }, 800);
       };
 
       if (audioCtx.state === "suspended") {
@@ -8844,14 +8876,6 @@ export default function App() {
     setActiveKeypadNum(num);
     setLockedNum(num);
   }, []);
-  // Standard solo victory celebration state: transitions clapping hands to thumbs-up without flicker
-  const [soloVictoryClappingComplete, setSoloVictoryClappingComplete] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (!showGameOverModal) {
-      setSoloVictoryClappingComplete(false);
-    }
-  }, [showGameOverModal]);
 
   // Victory modal rolling count-up animation for completed elapsed time
   const [animatedElapsedSecs, setAnimatedElapsedSecs] = useState<number>(0);
@@ -9046,10 +9070,13 @@ export default function App() {
 
         const isVictory = !boardState.currentMistakesCount || 
           (boardState.maxMistakesLimit ? boardState.currentMistakesCount < boardState.maxMistakesLimit : true);
-        const delayMs = isVictory ? 1000 : 0;
+        const delayMs = isVictory ? 1400 : 0;
 
         gameOverTimeout = setTimeout(() => {
           setShowGameOverModal(true);
+          setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+          setActiveKeypadNum(null);
+          setLockedNum(null);
         }, delayMs);
 
         if (challengeMode && !isDisconnected) {
@@ -10240,6 +10267,12 @@ export default function App() {
       // 1. On completion (t = 0ms): Trigger warm acoustic resolve audio
       playVictoryResolveSound();
 
+      const triggerVictoryCelebration = () => {
+        setShowCelebrationConfetti(true);
+        playPartyPopperSound();
+        playTrophyShimmerSound();
+      };
+
       if (challengeMode) {
         // Celebration Trigger (User Perspective Only):
         // Fire a single top shower of confetti ONLY if 'YOU' achieve 1st place.
@@ -10252,11 +10285,11 @@ export default function App() {
           if (isRecordBroken) {
             playRecordBreakSound();
             setConfettiMode("cannon-only");
-            setShowCelebrationConfetti(true);
+            setTimeout(triggerVictoryCelebration, 1400);
             playApplauseSound(true);
           } else {
             setConfettiMode("top-only");
-            setShowCelebrationConfetti(true);
+            setTimeout(triggerVictoryCelebration, 1400);
             playApplauseSound(true);
           }
         } else {
@@ -10269,11 +10302,11 @@ export default function App() {
         playRecordBreakSound();
         setConfettiMode("cannon-only");
         setConfettiBurstKey(prev => prev + 1);
-        setShowCelebrationConfetti(true);
+        setTimeout(triggerVictoryCelebration, 1400);
       } else {
         // Standard solo win: Single gentle top shower; clean, static stats without roll animation or badges
         setConfettiMode("top-only");
-        setShowCelebrationConfetti(true);
+        setTimeout(triggerVictoryCelebration, 1400);
         playApplauseSound(true);
       }
     } else {
@@ -11422,11 +11455,28 @@ export default function App() {
     }
   }, [showGameOverModal, showCreateChallengeModal, showMidGameInviteModal, showRematchInviteModal, showMultiplayerForkModal, isInvitingAll]);
 
-  // Auto-pause the game while the Rules (?), Multiplayer Fork, or Bell Invites modal is open,
+  // Auto-pause the game while ANY modal or overlay dialog is open over the board,
   // and resume synchronously (layout effect, before paint) when it closes.
   // Only resumes if this effect itself triggered the pause.
   const autoPausedByModalRef = useRef<boolean>(false);
-  const isPauseModalOpen = showHowToPlayModal || showMultiplayerForkModal || showBellInvitesModal;
+  const isPauseModalOpen = Boolean(
+    showHowToPlayModal ||
+    showSettingsModal ||
+    showMultiplayerForkModal ||
+    showBellInvitesModal ||
+    showMidGameInviteModal ||
+    showCreateChallengeModal ||
+    showGameOverModal ||
+    showAuthModal ||
+    showDisplayNameModal ||
+    showJoinRoomModal ||
+    showRematchInviteModal ||
+    showResetSettingsModal ||
+    showDeleteAccountModal ||
+    showLoginRequiredModal ||
+    showTargetLoginRequiredModal ||
+    showHistoryChallengeModal
+  );
   useLayoutEffect(() => {
     if (isPauseModalOpen) {
       if (!autoPausedByModalRef.current && currentScreen === "game" && boardState && !boardState.isGameOver && !isTimerPaused) {
@@ -11813,11 +11863,11 @@ export default function App() {
   }, []);
 
   // Industry-Standard Lifecycle Visibility, Blur, and App State Management
-  // Immediately pauses single-player timer on screen lock, minimize, tab switch, or app backgrounding
+  // Immediately pauses active puzzle timer on screen lock, minimize, tab switch, or app backgrounding
   useEffect(() => {
     const triggerAutoPause = () => {
       const activeBoard = boardStateRef.current;
-      if (currentScreen === "game" && activeBoard && !activeBoard.isGameOver && !challengeMode) {
+      if (currentScreenRef.current === "game" && activeBoard && !activeBoard.isGameOver) {
         setIsTimerPaused(true);
       }
     };
@@ -11840,7 +11890,7 @@ export default function App() {
     let isDisposed = false;
 
     if (Capacitor.isNativePlatform()) {
-      // 1. Native appStateChange listener
+      // 1. Native appStateChange listener (fires on app background / active toggle)
       CapApp.addListener('appStateChange', (state) => {
         if (!state.isActive) {
           triggerAutoPause();
@@ -11876,12 +11926,12 @@ export default function App() {
         capPauseHandle.remove();
       }
     };
-  }, [currentScreen, challengeMode]);
+  }, []);
 
   // Game running session timer increment effect
   useEffect(() => {
     let interval: any = null;
-    if (currentScreen === "game" && boardState && !boardState.isGameOver && !visualizingBacktrack && !isTimerPaused) {
+    if (currentScreen === "game" && boardState && !boardState.isGameOver && !visualizingBacktrack && !isTimerPaused && !isPauseModalOpen) {
       interval = setInterval(() => {
         setSessionSeconds(prev => prev + 1);
       }, 1000);
@@ -11889,7 +11939,7 @@ export default function App() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [currentScreen, boardState, boardState?.isGameOver, visualizingBacktrack, isTimerPaused]);
+  }, [currentScreen, boardState, boardState?.isGameOver, visualizingBacktrack, isTimerPaused, isPauseModalOpen]);
 
   const formatTimer = (secs: number): string => {
     if (typeof secs !== "number" || isNaN(secs) || secs < 0) return "00:00";
@@ -12113,7 +12163,7 @@ export default function App() {
     setShowGameOverModal(false);
     setIsVictoryActive(false);
     setGameSessionKey(Date.now());
-    playKalimbaRevealSound(getAudioCtx(), soundEffects);
+    setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
 
     // Also update current active challenge states if this started a challenge
     if (isChallengeSession) {
@@ -12375,7 +12425,7 @@ export default function App() {
     playClickSound();
     setIsVictoryActive(false);
     setGameSessionKey(Date.now());
-    playKalimbaRevealSound(getAudioCtx(), soundEffects);
+    setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
     generateAndSetNewPuzzle(difficulty);
     setIsTimerPaused(false);
     navigateToScreen("game");
@@ -12394,6 +12444,8 @@ export default function App() {
         if (loaded) {
           setDifficulty(loaded.difficulty);
           setIsTimerPaused(false);
+          setGameSessionKey(Date.now());
+          setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
           navigateToScreen("game");
           setCurrentScreen("game");
           setNavigationHistory(["game"]);
@@ -12605,7 +12657,7 @@ export default function App() {
     pushToHistory();
 
     if (pencilMode) {
-      playClickSound();
+      playGraphiteTickSound(getAudioCtx(), soundEffects);
       triggerHapticTap(vibrations);
 
       // Pure unrestricted scratchpad: toggle candidate digit freely in and out
@@ -12796,36 +12848,41 @@ export default function App() {
         // Check game win
         const currentProgress = finalGrid.every(r => r.every(cell => cell.value === solutionGrid[cell.row][cell.col]));
 
+        const isHolyGrailCombo = rowNowComplete && colNowComplete && boxNowComplete;
         const completionCount = (rowNowComplete ? 1 : 0) + (colNowComplete ? 1 : 0) + (boxNowComplete ? 1 : 0);
 
-        if (!currentProgress) {
-          if (completionCount >= 2) {
-            playMajor7thComboSound(getAudioCtx(), soundEffects);
-            setCompletionPulse({ type: "combo", row: selectedRow, col: selectedCol, timestamp: Date.now() });
-            addLog("✨ Simultaneous Combo! Major 7th chord chime.");
-          } else if (boxNowComplete) {
-            playRhodesBoxSound(getAudioCtx(), soundEffects);
+        if (!currentProgress && completionCount > 0) {
+          if (isHolyGrailCombo) {
             setCompletionPulse({
-              type: "box",
+              type: "holy_grail",
+              row: selectedRow,
+              col: selectedCol,
+              hasRow: true,
+              hasCol: true,
+              hasBox: true,
+              timestamp: Date.now()
+            });
+            addLog("🌟 HOLY GRAIL TRING! Simultaneous Row + Col + Box completed!");
+          } else {
+            setCompletionPulse({
+              type: "structures",
               row: selectedRow,
               col: selectedCol,
               boxIndex: Math.floor(selectedRow / 3) * 3 + Math.floor(selectedCol / 3),
+              hasRow: rowNowComplete,
+              hasCol: colNowComplete,
+              hasBox: boxNowComplete,
               timestamp: Date.now()
             });
-            addLog("✨ 3x3 Box Completed! Warm Rhodes chord bloom.");
-          } else if (rowNowComplete) {
-            playMarimbaLineSound(getAudioCtx(), soundEffects);
-            setCompletionPulse({ type: "row", row: selectedRow, col: selectedCol, timestamp: Date.now() });
-            addLog(`✨ Row ${selectedRow + 1} Completed! Marimba line sweep.`);
-          } else if (colNowComplete) {
-            playMarimbaLineSound(getAudioCtx(), soundEffects);
-            setCompletionPulse({ type: "col", row: selectedRow, col: selectedCol, timestamp: Date.now() });
-            addLog(`✨ Column ${selectedCol + 1} Completed! Marimba line sweep.`);
+            if (rowNowComplete) addLog(`✨ Row ${selectedRow + 1} Completed! Tactile tile-lift ripple.`);
+            if (colNowComplete) addLog(`✨ Column ${selectedCol + 1} Completed! Tactile tile-lift ripple.`);
+            if (boxNowComplete) addLog("✨ 3x3 Box Completed! Tactile tile-lift ripple.");
           }
+          setTimeout(() => setCompletionPulse(null), 1150);
         }
 
         if (currentProgress) {
-          setIsVictoryActive(true);
+          // Keep selection visible so inward wave can visibly wash away active highlights
           const terminalWinState: BoardState = {
             ...boardState,
             grid: finalGrid,
@@ -12835,6 +12892,11 @@ export default function App() {
           };
           setBoardState(terminalWinState);
           saveCurrentGameToLocal(terminalWinState, sessionSeconds, difficulty);
+
+          // Pre-Wave Settling Pause (150ms): allow the player to register that their final number has been committed before wave sweeps
+          setTimeout(() => {
+            setIsVictoryActive(true);
+          }, 150);
 
           // Immediate terminal write on completion/victory to room players (zero secondary dependency)
           const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
@@ -12882,10 +12944,29 @@ export default function App() {
           }
         }
 
+        // Strict Audio Mutex Hierarchy (Zero Audio Overlap):
+        if (!currentProgress) {
+          if (isNumCompleted) {
+            // Priority 1: Placement exhausts remaining number count (all 9 placed)
+            // Play ONLY tactile wooden latch snap; mute line completion tap and standard tap click
+            playBubblePopSound(getAudioCtx(), soundEffects);
+          } else if (completionCount > 0) {
+            // Priority 2: Placement completes line(s) / box
+            // Play ONLY completion audio; mute standard tap click
+            if (isHolyGrailCombo) {
+              playMajor9thGrandTringSound(getAudioCtx(), soundEffects);
+            } else if (boxNowComplete || completionCount > 1) {
+              playWoodenResonanceSound(getAudioCtx(), soundEffects);
+            } else {
+              playMarimbaLineSound(getAudioCtx(), soundEffects);
+            }
+          } else {
+            // Priority 3: Ordinary, non-completing move
+            playClickSound();
+          }
+        }
+
         if (!currentProgress && isNumCompleted) {
-          // Requirement 6: Number Completion Audio & Haptic Feedback + Keypad Pop
-          playNumberCompletionSound();
-          playBubblePopSound(getAudioCtx(), soundEffects);
           setExhaustedKeypadNum(num);
           setTimeout(() => setExhaustedKeypadNum(null), 400);
           triggerHapticCompletion(vibrations);
@@ -12939,10 +13020,6 @@ export default function App() {
           // Valid placement, not yet completed: keep this number active in normal mode
           if (!isNumberFirstInputMode) {
             setActiveKeypadNum(num);
-          }
-          const hasCompletionChime = completionCount > 0 || isNumCompleted;
-          if (!hasCompletionChime) {
-            playClickSound();
           }
           triggerHapticTap(vibrations);
         }
@@ -13515,32 +13592,60 @@ export default function App() {
       {/* Studio Splash Transition */}
       <StudioSplash duration={3000} />
 
-      {/* Pastel Sync Loading Wall */}
-      {!isAppReady && (
-        <div
-          id="sync-loading-wall"
-          className={`fixed inset-0 z-[99999] flex flex-col items-center justify-center transition-colors duration-300 ${
-            darkMode ? "bg-[#121212] text-[#E5E5E5]" : "bg-[#F3EFE9] text-[#1E1E1E]"
-          }`}
-        >
-          <div
-            className={`p-8 rounded-3xl shadow-[0_10px_35px_rgba(0,0,0,0.04)] flex flex-col items-center max-w-xs text-center border-none ${
-              darkMode ? "bg-zinc-900/95 text-zinc-100" : "bg-white/95 text-stone-800"
-            }`}
+      {/* Branded Pre-Game Splash Overlay ("By Mologic") */}
+      <AnimatePresence>
+        {!isAppReady && (
+          <motion.div
+            id="sync-loading-wall"
+            key="branded-pregame-splash"
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            exit={{ 
+              opacity: 0,
+              transition: { duration: 1.0, ease: "easeInOut" }
+            }}
+            className="fixed inset-0 z-[99999] flex flex-col items-center justify-center select-none pointer-events-none bg-[#000000] text-[#E5E5E5]"
           >
-            <div className="relative w-14 h-14 mb-4 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full border-4 border-emerald-400/20 border-t-emerald-400 animate-spin" />
-              <Sparkles className="w-6 h-6 text-emerald-500 animate-pulse" />
+            <div className="flex flex-col items-center justify-center text-center px-6">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.97, y: 8 }}
+                animate={{ opacity: 1, scale: 1.0, y: 0 }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shadow-2xl shadow-black/80 flex items-center justify-center bg-[#000000] mb-5 sm:mb-6"
+              >
+                <img
+                  src="/logo.png"
+                  alt="Sudoku Sync"
+                  className="w-full h-full object-cover pointer-events-none select-none"
+                  style={{ transform: "scale(1.04)" }}
+                />
+              </motion.div>
+              <motion.h1
+                initial={{ opacity: 0, scale: 0.97, y: 8 }}
+                animate={{ opacity: 1, scale: 1.0, y: 0 }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight uppercase font-sans select-none leading-none flex items-center justify-center"
+              >
+                <span className="font-sans font-black text-white">SUDOKU</span>
+                <span className="ml-2 font-sans font-black text-[#38bdf8]">SYNC</span>
+              </motion.h1>
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 0.85, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                className="mt-3.5 flex items-center justify-center text-center"
+              >
+                <span 
+                  className="text-[12.5px] font-semibold uppercase text-slate-400 font-sans select-none"
+                  style={{ letterSpacing: "0.24em" }}
+                >
+                  BY <span className="font-bold text-slate-200">MOLOGIC</span>
+                </span>
+              </motion.div>
             </div>
-            <h3 className="text-base font-bold tracking-tight mb-1 text-stone-800 dark:text-zinc-100">
-              Syncing Profile
-            </h3>
-            <p className="text-xs font-medium text-stone-500 dark:text-zinc-400">
-              Connecting to cloud vault...
-            </p>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Toast Notification */}
       <AnimatePresence>
@@ -13840,10 +13945,14 @@ export default function App() {
                               if (loaded) {
                                 setDifficulty(loaded.difficulty);
                                 setIsTimerPaused(false);
+                                setGameSessionKey(Date.now());
+                                setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
                                 navigateToScreen("game");
                               }
                             } else {
                               setIsTimerPaused(false);
+                              setGameSessionKey(Date.now());
+                              setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
                               navigateToScreen("game");
                             }
                           }
@@ -14184,10 +14293,9 @@ export default function App() {
                         if (boardState?.isGameOver) {
                           const cell = boardState.grid[r][c];
                           const isCurrentlySelected = boardState.selectedRow === r && boardState.selectedCol === c;
-                          const isCurrentlyActiveNum = cell && cell.value !== 0 && (activeKeypadNum === cell.value || lockedNum === cell.value);
 
-                          // Second tap on already-selected cell or currently highlighted number toggles it off back to neutral
-                          if (isCurrentlySelected || isCurrentlyActiveNum) {
+                          // Second tap on already-selected cell toggles it off back to neutral
+                          if (isCurrentlySelected) {
                             playClickSound();
                             triggerHapticTap(vibrations);
                             setActiveKeypadNum(null);
@@ -14201,6 +14309,7 @@ export default function App() {
                           triggerHapticTap(vibrations);
                           const cellVal = cell && cell.value !== 0 ? cell.value : null;
                           setActiveKeypadNum(cellVal);
+                          setLockedNum(null);
                           setBoardState(prev => prev ? { ...prev, selectedRow: r, selectedCol: c } : null);
                           if (cellVal) {
                             addLog(`🎯 Highlighted all ${cellVal}s on board.`);
@@ -14401,19 +14510,10 @@ export default function App() {
                   onHint={triggerSmartHint}
                   hintInventory={hintInventory}
                   onNumberSelect={(num) => {
-                    if (isNumberFirstInputMode) {
-                      setSelectedCell(null);
-                      if (activeKeypadNum === num || lockedNum === num) {
-                        setSelectedNumber(null);
-                      } else {
-                        setSelectedNumber(num);
-                      }
-                      return;
-                    }
                     if (boardState?.isGameOver) {
                       playClickSound();
                       triggerHapticTap(vibrations);
-                      if (activeKeypadNum === num || lockedNum === num) {
+                      if (activeKeypadNum === num) {
                         setActiveKeypadNum(null);
                         setLockedNum(null);
                         setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
@@ -14423,6 +14523,15 @@ export default function App() {
                         setLockedNum(null);
                         setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
                         addLog(`🎯 Highlighted all ${num}s on board.`);
+                      }
+                      return;
+                    }
+                    if (isNumberFirstInputMode) {
+                      setSelectedCell(null);
+                      if (activeKeypadNum === num || lockedNum === num) {
+                        setSelectedNumber(null);
+                      } else {
+                        setSelectedNumber(num);
                       }
                       return;
                     }
@@ -14810,66 +14919,16 @@ export default function App() {
                             </div>
                           ) : (
                             <div className="h-12 min-h-[48px] w-full mt-2 relative flex items-center justify-center select-none overflow-visible">
-                              <AnimatePresence>
-                                {!soloVictoryClappingComplete ? (
-                                  <motion.div
-                                    key="clapping-hands"
-                                    initial={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{
-                                      opacity: 0,
-                                      scale: 0.95,
-                                      y: -8,
-                                      transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] }
-                                    }}
-                                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                                  >
-                                    <ClappingHands
-                                      tier="champion"
-                                      darkMode={darkMode}
-                                      size="md"
-                                      onComplete={() => {
-                                        setSoloVictoryClappingComplete(true);
-                                        playTrophyShimmerSound();
-                                      }}
-                                    />
-                                  </motion.div>
-                                ) : (
-                                  <motion.div
-                                    key="victory-trophy"
-                                    initial={{ opacity: 0, scale: 0.8, y: 6 }}
-                                    animate={{
-                                      opacity: 1,
-                                      scale: 1.0,
-                                      y: 0,
-                                      transition: {
-                                        scale: { type: "spring", damping: 14, stiffness: 220, mass: 0.8 },
-                                        opacity: { duration: 0.4, ease: [0.16, 1, 0.3, 1] },
-                                        y: { duration: 0.4, ease: [0.16, 1, 0.3, 1] }
-                                      }
-                                    }}
-                                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                                  >
-                                    {/* Radiant golden/amber ambient glow pulse */}
-                                    <motion.div
-                                      animate={{
-                                        scale: [0.92, 1.18, 0.95],
-                                        opacity: [0.35, 0.8, 0.5]
-                                      }}
-                                      transition={{
-                                        duration: 2.4,
-                                        repeat: Infinity,
-                                        ease: "easeInOut"
-                                      }}
-                                      className="absolute w-14 h-14 rounded-full bg-amber-400/25 dark:bg-amber-400/30 blur-md pointer-events-none"
-                                    />
-
-                                    {/* Trophy icon capsule */}
-                                    <div className="relative w-12 h-12 rounded-full bg-gradient-to-br from-amber-400/20 to-amber-600/10 dark:from-amber-400/25 dark:to-amber-500/15 border border-amber-400/40 dark:border-amber-400/50 flex items-center justify-center shadow-[0_0_24px_rgba(245,158,11,0.28)] dark:shadow-[0_0_28px_rgba(251,191,36,0.35)]">
-                                      <Trophy className="w-6 h-6 text-amber-500 dark:text-amber-400 fill-amber-500/20 dark:fill-amber-400/25 drop-shadow-[0_2px_8px_rgba(245,158,11,0.3)]" strokeWidth={2.2} />
-                                    </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
+                              <div
+                                key="victory-trophy"
+                                className="relative flex items-center justify-center pointer-events-none"
+                              >
+                                {/* Elegant minimalist thin-stroke metallic amber trophy */}
+                                <Trophy 
+                                  className="w-8 h-8 text-amber-500 dark:text-amber-400 drop-shadow-[0_2px_8px_rgba(245,158,11,0.25)] dark:drop-shadow-[0_2px_12px_rgba(251,191,36,0.3)] shrink-0" 
+                                  strokeWidth={1.8} 
+                                />
+                              </div>
                             </div>
                           )}
 
@@ -19238,6 +19297,9 @@ export default function App() {
                 }
                 if (toastType === "fastFillOff") {
                   return <ZapOff className="w-5 h-5 text-stone-400 shrink-0" strokeWidth={2} />;
+                }
+                if (toastType === "offline") {
+                  return <WifiOff className="w-5 h-5 text-rose-400 shrink-0" strokeWidth={2.2} />;
                 }
                 return <Info className="w-4 h-4 text-sky-400 shrink-0" />;
               })()}

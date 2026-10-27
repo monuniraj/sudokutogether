@@ -21,6 +21,8 @@ interface Particle {
   tiltAngleInc: number;
   bornAt: number;
   lifespan: number;
+  layer?: "background" | "primary";
+  swayAngle?: number;
 }
 
 export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, onComplete, onBurst, mode = "all" }) => {
@@ -140,16 +142,47 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
       }
     };
 
+    // Spawn subtle background depth veil (32 micro-particles) falling gently behind primary bursts
+    const spawnBackgroundVeil = (currentTime: number) => {
+      const veilCount = 32;
+      for (let i = 0; i < veilCount; i++) {
+        const originX = Math.random() * width;
+        const originY = -20 - Math.random() * 20; // -20px to -40px off-screen
+        particles.push({
+          x: originX,
+          y: originY,
+          vx: (Math.random() - 0.5) * 0.8,
+          vy: 1.4,
+          size: 2.5 + Math.random() * 1.5,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rotation: Math.random() * 360,
+          vRotation: (Math.random() - 0.5) * 4,
+          shape: Math.random() > 0.5 ? "circle" : "rect",
+          tiltAngle: Math.random() * Math.PI,
+          tiltAngleInc: (Math.random() * 0.04) + 0.02,
+          bornAt: currentTime,
+          lifespan: 5500 + Math.random() * 1500,
+          layer: "background",
+          swayAngle: Math.random() * Math.PI * 2
+        });
+      }
+    };
+
     // Spawn celebratory streamers and particles cascading gracefully from the top viewport edge
     const spawnTopCascade = (count: number, currentTime: number) => {
       for (let i = 0; i < count; i++) {
         const originX = Math.random() * width;
-        const originY = -12 - Math.random() * 28;
-        const isStreamer = Math.random() < 0.45;
+        const originY = -20 - Math.random() * 20; // Strictly -20px to -40px off-screen
+        const shapeRand = Math.random();
+        const isBall = shapeRand < 0.28; // Circles or sparks
+        const isStreamer = !isBall && shapeRand > 0.65;
+        const shape: Particle["shape"] = isBall 
+          ? (Math.random() > 0.5 ? "circle" : "spark") 
+          : (isStreamer ? "streamer" : "rect");
 
-        // Gentle downward velocity with gentle horizontal sway
-        const vx = (Math.random() - 0.5) * 2.2;
-        const vy = isStreamer ? 1.6 + Math.random() * 1.8 : 2.2 + Math.random() * 2.6;
+        // Initial downward drop impulse: balls drop slightly faster to establish leading ~10% delta
+        const vx = (Math.random() - 0.5) * 2.4;
+        const vy = isBall ? 5.2 + Math.random() * 1.6 : 4.0 + Math.random() * 1.4;
 
         particles.push({
           x: originX,
@@ -160,11 +193,13 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
           color: colors[Math.floor(Math.random() * colors.length)],
           rotation: Math.random() * 360,
           vRotation: (Math.random() - 0.5) * 8,
-          shape: isStreamer ? "streamer" : Math.random() > 0.4 ? "rect" : "circle",
+          shape,
           tiltAngle: Math.random() * Math.PI,
           tiltAngleInc: (Math.random() * 0.06) + 0.03,
           bornAt: currentTime,
-          lifespan: 2600 + Math.random() * 900 // Float gracefully across the screen
+          lifespan: 3600 + Math.random() * 1400, // Float gracefully across the screen
+          layer: "primary",
+          swayAngle: Math.random() * Math.PI * 2
         });
       }
     };
@@ -186,7 +221,7 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
       : mode === "top-two-waves"
       ? 7500
       : mode === "top-only" 
-      ? 3800 
+      ? 4800 
       : 7500;
     const safetyTimer = setTimeout(() => {
       dispose();
@@ -209,18 +244,23 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
       burstSchedule.forEach((burst) => {
         if (elapsed >= burst.delay && !firedBursts.has(burst.waveIndex)) {
           firedBursts.add(burst.waveIndex);
+          if (burst.waveIndex === 0) {
+            spawnBackgroundVeil(now);
+          }
           // Corner cannons fire for 'all', 'cannon-only', and on Wave 1 of 'top-two-waves'
           if (mode !== "top-only" && (mode !== "top-two-waves" || burst.waveIndex === 0)) {
             spawnCornerCannons(burst.count, now);
             onBurstRef.current?.(burst.waveIndex);
           }
           if (mode !== "cannon-only") {
-            spawnTopCascade(mode === "top-only" || mode === "top-two-waves" ? 38 : 24, now);
+            spawnTopCascade(mode === "top-only" || mode === "top-two-waves" ? 42 : 32, now);
           }
         }
       });
 
       ctx.clearRect(0, 0, width, height);
+
+      const decelThreshold = height * 0.25;
 
       // Render active particles from the continuous pool
       for (let i = particles.length - 1; i >= 0; i--) {
@@ -238,24 +278,47 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
           ? Math.max(0, 1 - (age - p.lifespan * 0.75) / (p.lifespan * 0.25)) 
           : 1;
 
-        // Physics: individual trajectory integration
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.shape === "streamer") {
-          p.vy = Math.min(p.vy + 0.05, 3.6); // Gentle terminal fall speed for streamers
-          p.vx *= 0.99;
+        // Physics: Viewport-relative deceleration zone & terminal speed caps
+        if (p.layer === "background") {
+          p.vy = 1.4;
+          p.swayAngle = (p.swayAngle || 0) + 0.035;
+          p.x += p.vx + Math.sin(p.swayAngle) * 0.8;
+          p.y += p.vy;
+        } else if (p.shape === "circle" || p.shape === "spark") {
+          // Heavy Circles / Stars (Balls):
+          // Rapidly soak downward drop momentum within top quarter (y <= height * 0.25)
+          // Lock to terminal float speed vy = 2.8px/frame
+          if (p.y <= decelThreshold) {
+            p.vy = Math.max(2.8, p.vy * 0.93);
+          } else {
+            p.vy = 2.8;
+          }
+          p.vx *= 0.985;
+          p.x += p.vx;
+          p.y += p.vy;
         } else {
-          p.vy += 0.24; // Gravity
-          p.vx *= 0.984; // Air drag
-          p.vy *= 0.984;
+          // Paper Ribbons / Rectangles / Streamers:
+          // Rapidly soak downward momentum within top quarter (y <= height * 0.25)
+          // Lock to terminal float speed vy = 2.1px/frame
+          if (p.y <= decelThreshold) {
+            p.vy = Math.max(2.1, p.vy * 0.90);
+          } else {
+            p.vy = 2.1;
+          }
+          p.vx *= 0.985;
+          p.swayAngle = (p.swayAngle || 0) + 0.045;
+          p.x += p.vx + Math.sin(p.swayAngle) * 0.6;
+          p.y += p.vy;
         }
+
         p.rotation += p.vRotation;
         p.tiltAngle += p.tiltAngleInc;
 
         const xOffset = Math.sin(p.tiltAngle) * 3;
 
         ctx.save();
-        ctx.globalAlpha = pAlpha;
+        const baseAlpha = p.layer === "background" ? 0.45 : 1.0;
+        ctx.globalAlpha = pAlpha * baseAlpha;
         ctx.translate(p.x + xOffset, p.y);
         ctx.rotate((p.rotation * Math.PI) / 180);
         ctx.fillStyle = p.color;
@@ -310,7 +373,7 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-[100050]"
+      className="fixed inset-0 pointer-events-none z-[100]"
       style={{ touchAction: "none" }}
     />
   );
