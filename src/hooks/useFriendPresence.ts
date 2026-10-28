@@ -135,7 +135,7 @@ export function useFriendPresence(
     if (prevId && prevId !== userId) {
       if (prevId !== "GUEST" && prevId !== "guest" && prevId !== "GUEST_ANON" && !isHydrationWriteLocked(prevId)) {
         console.log(`[useFriendPresence] User ID transitioned from ${prevId} to ${userId || "none"}. Broadcasting offline for ${prevId}.`);
-        const prevRef = doc(db, "users", prevId);
+        const prevRef = doc(db, "presence", prevId);
         setDoc(
           prevRef,
           {
@@ -152,15 +152,17 @@ export function useFriendPresence(
     prevUserIdRef.current = userId || null;
   }, [userId]);
 
-  // Broadcast presence to Firestore
+  // Broadcast presence to Firestore (/presence/{currentId})
   const broadcastStatus = useCallback(async (status: "online" | "offline") => {
-    const currentId = userId || getStoredUserId();
-    if (!currentId || currentId === "GUEST" || currentId === "guest" || currentId === "GUEST_ANON" || isHydrationWriteLocked(currentId)) return;
+    const activeAuthUser = auth.currentUser;
+    const currentId = activeAuthUser?.uid || userId || getStoredUserId();
+    if (!currentId || currentId === "GUEST" || currentId === "guest" || currentId === "GUEST_ANON" || currentId.startsWith("GUEST_") || isHydrationWriteLocked(currentId)) return;
+    if (!activeAuthUser || activeAuthUser.uid !== currentId) return;
 
     try {
-      const userRef = doc(db, "users", currentId);
+      const presenceRef = doc(db, "presence", currentId);
       await setDoc(
-        userRef,
+        presenceRef,
         {
           id: currentId,
           status,
@@ -309,7 +311,7 @@ export function useFriendPresence(
 
     uniqueIds.forEach((friendId) => {
       try {
-        const friendRef = doc(db, "users", friendId);
+        const friendRef = doc(db, "presence", friendId);
         const unsub = onSnapshot(
           friendRef,
           (snap) => {

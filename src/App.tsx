@@ -610,6 +610,18 @@ const getApiOrigin = (): string => {
 };
 
 
+const hashRoomPin = async (pin: string, salt: string): Promise<string> => {
+  if (!pin) return "";
+  try {
+    const data = new TextEncoder().encode(pin.trim().toLowerCase() + ":" + salt.trim());
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return pin.trim();
+  }
+};
+
 const encodePass = (str: string): string => {
   if (!str) return "";
   try {
@@ -1921,6 +1933,18 @@ export default function App() {
   const inviteJoinCallbackRef = useRef<(() => void) | null>(null);
   const isProcessingQueueRef = useRef<boolean>(false);
 
+  // Guarantees an active Firebase Auth user exists before initiating any Firestore cloud write
+  const ensureActiveAuthUser = useCallback(async (): Promise<any> => {
+    if (auth.currentUser) return auth.currentUser;
+    try {
+      const cred = await signInAnonymously(auth);
+      return cred.user;
+    } catch (e) {
+      console.warn("[Auth] Failed to lazily acquire anonymous session:", e);
+      return null;
+    }
+  }, []);
+
   const checkIsDisplayNameConfigured = (): boolean => {
     // 1. Manually configured flag is paramount
     const isConfiguredFlag = localStorage.getItem("sudoku_is_display_name_configured") === "true";
@@ -2359,6 +2383,7 @@ export default function App() {
     hintLimit?: number;
     timerEnabled: boolean;
     password?: string;
+    pinHash?: string;
     senderName?: string;
   } | null>(null);
   const [enteredInvitePassword, setEnteredInvitePassword] = useState<string>("");
@@ -4937,7 +4962,7 @@ export default function App() {
               ? guestVault.profile.displayName
               : guestIdentity.displayName;
             const sanitizedProfile = {
-              id: guestIdentity.id,
+              id: user.uid,
               name: safeName,
               displayName: safeName,
               avatarColor: curProfile?.avatarColor || guestVault.profile.avatarColor || "#8B5CF6",
@@ -9347,38 +9372,39 @@ export default function App() {
             : (rData.hintLimit !== undefined ? Number(rData.hintLimit) : 3);
           const rTimer = rData.timerEnabled !== undefined ? Boolean(rData.timerEnabled) : true;
           const isLocked = Boolean(rData.isLocked);
-          const storedPin = (rData.pin || rData.roomPin || "").trim();
+          const storedPinHash = (rData.pinHash || "").trim();
+          const legacyPin = (rData.pin || rData.roomPin || "").trim();
 
           const rawSuppliedPw = (queryPw || "").trim();
           const decodedPw = rawSuppliedPw ? decodePass(rawSuppliedPw).trim() : "";
           let isPinMatch = false;
-          try {
-            const uriDecoded = decodeURIComponent(rawSuppliedPw).trim();
-            isPinMatch = Boolean(
-              storedPin.length > 0 &&
-              (rawSuppliedPw === storedPin || decodedPw === storedPin || uriDecoded === storedPin)
-            );
-          } catch (e) {
-            isPinMatch = Boolean(
-              storedPin.length > 0 &&
-              (rawSuppliedPw === storedPin || decodedPw === storedPin)
-            );
+          if (storedPinHash.length > 0) {
+            const rawHash = await hashRoomPin(rawSuppliedPw, code);
+            const decodedHash = decodedPw ? await hashRoomPin(decodedPw, code) : "";
+            isPinMatch = Boolean(rawHash === storedPinHash || (decodedHash && decodedHash === storedPinHash));
+          } else if (legacyPin.length > 0) {
+            try {
+              const uriDecoded = decodeURIComponent(rawSuppliedPw).trim();
+              isPinMatch = Boolean(rawSuppliedPw === legacyPin || decodedPw === legacyPin || uriDecoded === legacyPin);
+            } catch {
+              isPinMatch = Boolean(rawSuppliedPw === legacyPin || decodedPw === legacyPin);
+            }
           }
 
-          if (!isLocked || storedPin.length === 0 || isPinMatch) {
+          if (!isLocked || (!storedPinHash && !legacyPin) || isPinMatch) {
             // Unlocked or authorized via link credentials
             // GUEST PRESERVATION: Check if guest display name needs to be configured first (Public Share Link & Unlocked Room)
             const isConfigured = checkIsDisplayNameConfigured();
             if (!isConfigured) {
               inviteJoinCallbackRef.current = () => {
-                handleAcceptAndLaunchInvite(code, undefined, storedPin, true, rData, targetUid);
+                handleAcceptAndLaunchInvite(code, undefined, rawSuppliedPw || decodedPw, true, rData, targetUid);
               };
               setInviteJoinName(getActiveDisplayName());
               setInviteJoinError(null);
               setShowInviteJoinNamePopup(true);
               return;
             }
-            await handleAcceptAndLaunchInvite(code, undefined, storedPin, true, rData, targetUid);
+            await handleAcceptAndLaunchInvite(code, undefined, rawSuppliedPw || decodedPw, true, rData, targetUid);
             return;
           }
 
@@ -9392,7 +9418,8 @@ export default function App() {
             maxMistakes: rMistakes,
             hintLimit: rHints,
             timerEnabled: rTimer,
-            password: storedPin,
+            pinHash: storedPinHash,
+            password: legacyPin,
             senderName: cleanSender
           });
           setShowInviteModal(true);
@@ -9737,7 +9764,7 @@ export default function App() {
 
     // Only write Firestore room record when online — offline sessions are solo-only and need no room document
     if (isOnline) {
-      const activeHostId = userProfile?.id || auth.currentUser?.uid || getOrCreateGuestIdentity().id;
+      const activeHostId = auth.currentUser?.uid || userProfile?.id || getOrCreateGuestIdentity().id;
       const activeHostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
 
       setDoc(doc(db, "rooms", roomCode), {
@@ -9749,12 +9776,11 @@ export default function App() {
         createdById: activeHostId,
         createdByName: activeHostName,
         puzzleFlat: generated.puzzleFlat,
-        solutionFlat: generated.solutionFlat,
         mistakesLimit: 3,
         hintsLimit: 3,
         timerEnabled: initialTimer,
         isLocked: false,
-        pin: "",
+        pinHash: "",
         status: "active",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -9811,10 +9837,9 @@ export default function App() {
     };
     if (updates.difficulty !== undefined) {
       payload.difficulty = updates.difficulty;
-      // Synchronously regenerate puzzleFlat and solutionFlat matching the seed and new difficulty
+      // Synchronously regenerate puzzleFlat matching the seed and new difficulty
       const generated = generateFlatBoardForSeed(updates.difficulty, seed);
       payload.puzzleFlat = generated.puzzleFlat;
-      payload.solutionFlat = generated.solutionFlat;
       puzzleCache.set(`${updates.difficulty}_${seed}`, {
         solved: generated.solved.map(r => [...r]),
         puzzle: generated.puzzle.map(r => [...r])
@@ -9831,8 +9856,7 @@ export default function App() {
     if (updates.timerEnabled !== undefined) payload.timerEnabled = updates.timerEnabled;
     if (updates.isLocked !== undefined) payload.isLocked = updates.isLocked;
     if (updates.pin !== undefined) {
-      payload.pin = updates.pin;
-      payload.roomPin = updates.pin;
+      payload.pinHash = updates.pin ? await hashRoomPin(updates.pin, code) : "";
     }
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.isClosed !== undefined) payload.isClosed = updates.isClosed;
@@ -9917,9 +9941,7 @@ export default function App() {
           const puzzleFlat = (boardState as any)?.initialGrid
             ? (boardState as any).initialGrid.flat()
             : (boardState.grid ? boardState.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)).flat() : null);
-          const solutionFlat = (boardState as any)?.solutionGrid
-            ? (boardState as any).solutionGrid.flat()
-            : (solutionGrid && solutionGrid.length === 9 ? solutionGrid.flat() : null);
+          const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, roomCode) : "";
 
           await setDoc(doc(db, "rooms", roomCode), {
             roomCode: roomCode,
@@ -9930,12 +9952,11 @@ export default function App() {
             createdById: uId,
             createdByName: pName,
             ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
-            ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
             mistakesLimit: mistakeLimitEnabled ? (boardState.maxMistakesLimit || 3) : 999,
             hintsLimit: boardState.hintsRemaining !== undefined ? boardState.hintsRemaining : 3,
             timerEnabled: timerEnabled,
             isLocked: isRoomLocked,
-            pin: isRoomLocked ? roomPin : "",
+            pinHash: hashedPin,
             status: "active",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -10088,9 +10109,10 @@ export default function App() {
     }));
     addLog(`📤 Custom challenge invite dispatched to player.`);
 
+    const activeAuth = await ensureActiveAuthUser();
     const seed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
     const activeRoomCode = String(seed).padStart(6, '0').slice(-6);
-    const currentUserId = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || getOrCreateGuestIdentity().id;
+    const currentUserId = activeAuth?.uid || userProfile?.id;
     const currentUserName = getActiveDisplayName() || userProfileRef.current?.displayName || userProfileRef.current?.name || getOrCreateGuestIdentity().displayName;
 
     // Ensure room is synced with current settings before invite is dispatched
@@ -10833,15 +10855,18 @@ export default function App() {
 
   // Submit a completed game result to Firestore, with 1 retry and offline queuing
   const submitGameResult = async (rBody: any, attempt = 1): Promise<void> => {
-    console.log(`[Firestore] Submitting result. ID: ${rBody.challengeId}, User: ${rBody.userId}, Attempt: ${attempt}`);
+    const activeAuth = await ensureActiveAuthUser();
+    const effectiveUserId = activeAuth?.uid || rBody.userId;
+    const effectivePlayerName = rBody.playerName || getActiveDisplayName();
+    console.log(`[Firestore] Submitting result. ID: ${rBody.challengeId}, User: ${effectiveUserId}, Attempt: ${attempt}`);
     try {
       const docId = getSeedDocId(rBody.challengeId);
-      const participantRef = doc(db, "challenge_results", docId, "participants", rBody.userId);
+      const participantRef = doc(db, "challenge_results", docId, "participants", effectiveUserId);
 
       const newRecord = {
         challengeId: rBody.challengeId,
-        userId: rBody.userId,
-        playerName: rBody.playerName,
+        userId: effectiveUserId,
+        playerName: effectivePlayerName,
         timeSec: Number(rBody.timeSec),
         mistakes: Number(rBody.mistakes),
         isWon: !!rBody.isWon,
@@ -10853,10 +10878,10 @@ export default function App() {
 
       await setDoc(participantRef, newRecord);
       try {
-        const roomPlayerRef = doc(db, "rooms", rBody.challengeId, "players", rBody.userId);
+        const roomPlayerRef = doc(db, "rooms", rBody.challengeId, "players", effectiveUserId);
         await setDoc(roomPlayerRef, {
-          id: rBody.userId,
-          name: rBody.playerName,
+          id: effectiveUserId,
+          name: effectivePlayerName,
           status: rBody.status || (rBody.isWon ? "completed" : "mistake_game_over"),
           timeSec: Number(rBody.timeSec),
           mistakes: Number(rBody.mistakes),
@@ -10868,8 +10893,8 @@ export default function App() {
         const roomDocRef = doc(db, "rooms", rBody.challengeId);
         await setDoc(roomDocRef, {
           status: "active",
-          lastCompletedUid: rBody.userId,
-          lastCompletedBy: rBody.playerName,
+          lastCompletedUid: effectiveUserId,
+          lastCompletedBy: effectivePlayerName,
           lastCompletedTime: Number(rBody.timeSec) || 0,
           lastCompletedAt: serverTimestamp()
         }, { merge: true });
@@ -12151,14 +12176,12 @@ export default function App() {
     setSolutionGrid(solved.map(r => [...r]));
     addLog(`Difficulty Tagged: ${level}`);
 
-    // If challenge session, persist flat puzzle and solution arrays to canonical room
+    // If challenge session, persist flat puzzle array to canonical room (solutionFlat omitted for anti-cheat shield)
     if (isChallengeSession) {
       const flatP = puzzle.map(r => [...r]).flat();
-      const flatS = solved.map(r => [...r]).flat();
       const canonicalRoomCode = String(seed).padStart(6, '0').slice(-6);
       setDoc(doc(db, "rooms", canonicalRoomCode), {
         puzzleFlat: flatP,
-        solutionFlat: flatS,
         updatedAt: serverTimestamp()
       }, { merge: true }).catch(() => { });
     }
@@ -12273,7 +12296,7 @@ export default function App() {
   };
 
   // Mid-game Solo to Multiplayer Escalation: Initializes Firestore room document with flat arrays and attaches listeners
-  const handleOpenMidGameMultiplayer = () => {
+  const handleOpenMidGameMultiplayer = async () => {
     playClickSound();
     setIsTimerPaused(true);
 
@@ -12338,6 +12361,8 @@ export default function App() {
     const activeHostId = userProfile?.id || auth.currentUser?.uid || getOrCreateGuestIdentity().id;
     const activeHostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
 
+    const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, liveRoomCode) : "";
+
     // Write canonical room to Firestore with flat arrays (safe against nested array errors)
     setDoc(doc(db, "rooms", liveRoomCode), {
       roomCode: liveRoomCode,
@@ -12348,12 +12373,11 @@ export default function App() {
       createdById: activeHostId,
       createdByName: activeHostName,
       ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
-      ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
       mistakesLimit: midMistakes,
       hintsLimit: midHints,
       timerEnabled: timerEnabled,
       isLocked: isRoomLocked,
-      pin: isRoomLocked && roomPin ? roomPin : "",
+      pinHash: hashedPin,
       status: "active",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -14824,6 +14848,7 @@ export default function App() {
 
                       const hostId = userProfile?.id || authUser?.uid || getOrCreateGuestIdentity().id;
                       const hostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
+                      const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, roomCode) : "";
 
                       await setDoc(doc(db, "rooms", roomCode), {
                         roomCode: roomCode,
@@ -14834,12 +14859,11 @@ export default function App() {
                         createdById: hostId,
                         createdByName: hostName,
                         ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
-                        ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
                         mistakesLimit: challengeMistakeLimit,
                         hintsLimit: challengeHintLimit,
                         timerEnabled: challengeTimerEnabled,
                         isLocked: isRoomLocked,
-                        pin: isRoomLocked ? roomPin : "",
+                        pinHash: hashedPin,
                         status: "active",
                         createdAt: serverTimestamp(),
                         updatedAt: serverTimestamp(),
@@ -17393,9 +17417,15 @@ export default function App() {
           handleMaybeLaterChallenge();
           setShowInviteModal(false);
         }}
-        onAccept={() => {
+        onAccept={async () => {
           // Password check
-          if (incomingChallengeDetails?.password) {
+          if (incomingChallengeDetails?.pinHash) {
+            const enteredHash = await hashRoomPin(enteredInvitePassword, incomingChallengeId);
+            if (enteredHash !== incomingChallengeDetails.pinHash) {
+              setInvitePasswordError("Incorrect Password");
+              return;
+            }
+          } else if (incomingChallengeDetails?.password) {
             const correct = incomingChallengeDetails.password.trim().toLowerCase();
             const entered = enteredInvitePassword.trim().toLowerCase();
             if (entered !== correct) {

@@ -2,21 +2,47 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
     function isValidString(val, minLen, maxLen) {
       return val is string && val.size() >= minLen && val.size() <= maxLen;
     }
 
-    // Challenge leaderboard results
+    function isOptionalString(data, field, minLen, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() >= minLen && data[field].size() <= maxLen);
+    }
+
+    function isOptionalNumber(data, field, minVal, maxVal) {
+      return !(field in data) || (data[field] is number && data[field] >= minVal && data[field] <= maxVal);
+    }
+
+    function isOptionalBool(data, field) {
+      return !(field in data) || data[field] is bool;
+    }
+
+    // =========================================================================
+    // 1. CHALLENGE LEADERBOARDS (/challenge_results)
+    // =========================================================================
     match /challenge_results/{challengeId}/participants/{userId} {
-      // Anyone can read public leaderboard entries
+      // Anyone can read public leaderboard standings
       allow read: if true;
 
-      // Disallow document deletion to prevent griefing
+      // Deletion is strictly prohibited to prevent griefing
       allow delete: if false;
 
-      // Restrict create & update with strict schema validation
-      allow create: if request.resource.data.userId == userId
+      // Creation: must be authenticated as the target userId with valid schema
+      allow create: if isOwner(userId)
+                    && request.resource.data.userId == userId
                     && isValidString(request.resource.data.challengeId, 1, 100)
                     && isValidString(request.resource.data.playerName, 1, 50)
                     && request.resource.data.timeSec is number
@@ -28,7 +54,10 @@ service cloud.firestore {
                     && request.resource.data.isWon is bool
                     && request.resource.data.isPending is bool;
 
-      allow update: if request.resource.data.userId == userId
+      // Update: only the owner can update their score, cannot mutate challengeId or userId
+      allow update: if isOwner(userId)
+                    && request.resource.data.userId == userId
+                    && request.resource.data.challengeId == resource.data.challengeId
                     && isValidString(request.resource.data.playerName, 1, 50)
                     && request.resource.data.timeSec is number
                     && request.resource.data.timeSec >= 0
@@ -38,49 +67,133 @@ service cloud.firestore {
                     && request.resource.data.isPending is bool;
     }
 
-    // Invitations collection for real-time multiplayer invites
+    // =========================================================================
+    // 2. INVITATIONS (/invites)
+    // =========================================================================
     match /invites/{inviteId} {
-      allow read: if true;
+      // Only authenticated users who are sender or receiver can read the invite,
+      // or queries matching roomCode / gameId by participants
+      allow read: if isAuthenticated() && (
+        resource == null ||
+        resource.data.toUserId == request.auth.uid ||
+        resource.data.fromUserId == request.auth.uid
+      );
+
       allow delete: if false;
 
-      allow create: if isValidString(request.resource.data.fromUserId, 1, 100)
+      // Create: sender must be authenticated as fromUserId, cannot invite self
+      allow create: if isAuthenticated()
+                    && request.resource.data.fromUserId == request.auth.uid
                     && isValidString(request.resource.data.toUserId, 1, 100)
-                    && (('roomCode' in request.resource.data && isValidString(request.resource.data.roomCode, 1, 120)) || ('gameId' in request.resource.data && isValidString(request.resource.data.gameId, 1, 120)))
-                    && request.resource.data.status in ['pending', 'accepted', 'declined'];
+                    && request.resource.data.toUserId != request.auth.uid
+                    && (
+                      ('roomCode' in request.resource.data && isValidString(request.resource.data.roomCode, 1, 120)) ||
+                      ('gameId' in request.resource.data && isValidString(request.resource.data.gameId, 1, 120))
+                    )
+                    && request.resource.data.status == 'pending'
+                    && isOptionalString(request.resource.data, 'fromName', 1, 50)
+                    && isOptionalString(request.resource.data, 'difficulty', 1, 20);
 
-      allow update: if request.resource.data.status in ['pending', 'accepted', 'declined'];
+      // Update: only recipient or sender can update; status is the ONLY mutable operational field
+      allow update: if isAuthenticated()
+                    && (resource.data.toUserId == request.auth.uid || resource.data.fromUserId == request.auth.uid)
+                    && request.resource.data.status in ['pending', 'accepted', 'declined']
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']);
     }
 
-    // User profiles, FCM tokens, and past players subcollections
+    // =========================================================================
+    // 3. USER PROFILES & PRIVATE DATA (/users)
+    // =========================================================================
     match /users/{userId} {
-      allow read: if true;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      allow create, update: if (request.resource.data.id == userId || !('id' in request.resource.data))
-                            && (!('name' in request.resource.data) || isValidString(request.resource.data.name, 1, 50));
+      // Single doc read allowed for authenticated users (for friend lookups);
+      // Collection list (blanket queries) blocked to prevent scraping user base
+      allow get: if isAuthenticated();
+      allow list: if false;
 
+      // User document can ONLY be created, updated, or deleted by the authenticated owner
+      allow create: if isOwner(userId)
+                    && (request.resource.data.id == userId || !('id' in request.resource.data))
+                    && isOptionalString(request.resource.data, 'name', 1, 50)
+                    && isOptionalString(request.resource.data, 'displayName', 1, 50);
+
+      allow update: if isOwner(userId)
+                    && (request.resource.data.id == userId || !('id' in request.resource.data))
+                    && isOptionalString(request.resource.data, 'name', 1, 50)
+                    && isOptionalString(request.resource.data, 'displayName', 1, 50);
+
+      allow delete: if isOwner(userId);
+
+      // Past players subcollection: strictly isolated to the profile owner
       match /past_players/{playerId} {
-        allow read: if true;
-        allow delete: if request.auth != null && request.auth.uid == userId;
-        allow create, update: if isValidString(request.resource.data.id, 1, 100)
-                              && (!('name' in request.resource.data) || isValidString(request.resource.data.name, 1, 50))
-                              && (!('isFriend' in request.resource.data) || request.resource.data.isFriend is bool);
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+                              && isValidString(request.resource.data.id, 1, 100)
+                              && isOptionalString(request.resource.data, 'name', 1, 50)
+                              && isOptionalBool(request.resource.data, 'isFriend');
+        allow delete: if isOwner(userId);
       }
     }
 
-    // Multiplayer Rooms for lock status, settings, and join codes
-    match /rooms/{roomCode} {
-      allow read: if true;
-      allow delete: if false;
-      allow create, update: if isValidString(roomCode, 1, 30)
-                            && (!('isLocked' in request.resource.data) || request.resource.data.isLocked is bool);
+    // =========================================================================
+    // 4. REAL-TIME PRESENCE (/presence)
+    // =========================================================================
+    match /presence/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
 
+    // =========================================================================
+    // 5. MULTIPLAYER ROOMS (/rooms)
+    // =========================================================================
+    match /rooms/{roomCode} {
+      // Room metadata readable by authenticated participants
+      allow read: if isAuthenticated();
+      allow delete: if false;
+
+      // Creation: must be authenticated host with valid roomCode length;
+      // Plaintext pin and solutionFlat forbidden (Anti-Cheat Shield)
+      allow create: if isAuthenticated()
+                    && isValidString(roomCode, 1, 30)
+                    && (!('pin' in request.resource.data))
+                    && (!('solutionFlat' in request.resource.data))
+                    && (
+                      !('hostId' in request.resource.data) ||
+                      request.resource.data.hostId == request.auth.uid ||
+                      request.resource.data.createdById == request.auth.uid
+                    )
+                    && isOptionalBool(request.resource.data, 'isLocked');
+
+      // Update:
+      // Case A: Room Host can update room settings, lock status, pinHash
+      // Case B: Non-host participants can ONLY update completion telemetry
+      allow update: if isAuthenticated()
+                    && (!('pin' in request.resource.data))
+                    && (!('solutionFlat' in request.resource.data))
+                    && (
+                      (
+                        resource.data.hostId == request.auth.uid ||
+                        resource.data.createdById == request.auth.uid
+                      ) ||
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                        'lastCompletedUid', 'lastCompletedBy', 'lastCompletedTime', 'lastCompletedAt', 'updatedAt', 'status'
+                      ])
+                    );
+
+      // Player status inside room
       match /players/{playerId} {
-        allow read: if true;
-        allow create, update: if isValidString(playerId, 1, 100);
-        allow delete: if request.auth != null && request.auth.uid == playerId;
+        allow read: if isAuthenticated();
+
+        // Players can ONLY write and update their own participant record
+        allow create, update: if isOwner(playerId)
+                              && isValidString(playerId, 1, 100)
+                              && isOptionalString(request.resource.data, 'name', 1, 50)
+                              && isOptionalNumber(request.resource.data, 'timeSec', 0, 86400)
+                              && isOptionalNumber(request.resource.data, 'mistakes', 0, 999)
+                              && isOptionalBool(request.resource.data, 'isWon');
+
+        allow delete: if isOwner(playerId);
       }
     }
   }
 }
-
-
