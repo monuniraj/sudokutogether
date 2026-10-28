@@ -3100,6 +3100,32 @@ export default function App() {
   const bellWiggleTimerRef = useRef<any>(null);
   const preservedSoloBoardRef = useRef<any | null>(null);
 
+  // Web Push Activation State (Strictly Web only, zero effect on Android)
+  const [showWebPushPrompt, setShowWebPushPrompt] = useState<boolean>(() => {
+    if (Capacitor.isNativePlatform()) return false;
+    if (typeof window === "undefined" || !("Notification" in window)) return false;
+    if (Notification.permission !== "default") return false;
+    try {
+      return !sessionStorage.getItem("sudoku_web_push_dismissed");
+    } catch {
+      return false;
+    }
+  });
+
+  const handleEnableWebPush = useCallback(async () => {
+    setShowWebPushPrompt(false);
+    if (!Capacitor.isNativePlatform()) {
+      await registerPushNotificationsRef.current(true);
+    }
+  }, []);
+
+  const handleDismissWebPush = useCallback(() => {
+    setShowWebPushPrompt(false);
+    try {
+      sessionStorage.setItem("sudoku_web_push_dismissed", "true");
+    } catch {}
+  }, []);
+
   // Reference to current active board state across the app
   const boardStateRef = useRef<BoardState | null>(null);
   const challengeModeRef = useRef(challengeMode);
@@ -6836,16 +6862,20 @@ export default function App() {
         const platformField = Capacitor.isNativePlatform() ? "fcmToken_native" : "fcmToken_web";
         if (notificationsEnabled) {
           await setDoc(userRef, {
+            id: userProfile.id,
             notificationsEnabled: true,
             fcmToken: token,
             [platformField]: token,
-            fcmTokens: arrayUnion(token)
+            fcmTokens: arrayUnion(token),
+            updatedAt: serverTimestamp()
           }, { merge: true });
         } else {
           await setDoc(userRef, {
+            id: userProfile.id,
             notificationsEnabled: false,
             fcmTokens: arrayRemove(token),
-            [platformField]: ""
+            [platformField]: "",
+            updatedAt: serverTimestamp()
           }, { merge: true });
         }
       }
@@ -7507,6 +7537,7 @@ export default function App() {
           }
 
           if (permission === "granted") {
+            setShowWebPushPrompt(false);
             console.log("[Push] Web push permission granted. Awaiting active Service Worker ready state...");
             if (messaging) {
               try {
@@ -13839,6 +13870,52 @@ export default function App() {
 
               {/* Center column container: combines difficulty selectors and Play Button */}
               <div className="w-full max-w-sm mx-auto flex flex-col justify-center gap-4 sm:gap-6 py-2 sm:py-6 font-sans shrink-0" id="home-screen-inner-container">
+
+                {/* 🔔 PASTEL WEB PUSH ACTIVATION BANNER (Strictly Web only) */}
+                {!Capacitor.isNativePlatform() && showWebPushPrompt && (
+                  <div
+                    className={`w-full p-3.5 sm:p-4 mb-2 rounded-2xl flex items-center justify-between gap-3 shadow-sm select-none transition-all ${
+                      darkMode
+                        ? "bg-indigo-950/40 text-indigo-200"
+                        : "bg-indigo-50/90 text-indigo-900"
+                    }`}
+                    style={{ border: "none" }}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`p-2 rounded-xl shrink-0 ${darkMode ? "bg-indigo-900/60 text-indigo-300" : "bg-indigo-100 text-indigo-600"}`}>
+                        <Bell className="w-4 h-4" />
+                      </div>
+                      <div className="flex flex-col min-w-0 text-left">
+                        <span className="text-xs font-bold leading-tight truncate">
+                          Challenge Notifications
+                        </span>
+                        <span className="text-[11px] leading-tight opacity-80 truncate">
+                          Get alerted when challenged
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={handleEnableWebPush}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm active:scale-95 transition-all cursor-pointer"
+                        style={{ border: "none" }}
+                      >
+                        Turn On
+                      </button>
+                      <button
+                        onClick={handleDismissWebPush}
+                        className={`p-1.5 rounded-lg opacity-60 hover:opacity-100 transition-opacity cursor-pointer ${
+                          darkMode ? "text-indigo-300 hover:bg-indigo-900/40" : "text-indigo-700 hover:bg-indigo-100"
+                        }`}
+                        style={{ border: "none" }}
+                        title="Dismiss"
+                        aria-label="Dismiss"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* 📌 PREMIUM FLOATING STICKY NOTE (CHIT) */}
                 <div
