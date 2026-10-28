@@ -40,6 +40,8 @@ export interface UserVault {
   bestTimes: UserVaultBestTimes;
   completedGames: any[];
   savedGames: any[];
+  friends?: any[];
+  pastPlayers?: any[];
 }
 
 // ============================================================================
@@ -246,7 +248,9 @@ export function createDefaultVault(options?: Partial<UserVaultProfile>): UserVau
       MASTER: null
     },
     completedGames: [],
-    savedGames: []
+    savedGames: [],
+    friends: [],
+    pastPlayers: []
   };
 }
 
@@ -495,6 +499,22 @@ export function migrateLegacyToVault(uid?: string | null): UserVault {
       parsedBestTimes
     );
 
+    // 6. Recover Friends & Past Players (Guests only)
+    if (isGuest) {
+      try {
+        const legacyPast = localStorage.getItem("sudoku_guest_past_players") || localStorage.getItem("sudoku_guest_recent_players");
+        if (legacyPast) {
+          const lp = JSON.parse(legacyPast);
+          if (Array.isArray(lp)) defaultVault.pastPlayers = lp;
+        }
+        const legacyFriends = localStorage.getItem("sudoku_guest_friends");
+        if (legacyFriends) {
+          const lf = JSON.parse(legacyFriends);
+          if (Array.isArray(lf)) defaultVault.friends = lf;
+        }
+      } catch {}
+    }
+
     // Save canonical vault & purge legacy keys to prevent disk bloat
     // For authenticated users, do NOT save a blank/default vault to disk during cold boot.
     // Cloud Firestore is the SSOT and will supply the authoritative vault during hydrateUserFromCloud.
@@ -552,6 +572,30 @@ export function loadVault(uid?: string | null): UserVault {
           }
         }
 
+        let parsedFriends: any[] | undefined = Array.isArray(parsed.friends) ? parsed.friends : undefined;
+        let parsedPastPlayers: any[] | undefined = Array.isArray(parsed.pastPlayers) ? parsed.pastPlayers : undefined;
+
+        if (isGuestVault) {
+          if (!parsedPastPlayers) {
+            try {
+              const legacyPast = localStorage.getItem("sudoku_guest_past_players") || localStorage.getItem("sudoku_guest_recent_players");
+              if (legacyPast) {
+                const lp = JSON.parse(legacyPast);
+                if (Array.isArray(lp)) parsedPastPlayers = lp;
+              }
+            } catch {}
+          }
+          if (!parsedFriends) {
+            try {
+              const legacyFriends = localStorage.getItem("sudoku_guest_friends");
+              if (legacyFriends) {
+                const lf = JSON.parse(legacyFriends);
+                if (Array.isArray(lf)) parsedFriends = lf;
+              }
+            } catch {}
+          }
+        }
+
         return {
           profile: {
             id: resolvedProfileId,
@@ -567,7 +611,9 @@ export function loadVault(uid?: string | null): UserVault {
           },
           bestTimes: safeBestTimes,
           completedGames: Array.isArray(parsed.completedGames) ? parsed.completedGames : [],
-          savedGames: Array.isArray(parsed.savedGames) ? parsed.savedGames : []
+          savedGames: Array.isArray(parsed.savedGames) ? parsed.savedGames : [],
+          friends: parsedFriends || [],
+          pastPlayers: parsedPastPlayers || []
         };
       }
     }

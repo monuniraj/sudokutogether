@@ -42,7 +42,7 @@
 | **3980 – 4770** | `hydrateUserFromCloud` | Resolves profile name and cloud stats from Firestore, writes local vault, triggers Fast-Path Early Unlock (`clearSafetyTimeout`, `setIsAuthHydrating(false)`, `setIsAppReady(true)`), and syncs players/FCM in background. |
 | **4785 – 5015** | `onAuthStateChanged` | Contains `currentHydratedUidRef` re-entrance guard, suppresses `signInAnonymously` on explicit logout (`isExplicitLogoutRef`), zeroes cold-boot stats when `userHasVault` is false, and triggers cloud hydration. |
 | **5250 – 5445** | `handleConnectGoogle` | Interactive Google sign-in & anonymous account linking flow with Global Execution Tracer (`[+XXms]`). Sequences guest snapshot, popup, in-memory flush, and cloud hydration. |
-| **5446 – 5565** | `handleLogout` | Safe Logout SSOT: sets `isExplicitLogoutRef`, wipes session tokens, sets guest drawer, unlocks `isAppReady`, and releases logout locks after 150ms. |
+| **5514 – 5680** | `handleLogout` | Safe Logout SSOT: sets `isExplicitLogoutRef`, wipes session tokens, sets guest drawer, restores canonical `loadVault("guest")` (including `pastPlayers` & `friends`), unlocks `isAppReady`, and releases logout locks after 150ms. |
 | **6235 – 6340** | Incoming Invites Listener #1 | Firestore `onSnapshot` on `/invites` (`toUserId == activeId`). Resolves `activeId` to `authUser.uid` for authenticated Google users and `userProfile.id` (`"GUEST_XXXX"`) for guest/anonymous sessions to match presence & lobby invites. Automatically normalizes difficulty via `normalizeDifficulty`, upserts pending invites to Bell on app load, cleans up invites on accept/decline. |
 | **6830 – 6860** | `saveFcmToken` | Saves `id`, `fcmToken`, `fcmTokens` array, platform-specific `fcmToken_native` / `fcmToken_web`, and `updatedAt` to `/users/{userProfile.id}` so Android and Web APKs do not overwrite each other and Guest web tokens are persisted. |
 | **6930 – 6965** | Bell Invite Actions | `handleAcceptAndPlayBellInvite` (resolves canonical room code via `extractRoomCodeFromChallenge`) and `handleDeclineBellInvite` (dual-write scoped storage). |
@@ -99,16 +99,16 @@
   * **Point 4 (`App.tsx: syncPushPreference`):** Guarded by `isHydrationWriteLocked(uid) || !isHydrationCompleteRef.current || isConnectingRef.current || isSyncingCloudData`.
   * **Point 5 (`App.tsx: FCM Token & Language Sync Effects`):** Guarded by `isHydrationWriteLocked(userProfile?.id) || !isHydrationCompleteRef.current || isConnectingRef.current || isSyncingCloudData`.
 * **`storageEngine.ts: loadVault & saveVault`**
-  * `loadVault(uid)`: Read-only on cold boot for authenticated users. `migrateLegacyToVault` does NOT persist blank default 0-stats vaults to disk.
-  * `saveVault(vault, uid)`: Guarded by `isHydrationWriteLocked(uid)`. Automatically blocks premature writes while cloud hydration is in flight.
-* **`handleLogout()` (`src/App.tsx:5270`) (Safe Logout SSOT)**
+  * `loadVault(uid)`: Read-only on cold boot for authenticated users. `migrateLegacyToVault` does NOT persist blank default 0-stats vaults to disk. Canonical `UserVault` schema integrates `friends` and `pastPlayers` directly into `sudoku_vault_guest` with transparent legacy fallback to `sudoku_guest_past_players` and `sudoku_guest_friends`.
+  * `saveVault(vault, uid)`: Guarded by `isHydrationWriteLocked(uid)`. Automatically blocks premature writes while cloud hydration is in flight. Serializes full `UserVault` payload (including `friends` and `pastPlayers`).
+* **`handleLogout()` (`src/App.tsx:5514`) (Safe Logout SSOT)**
   * `⬅️ Receives From:` User clicking Logout in SettingsModal.
   * `➡️ Sends To:`
     * Sets `isLoggingOutRef.current = true` and `isExplicitLogoutRef.current = true`.
     * Updates Firestore user presence and prunes FCM device token (non-blocking).
     * Locks active namespace to guest (`setGuestNamespaceLock(true)`).
     * Flushes ephemeral session markers ONLY (`savedSession`, `lastCompletedSession`, `active_invite`). **NEVER deletes user vault `sudoku_vault_${uid}` or scoped keys `sudoku_user_${uid}_*`.**
-    * Switches `setActiveAuthUid("guest")`, loads canonical `loadVault("guest")` into memory, and signs out of Firebase Auth cleanly without full page reload.
+    * Switches `setActiveAuthUid("guest")`, loads canonical `loadVault("guest")` into memory, re-hydrates guest career stats, best times, `completedGames`, `savedGames`, and canonical `pastPlayers` & `friends` into React state (`setMultiplayerPlayers`, `setFriendsState`, `setRecentPlayersState`), and signs out of Firebase Auth cleanly without full page reload.
     * Unlocks `setIsAppReady(true)` and releases `isLoggingOutRef` and `isExplicitLogoutRef` safely after a 150ms macrotask tick via `setTimeout`.
 
 ### B. Game Completion & Stats Write Pipeline
@@ -591,6 +591,12 @@
     * Evaluates `isMistakeEnforced = challengeMode ? (boardState.maxMistakesLimit < 999) : mistakeLimitEnabled`.
     * If `challengeMode` is active and the room has a finite mistake limit (e.g., 3 mistakes), mistake game over triggers strictly according to the authoritative room rule, completely immunizing the match against the guest's local settings.
     * Solo play remains 100% governed by the player's personal `mistakeLimitEnabled` toggle.
+
+30. **Canonical Guest Social Data Unification into UserVault (`storageEngine.ts`, `App.tsx`):**
+    * **Root Cause Eliminated:** Fixed bug where `handleLogout` wiped guest `pastPlayers` and `friends` by resetting them to `INITIAL_GUEST_STATE.multiplayerPlayers` (`[]`).
+    * **Schema Extension (`storageEngine.ts:UserVault`):** Added `friends?: any[]` and `pastPlayers?: any[]` directly to `UserVault` (`sudoku_vault_guest`), with fallback recovery in `loadVault` and `migrateLegacyToVault` from legacy keys `sudoku_guest_past_players` and `sudoku_guest_friends`.
+    * **Real-time Snapshot Sync (`App.tsx:syncGuestSnapshotInRealtime`):** Persists `friends` and `pastPlayers` into `sudoku_vault_guest` on opponent and friend list mutations.
+    * **Safe Logout Restoration (`App.tsx:handleLogout`):** Restores `pastPlayers` and `friends` from canonical `loadVault("guest")` directly into React state (`setMultiplayerPlayers`, `setFriendsState`, `setRecentPlayersState`) during logout, preventing empty array overwrites.
 
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**

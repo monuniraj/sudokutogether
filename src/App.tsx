@@ -2242,6 +2242,17 @@ export default function App() {
             .filter(p => p && p.id && (!currentStoredId || p.id !== currentStoredId))
             .map(p => ({ ...p, inviteStatus: "idle" as const }));
         }
+
+        // Canonical guest vault fallback
+        const isGuest = !currentUid || currentUid === "guest" || currentUid.startsWith("GUEST_");
+        if (isGuest) {
+          const gv = loadVault("guest");
+          if (Array.isArray(gv.pastPlayers) && gv.pastPlayers.length > 0) {
+            return gv.pastPlayers
+              .filter(p => p && p.id && (!currentStoredId || p.id !== currentStoredId))
+              .map(p => ({ ...p, inviteStatus: "idle" as const }));
+          }
+        }
       }
     } catch { }
 
@@ -3693,7 +3704,9 @@ export default function App() {
           },
           bestTimes: reconcileBestTimesFromHistory(upHistory, upBest),
           completedGames: Array.isArray(upHistory) ? upHistory : [],
-          savedGames: Array.isArray(upSaved) ? upSaved : []
+          savedGames: Array.isArray(upSaved) ? upSaved : [],
+          friends: Array.isArray(currentFriends) ? currentFriends : (prevVault.friends || []),
+          pastPlayers: Array.isArray(currentMultiplayer) ? currentMultiplayer : (prevVault.pastPlayers || [])
         };
       }, "guest");
     } catch (e) {
@@ -5600,9 +5613,16 @@ export default function App() {
       setPersonalBestTimes(restoredVault.bestTimes);
       personalBestTimesRef.current = restoredVault.bestTimes;
 
-      setFriendsState([]);
-      setRecentPlayersState([]);
-      setMultiplayerPlayers(INITIAL_GUEST_STATE.multiplayerPlayers);
+      const restoredPlayers = Array.isArray(restoredVault.pastPlayers) ? restoredVault.pastPlayers : [];
+      const restoredFriends = Array.isArray(restoredVault.friends) ? restoredVault.friends : restoredPlayers.filter((p: any) => p && p.isFriend);
+      const restoredRecent = restoredPlayers.filter((p: any) => p && !p.isFriend);
+
+      setMultiplayerPlayers(restoredPlayers);
+      setFriendsState(restoredFriends);
+      setRecentPlayersState(restoredRecent);
+      multiplayerPlayersRef.current = restoredPlayers;
+      friendsRef.current = restoredFriends;
+      recentPlayersRef.current = restoredRecent;
       setPendingChallenges(INITIAL_GUEST_STATE.pendingChallenges);
       setActiveInviteNotification(null);
       setIsDockingToBell(false);
