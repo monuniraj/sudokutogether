@@ -7,6 +7,8 @@
  * and data loss on hard page reload.
  */
 
+import { auth } from "../firebase";
+
 // ============================================================================
 // 1. CANONICAL SCHEMA DEFINITION
 // ============================================================================
@@ -95,6 +97,23 @@ export function getVaultKey(uid?: string | null): string {
   if (!uid || uid === "guest" || uid === "GUEST" || uid.startsWith("GUEST_") || uid === "GUEST_ANON") {
     return STORAGE_KEYS.VAULT_GUEST;
   }
+
+  // Strictly enforce guest vault isolation:
+  // If the uid matches an anonymous Firebase user or has no email, resolve strictly to guest vault.
+  // Authenticated Google users (user.email && !user.isAnonymous) resolve to sudoku_vault_${googleUid}.
+  try {
+    const currentAuthUser = auth?.currentUser;
+    if (currentAuthUser && currentAuthUser.uid === uid) {
+      if (currentAuthUser.isAnonymous || !currentAuthUser.email) {
+        return STORAGE_KEYS.VAULT_GUEST;
+      }
+    }
+    const activeAuthUid = getActiveAuthUid();
+    if (!activeAuthUid && uid && currentAuthUser?.isAnonymous) {
+      return STORAGE_KEYS.VAULT_GUEST;
+    }
+  } catch {}
+
   return `${STORAGE_KEYS.VAULT_PREFIX}${uid}`;
 }
 

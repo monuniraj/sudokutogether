@@ -496,7 +496,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                   ? "background-color 250ms ease-out var(--wash-delay, 0ms), opacity 250ms ease-out var(--wash-delay, 0ms)" 
                   : "background-color 200ms ease-out",
                 transform: "translateZ(0)",
-                willChange: "transform, opacity",
+                willChange: isClearingHighlights ? "background-color, opacity" : undefined,
                 ["--ring-index" as any]: ringIndex,
                 ["--wash-delay" as any]: `${washDelayMs}ms`
               }}
@@ -510,7 +510,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                     animation: overlayAnimation,
                     animationDelay: "var(--reveal-delay, 0ms)",
                     transform: "translateZ(0)",
-                    willChange: "transform, opacity",
+                    willChange: "opacity",
                     ["--reveal-delay" as any]: `${overlayDelayMs}ms`
                   }}
                 />
@@ -535,7 +535,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                     opacity: isUnrevealed ? 0 : 1,
                     animation: isRevealing ? "inkDigitFadeIn 220ms ease-out var(--digit-delay, 0ms) forwards" : undefined,
                     transform: "translateZ(0)",
-                    willChange: "transform, opacity",
+                    willChange: isRevealing ? "opacity" : undefined,
                     ["--digit-delay" as any]: `${digitRevealDelay}ms`
                   }}
                 >

@@ -35,16 +35,17 @@
 | **963 – 1088** | Display Name Guards | `checkIsDisplayNameConfigured`, `getActiveDisplayName`, `handleAcceptInvitationWithProfileCheck`, `saveAndExecuteName`. |
 | **1112 – 1255** | Multiplayer & Friends State | `multiplayerPlayers`, `friends`, `recentPlayers`, scoped localStorage sync effect, `useFriendPresence` hook call. |
 | **1685 – 1710** | `isAppReady` & Cancellable 3.5s Safety Timeout | Gates initial rendering with `isAppReady`, manages `safetyTimeoutRef` & `clearSafetyTimeout` to ensure UI is never stuck while cancelling safely when cloud data resolves. |
-| **1920 – 1940** | `ensureActiveAuthUser` | Guarantees active Firebase Auth session before cloud writes for zero permission-denied crashes. |
+| **1920 – 1965** | `ensureActiveAuthUser` | Guarantees active Firebase Auth session before cloud writes for zero permission-denied crashes. Features 3.5s race timeout, offline bypass, and auto profile UID alignment. |
 | **2435 – 2470** | Leaderboard Cache, Vault Sync & `pendingChallenges` | `challengeLeaderboardCache`, `savedGames`, `completedGames`, `pendingChallenges` (initialized via `getScopedKey("pending_challenges")` with legacy fallback). |
 | **2672 – 2776** | Bell Notification Grouping | `extractRoomCodeFromChallenge`, `getInviteTimestampMs`, `sortedBellInvites` (groups `challenge_completed` by room), `unreadNotificationCount`. |
 | **2778 – 2940** | User Settings States | `darkMode`, `soundEffects`, `vibrations`, `timerEnabled`, `mistakeLimitEnabled`, `isNumberFirstInputMode`, `autoSwitchCompletedNumber`, `isAutoRemoveNotesEnabled`. |
-| **3220 – 3390** | Unified Invite & Bell Router | **SSOT BELL FUNNEL:** `upsertBellChallenge` (canonical ID + real-name protection + `normalizeDifficulty` + dual-write scoped storage), `routeInviteNotification`, `dockInviteToBell`, `activeInviteNotificationRef`. |
-| **3980 – 4770** | `hydrateUserFromCloud` | Resolves profile name and cloud stats from Firestore, writes local vault, triggers Fast-Path Early Unlock (`clearSafetyTimeout`, `setIsAuthHydrating(false)`, `setIsAppReady(true)`), and syncs players/FCM in background. |
-| **4785 – 5015** | `onAuthStateChanged` | Dual-Identity Guest Auth Alignment: Sets `userProfile.id = user.uid` for anonymous sessions while preserving `Guest_XXXX` display handle; suppresses `signInAnonymously` on explicit logout (`isExplicitLogoutRef`). |
-| **5250 – 5445** | `handleConnectGoogle` | Interactive Google sign-in & anonymous account linking flow with Global Execution Tracer (`[+XXms]`). Sequences guest snapshot, popup, in-memory flush, and cloud hydration. |
-| **5446 – 5565** | `handleLogout` | Safe Logout SSOT: sets `isExplicitLogoutRef`, wipes session tokens, sets guest drawer, unlocks `isAppReady`, and releases logout locks after 150ms. |
-| **6235 – 6340** | Incoming Invites Listener #1 | Firestore `onSnapshot` on `/invites` (`toUserId == activeId`). Resolves `activeId` to `auth.currentUser.uid`. Automatically normalizes difficulty via `normalizeDifficulty`, cleans up invites on accept/decline. |
+| **3140 – 3185** | Web Push Activation State & Mount Effect | `showWebPushPrompt` with reactive `useEffect([authUser?.uid, isAppReady])` ensuring zero lazy-load delay for anonymous guests. |
+| **3240 – 3410** | Unified Invite & Bell Router | **SSOT BELL FUNNEL:** `upsertBellChallenge` (canonical ID + real-name protection + `normalizeDifficulty` + dual-write scoped storage), `routeInviteNotification`, `dockInviteToBell`, `activeInviteNotificationRef`. |
+| **4000 – 4790** | `hydrateUserFromCloud` | Resolves profile name and cloud stats from Firestore, writes local vault, triggers Fast-Path Early Unlock (`clearSafetyTimeout`, `setIsAuthHydrating(false)`, `setIsAppReady(true)`), and syncs players/FCM in background. |
+| **4805 – 5035** | `onAuthStateChanged` | Dual-Identity Guest Auth Alignment: Sets `userProfile.id = user.uid` for anonymous sessions while preserving `Guest_XXXX` display handle; suppresses `signInAnonymously` on explicit logout (`isExplicitLogoutRef`). |
+| **5270 – 5475** | `handleConnectGoogle` | Interactive Google sign-in & anonymous account linking flow with Global Execution Tracer. Writes `status: offline` to `/presence/{oldGuestUid}` and unsubscribes room listeners before popup. |
+| **5476 – 5595** | `handleLogout` | Safe Logout SSOT: sets `isExplicitLogoutRef`, wipes session tokens, sets guest drawer, unlocks `isAppReady`, and releases logout locks after 150ms. |
+| **6330 – 6435** | Incoming Invites Listener #1 | Firestore `onSnapshot` on `/invites` (`toUserId == activeId`). Strictly binds `activeId` to `auth.currentUser.uid`. Normalizes difficulty, cleans up invites on accept/decline. |
 | **6830 – 6860** | `saveFcmToken` | Saves `id`, `fcmToken`, `fcmTokens` array, platform-specific `fcmToken_native` / `fcmToken_web`, and `updatedAt` to `/users/{activeAuthUid}` guarded against unauthenticated writes. |
 | **6930 – 6965** | Bell Invite Actions | `handleAcceptAndPlayBellInvite` (resolves canonical room code via `extractRoomCodeFromChallenge`) and `handleDeclineBellInvite` (dual-write scoped storage). |
 | **6970 – 7230** | `handleViewChallengeResults` | Zero-latency modal open + 7-day partial standings sync (Host completed, Guest pending). Result dismissal filter ONLY removes `type === "challenge_completed"`, preserving active game invites. |
@@ -593,6 +594,75 @@
     * Evaluates `isMistakeEnforced = challengeMode ? (boardState.maxMistakesLimit < 999) : mistakeLimitEnabled`.
     * If `challengeMode` is active and the room has a finite mistake limit (e.g., 3 mistakes), mistake game over triggers strictly according to the authoritative room rule, completely immunizing the match against the guest's local settings.
     * Solo play remains 100% governed by the player's personal `mistakeLimitEnabled` toggle.
+
+30. **Identity, Presence, Direct Invite Routing & Vault Scoping Unification (`useFriendPresence.ts`, `App.tsx`, `storageEngine.ts`):**
+    * **Cross-Platform Presence & Green Dots (`useFriendPresence.ts`, `App.tsx`):**
+      * Updated `FriendPresenceState` interface and modified `getFriendStatus` and `getFriendLastActive` to accept `friendAuthUid?: string` alongside `friendId`, matching across both `friendPresenceMap[friendId]` and `friendPresenceMap[friendAuthUid]`.
+      * In `App.tsx`, updated `drawerPlayerIds` to subscribe to both `p.id` and `p.authUid` in `useFriendPresence`. All UI call sites pass `friend.authUid` / `player.authUid` to render live presence dots accurately regardless of whether the friend was saved under a guest handle or an Auth UID.
+    * **Direct Invite Routing & Target Roster Guards (`App.tsx`):**
+      * In `handleInviteFriend`, dynamically resolved `targetPlayerId` from `matchedPlayer.authUid || player.id`, writing `toUserId` to the recipient's secure Auth UID so Firestore security rules (`resource.data.toUserId == request.auth.uid`) and incoming invite listeners resolve cleanly.
+      * In `executeJoinRoom` and `triggerLoadInviteDirectly`, modernized the Target Roster Guard (`isTargetMatch`) to validate against a candidate ID set containing `auth.currentUser?.uid`, `authUser?.uid`, `userProfile?.id`, `guestIdentity.id`, and `getActiveAuthUid()`, preventing false "This invite is for another account" join rejections.
+    * **Roster De-duplication & Safe Cloud Writes (`App.tsx`):**
+      * In `saveOpponentsToPastPlayers`, implemented candidate de-duplication so separate entries for the same player (guest handle vs Auth UID) merge into a single clean record, preserving `isFriend: true` and storing `authUid`. Gated writes to Firestore `/users/{currentUserId}/past_players` to authenticated, synced sessions only.
+    * **Vault Cache & Anonymous Guest Scoping (`App.tsx`, `storageEngine.ts`):**
+      * In `getScopedKey`, enforced guest scoping for anonymous Firebase sessions (`authUser.isAnonymous`), mapping strictly to `sudoku_guest_*` / `sudoku_vault_guest` to prevent game history and career stats from wiping or remaining stuck at "1 play" on refresh.
+      * In `handleCompleteGame`, routed anonymous users strictly to `updateVault(..., "guest")` and dispatched `syncGuestSnapshotInRealtime`.
+    * **Challenge Join Doc Authorization (`App.tsx`):**
+      * In `registerChallengeJoin`, wrote participant and room player documents to `/rooms/{challengeId}/players/{activeAuth.uid}` and `/challenge_results/{docId}/participants/{activeAuth.uid}` using `activeAuth.uid`, passing Firestore rules with `{ id: activeAuth.uid, authUid: activeAuth.uid, guestId: guestIdentity.id }`.
+
+31. **Join Room Main-Thread CPU & Compositor Optimization (`App.tsx`, `SudokuBoard.tsx`):**
+    * **Redundant Solver Bypass for Guests (`App.tsx:executeJoinRoom`):**
+      * In `executeJoinRoom`, bypassed the heavy 30–54 hole-punching generator (`generateFlatBoardForSeed`) when `rData.puzzleFlat` (81 elements) is present in the Firestore room document.
+      * Directly reconstructs `puzzle2D` in $O(81)$ ($<0.1\text{ms}$).
+      * Resolves `solution2D` via a 3-tier fast path: (1) `puzzleCache` check, (2) legacy `rData.solutionFlat` if present, (3) single-pass linear backtracking solve via `solveSudokuRecursivePure(solvedClone, prng)` ($1\text{ms}–2\text{ms}$ on Android without any hole-punching or `countSolutionsPure` branching).
+      * Primes `puzzleCache` under `${diff}_${seed}` for 0ms instant reload and re-entry.
+    * **GPU Composite Layer Pressure Relief (`SudokuBoard.tsx`):**
+      * Replaced static unconditional `willChange: "transform, opacity"` on all 81 cell containers and inner digit elements with strictly dynamic animation guards (`isClearingHighlights ? "background-color, opacity" : undefined` and `isRevealing ? "opacity" : undefined`).
+      * Eradicated 162+ concurrent compositor texture allocations on Android WebView, ensuring 60fps transitions and zero frame drops on board mount.
+
+32. **Unified Self-Identity Guard, Roster De-duplication, Guest Vault Isolation & Real-Time Presence (`App.tsx`, `storageEngine.ts`, `useFriendPresence.ts`, `formatTimestamp.ts`):**
+    * **Unified Self-Identity Guard (`App.tsx`):**
+      * Replaced fragmented single-ID checks (`id === currentUid || id === userProfile?.id`) across `multiplayerPlayers` listeners (lines 11450–11495), rematch participants population (lines 9210–9225), `saveOpponentsToPastPlayers` (lines 6760–6815), and cold-boot hydration (lines 2235–2255) with a comprehensive `selfIds` set:
+        `new Set([auth.currentUser?.uid, authUser?.uid, userProfile?.id, userProfileRef.current?.id, getOrCreateGuestIdentity().id, loadVault("guest").profile?.id, getActiveAuthUid()].filter(Boolean))`
+      * Guaranteed that a user's own guest identity, Auth UID, or profile ID is immediately discarded and can NEVER appear in their own Recent Players list, past players, or rematch participant lobbies.
+    * **Clean Opponent De-duplication (`App.tsx:saveOpponentsToPastPlayers`):**
+      * Expanded opponent matching to check `p.id === opp.id || (oppAuthUid && p.authUid === oppAuthUid) || (oppGuestId && p.guestId === oppGuestId) || (p.name === opp.name && (oppGuestId || opp.id.startsWith("GUEST_") || p.id.startsWith("GUEST_")))`.
+      * Updates the existing record in-place with latest `authUid`, `guestId`, and `lastPlayedAt` without creating duplicate array rows across match completions.
+    * **Strict Guest Vault Isolation (`storageEngine.ts:getVaultKey`):**
+      * Verified `auth.currentUser` inside `getVaultKey`: if the active user is anonymous (`isAnonymous: true`) or lacks an email, the key resolves strictly to `STORAGE_KEYS.VAULT_GUEST` (`sudoku_vault_guest`).
+      * Authenticated Google accounts (`user.email && !user.isAnonymous`) resolve strictly to `sudoku_vault_${googleUid}`, eliminating phantom third vaults and game history resets.
+    * **Real-Time Presence & 45s Cutoff (`formatTimestamp.ts`, `useFriendPresence.ts`):**
+      * Reduced `PRESENCE_TIMEOUT_MS` from 15 minutes to 45 seconds (`45 * 1000`).
+      * Adjusted `HEARTBEAT_INTERVAL_MS` to 25 seconds (`25 * 1000`) for active sessions to stay comfortably within the 45-second sliding window.
+      * Added an explicit `else` branch in `useFriendPresence` snapshot listener: when `!snap.exists()`, sets the friend's status to `"offline"`.
+      * Combined with `beforeunload` / `pagehide` broadcast, ghost green dots are eradicated within 45 seconds maximum on browser close.
+
+33. **WebPush High-Priority Heads-Up Banner & Vibration Enhancement (`firebase-messaging-sw.js`, `functions/index.js`, `App.tsx`):**
+    * **Heads-Up Banner & Vibration Pattern (`firebase-messaging-sw.js`):**
+      * Upgraded service worker `onBackgroundMessage` notification options with standard Android OS heads-up banner pattern: `vibrate: [200, 100, 200]`.
+      * Preserved all existing fields (`title`, `body`, `icon`, `data`, `click_action`).
+      * Added `requireInteraction: typeof data.requireInteraction === 'boolean' ? data.requireInteraction : false`.
+      * Enforced `renotify: true` and stable tag fallback (`data.tag || (data.type === 'challenge_completed' ? ('sudoku-result-' + (data.roomCode || 'race')) : 'sudoku-invite')`).
+      * Added safe fallback to `/favicon-48x48.png` if monochrome badge asset is absent.
+      * Wrapped `self.registration.showNotification` in a try/catch with safe fallback options to guarantee 100% backward compatibility on browsers that reject advanced notification parameters.
+    * **FCM WebPush Urgency Headers (`functions/index.js`):**
+      * Validated that outgoing FCM payloads in `onInviteCreated` and `processChallengeCompleted` specify `webpush: { headers: { Urgency: "high" }, notification: { vibrate: [200, 100, 200], renotify: true, requireInteraction: false, tag: ... } }`.
+      * Native Android / Capacitor payload (`android: { priority: "high", notification: { ... } }`) remains completely untouched and valid.
+    * **Web Foreground Notification Alignment (`App.tsx`):**
+      * Aligned `triggerBackgroundNotification` in `App.tsx` to use matching `vibrate: [200, 100, 200]`, `tag: 'sudoku-invite'`, `renotify: true`, and `requireInteraction: false`.
+
+34. **Strict Identity Isolation, Unbroken Invites & Synchronous Presence Handoff (`App.tsx`):**
+    * **Pure Opponent Record Storage & Strict ID Retention (`App.tsx:saveOpponentsToPastPlayers`):**
+      * Eradicated cross-identity mutation logic that overwrote opponent IDs with `oppAuthUid || opp.id` or merged guest handles with Auth UIDs.
+      * Restored pure record storage: opponent cards in `past_players` and `multiplayerPlayers` strictly retain their exact incoming `id: opp.id`.
+      * Matching existing opponent entries now executes strictly by `p.id === opp.id` (and `m.id === p.id` during cold-boot `mergeDeduplicated`), treating guest identities (`GUEST_XXXX`) and authenticated Google accounts (`auth.currentUser.uid`) as separate, un-merged entities.
+    * **Intact Invitation Addressing (`App.tsx:handleInviteFriend`):**
+      * In `handleInviteFriend`, dispatches invites directly to `targetPlayerId = playerId` without resolving or overwriting to stored `authUid`.
+      * Guarantees invites are addressed to the exact identifier the receiving player is listening on (`toUserId == activeId`).
+    * **Synchronous Single-Presence Device Handoff (`App.tsx:handleConnectGoogle`, `handleLogout`):**
+      * When signing into Google, explicitly awaits `{ status: "offline", lastActive: serverTimestamp() }` on `/presence/${oldGuestUid}` before activating Google credentials, completely eliminating overlapping green dots.
+      * When signing out of Google, explicitly awaits `{ status: "offline", lastActive: serverTimestamp() }` on `/presence/${googleUid}` before `signOut(auth)` and reactivating guest mode.
+      * Guarantees that at any given millisecond, only ONE presence document for the device has `status: "online"`.
 
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**

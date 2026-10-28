@@ -233,10 +233,10 @@ exports.onInviteCreated = onDocumentCreated("invites/{inviteId}", async (event) 
         notification: {
           icon: "/pwa-192x192.png",
           badge: "/favicon-48x48.png",
-          vibrate: [300, 150, 300],
+          vibrate: [200, 100, 200],
           renotify: true,
           requireInteraction: false,
-          tag: "sudoku-duel-alert"
+          tag: "sudoku-invite"
         },
         fcmOptions: {
           link: `/?room=${encodeURIComponent(roomCode)}&toUserId=${encodeURIComponent(toUserId)}&inviteId=${encodeURIComponent(inviteId)}`
@@ -350,10 +350,10 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
           notification: {
             icon: "/pwa-192x192.png",
             badge: "/favicon-48x48.png",
-            vibrate: [300, 150, 300],
+            vibrate: [200, 100, 200],
             renotify: true,
             requireInteraction: false,
-            tag: "sudoku-duel-alert"
+            tag: "sudoku-result-" + roomCode
           },
           fcmOptions: {
             link: `/?room=${encodeURIComponent(roomCode)}&view=results`

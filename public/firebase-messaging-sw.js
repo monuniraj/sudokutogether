@@ -155,17 +155,29 @@ messaging.onBackgroundMessage(async (payload) => {
 
   const notificationOptions = {
     body: notificationBody,
-    icon: payload.notification?.icon || '/pwa-192x192.png',
-    badge: payload.notification?.badge || '/favicon-48x48.png',
-    vibrate: [300, 150, 300],
+    icon: payload.notification?.icon || data.icon || '/pwa-192x192.png',
+    badge: payload.notification?.badge || data.badge || '/favicon-48x48.png',
+    vibrate: [200, 100, 200],
     renotify: true,
-    tag: 'sudoku-duel-alert',
-    requireInteraction: false,
+    tag: data.tag || (data.type === 'challenge_completed' ? ('sudoku-result-' + (data.roomCode || 'race')) : 'sudoku-invite'),
+    requireInteraction: typeof data.requireInteraction === 'boolean' ? data.requireInteraction : false,
     silent: false,
-    data: data
+    data: {
+      ...data,
+      click_action: data.click_action || payload.notification?.click_action || '/'
+    }
   };
 
-  return self.registration.showNotification(notificationTitle, notificationOptions);
+  try {
+    return await self.registration.showNotification(notificationTitle, notificationOptions);
+  } catch (err) {
+    console.warn('[firebase-messaging-sw.js] showNotification with advanced options failed, falling back:', err);
+    return self.registration.showNotification(notificationTitle, {
+      body: notificationBody,
+      icon: notificationOptions.icon,
+      data: notificationOptions.data
+    });
+  }
 });
 
 // Handle tap on notification

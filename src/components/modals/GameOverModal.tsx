@@ -139,8 +139,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
     const isCurrentPlayerWon = Boolean(boardState?.isGameOver && !didCurrentPlayerFail);
     const isCurrentPlayerPending = !isCurrentPlayerWon && !didCurrentPlayerFail;
 
+    const localMeId = auth.currentUser?.uid || userProfile?.id || "me";
     const localMe = {
-      id: userProfile?.id || "me",
+      id: localMeId,
       name: currentLocalName,
       time: didCurrentPlayerFail ? 9999 : (isCurrentPlayerPending ? 9999 : sessionSeconds),
       elapsedTime: sessionSeconds,
@@ -154,10 +155,19 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
     };
     resultsMap.set(localMe.id, localMe);
 
+    const myAuthUid = auth.currentUser?.uid;
     (syncedLeaderboard || []).forEach((r: any) => {
       const uId = r.userId || r.uid || r.id;
       if (!uId) return;
-      const isCurrentUser = uId === userProfile?.id;
+      const isCurrentUser = Boolean(
+        (myAuthUid && uId === myAuthUid) ||
+        (userProfile?.id && uId === userProfile.id) ||
+        (effectiveUserId && uId === effectiveUserId) ||
+        uId === localMe.id
+      );
+      if (isCurrentUser && localMe.id !== uId) {
+        resultsMap.delete(localMe.id);
+      }
       const playerMistakes = r.mistakes !== undefined
         ? Number(r.mistakes)
         : (isCurrentUser ? (boardState?.currentMistakesCount ?? 0) : 0);
