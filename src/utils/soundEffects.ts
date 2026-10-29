@@ -538,7 +538,7 @@ export function playWoodBlockErrorSound(
     // Warm triangle percussive thump dropping from 220Hz down to 110Hz in 45ms
     osc.type = "triangle";
     osc.frequency.setValueAtTime(220, t);
-    osc.exponentialRampToValueAtTime(110, t + 0.045);
+    osc.frequency.exponentialRampToValueAtTime(110, t + 0.045);
 
     // Tactile damped envelope: fast 2ms attack, rapid 80ms decay
     gain.gain.setValueAtTime(0.0001, t);

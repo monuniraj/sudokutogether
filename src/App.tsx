@@ -9113,9 +9113,9 @@ export default function App() {
   }, [boardState?.isGameOver]);
 
   const hasTriggeredGameOverRef = useRef(false);
+  const gameOverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    let gameOverTimeout: NodeJS.Timeout | null = null;
     if (boardState?.isGameOver) {
       if (!hasTriggeredGameOverRef.current) {
         hasTriggeredGameOverRef.current = true;
@@ -9130,20 +9130,28 @@ export default function App() {
           (boardState.maxMistakesLimit ? boardState.currentMistakesCount < boardState.maxMistakesLimit : true);
         const delayMs = isVictory ? 1400 : 0;
 
-        gameOverTimeout = setTimeout(() => {
+        if (gameOverTimeoutRef.current) {
+          clearTimeout(gameOverTimeoutRef.current);
+          gameOverTimeoutRef.current = null;
+        }
+
+        gameOverTimeoutRef.current = setTimeout(() => {
           setShowGameOverModal(true);
           setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
           setActiveKeypadNum(null);
           setLockedNum(null);
+          gameOverTimeoutRef.current = null;
         }, delayMs);
 
         if (challengeMode && !isDisconnected) {
           setEndGameStep(1); // Always start on Screen 1 (Results) when game first ends
           setPendingRematchSeed(null);
-          // Populate rematchParticipants immediately when game is over
+          // Populate rematchParticipants immediately when game is over without triggering effect cleanup
+          const currentList = syncedLeaderboardRef.current.length > 0 ? syncedLeaderboardRef.current : syncedLeaderboard;
+          const currentUid = userProfileRef.current?.id || userProfile?.id;
           const othersList: Array<{ id: string; name: string; isReal: boolean }> = [];
-          syncedLeaderboard.forEach(r => {
-            if (r.userId !== userProfile?.id && !othersList.some(o => o.id === r.userId)) {
+          currentList.forEach(r => {
+            if (r.userId !== currentUid && !othersList.some(o => o.id === r.userId)) {
               othersList.push({ id: r.userId, name: r.playerName, isReal: true });
             }
           });
@@ -9153,11 +9161,19 @@ export default function App() {
       }
     } else {
       hasTriggeredGameOverRef.current = false;
+      if (gameOverTimeoutRef.current) {
+        clearTimeout(gameOverTimeoutRef.current);
+        gameOverTimeoutRef.current = null;
+      }
     }
     return () => {
-      if (gameOverTimeout) clearTimeout(gameOverTimeout);
+      // Only clear timer if boardState explicitly ceases to be game over (e.g. game reset / fresh puzzle started)
+      if (!boardState?.isGameOver && gameOverTimeoutRef.current) {
+        clearTimeout(gameOverTimeoutRef.current);
+        gameOverTimeoutRef.current = null;
+      }
     };
-  }, [boardState?.isGameOver, challengeMode, isOnline, syncedLeaderboard, userProfile?.id]);
+  }, [boardState?.isGameOver, challengeMode, isOnline]);
 
   const [pencilMode, setPencilMode] = useState<boolean>(false);
   const [solutionGrid, setSolutionGrid] = useState<number[][]>([]);
@@ -12943,6 +12959,10 @@ export default function App() {
         }
 
         if (currentProgress) {
+          // Immediately neutralize active keypad inputs and locks upon completion
+          setActiveKeypadNum(null);
+          setLockedNum(null);
+
           // Keep selection visible so inward wave can visibly wash away active highlights
           const terminalWinState: BoardState = {
             ...boardState,

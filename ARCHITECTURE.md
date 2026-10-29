@@ -598,6 +598,19 @@
     * **Real-time Snapshot Sync (`App.tsx:syncGuestSnapshotInRealtime`):** Persists `friends` and `pastPlayers` into `sudoku_vault_guest` on opponent and friend list mutations.
     * **Safe Logout Restoration (`App.tsx:handleLogout`):** Restores `pastPlayers` and `friends` from canonical `loadVault("guest")` directly into React state (`setMultiplayerPlayers`, `setFriendsState`, `setRecentPlayersState`) during logout, preventing empty array overwrites.
 
+31. **Multiplayer Victory Modal Dispatch Immunization & Celebration Choreography (`App.tsx`, `ConfettiBurst.tsx`):**
+    * **Leaderboard Snapshot Cleanup Immunization (`App.tsx`):**
+      * Solved defect where `<GameOverModal>` failed to mount in multiplayer matches because incoming Firestore `onSnapshot` updates called `setSyncedLeaderboard`, causing React to execute the `useEffect` cleanup and prematurely abort `gameOverTimeout` via `clearTimeout`.
+      * Decoupled `gameOverTimeout` into a persistent `gameOverTimeoutRef = useRef<NodeJS.Timeout | null>(null)`.
+      * Removed `syncedLeaderboard` and `userProfile?.id` from the `useEffect` dependency array, reading live state via `syncedLeaderboardRef.current` and `userProfileRef.current`.
+      * Guarded cleanup so that the 1400ms modal transition timer is only cleared if `boardState?.isGameOver` explicitly transitions to `false` (e.g., game reset / fresh puzzle start), completely immunizing the modal dispatch against all background network/Firestore snapshots.
+    * **Immediate Keypad Neutralization (`App.tsx`):**
+      * Neutralized keypad at $T=0$ in `handleValueInput` by immediately calling `setActiveKeypadNum(null)` and `setLockedNum(null)` when `currentProgress` is detected, in addition to clearing selection inside `gameOverTimeout`, completely preventing post-completion cell taps.
+    * **Elimination of Premature Micro-Pellets (`ConfettiBurst.tsx`):**
+      * Neutralized `spawnBackgroundVeil`, eliminating the 32 micro-particles that previously dropped over the grid at $T=0$. The solved board remains pristine, clean, and readable.
+    * **Elevated Corner Cannon Coordinates (`ConfettiBurst.tsx`):**
+      * Shifted `cannonY` launcher origin from `height * 0.95` (behind the keypad/bottom bar) up to `height * 0.72`, ensuring celebratory cannons blast inward and upward in full unobstructed view framing the end-game modal.
+
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**
    * **Root Cause:** When testing on Laptop and Phone logged into the same Google account (`uid`), self-exclusion filters hide the other device.

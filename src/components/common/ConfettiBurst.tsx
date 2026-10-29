@@ -109,7 +109,7 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
     const spawnCornerCannons = (count: number, currentTime: number) => {
       const leftOriginX = width * 0.15;
       const rightOriginX = width * 0.85;
-      const cannonY = height * 0.95;
+      const cannonY = height * 0.72;
 
       for (let i = 0; i < count; i++) {
         const fromLeft = i % 2 === 0;
@@ -142,30 +142,9 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
       }
     };
 
-    // Spawn subtle background depth veil (32 micro-particles) falling gently behind primary bursts
-    const spawnBackgroundVeil = (currentTime: number) => {
-      const veilCount = 32;
-      for (let i = 0; i < veilCount; i++) {
-        const originX = Math.random() * width;
-        const originY = -20 - Math.random() * 20; // -20px to -40px off-screen
-        particles.push({
-          x: originX,
-          y: originY,
-          vx: (Math.random() - 0.5) * 0.8,
-          vy: 1.4,
-          size: 2.5 + Math.random() * 1.5,
-          color: colors[Math.floor(Math.random() * colors.length)],
-          rotation: Math.random() * 360,
-          vRotation: (Math.random() - 0.5) * 4,
-          shape: Math.random() > 0.5 ? "circle" : "rect",
-          tiltAngle: Math.random() * Math.PI,
-          tiltAngleInc: (Math.random() * 0.04) + 0.02,
-          bornAt: currentTime,
-          lifespan: 5500 + Math.random() * 1500,
-          layer: "background",
-          swayAngle: Math.random() * Math.PI * 2
-        });
-      }
+    // Neutralized: Background micro-pellets disabled to keep the solved grid pristine and uncluttered
+    const spawnBackgroundVeil = (_currentTime: number) => {
+      // Discarded micro-pellets: prevents visual clutter over the completed board
     };
 
     // Spawn celebratory streamers and particles cascading gracefully from the top viewport edge
