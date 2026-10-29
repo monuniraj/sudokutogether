@@ -7087,17 +7087,23 @@ export default function App() {
         : (rData.hintLimit !== undefined ? Number(rData.hintLimit) : 3);
       const timerEnabled = rData.timerEnabled !== undefined ? Boolean(rData.timerEnabled) : true;
 
-      // 6. Option A: Decode puzzleFlat and solutionFlat directly into 9x9 grids with deterministic fallback
+      // 6. Decode puzzle into a 9x9 grid. Solution: use legacy room solutionFlat if a legacy host still
+      // published it; otherwise deterministically regenerate it locally from (difficulty, seed) so the
+      // solved board never needs to travel over the network (anti solution-leak).
       let puzzle2D: number[][];
       let solution2D: number[][];
 
-      if (Array.isArray(rData.puzzleFlat) && Array.isArray(rData.solutionFlat) && rData.puzzleFlat.length === 81) {
+      if (Array.isArray(rData.puzzleFlat) && rData.puzzleFlat.length === 81) {
         puzzle2D = Array(9).fill(null).map((_, r) =>
           Array(9).fill(null).map((_, c) => Number(rData.puzzleFlat[r * 9 + c]))
         );
-        solution2D = Array(9).fill(null).map((_, r) =>
-          Array(9).fill(null).map((_, c) => Number(rData.solutionFlat[r * 9 + c]))
-        );
+        if (Array.isArray(rData.solutionFlat) && rData.solutionFlat.length === 81) {
+          solution2D = Array(9).fill(null).map((_, r) =>
+            Array(9).fill(null).map((_, c) => Number(rData.solutionFlat[r * 9 + c]))
+          );
+        } else {
+          solution2D = generateFlatBoardForSeed(diff, seed).solved;
+        }
       } else if (rData.puzzle && rData.solution && Array.isArray(rData.puzzle[0])) {
         puzzle2D = rData.puzzle;
         solution2D = rData.solution;
@@ -9786,7 +9792,6 @@ export default function App() {
         createdById: activeHostId,
         createdByName: activeHostName,
         puzzleFlat: generated.puzzleFlat,
-        solutionFlat: generated.solutionFlat,
         mistakesLimit: 3,
         hintsLimit: 3,
         timerEnabled: initialTimer,
@@ -10104,6 +10109,25 @@ export default function App() {
       setLoginRequiredPurpose("DIRECT_INVITE");
       setShowLoginRequiredModal(true);
       return;
+    }
+
+    // FCM billing protection: max 3 invites per rolling 60s, persisted in sessionStorage (survives reloads).
+    // Placed after the offline/login gates so only invites that can really dispatch consume a slot,
+    // and before any UI 'sent' state or Firestore write so a blocked invite never looks dispatched.
+    try {
+      const nowTs = Date.now();
+      const rawTs = sessionStorage.getItem("sudoku_invite_timestamps");
+      const parsedTs: unknown = rawTs ? JSON.parse(rawTs) : [];
+      const recentTs = (Array.isArray(parsedTs) ? parsedTs : [])
+        .filter((x): x is number => typeof x === "number" && nowTs - x < 60000);
+      if (recentTs.length >= 3) {
+        addLog("Rate limit exceeded");
+        return;
+      }
+      recentTs.push(nowTs);
+      sessionStorage.setItem("sudoku_invite_timestamps", JSON.stringify(recentTs));
+    } catch {
+      // sessionStorage unavailable/corrupt: fail open so legitimate invites are never blocked
     }
 
     const currentDifficulty = normalizeDifficulty(
@@ -10870,6 +10894,18 @@ export default function App() {
 
   // Submit a completed game result to Firestore, with 1 retry and offline queuing
   const submitGameResult = async (rBody: any, attempt = 1): Promise<void> => {
+    // Logical speed barrier: a win under 25s is physically implausible. Do NOT drop the payload
+    // (opponents would hang on "Solving..."); convert it into a forfeit so their result screen resolves.
+    // Derived per call from the untouched rBody, so retries and offline-queue replays re-evaluate identically.
+    const isImplausibleWin = !!rBody.isWon && Number(rBody.timeSec) < 25;
+    const effIsWon = isImplausibleWin ? false : !!rBody.isWon;
+    const effTimeSec = isImplausibleWin ? 9999 : Number(rBody.timeSec);
+    const effMistakes = isImplausibleWin ? (boardState?.maxMistakesLimit || 3) : Number(rBody.mistakes);
+    const effStatus = isImplausibleWin ? "mistake_game_over" : (rBody.status || (rBody.isWon ? "completed" : "mistake_game_over"));
+    if (isImplausibleWin) {
+      console.warn(`[Anti-Cheat] Implausible solve time (${rBody.timeSec}s) converted to forfeit.`);
+    }
+
     console.log(`[Firestore] Submitting result. ID: ${rBody.challengeId}, User: ${rBody.userId}, Attempt: ${attempt}`);
     try {
       const docId = getSeedDocId(rBody.challengeId);
@@ -10879,11 +10915,11 @@ export default function App() {
         challengeId: rBody.challengeId,
         userId: rBody.userId,
         playerName: rBody.playerName,
-        timeSec: Number(rBody.timeSec),
-        mistakes: Number(rBody.mistakes),
-        isWon: !!rBody.isWon,
+        timeSec: effTimeSec,
+        mistakes: effMistakes,
+        isWon: effIsWon,
         isPending: false,
-        status: rBody.status || (rBody.isWon ? "completed" : "mistake_game_over"),
+        status: effStatus,
         date: rBody.date || new Date().toISOString(),
         timestamp: serverTimestamp()
       };
@@ -10894,10 +10930,10 @@ export default function App() {
         await setDoc(roomPlayerRef, {
           id: rBody.userId,
           name: rBody.playerName,
-          status: rBody.status || (rBody.isWon ? "completed" : "mistake_game_over"),
-          timeSec: Number(rBody.timeSec),
-          mistakes: Number(rBody.mistakes),
-          isWon: !!rBody.isWon,
+          status: effStatus,
+          timeSec: effTimeSec,
+          mistakes: effMistakes,
+          isWon: effIsWon,
           updatedAt: serverTimestamp()
         }, { merge: true });
 
@@ -10907,7 +10943,7 @@ export default function App() {
           status: "active",
           lastCompletedUid: rBody.userId,
           lastCompletedBy: rBody.playerName,
-          lastCompletedTime: Number(rBody.timeSec) || 0,
+          lastCompletedTime: effTimeSec || 0,
           lastCompletedAt: serverTimestamp()
         }, { merge: true });
       } catch (err) { }
