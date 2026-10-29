@@ -593,8 +593,10 @@
     * Solo play remains 100% governed by the player's personal `mistakeLimitEnabled` toggle.
 
 30. **Canonical Guest Social Data Unification into UserVault (`storageEngine.ts`, `App.tsx`):**
-    * **Root Cause Eliminated:** Fixed bug where `handleLogout` wiped guest `pastPlayers` and `friends` by resetting them to `INITIAL_GUEST_STATE.multiplayerPlayers` (`[]`).
+    * **Root Cause Eliminated:** Fixed bug where `handleLogout` and cold-boot hard refreshes wiped guest `pastPlayers` and `friends` by resetting them or reading purged legacy keys and immediately committing empty arrays back to `sudoku_vault_guest`.
     * **Schema Extension (`storageEngine.ts:UserVault`):** Added `friends?: any[]` and `pastPlayers?: any[]` directly to `UserVault` (`sudoku_vault_guest`), with fallback recovery in `loadVault` and `migrateLegacyToVault` from legacy keys `sudoku_guest_past_players` and `sudoku_guest_friends`.
+    * **Cold-Boot Vault-First Hydration (`App.tsx:multiplayerPlayers`):** Initialized `multiplayerPlayers` lazy state directly from `loadVault("guest")` as primary SSOT for guests, deduplicating and merging `gv.friends` and `gv.pastPlayers` into unified player objects with `isFriend` flags preserved.
+    * **Destructive Overwrite Guard (`App.tsx:useEffect`):** Added safety guard preventing synchronization `useEffect` from dispatching empty arrays `{ friends: [], recentPlayers: [], multiplayerPlayers: [] }` to `syncGuestSnapshotInRealtime` if local guest vault already holds valid data.
     * **Real-time Snapshot Sync (`App.tsx:syncGuestSnapshotInRealtime`):** Persists `friends` and `pastPlayers` into `sudoku_vault_guest` on opponent and friend list mutations.
     * **Safe Logout Restoration (`App.tsx:handleLogout`):** Restores `pastPlayers` and `friends` from canonical `loadVault("guest")` directly into React state (`setMultiplayerPlayers`, `setFriendsState`, `setRecentPlayersState`) during logout, preventing empty array overwrites.
 

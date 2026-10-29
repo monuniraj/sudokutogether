@@ -2198,9 +2198,36 @@ export default function App() {
   }>>(() => {
     try {
       const currentUid = auth.currentUser?.uid;
+      const currentStoredId: string | null = currentUid || getActiveAuthUid() || loadVault("guest").profile?.id;
+      const isGuest = !currentUid || currentUid === "guest" || currentUid.startsWith("GUEST_");
+
+      // Canonical guest vault hydration (SSOT for guest)
+      if (isGuest) {
+        const gv = loadVault("guest");
+        const vFriends = Array.isArray(gv.friends) ? gv.friends : [];
+        const vPast = Array.isArray(gv.pastPlayers) ? gv.pastPlayers : [];
+        if (vFriends.length > 0 || vPast.length > 0) {
+          const map = new Map<string, any>();
+          vPast.forEach(p => {
+            const id = p?.id || p?.uid || p?.friendId;
+            if (id && (!currentStoredId || id !== currentStoredId)) {
+              map.set(String(id), { ...p, id: String(id), inviteStatus: "idle" as const });
+            }
+          });
+          vFriends.forEach(f => {
+            const id = f?.id || f?.uid || f?.friendId;
+            if (id && (!currentStoredId || id !== currentStoredId)) {
+              const existing = map.get(String(id)) || {};
+              map.set(String(id), { ...existing, ...f, id: String(id), isFriend: true, inviteStatus: "idle" as const });
+            }
+          });
+          const unified = Array.from(map.values());
+          if (unified.length > 0) return unified;
+        }
+      }
+
       const scopedPast = getScopedKey("past_players", currentUid);
       const saved = localStorage.getItem(scopedPast);
-      const currentStoredId: string | null = currentUid || getActiveAuthUid() || loadVault("guest").profile?.id;
 
       if (saved) {
         const parsed = JSON.parse(saved) as any[];
@@ -2244,14 +2271,25 @@ export default function App() {
         }
 
         // Canonical guest vault fallback
-        const isGuest = !currentUid || currentUid === "guest" || currentUid.startsWith("GUEST_");
         if (isGuest) {
           const gv = loadVault("guest");
-          if (Array.isArray(gv.pastPlayers) && gv.pastPlayers.length > 0) {
-            return gv.pastPlayers
-              .filter(p => p && p.id && (!currentStoredId || p.id !== currentStoredId))
-              .map(p => ({ ...p, inviteStatus: "idle" as const }));
-          }
+          const vFriends = Array.isArray(gv.friends) ? gv.friends : [];
+          const vPast = Array.isArray(gv.pastPlayers) ? gv.pastPlayers : [];
+          const map = new Map<string, any>();
+          vPast.forEach(p => {
+            const id = p?.id || p?.uid || p?.friendId;
+            if (id && (!currentStoredId || id !== currentStoredId)) {
+              map.set(String(id), { ...p, id: String(id), inviteStatus: "idle" as const });
+            }
+          });
+          vFriends.forEach(f => {
+            const id = f?.id || f?.uid || f?.friendId;
+            if (id && (!currentStoredId || id !== currentStoredId)) {
+              const existing = map.get(String(id)) || {};
+              map.set(String(id), { ...existing, ...f, id: String(id), isFriend: true, inviteStatus: "idle" as const });
+            }
+          });
+          return Array.from(map.values());
         }
       }
     } catch { }
@@ -2306,6 +2344,12 @@ export default function App() {
       setFriendsState(fList);
       recentPlayersRef.current = rList;
       setRecentPlayersState(rList);
+
+      // Guard against destructive boot overwrite if state is empty but vault holds data
+      if (fList.length === 0 && rList.length === 0) {
+        const gv = loadVault("guest");
+        if ((gv.friends?.length ?? 0) > 0 || (gv.pastPlayers?.length ?? 0) > 0) return;
+      }
 
       // 1. Scoped keys
       localStorage.setItem(getScopedKey("friends", currentUid), JSON.stringify(fList));
@@ -9853,10 +9897,10 @@ export default function App() {
     };
     if (updates.difficulty !== undefined) {
       payload.difficulty = updates.difficulty;
-      // Synchronously regenerate puzzleFlat and solutionFlat matching the seed and new difficulty
+      // Synchronously regenerate puzzleFlat matching the seed and new difficulty.
+      // The solution is intentionally NOT published; joiners derive it locally from the seed.
       const generated = generateFlatBoardForSeed(updates.difficulty, seed);
       payload.puzzleFlat = generated.puzzleFlat;
-      payload.solutionFlat = generated.solutionFlat;
       puzzleCache.set(`${updates.difficulty}_${seed}`, {
         solved: generated.solved.map(r => [...r]),
         puzzle: generated.puzzle.map(r => [...r])
@@ -9959,9 +10003,6 @@ export default function App() {
           const puzzleFlat = (boardState as any)?.initialGrid
             ? (boardState as any).initialGrid.flat()
             : (boardState.grid ? boardState.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)).flat() : null);
-          const solutionFlat = (boardState as any)?.solutionGrid
-            ? (boardState as any).solutionGrid.flat()
-            : (solutionGrid && solutionGrid.length === 9 ? solutionGrid.flat() : null);
 
           await setDoc(doc(db, "rooms", roomCode), {
             roomCode: roomCode,
@@ -9972,7 +10013,6 @@ export default function App() {
             createdById: uId,
             createdByName: pName,
             ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
-            ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
             mistakesLimit: mistakeLimitEnabled ? (boardState.maxMistakesLimit || 3) : 999,
             hintsLimit: boardState.hintsRemaining !== undefined ? boardState.hintsRemaining : 3,
             timerEnabled: timerEnabled,
@@ -10111,7 +10151,7 @@ export default function App() {
       return;
     }
 
-    // FCM billing protection: max 3 invites per rolling 60s, persisted in sessionStorage (survives reloads).
+    // FCM billing protection: max 50 invites per rolling 60s, persisted in sessionStorage (survives reloads).
     // Placed after the offline/login gates so only invites that can really dispatch consume a slot,
     // and before any UI 'sent' state or Firestore write so a blocked invite never looks dispatched.
     try {
@@ -10120,7 +10160,7 @@ export default function App() {
       const parsedTs: unknown = rawTs ? JSON.parse(rawTs) : [];
       const recentTs = (Array.isArray(parsedTs) ? parsedTs : [])
         .filter((x): x is number => typeof x === "number" && nowTs - x < 60000);
-      if (recentTs.length >= 3) {
+      if (recentTs.length >= 50) {
         addLog("Rate limit exceeded");
         return;
       }
@@ -10894,10 +10934,10 @@ export default function App() {
 
   // Submit a completed game result to Firestore, with 1 retry and offline queuing
   const submitGameResult = async (rBody: any, attempt = 1): Promise<void> => {
-    // Logical speed barrier: a win under 25s is physically implausible. Do NOT drop the payload
+    // Logical speed barrier: a win under 15s is physically implausible. Do NOT drop the payload
     // (opponents would hang on "Solving..."); convert it into a forfeit so their result screen resolves.
     // Derived per call from the untouched rBody, so retries and offline-queue replays re-evaluate identically.
-    const isImplausibleWin = !!rBody.isWon && Number(rBody.timeSec) < 25;
+    const isImplausibleWin = !!rBody.isWon && Number(rBody.timeSec) < 15;
     const effIsWon = isImplausibleWin ? false : !!rBody.isWon;
     const effTimeSec = isImplausibleWin ? 9999 : Number(rBody.timeSec);
     const effMistakes = isImplausibleWin ? (boardState?.maxMistakesLimit || 3) : Number(rBody.mistakes);
@@ -12224,14 +12264,12 @@ export default function App() {
     setSolutionGrid(solved.map(r => [...r]));
     addLog(`Difficulty Tagged: ${level}`);
 
-    // If challenge session, persist flat puzzle and solution arrays to canonical room
+    // If challenge session, persist the flat puzzle array to the canonical room (solution stays local)
     if (isChallengeSession) {
       const flatP = puzzle.map(r => [...r]).flat();
-      const flatS = solved.map(r => [...r]).flat();
       const canonicalRoomCode = String(seed).padStart(6, '0').slice(-6);
       setDoc(doc(db, "rooms", canonicalRoomCode), {
         puzzleFlat: flatP,
-        solutionFlat: flatS,
         updatedAt: serverTimestamp()
       }, { merge: true }).catch(() => { });
     }
@@ -12394,7 +12432,6 @@ export default function App() {
       }
     }
     const puzzleFlat = basePuzzleGrid ? basePuzzleGrid.flat() : null;
-    const solutionFlat = solvedGrid ? solvedGrid.flat() : null;
 
     const midMistakes = boardState?.maxMistakesLimit !== undefined ? boardState.maxMistakesLimit : (challengeMistakeLimit || 3);
     const midHints = boardState?.maxHintsLimit !== undefined ? boardState.maxHintsLimit : (challengeHintLimit || 3);
@@ -12421,7 +12458,6 @@ export default function App() {
       createdById: activeHostId,
       createdByName: activeHostName,
       ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
-      ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
       mistakesLimit: midMistakes,
       hintsLimit: midHints,
       timerEnabled: timerEnabled,
@@ -13022,14 +13058,28 @@ export default function App() {
           const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
           const currentUid = userProfile?.id || auth.currentUser?.uid;
           if (liveRoomId && currentUid) {
+            // Plausible speed barrier: a solve under 15s is physically implausible.
+            // Convert to a forfeit so opponents' result screens resolve properly without a false win flash.
+            const isImplausibleFast = sessionSeconds < 15;
+            const directStatus = isImplausibleFast ? "mistake_game_over" : "completed";
+            const directIsWon = isImplausibleFast ? false : true;
+            const directTimeSec = isImplausibleFast ? 9999 : sessionSeconds;
+            const directMistakes = isImplausibleFast
+              ? (boardState?.maxMistakesLimit || 3)
+              : (boardState ? boardState.currentMistakesCount : 0);
+
+            if (isImplausibleFast) {
+              console.warn(`[Anti-Cheat] Implausible terminal solve time (${sessionSeconds}s) converted to forfeit.`);
+            }
+
             try {
               setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
-                status: "completed",
-                isWon: true,
+                status: directStatus,
+                isWon: directIsWon,
                 failed: false,
                 isPending: false,
-                timeSec: sessionSeconds,
-                mistakes: boardState ? boardState.currentMistakesCount : 0,
+                timeSec: directTimeSec,
+                mistakes: directMistakes,
                 completedAt: serverTimestamp()
               }, { merge: true }).catch(err => {
                 console.warn("[Multiplayer] Immediate victory write notice:", err);
@@ -14900,9 +14950,6 @@ export default function App() {
                       const puzzleFlat = (boardState as any)?.initialGrid
                         ? (boardState as any).initialGrid.flat()
                         : (boardState?.grid ? boardState.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)).flat() : null);
-                      const solutionFlat = (boardState as any)?.solutionGrid
-                        ? (boardState as any).solutionGrid.flat()
-                        : (solutionGrid && solutionGrid.length === 9 ? solutionGrid.flat() : null);
 
                       const hostId = userProfile?.id || authUser?.uid || getOrCreateGuestIdentity().id;
                       const hostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
@@ -14916,7 +14963,6 @@ export default function App() {
                         createdById: hostId,
                         createdByName: hostName,
                         ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
-                        ...(solutionFlat && solutionFlat.length === 81 ? { solutionFlat } : {}),
                         mistakesLimit: challengeMistakeLimit,
                         hintsLimit: challengeHintLimit,
                         timerEnabled: challengeTimerEnabled,
