@@ -23,6 +23,7 @@ interface Particle {
   lifespan: number;
   layer?: "background" | "primary";
   swayAngle?: number;
+  source?: "cannon" | "cascade";
 }
 
 export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, onComplete, onBurst, mode = "all" }) => {
@@ -116,19 +117,19 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
         const originX = fromLeft ? leftOriginX : rightOriginX;
         const originY = cannonY;
 
-        // Angle: Upward and inward so particles arc across and frame the modal card
-        // Left cannon shoots up-right (~-63°); Right cannon shoots up-left (~-117°)
-        const baseAngle = fromLeft ? -Math.PI * 0.36 : -Math.PI * 0.64;
-        const angleSpread = (Math.random() - 0.5) * 0.36;
+        // Angle: Upward and inward so particles arc diagonally and converge at top-center (0.50·W, 0.35·H)
+        // Left cannon shoots up-right (-73.5° / -0.408π); Right cannon shoots up-left (-106.5° / -0.592π)
+        const baseAngle = fromLeft ? -Math.PI * 0.408 : -Math.PI * 0.592;
+        const angleSpread = (Math.random() - 0.5) * 0.20;
         const angle = baseAngle + angleSpread;
-        const speed = 13 + Math.random() * 8;
+        const speed = 16 + Math.random() * 4;
 
         const shapeRand = Math.random();
         particles.push({
           x: originX,
           y: originY,
           vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - 2.8,
+          vy: Math.sin(angle) * speed,
           size: 5 + Math.random() * 6.5,
           color: colors[Math.floor(Math.random() * colors.length)],
           rotation: Math.random() * 360,
@@ -137,7 +138,8 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
           tiltAngle: Math.random() * Math.PI,
           tiltAngleInc: (Math.random() * 0.08) + 0.04,
           bornAt: currentTime,
-          lifespan: 1400 + Math.random() * 450 // Each particle lives 1.4s to 1.85s independently
+          lifespan: 1800 + Math.random() * 500, // Balanced flight to reach peak and gracefully float down
+          source: "cannon"
         });
       }
     };
@@ -178,7 +180,8 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
           bornAt: currentTime,
           lifespan: 3600 + Math.random() * 1400, // Float gracefully across the screen
           layer: "primary",
-          swayAngle: Math.random() * Math.PI * 2
+          swayAngle: Math.random() * Math.PI * 2,
+          source: "cascade"
         });
       }
     };
@@ -258,7 +261,13 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
           : 1;
 
         // Physics: Viewport-relative deceleration zone & terminal speed caps
-        if (p.layer === "background") {
+        if (p.source === "cannon") {
+          // Ballistic Cannon Flight: arc diagonally upward toward top-center banner (0.50·W, 0.35·H)
+          p.vy += 0.38; // Gravitational acceleration
+          p.vx *= 0.985; // Air drag
+          p.x += p.vx;
+          p.y += p.vy;
+        } else if (p.layer === "background") {
           p.vy = 1.4;
           p.swayAngle = (p.swayAngle || 0) + 0.035;
           p.x += p.vx + Math.sin(p.swayAngle) * 0.8;

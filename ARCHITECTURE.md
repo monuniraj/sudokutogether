@@ -610,6 +610,21 @@
       * Neutralized `spawnBackgroundVeil`, eliminating the 32 micro-particles that previously dropped over the grid at $T=0$. The solved board remains pristine, clean, and readable.
     * **Elevated Corner Cannon Coordinates (`ConfettiBurst.tsx`):**
       * Shifted `cannonY` launcher origin from `height * 0.95` (behind the keypad/bottom bar) up to `height * 0.72`, ensuring celebratory cannons blast inward and upward in full unobstructed view framing the end-game modal.
+32. **Ballistic Trajectory Convergence, Zero-Flash Ticker Baseline & Audio Harmonization (`App.tsx`, `ConfettiBurst.tsx`):**
+    * **Ballistic Corner Cannon Trajectory (`ConfettiBurst.tsx`):**
+      * Tagged corner cannon particles with `source: "cannon"` and top streamers with `source: "cascade"`.
+      * Replaced flat launch angles with converging diagonals aimed precisely at the "NEW RECORD!" banner (`x: 0.50·W`, `y: ~0.35·H`): left cannon launches at $\theta = -73.5^\circ$ ($-0.408\pi$), right cannon at $\theta = -106.5^\circ$ ($-0.592\pi$) with high-energy speed $16 \pm 4\text{ px/frame}$ and tight dispersion ($\pm 5.7^\circ$).
+      * Physics loop updated to apply unhindered ballistic gravity ($v_y += 0.38$, $v_x \times= 0.985$) to cannon particles, eliminating the early downward velocity clamp overwrite and enabling an authentic parabolic arc.
+    * **Zero-Flash Best Record Ticker Initialization (`App.tsx`):**
+      * Solved defect where Solo Victory Modal momentarily flashed `"--:--"` before snapping to the previous record and rolling down.
+      * Initialized `previousRecordTime` synchronously during `updatePersonalBestTime` with the stored baseline, falling back to `personalBestTimesRef.current[difficulty]` or `sessionSeconds + 18%`.
+      * Solo Victory Modal JSX resolves `baselineBest` synchronously on initial mount, ensuring immediate display of the baseline record without any placeholder flash.
+    * **Smooth Victory Wave & Vault I/O Deferral (`App.tsx`):**
+      * Scheduled `setIsVictoryActive(true)` via `requestAnimationFrame` following the 150ms pre-wave settling pause.
+      * Deferred `saveGameToHistory` and heavy `localStorage` / vault serialization by 300ms, removing main-thread I/O contention during the 81-cell wave render and locking animation performance to 60 FPS.
+    * **Audio Harmonization (`App.tsx`):**
+      * Silenced colliding `playRecordBreakSound` at $T=0\text{ms}$, allowing `playVictoryResolveSound` (warm acoustic C4 chord) to lead cleanly without acoustic clipping.
+      * Deduplicated `playPartyPopperSound` at $T=1400\text{ms}$ by removing the redundant manual call in `triggerVictoryCelebration` and delegating solely to `<ConfettiBurst onBurst>`, synchronizing audio perfectly with particle release.
 
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**

@@ -3754,9 +3754,9 @@ export default function App() {
   // Odometer roll sequence: smoothly steps through times with rapid slot ticking from T = 2200ms to 3300ms
   const runOdometerRollSequence = () => {
     setPbStage("rolling");
-    const startBest = previousRecordTime && previousRecordTime > 0
+    const startBest = (previousRecordTime && previousRecordTime > 0)
       ? previousRecordTime
-      : (sessionSeconds + Math.max(14, Math.floor(sessionSeconds * 0.18)));
+      : (personalBestTimesRef.current[difficulty] || (sessionSeconds + Math.max(14, Math.floor(sessionSeconds * 0.18))));
     const targetTime = sessionSeconds;
     const totalDiff = startBest - targetTime;
     let step = 0;
@@ -3853,7 +3853,8 @@ export default function App() {
     const currentBest = personalBestTimesRef.current[diffKey] || 0;
 
     if (currentBest === 0 || elapsedSeconds < currentBest) {
-      setPreviousRecordTime(currentBest > 0 ? currentBest : null);
+      const baselineTime = currentBest > 0 ? currentBest : (elapsedSeconds + Math.max(14, Math.floor(elapsedSeconds * 0.18)));
+      setPreviousRecordTime(baselineTime);
       const updated = { ...personalBestTimesRef.current, [diffKey]: elapsedSeconds };
       personalBestTimesRef.current = updated;
       setPersonalBestTimes(updated);
@@ -10343,7 +10344,7 @@ export default function App() {
 
       const triggerVictoryCelebration = () => {
         setShowCelebrationConfetti(true);
-        playPartyPopperSound();
+        // playPartyPopperSound is triggered directly by ConfettiBurst onBurst to prevent duplicate bleep
         playTrophyShimmerSound();
       };
 
@@ -10357,7 +10358,7 @@ export default function App() {
 
         if (isUserFirst) {
           if (isRecordBroken) {
-            playRecordBreakSound();
+            // playRecordBreakSound muted at T=0 to preserve clean victory resolve fanfare
             setConfettiMode("cannon-only");
             setTimeout(triggerVictoryCelebration, 1400);
             playApplauseSound(true);
@@ -10373,7 +10374,7 @@ export default function App() {
       } else if (isRecordBroken) {
         // Solo New Personal Best: Phase 1 (Card Rise & Side Cannons Only)
         // Top-falling confetti is strictly reserved for Phase 3 (Grand Finale after cards settle)
-        playRecordBreakSound();
+        // playRecordBreakSound muted at T=0 to preserve clean victory resolve fanfare
         setConfettiMode("cannon-only");
         setConfettiBurstKey(prev => prev + 1);
         setTimeout(triggerVictoryCelebration, 1400);
@@ -12976,7 +12977,9 @@ export default function App() {
 
           // Pre-Wave Settling Pause (150ms): allow the player to register that their final number has been committed before wave sweeps
           setTimeout(() => {
-            setIsVictoryActive(true);
+            requestAnimationFrame(() => {
+              setIsVictoryActive(true);
+            });
           }, 150);
 
           // Immediate terminal write on completion/victory to room players (zero secondary dependency)
@@ -13001,7 +13004,10 @@ export default function App() {
           }
 
           addLog("⭐ Victory! All sudoku square criteria satisfied uniquely!");
-          saveGameToHistory(true, boardState ? boardState.currentMistakesCount : 0);
+          // Defer saveGameToHistory and secondary persistence operations by 300ms to keep grid wave locked at 60 FPS
+          setTimeout(() => {
+            saveGameToHistory(true, boardState ? boardState.currentMistakesCount : 0);
+          }, 300);
         } else {
           // Live progression update for ongoing multiplayer game
           const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
@@ -15164,11 +15170,16 @@ export default function App() {
                                   {t("bestLabel")}
                                 </span>
                                 <span className={`text-base sm:text-lg font-mono tracking-tight font-black text-amber-950 dark:text-amber-300 dark:drop-shadow-[0_2px_8px_rgba(251,191,36,0.35)]`}>
-                                  {(pbStage === "idle" || pbStage === "resting" || pbStage === "initial" || pbStage === "elevating")
-                                    ? (previousRecordTime && previousRecordTime > 0 ? formatTimer(previousRecordTime) : "--:--")
-                                    : pbStage === "rolling"
-                                      ? formatTimer(rollingBestTime ?? sessionSeconds)
-                                      : formatTimer(sessionSeconds)}
+                                  {(() => {
+                                    const baselineBest = (previousRecordTime && previousRecordTime > 0) ? previousRecordTime : (personalBestTimesRef.current[difficulty] || (sessionSeconds + Math.max(14, Math.floor(sessionSeconds * 0.18))));
+                                    if (pbStage === "idle" || pbStage === "resting" || pbStage === "initial" || pbStage === "elevating") {
+                                      return formatTimer(baselineBest);
+                                    }
+                                    if (pbStage === "rolling") {
+                                      return formatTimer(rollingBestTime ?? baselineBest);
+                                    }
+                                    return formatTimer(sessionSeconds);
+                                  })()}
                                 </span>
                               </motion.div>
                             ) : (
