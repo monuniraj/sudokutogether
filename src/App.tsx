@@ -2628,6 +2628,7 @@ export default function App() {
     difficulty: Difficulty;
     isChallenge?: boolean;
     challengeSeed?: number | null;
+    solutionGrid?: number[][];
   } | null>(() => {
     try {
       const stored = localStorage.getItem(getScopedKey("lastCompletedSession"));
@@ -2640,6 +2641,17 @@ export default function App() {
           notes: new Set<number>(cell.notes || [])
         }))
       );
+      let restoredSolution: number[][] | undefined =
+        Array.isArray(data.solutionGrid) && data.solutionGrid.length === 9
+          ? data.solutionGrid
+          : undefined;
+      if (!restoredSolution) {
+        const boardArr: number[][] = revivedGrid.map((row: SudokuCell[]) =>
+          row.map((cell: SudokuCell) => (cell.isOriginalClue ? cell.value : 0))
+        );
+        solveSudokuRecursivePure(boardArr);
+        restoredSolution = boardArr;
+      }
       return {
         state: {
           grid: revivedGrid,
@@ -2655,7 +2667,8 @@ export default function App() {
         seconds: data.sessionSeconds ?? 0,
         difficulty: data.difficulty as Difficulty,
         isChallenge: data.challengeMode ?? false,
-        challengeSeed: data.challengeSeed ?? null
+        challengeSeed: data.challengeSeed ?? null,
+        solutionGrid: restoredSolution
       };
     } catch {
       return null;
@@ -4651,12 +4664,23 @@ export default function App() {
             if (userLastCompleted) {
               const data = JSON.parse(userLastCompleted);
               if (data && data.grid) {
-                const revivedGrid = data.grid.map((row: any) =>
+                const revivedGrid: SudokuCell[][] = data.grid.map((row: any) =>
                   row.map((cell: any) => ({
                     ...cell,
                     notes: new Set<number>(cell.notes || [])
                   }))
                 );
+                let restoredSolution: number[][] | undefined =
+                  Array.isArray(data.solutionGrid) && data.solutionGrid.length === 9
+                    ? data.solutionGrid
+                    : undefined;
+                if (!restoredSolution) {
+                  const boardArr: number[][] = revivedGrid.map((row: SudokuCell[]) =>
+                    row.map((cell: SudokuCell) => (cell.isOriginalClue ? cell.value : 0))
+                  );
+                  solveSudokuRecursivePure(boardArr);
+                  restoredSolution = boardArr;
+                }
                 setLastCompletedSession({
                   state: {
                     grid: revivedGrid,
@@ -4672,7 +4696,8 @@ export default function App() {
                   seconds: data.sessionSeconds ?? 0,
                   difficulty: data.difficulty as Difficulty,
                   isChallenge: data.challengeMode ?? false,
-                  challengeSeed: data.challengeSeed ?? null
+                  challengeSeed: data.challengeSeed ?? null,
+                  solutionGrid: restoredSolution
                 });
               } else {
                 setLastCompletedSession(null);
@@ -9228,7 +9253,7 @@ export default function App() {
   }, [boardState?.isGameOver, challengeMode, isOnline]);
 
   const [pencilMode, setPencilMode] = useState<boolean>(false);
-  const [solutionGrid, setSolutionGrid] = useState<number[][]>([]);
+  const [solutionGrid, setSolutionGrid] = useState<number[][]>(() => lastCompletedSession?.solutionGrid || []);
   const [history, setHistory] = useState<SudokuCell[][][]>([]);
 
   const resumeSavedSession = () => {
@@ -10353,14 +10378,15 @@ export default function App() {
   };
 
   // Save played games (won or lost/terminated) into history list
-  const saveGameToHistory = async (isWon: boolean, mistakesOverride?: number) => {
+  const saveGameToHistory = async (isWon: boolean, mistakesOverride?: number, boardOverride?: BoardState) => {
     mutedSendersInGameRef.current.clear();
-    const gameSeed = boardState?.seed || challengeSeed || (Math.floor(Math.random() * 900000) + 100000);
+    const activeBoard = boardOverride || boardState;
+    const gameSeed = activeBoard?.seed || challengeSeed || (Math.floor(Math.random() * 900000) + 100000);
     const finalGameId = activeGameId || `SUDOKU-${gameSeed}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-H${challengeHintLimit}-T${timerEnabled ? 1 : 0}`;
 
     const finalMistakes = mistakesOverride !== undefined
       ? mistakesOverride
-      : (boardState ? boardState.currentMistakesCount : 0);
+      : (activeBoard ? activeBoard.currentMistakesCount : 0);
 
     // Evaluate Personal Best qualification based on industry standard rules:
     // 1. Any completed game within standard 3-mistake limit (< 3 errors: 0, 1, or 2 mistakes) MUST qualify.
@@ -10370,7 +10396,7 @@ export default function App() {
     // 3. Hint limit rule:
     //    a) A run only qualifies if hints used <= 3 AND max hints limit <= 3.
     //    b) If hints used > 3 or hints set to unlimited (> 3), personal best is not recorded.
-    const maxMistakesLimit = boardState ? boardState.maxMistakesLimit : (mistakeLimitEnabled ? 3 : 999);
+    const maxMistakesLimit = activeBoard ? activeBoard.maxMistakesLimit : (mistakeLimitEnabled ? 3 : 999);
     const isStrictMistakeSetting = Boolean(
       (settingsStateRef.current.strictMistakeLimit ?? true) &&
       (settingsStateRef.current.mistakeLimitEnabled ?? true) &&
@@ -10381,8 +10407,8 @@ export default function App() {
     const isCustomIncreasedAbove3 = maxMistakesLimit > 3;
     const isWithinStandardLimit = finalMistakes < 3;
 
-    const hintsUsed = boardState ? boardState.hintsCount : 0;
-    const maxHintsLimit = boardState?.maxHintsLimit ?? (challengeMode ? challengeHintLimit : 3);
+    const hintsUsed = activeBoard ? activeBoard.hintsCount : 0;
+    const maxHintsLimit = activeBoard?.maxHintsLimit ?? (challengeMode ? challengeHintLimit : 3);
     const isHintsDisqualified = hintsUsed > 3 || maxHintsLimit > 3;
 
     // RULE ENFORCEMENT:
@@ -10579,6 +10605,59 @@ export default function App() {
 
     submitGameResult(rBody);
 
+    // Purge active session persistence so completed puzzle is never re-opened via Resume
+    try {
+      localStorage.removeItem(getScopedKey("savedSession"));
+      localStorage.removeItem("sudoku_savedSession");
+    } catch { }
+    setSavedSessionInfo(null);
+
+    // Save completed session for post-game Review on Home Screen synchronously before any network await
+    if (activeBoard) {
+      const terminalBoardState: BoardState = {
+        ...activeBoard,
+        currentMistakesCount: finalMistakes,
+        isGameOver: true
+      };
+      let activeSolution: number[][] =
+        Array.isArray(solutionGrid) && solutionGrid.length === 9
+          ? solutionGrid
+          : [];
+      if (activeSolution.length !== 9) {
+        const boardArr: number[][] = terminalBoardState.grid.map(row =>
+          row.map(cell => (cell.isOriginalClue ? cell.value : 0))
+        );
+        solveSudokuRecursivePure(boardArr);
+        activeSolution = boardArr;
+      }
+      const completedSessionData = {
+        state: terminalBoardState,
+        seconds: sessionSeconds,
+        difficulty: difficulty,
+        isChallenge: challengeMode,
+        challengeSeed: challengeSeed,
+        solutionGrid: activeSolution
+      };
+      setLastCompletedSession(completedSessionData);
+      try {
+        localStorage.setItem(getScopedKey("lastCompletedSession"), JSON.stringify({
+          grid: terminalBoardState.grid.map(row => row.map(cell => ({ ...cell, notes: Array.from(cell.notes) }))),
+          selectedRow: terminalBoardState.selectedRow,
+          selectedCol: terminalBoardState.selectedCol,
+          currentMistakesCount: finalMistakes,
+          maxMistakesLimit: terminalBoardState.maxMistakesLimit,
+          hintsCount: terminalBoardState.hintsCount,
+          isGameOver: true,
+          sessionSeconds: sessionSeconds,
+          difficulty: difficulty,
+          seed: terminalBoardState.seed,
+          challengeMode: challengeMode,
+          challengeSeed: challengeSeed,
+          solutionGrid: activeSolution
+        }));
+      } catch { }
+    }
+
     // Continuous stats persistence: Direct Firestore write for authenticated user
     const effectiveCloudUid = authUser?.uid || (targetUid && targetUid !== "guest" && !targetUid.startsWith("GUEST_") ? targetUid : null);
     if (effectiveCloudUid && !isGuest) {
@@ -10596,41 +10675,6 @@ export default function App() {
       } catch (syncErr) {
         console.warn("[Firestore] Failed to persist game completion to Firestore:", syncErr);
       }
-    }
-
-    // Purge active session persistence so completed puzzle is never re-opened via Resume
-    try {
-      localStorage.removeItem(getScopedKey("savedSession"));
-      localStorage.removeItem("sudoku_savedSession");
-    } catch { }
-    setSavedSessionInfo(null);
-
-    // Save completed session for post-game Review on Home Screen
-    if (boardState) {
-      const completedSessionData = {
-        state: boardState,
-        seconds: sessionSeconds,
-        difficulty: difficulty,
-        isChallenge: challengeMode,
-        challengeSeed: challengeSeed
-      };
-      setLastCompletedSession(completedSessionData);
-      try {
-        localStorage.setItem(getScopedKey("lastCompletedSession"), JSON.stringify({
-          grid: boardState.grid.map(row => row.map(cell => ({ ...cell, notes: Array.from(cell.notes) }))),
-          selectedRow: boardState.selectedRow,
-          selectedCol: boardState.selectedCol,
-          currentMistakesCount: boardState.currentMistakesCount,
-          maxMistakesLimit: boardState.maxMistakesLimit,
-          hintsCount: boardState.hintsCount,
-          isGameOver: true,
-          sessionSeconds: sessionSeconds,
-          difficulty: difficulty,
-          seed: boardState.seed,
-          challengeMode: challengeMode,
-          challengeSeed: challengeSeed
-        }));
-      } catch { }
     }
   };
 
@@ -12936,7 +12980,7 @@ export default function App() {
             }
           }
 
-          saveGameToHistory(false, newMistakes);
+          saveGameToHistory(false, newMistakes, terminalState);
         } else {
           // Synchronous live mistake updates to /rooms/{roomId}/players/{uid}
           const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
@@ -13091,10 +13135,7 @@ export default function App() {
           }
 
           addLog("⭐ Victory! All sudoku square criteria satisfied uniquely!");
-          // Defer saveGameToHistory and secondary persistence operations by 300ms to keep grid wave locked at 60 FPS
-          setTimeout(() => {
-            saveGameToHistory(true, boardState ? boardState.currentMistakesCount : 0);
-          }, 300);
+          saveGameToHistory(true, terminalWinState.currentMistakesCount, terminalWinState);
         } else {
           // Live progression update for ongoing multiplayer game
           const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
@@ -13311,9 +13352,15 @@ export default function App() {
     // Check game win if hint completes the puzzle
     const currentProgress = finalGrid.every(r => r.every(cell => cell.value === solutionGrid[cell.row][cell.col]));
     if (currentProgress) {
-      setBoardState(prev => prev ? { ...prev, isGameOver: true } : null);
+      const terminalHintWinState: BoardState = {
+        ...boardState,
+        grid: finalGrid,
+        hintsCount: boardState.hintsCount + 1,
+        isGameOver: true
+      };
+      setBoardState(terminalHintWinState);
       addLog("⭐ Victory! All sudoku square criteria satisfied uniquely!");
-      saveGameToHistory(true, boardState ? boardState.currentMistakesCount : 0);
+      saveGameToHistory(true, terminalHintWinState.currentMistakesCount, terminalHintWinState);
     }
   };
 
@@ -14151,10 +14198,22 @@ export default function App() {
                           if (isActionDisabled) return;
                           playClickSound();
                           if (hasReviewGame) {
+                            const reviewBoard = boardState || lastCompletedSession?.state;
                             if (!boardState && lastCompletedSession) {
                               setBoardState(lastCompletedSession.state);
                               setSessionSeconds(lastCompletedSession.seconds);
                               setDifficulty(lastCompletedSession.difficulty);
+                            }
+                            if (!solutionGrid || solutionGrid.length !== 9) {
+                              if (lastCompletedSession?.solutionGrid && lastCompletedSession.solutionGrid.length === 9) {
+                                setSolutionGrid(lastCompletedSession.solutionGrid);
+                              } else if (reviewBoard?.grid) {
+                                const boardArr: number[][] = reviewBoard.grid.map(row =>
+                                  row.map(cell => (cell.isOriginalClue ? cell.value : 0))
+                                );
+                                solveSudokuRecursive(boardArr);
+                                setSolutionGrid(boardArr);
+                              }
                             }
                             setIsTimerPaused(false);
                             setShowGameOverModal(false);
