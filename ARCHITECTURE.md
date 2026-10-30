@@ -631,6 +631,9 @@
     * **Android 11+ (API 30+) TTS Package Visibility (`AndroidManifest.xml`):** Added `<queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>` so Android WebView/Capacitor can bind to the system `TextToSpeech` engine on Android 11+.
     * **Zero-Dependency Native Bridge (`NativeTTSPlugin.java` & `MainActivity.java`):** Created `@CapacitorPlugin(name = "NativeTTS")` wrapping `android.speech.tts.TextToSpeech` with `speak(PluginCall)` and `stop(PluginCall)` methods, registered in `MainActivity.onCreate` before `super.onCreate`.
     * **Dual-Platform Speech Router (`RulesModal.tsx`):** Branches on `Capacitor.isNativePlatform()` in `handleToggleAudio` and `stopAudio` to invoke `NativeTTS.speak({ text, lang })` / `NativeTTS.stop()` on Android builds while falling back to `window.speechSynthesis.resume()` + `window.speechSynthesis.speak(utterance)` on Web.
+34. **Inverted Light Mode Crosshair Highlight & Boosted Error Knock (`SudokuBoard.tsx`, `App.tsx`, `soundEffects.ts`):**
+    * **Light Mode Crosshair Restoration (`SudokuBoard.tsx`):** Restored `cellBgClass = "bg-white"` on `isHighlightedSibling` in Light Mode while retaining `backgroundColor: diffTheme.crosshair.light` on default unselected cells so the row/col/box crosshair pops out in crisp white against the pastel board.
+    * **Error Knock Acoustic Boost (`App.tsx` & `soundEffects.ts`):** Boosted `playMistakeSound` / `playWoodBlockErrorSound` lowpass cutoff to `680Hz`, pitch drop duration to `65ms`, peak linear gain to `0.45`, and decay envelope to `130ms` (`stop` at `135ms`).
 
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**

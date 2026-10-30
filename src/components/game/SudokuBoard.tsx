@@ -375,9 +375,13 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
             };
             if (darkMode) cellBgClass = "text-white";
           } else if (isHighlightedSibling) {
-            cellBgStyle = {
-              backgroundColor: darkMode ? diffTheme.crosshair.dark : diffTheme.crosshair.light,
-            };
+            if (darkMode) {
+              cellBgStyle = {
+                backgroundColor: diffTheme.crosshair.dark,
+              };
+            } else {
+              cellBgClass = "bg-white";
+            }
           } else {
             if (darkMode) {
               cellBgClass = "bg-zinc-900";

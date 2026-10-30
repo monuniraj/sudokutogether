@@ -532,25 +532,25 @@ export function playWoodBlockErrorSound(
 
     // Low-Q damped organic body filter
     filter.type = "lowpass";
-    filter.frequency.setValueAtTime(480, t);
+    filter.frequency.setValueAtTime(680, t);
     filter.Q.setValueAtTime(1.8, t);
 
-    // Warm triangle percussive thump dropping from 220Hz down to 110Hz in 45ms
+    // Warm triangle percussive thump dropping from 220Hz down to 110Hz in 65ms
     osc.type = "triangle";
     osc.frequency.setValueAtTime(220, t);
-    osc.frequency.exponentialRampToValueAtTime(110, t + 0.045);
+    osc.frequency.exponentialRampToValueAtTime(110, t + 0.065);
 
-    // Tactile damped envelope: fast 2ms attack, rapid 80ms decay
+    // Tactile damped envelope: fast 2ms attack, punchy 130ms decay at boosted 0.45 gain
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.linearRampToValueAtTime(0.16, t + 0.002);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.080);
+    gain.gain.linearRampToValueAtTime(0.45, t + 0.002);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.130);
 
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(audioCtx.destination);
 
     osc.start(t);
-    osc.stop(t + 0.085);
+    osc.stop(t + 0.135);
     osc.onended = () => {
       try {
         osc.disconnect();

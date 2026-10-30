@@ -8177,25 +8177,25 @@ export default function App() {
 
       // Low-Q damped organic body filter
       filter.type = "lowpass";
-      filter.frequency.setValueAtTime(480, audioCtx.currentTime);
+      filter.frequency.setValueAtTime(680, audioCtx.currentTime);
       filter.Q.setValueAtTime(1.8, audioCtx.currentTime);
 
-      // Warm triangle percussive thump dropping from 220Hz down to 110Hz in 45ms
+      // Warm triangle percussive thump dropping from 220Hz down to 110Hz in 65ms
       osc.type = "triangle";
       osc.frequency.setValueAtTime(220, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.045);
+      osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.065);
 
-      // Tactile damped envelope: fast 2ms attack, rapid 80ms decay
+      // Tactile damped envelope: fast 2ms attack, punchy 130ms decay at boosted 0.45 gain
       gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.16, audioCtx.currentTime + 0.002);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.080);
+      gain.gain.linearRampToValueAtTime(0.45, audioCtx.currentTime + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.130);
 
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(audioCtx.destination);
 
       osc.start(audioCtx.currentTime);
-      osc.stop(audioCtx.currentTime + 0.085);
+      osc.stop(audioCtx.currentTime + 0.135);
       osc.onended = () => {
         try {
           osc.disconnect();
