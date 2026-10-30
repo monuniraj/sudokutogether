@@ -12,6 +12,7 @@ import { MultiplayerForkModal } from "./components/modals/MultiplayerForkModal";
 import { CreateChallengeModal } from "./components/modals/CreateChallengeModal";
 import { GameOverModal } from "./components/modals/GameOverModal";
 import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
+import { ShareActionWrapper } from "./components/share/ShareActionWrapper";
 import { SudokuBoard, CompletionPulse } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
 import { ConfettiBurst } from "./components/common/ConfettiBurst";
@@ -15061,21 +15062,34 @@ export default function App() {
                   }
                   className={`modal card border-none p-8 max-w-sm w-full relative text-center rounded-[32px] shadow-[0_12px_40px_rgba(0,0,0,0.08)] flex flex-col gap-6 ${darkMode ? "bg-[#2A2D24]" : "bg-[#FDFBF7]"}`}
                 >
-                  {/* Top-right X dismiss button — closes modal without leaving the board */}
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                      setShowGameOverModal(false);
-                      setShowCelebrationConfetti(false);
-                      setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
-                      setLockedNum(null);
-                      setActiveKeypadNum(null);
-                    }}
-                    className={`absolute top-4 right-4 p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 z-50 ${darkMode ? "bg-zinc-700/60 hover:bg-zinc-600 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-500"}`}
-                    title={t("closeTooltip")}
-                  >
-                    <X className="w-4 h-4" strokeWidth={2.5} />
-                  </button>
+                  {/* Top-right Share + X dismiss buttons — closes modal without leaving the board */}
+                  <div className="absolute top-4 right-4 flex items-center gap-1.5 z-50">
+                    <ShareActionWrapper
+                      boardState={boardState}
+                      difficulty={difficulty}
+                      time={formatTimer(sessionSeconds)}
+                      playerName={getActiveDisplayName()}
+                      tagline="मैंने इसे इतनी देर में सॉल्व किया! क्या आप कर सकते हैं?"
+                      bestTime={bestTime && bestTime > 0 ? formatTimer(bestTime) : undefined}
+                      isNewRecord={isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit)}
+                      darkMode={darkMode}
+                      playClickSound={playClickSound}
+                    />
+                    <button
+                      onClick={() => {
+                        playClickSound();
+                        setShowGameOverModal(false);
+                        setShowCelebrationConfetti(false);
+                        setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+                        setLockedNum(null);
+                        setActiveKeypadNum(null);
+                      }}
+                      className={`p-1.5 rounded-full border-none cursor-pointer transition-all hover:scale-110 active:scale-95 ${darkMode ? "bg-zinc-700/60 hover:bg-zinc-600 text-zinc-300" : "bg-stone-100 hover:bg-stone-200 text-stone-500"}`}
+                      title={t("closeTooltip")}
+                    >
+                      <X className="w-4 h-4" strokeWidth={2.5} />
+                    </button>
+                  </div>
                   {(() => {
                     const isFailed = Boolean(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit);
                     return (

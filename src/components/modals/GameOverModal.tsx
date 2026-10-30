@@ -21,7 +21,7 @@ import {
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { formatActiveStatus } from "../../utils/formatTimestamp";
-import { IncognitoIcon } from "../common/IncognitoIcon";
+import { ShareActionWrapper } from "../share/ShareActionWrapper";
 import { auth } from "../../firebase";
 import { getActiveAuthUid, loadVault } from "../../utils/storageEngine";
 
@@ -123,7 +123,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
   const playerIds = sanitizedPlayers.map((p: any) => p.id);
   const effectiveUserId = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || loadVault("guest").profile?.id;
-  const { isIncognito, toggleIncognito, getFriendStatus, getFriendLastActive } = useFriendPresence(effectiveUserId, playerIds);
+  const { getFriendStatus, getFriendLastActive } = useFriendPresence(effectiveUserId, playerIds);
 
   const results = useMemo(() => {
     const didCurrentPlayerFail =
@@ -301,27 +301,17 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 </span>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    playClickSound();
-                    toggleIncognito();
-                  }}
-                  title={isIncognito ? `${t("incognitoMode")} ON` : `${t("incognitoMode")} OFF`}
-                  aria-label={t("incognitoMode")}
-                  aria-pressed={isIncognito}
-                  className={`p-1.5 rounded-xl border flex items-center justify-center cursor-pointer select-none transition-colors duration-200 active:scale-95 ${
-                    isIncognito
-                      ? darkMode
-                        ? "bg-purple-900/30 text-purple-300 border-purple-500/20"
-                        : "bg-purple-100/70 text-purple-900 border-purple-200/50"
-                      : darkMode
-                      ? "bg-white/[0.06] text-stone-400 border-transparent hover:bg-white/[0.1]"
-                      : "bg-black/[0.04] text-stone-600 border-transparent hover:bg-black/[0.07]"
-                  }`}
-                >
-                  <IncognitoIcon className="w-3.5 h-3.5" />
-                </button>
+                <ShareActionWrapper
+                  boardState={boardState}
+                  difficulty={difficulty}
+                  time={formatTimer(sessionSeconds)}
+                  playerName={(userProfile?.name && userProfile.name.trim()) || getActiveDisplayName()}
+                  tagline="मैंने इसे इतनी देर में सॉल्व किया! क्या आप कर सकते हैं?"
+                  isNewRecord={isNewRecordAchieved}
+                  darkMode={darkMode}
+                  roomCode={activeRematchRoomCode}
+                  playClickSound={playClickSound}
+                />
 
                 <button
                   onClick={() => {
@@ -721,29 +711,19 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     </button>
                   </div>
 
-                  {/* Right: Incognito toggle + Lock toggle & Close button securely pinned */}
+                  {/* Right: Share + Lock toggle & Close button securely pinned */}
                   <div className="flex items-center gap-1.5 sm:gap-2 pr-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playClickSound();
-                        toggleIncognito();
-                      }}
-                      title={isIncognito ? `${t("incognitoMode")} ON` : `${t("incognitoMode")} OFF`}
-                      aria-label={t("incognitoMode")}
-                      aria-pressed={isIncognito}
-                      className={`p-1.5 rounded-xl border flex items-center justify-center cursor-pointer select-none transition-colors duration-200 active:scale-95 ${
-                        isIncognito
-                          ? darkMode
-                            ? "bg-purple-900/30 text-purple-300 border-purple-500/20"
-                            : "bg-purple-100/70 text-purple-900 border-purple-200/50"
-                          : darkMode
-                          ? "bg-white/[0.06] text-stone-400 border-transparent hover:bg-white/[0.1]"
-                          : "bg-black/[0.04] text-stone-600 border-transparent hover:bg-black/[0.07]"
-                      }`}
-                    >
-                      <IncognitoIcon className="w-3.5 h-3.5" />
-                    </button>
+                    <ShareActionWrapper
+                      boardState={boardState}
+                      difficulty={difficulty}
+                      time={formatTimer(sessionSeconds)}
+                      playerName={(userProfile?.name && userProfile.name.trim()) || getActiveDisplayName()}
+                      tagline="मैंने इसे इतनी देर में सॉल्व किया! क्या आप कर सकते हैं?"
+                      isNewRecord={isNewRecordAchieved}
+                      darkMode={darkMode}
+                      roomCode={activeRematchRoomCode}
+                      playClickSound={playClickSound}
+                    />
 
                     <button
                       onClick={() => {
