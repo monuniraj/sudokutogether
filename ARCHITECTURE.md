@@ -634,6 +634,10 @@
 34. **Inverted Light Mode Crosshair Highlight & Boosted Error Knock (`SudokuBoard.tsx`, `App.tsx`, `soundEffects.ts`):**
     * **Light Mode Crosshair Restoration (`SudokuBoard.tsx`):** Restored `cellBgClass = "bg-white"` on `isHighlightedSibling` in Light Mode while retaining `backgroundColor: diffTheme.crosshair.light` on default unselected cells so the row/col/box crosshair pops out in crisp white against the pastel board.
     * **Error Knock Acoustic Boost (`App.tsx` & `soundEffects.ts`):** Boosted `playMistakeSound` / `playWoodBlockErrorSound` lowpass cutoff to `680Hz`, pitch drop duration to `65ms`, peak linear gain to `0.45`, and decay envelope to `130ms` (`stop` at `135ms`).
+35. **Isolated Viral Share Module Setup (`src/components/share/ShareIcon.tsx`, `src/components/share/ShareCard.tsx`, `package.json`):**
+    * **Dependencies Installed:** Added `html2canvas` and `@capacitor/filesystem` to `package.json`.
+    * **`ShareIcon.tsx`:** Created isolated `motion.button` with periodic wiggle/pulse animation and notification ping badge.
+    * **`ShareCard.tsx`:** Created forwardRef shareable visual card supporting both off-screen capture (`hiddenOffscreen`) and modal preview, rendering difficulty-matched pastel gradients, Sudoku Sync logo, solve time & Best Time / Flawless badge, mini 9×9 completed grid, and viral tagline.
 
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**
