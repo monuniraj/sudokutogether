@@ -143,13 +143,15 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
       ? mistakes === 0
       : mistakes < maxMistakes;
 
-  const { fullUrl, displayUrl } = buildFreshChallengeUrl(
+  const { fullUrl, displayUrl, extractedRoomCode } = buildFreshChallengeUrl(
     boardState,
     normalizedDiff,
     roomCode
   );
 
-  const finalTagline = tagline || "Can you beat my time? Tap to play!";
+  const ctaCopy = didWin
+    ? "Can you beat my time?"
+    : "Stuck! Can you help me finish this?";
 
   useEffect(() => {
     if (!isOpen) {
@@ -171,12 +173,36 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
         }
 
         const canvas = await html2canvas(targetEl, {
+          width: 360,
+          windowWidth: 360,
           scale: 2,
           useCORS: true,
           backgroundColor: null,
-          width: 360,
-          windowWidth: 360,
           onclone: (clonedDoc, clonedEl) => {
+            const clonedTarget = clonedDoc.getElementById(
+              "share-card-capture-target"
+            );
+            if (clonedTarget) {
+              clonedTarget.style.width = "360px";
+              clonedTarget.style.height = "auto";
+            }
+
+            // Enforce strict baseline centering on all cloned digits to prevent cross-OS font shifts
+            const digitNodes = clonedEl.querySelectorAll(
+              ".sudoku-digit-text, .handwriting"
+            );
+            digitNodes.forEach((el) => {
+              if (el instanceof HTMLElement) {
+                el.style.setProperty("display", "flex", "important");
+                el.style.setProperty("align-items", "center", "important");
+                el.style.setProperty("justify-content", "center", "important");
+                el.style.setProperty("line-height", "1", "important");
+                el.style.setProperty("transform", "translateY(0)", "important");
+                el.style.setProperty("margin", "0", "important");
+                el.style.setProperty("padding", "0", "important");
+              }
+            });
+
             sanitizeClonedColorsForHtml2Canvas(clonedDoc, clonedEl);
           },
         });
@@ -251,8 +277,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     if (playClickSound) playClickSound();
     if (isGenerating || !generatedImage) return;
 
-    const statusHeader = didWin ? `SOLVED IN ${time}` : "GAME COMPLETED";
-    const shareText = `${statusHeader} (${normalizedDiff}) — ${finalTagline}\n${fullUrl}`;
+    const shareText = `${time} (${normalizedDiff}) — ${ctaCopy}\nsudokusync.com | Room Code: ${extractedRoomCode}\n${fullUrl}`;
 
     try {
       if (Capacitor.isNativePlatform()) {
@@ -397,7 +422,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
                   darkMode ? "text-stone-200" : "text-stone-800"
                 }`}
               >
-                {didWin ? `SOLVED IN ${time}` : "GAME COMPLETED"}
+                SHARE SCREENSHOT
               </span>
               <button
                 type="button"
@@ -426,7 +451,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
                 time={time}
                 sessionSeconds={sessionSeconds}
                 playerName={playerName}
-                tagline={finalTagline}
+                tagline={tagline}
                 bestTime={bestTime}
                 isNewRecord={isNewRecord && didWin}
                 isWon={didWin}

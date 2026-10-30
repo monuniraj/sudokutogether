@@ -273,6 +273,15 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
             transform: translateZ(0);
           }
         }
+        .sudoku-digit-text {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          line-height: 1 !important;
+          transform: translateY(0) !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
       `}</style>
       {/* MINIMALIST PAUSE SCREEN OVERLAY */}
       {isTimerPaused && !boardState.isGameOver && (
@@ -541,12 +550,31 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                       : "clamp(26px, min(9.5vw, 8.5vh), 50px)",
                     opacity: isUnrevealed ? 0 : 1,
                     animation: isRevealing ? "inkDigitFadeIn 220ms ease-out var(--digit-delay, 0ms) forwards" : undefined,
-                    transform: "translateZ(0)",
                     willChange: "transform, opacity",
-                    ["--digit-delay" as any]: `${digitRevealDelay}ms`
+                    ["--digit-delay" as any]: `${digitRevealDelay}ms`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    lineHeight: '1 !important',
+                    transform: 'translateY(0)',
+                    margin: 0,
+                    padding: 0,
                   }}
                 >
-                  {cell.value}
+                  <span
+                    className="sudoku-digit-text"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      lineHeight: '1 !important',
+                      transform: 'translateY(0)',
+                      margin: 0,
+                      padding: 0,
+                    }}
+                  >
+                    {cell.value}
+                  </span>
                 </div>
               ) : (
                 /* High-legibility candidate note digits */
