@@ -144,8 +144,20 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     if (playClickSound) playClickSound();
     if (isGenerating || !generatedImage) return;
 
-    const shareText = `${time} (${normalizedDiff}) — ${ctaCopy}\nsudokusync.com | Room Code: ${extractedRoomCode}\n${fullUrl}`;
+    const challengeUrl =
+      buildFreshChallengeUrl(challengeId) || window.location.href;
+    const shareText = `Can you beat my game? Play here: ${challengeUrl}`;
     const base64Data = generatedImage.replace(/^data:image\/png;base64,/, "");
+
+    const copyChallengeToClipboard = async () => {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(shareText);
+        } catch {
+          // Ignore clipboard permission errors in restricted contexts
+        }
+      }
+    };
 
     try {
       if (Capacitor.isNativePlatform()) {
@@ -156,34 +168,44 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
         });
 
         await Share.share({
-          title: "Sudoku Sync",
+          title: "Sudoku Sync Challenge",
           text: shareText,
           url: savedFile.uri,
           dialogTitle: "Share this Screenshot",
         });
       } else {
         const blob = await dataUrlToBlob(generatedImage);
-        const file = new File([blob], "sudoku-sync-result.png", {
+        const imageFile = new File([blob], "sudoku-sync-result.png", {
           type: "image/png",
         });
 
-        if (
-          typeof navigator !== "undefined" &&
-          navigator.share &&
-          (!navigator.canShare || navigator.canShare({ files: [file] }))
-        ) {
-          await navigator.share({
-            title: "Sudoku Sync",
-            text: shareText,
-            files: [file],
-          });
-        } else if (typeof navigator !== "undefined" && navigator.share) {
-          await navigator.share({
-            title: "Sudoku Sync",
-            text: shareText,
-            url: fullUrl,
-          });
+        const shareData: ShareData = {
+          files: [imageFile],
+          title: "Sudoku Sync Challenge",
+          text: `Can you beat my game? Play here: ${challengeUrl}`,
+          url: challengeUrl,
+        };
+
+        if (typeof navigator !== "undefined" && navigator.share) {
+          if (!navigator.canShare || navigator.canShare(shareData)) {
+            await navigator.share(shareData);
+          } else if (navigator.canShare({ files: [imageFile] })) {
+            await copyChallengeToClipboard();
+            await navigator.share({
+              files: [imageFile],
+              title: "Sudoku Sync Challenge",
+              text: shareText,
+            });
+          } else {
+            await copyChallengeToClipboard();
+            await navigator.share({
+              title: "Sudoku Sync Challenge",
+              text: shareText,
+              url: challengeUrl,
+            });
+          }
         } else {
+          await copyChallengeToClipboard();
           const link = document.createElement("a");
           link.href = generatedImage;
           link.download = `sudoku-sync-${normalizedDiff.toLowerCase()}.png`;
@@ -193,6 +215,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
         }
       }
     } catch (error) {
+      await copyChallengeToClipboard();
       console.error("Share failed:", error);
     }
   };

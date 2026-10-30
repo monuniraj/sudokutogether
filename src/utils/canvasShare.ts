@@ -606,16 +606,43 @@ export const extractRoomCodeFromChallenge = (
   return "849201";
 };
 
-export const buildFreshChallengeUrl = (
-  boardState: SudokuBoardState | null,
-  difficulty: string,
-  roomCode?: string
-): {
+export interface BuiltChallengeUrlInfo {
   fullUrl: string;
   displayUrl: string;
   extractedRoomCode: string;
   challengeId: string;
-} => {
+}
+
+export function buildFreshChallengeUrl(challengeId: string): string;
+export function buildFreshChallengeUrl(
+  boardState: SudokuBoardState | null,
+  difficulty: string,
+  roomCode?: string
+): BuiltChallengeUrlInfo;
+export function buildFreshChallengeUrl(
+  boardStateOrChallengeId: SudokuBoardState | string | null,
+  difficulty?: string,
+  roomCode?: string
+): string | BuiltChallengeUrlInfo {
+  const origin =
+    typeof window !== "undefined" &&
+    window.location.origin &&
+    !/localhost|127\.0\.0\.1|capacitor:\/\//i.test(window.location.origin)
+      ? window.location.origin.replace(/\/+$/, "")
+      : "https://sudokusync.com";
+
+  if (typeof boardStateOrChallengeId === "string") {
+    const rawToken = boardStateOrChallengeId.trim();
+    if (!rawToken) {
+      return `${origin}/?challenge=SUDOKU-849201-EASY-M3-H3-T1`;
+    }
+    if (/^https?:\/\//i.test(rawToken)) {
+      return rawToken;
+    }
+    return `${origin}/?challenge=${rawToken}`;
+  }
+
+  const boardState = boardStateOrChallengeId;
   const diff = String(
     difficulty || boardState?.difficulty || "EASY"
   ).toUpperCase();
@@ -624,20 +651,13 @@ export const buildFreshChallengeUrl = (
   const hintLimit = (boardState as any)?.hintLimit ?? 3;
   const challengeId = `SUDOKU-${seed}-${diff}-M${maxMistakes}-H${hintLimit}-T1`;
 
-  const origin =
-    typeof window !== "undefined" &&
-    window.location.origin &&
-    !/localhost|127\.0\.0\.1|capacitor:\/\//i.test(window.location.origin)
-      ? window.location.origin.replace(/\/+$/, "")
-      : "https://sudokusync.com";
-
   return {
     fullUrl: `${origin}/?challenge=${challengeId}`,
     displayUrl: `sudokusync.com | Room Code: ${seed}`,
     extractedRoomCode: seed,
     challengeId,
   };
-};
+}
 
 const drawRoundedRect = (
   ctx: CanvasRenderingContext2D,
