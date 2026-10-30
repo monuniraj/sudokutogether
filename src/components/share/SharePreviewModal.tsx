@@ -1,18 +1,17 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import html2canvas from "html2canvas";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import { X, Loader2, Share2, Download, Check } from "lucide-react";
 import { SudokuBoardState, Difficulty } from "../game/SudokuBoard";
 import {
-  ShareCard,
+  generateShareCanvas,
   ShareDifficulty,
   buildFreshChallengeUrl,
   evaluateBoardDidWin,
-} from "./ShareCard";
+} from "../../utils/canvasShare";
 
 export interface SharePreviewModalProps {
   isOpen: boolean;
@@ -32,80 +31,9 @@ export interface SharePreviewModalProps {
   playClickSound?: () => void;
 }
 
-interface GeneratedImagePayload {
-  dataUrl: string;
-  base64Data: string;
-  blob: Blob | null;
-  file: File | null;
-  nativeUri?: string;
-}
-
-/**
- * Converts modern CSS color functions (e.g. Tailwind v4 oklch/oklab/color)
- * into standard rgb/rgba strings inside the cloned html2canvas document so
- * html2canvas never throws "Attempting to parse an unsupported color function".
- */
-const sanitizeClonedColorsForHtml2Canvas = (
-  clonedDoc: Document,
-  clonedRoot: HTMLElement
-) => {
-  try {
-    const cvs = clonedDoc.createElement("canvas");
-    cvs.width = 1;
-    cvs.height = 1;
-    const ctx = cvs.getContext("2d");
-    if (!ctx) return;
-
-    const toRgb = (cssColor: string): string => {
-      ctx.clearRect(0, 0, 1, 1);
-      ctx.fillStyle = "rgba(0,0,0,0)";
-      ctx.fillStyle = cssColor;
-      ctx.fillRect(0, 0, 1, 1);
-      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-      if (a === 0) return "rgba(0, 0, 0, 0)";
-      if (a === 255) return `rgb(${r}, ${g}, ${b})`;
-      return `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
-    };
-
-    const colorFnRegex = /(?:oklch|oklab|lch|lab|color-mix|color)\([^)]+\)/gi;
-    const propsToSanitize = [
-      "color",
-      "background-color",
-      "border-top-color",
-      "border-right-color",
-      "border-bottom-color",
-      "border-left-color",
-      "outline-color",
-      "text-decoration-color",
-      "box-shadow",
-      "background-image",
-    ];
-
-    const view = clonedDoc.defaultView || window;
-    const nodes: Element[] = [
-      clonedDoc.documentElement,
-      clonedDoc.body,
-      clonedRoot,
-      ...Array.from(clonedRoot.querySelectorAll("*")),
-    ];
-
-    for (const node of nodes) {
-      if (!(node instanceof HTMLElement) && !(node instanceof SVGElement)) {
-        continue;
-      }
-      const computed = view.getComputedStyle(node);
-      for (const prop of propsToSanitize) {
-        const val = computed.getPropertyValue(prop);
-        if (val && colorFnRegex.test(val)) {
-          colorFnRegex.lastIndex = 0;
-          const sanitized = val.replace(colorFnRegex, (match) => toRgb(match));
-          node.style.setProperty(prop, sanitized, "important");
-        }
-      }
-    }
-  } catch (err) {
-    console.error("[SharePreviewModal] Color sanitization warning:", err);
-  }
+const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
+  const response = await fetch(dataUrl);
+  return await response.blob();
 };
 
 export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
@@ -117,7 +45,6 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   time,
   sessionSeconds,
   playerName,
-  tagline,
   bestTime,
   isNewRecord = false,
   isWon,
@@ -125,9 +52,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   roomCode,
   playClickSound,
 }) => {
-  const offscreenCaptureRef = useRef<HTMLDivElement | null>(null);
-  const [generatedImage, setGeneratedImage] =
-    useState<GeneratedImagePayload | null>(null);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(true);
   const [isSavedSuccess, setIsSavedSuccess] = useState<boolean>(false);
 
@@ -138,7 +63,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   // Strict Win/Loss evaluation: requires < maxMistakes AND all 81 cells populated
   const didWin = evaluateBoardDidWin(boardState, isWon);
 
-  const { fullUrl, displayUrl, extractedRoomCode } = buildFreshChallengeUrl(
+  const { fullUrl, extractedRoomCode, challengeId } = buildFreshChallengeUrl(
     boardState,
     normalizedDiff,
     roomCode
@@ -160,107 +85,50 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     setIsGenerating(true);
     setGeneratedImage(null);
 
-    const timer = setTimeout(async () => {
+    const runCanvasGenerator = async () => {
       try {
-        const targetEl = offscreenCaptureRef.current;
-        if (!targetEl) {
-          throw new Error("Visible ShareCard container ref is null");
-        }
-
-        const canvas = await html2canvas(targetEl, {
-          width: 360,
-          windowWidth: 360,
-          scale: 2,
-          useCORS: true,
-          backgroundColor: null,
-          onclone: (clonedDoc, clonedEl) => {
-            const clonedTarget = clonedDoc.getElementById(
-              "share-card-capture-target"
-            );
-            if (clonedTarget) {
-              clonedTarget.style.width = "360px";
-              clonedTarget.style.height = "auto";
-            }
-
-            // Enforce strict absolute centering on all cloned cell numbers to bypass html2canvas baseline shifts
-            const digitNodes = clonedEl.querySelectorAll(".sudoku-digit-text");
-            digitNodes.forEach((el) => {
-              if (el instanceof HTMLElement) {
-                el.style.setProperty("position", "absolute", "important");
-                el.style.setProperty("top", "50%", "important");
-                el.style.setProperty("left", "50%", "important");
-                el.style.setProperty(
-                  "transform",
-                  "translate(-50%, -50%)",
-                  "important"
-                );
-                el.style.setProperty("line-height", "1", "important");
-                el.style.setProperty("margin", "0", "important");
-                el.style.setProperty("padding", "0", "important");
-                el.style.setProperty("display", "block", "important");
-              }
-            });
-
-            sanitizeClonedColorsForHtml2Canvas(clonedDoc, clonedEl);
-          },
-        });
-
-        if (isCancelled) return;
-
-        const dataUrl = canvas.toDataURL("image/png");
-        const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
-
-        const blob = await new Promise<Blob | null>((resolve) =>
-          canvas.toBlob((b) => resolve(b), "image/png")
+        const gameState = {
+          boardState,
+          solutionGrid,
+          difficulty: normalizedDiff,
+          time,
+          sessionSeconds,
+          playerName,
+          bestTime,
+          isNewRecord: isNewRecord && didWin,
+          isWon: didWin,
+          darkMode,
+          roomCode,
+        };
+        const themeColor = normalizedDiff;
+        const url = await generateShareCanvas(
+          gameState,
+          challengeId,
+          themeColor
         );
 
-        const file = blob
-          ? new File([blob], "sudoku-sync-result.png", { type: "image/png" })
-          : null;
-
-        let nativeUri: string | undefined;
-        if (Capacitor.isNativePlatform()) {
-          try {
-            const savedFile = await Filesystem.writeFile({
-              path: "share_result.png",
-              data: base64Data,
-              directory: Directory.Cache,
-            });
-            nativeUri = savedFile.uri;
-          } catch (fsErr) {
-            console.error(
-              "[SharePreviewModal] Capacitor Filesystem cache write error:",
-              fsErr
-            );
-          }
-        }
-
         if (!isCancelled) {
-          setGeneratedImage({
-            dataUrl,
-            base64Data,
-            blob,
-            file,
-            nativeUri,
-          });
+          setGeneratedImage(url);
         }
       } catch (error) {
-        console.error("Capture failed:", error);
+        console.error("Canvas share generation failed:", error);
       } finally {
         if (!isCancelled) {
           setIsGenerating(false);
         }
       }
-    }, 350);
+    };
+
+    runCanvasGenerator();
 
     return () => {
       isCancelled = true;
-      clearTimeout(timer);
     };
   }, [
     isOpen,
     boardState,
-    difficulty,
+    solutionGrid,
+    normalizedDiff,
     time,
     sessionSeconds,
     playerName,
@@ -269,6 +137,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     didWin,
     darkMode,
     roomCode,
+    challengeId,
   ]);
 
   const handleShareScreenshot = async () => {
@@ -276,31 +145,31 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     if (isGenerating || !generatedImage) return;
 
     const shareText = `${time} (${normalizedDiff}) — ${ctaCopy}\nsudokusync.com | Room Code: ${extractedRoomCode}\n${fullUrl}`;
+    const base64Data = generatedImage.replace(/^data:image\/png;base64,/, "");
 
     try {
       if (Capacitor.isNativePlatform()) {
-        let uriToShare = generatedImage.nativeUri;
-        if (!uriToShare) {
-          const savedFile = await Filesystem.writeFile({
-            path: "share_result.png",
-            data: generatedImage.base64Data,
-            directory: Directory.Cache,
-          });
-          uriToShare = savedFile.uri;
-        }
+        const savedFile = await Filesystem.writeFile({
+          path: "share_result.png",
+          data: base64Data,
+          directory: Directory.Cache,
+        });
 
         await Share.share({
           title: "Sudoku Sync",
           text: shareText,
-          url: uriToShare,
+          url: savedFile.uri,
           dialogTitle: "Share this Screenshot",
         });
       } else {
-        const { file, dataUrl } = generatedImage;
+        const blob = await dataUrlToBlob(generatedImage);
+        const file = new File([blob], "sudoku-sync-result.png", {
+          type: "image/png",
+        });
+
         if (
           typeof navigator !== "undefined" &&
           navigator.share &&
-          file &&
           (!navigator.canShare || navigator.canShare({ files: [file] }))
         ) {
           await navigator.share({
@@ -316,7 +185,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
           });
         } else {
           const link = document.createElement("a");
-          link.href = dataUrl;
+          link.href = generatedImage;
           link.download = `sudoku-sync-${normalizedDiff.toLowerCase()}.png`;
           document.body.appendChild(link);
           link.click();
@@ -333,29 +202,24 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     if (isGenerating || !generatedImage) return;
 
     const fileName = `sudoku-sync-${normalizedDiff.toLowerCase()}-${Date.now()}.png`;
+    const base64Data = generatedImage.replace(/^data:image\/png;base64,/, "");
 
     try {
       if (Capacitor.isNativePlatform()) {
         await Filesystem.writeFile({
           path: fileName,
-          data: generatedImage.base64Data,
+          data: base64Data,
           directory: Directory.Documents,
         });
         setIsSavedSuccess(true);
         setTimeout(() => setIsSavedSuccess(false), 2500);
       } else {
-        const url = generatedImage.blob
-          ? URL.createObjectURL(generatedImage.blob)
-          : generatedImage.dataUrl;
         const link = document.createElement("a");
-        link.href = url;
+        link.href = generatedImage;
         link.download = fileName;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        if (generatedImage.blob) {
-          setTimeout(() => URL.revokeObjectURL(url), 1500);
-        }
         setIsSavedSuccess(true);
         setTimeout(() => setIsSavedSuccess(false), 2500);
       }
@@ -439,24 +303,26 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
               </button>
             </div>
 
-            {/* VISIBLE DOM RENDER & CAPTURE: Fixed mobile aspect ratio container (w-[360px] max-w-[360px] mx-auto) */}
+            {/* PURE CANVAS PREVIEW IMAGE */}
             <div className="w-[360px] max-w-[360px] mx-auto flex items-center justify-center shrink-0">
-              <ShareCard
-                ref={offscreenCaptureRef}
-                boardState={boardState}
-                solutionGrid={solutionGrid}
-                difficulty={normalizedDiff}
-                time={time}
-                sessionSeconds={sessionSeconds}
-                playerName={playerName}
-                tagline={tagline}
-                bestTime={bestTime}
-                isNewRecord={isNewRecord && didWin}
-                isWon={didWin}
-                darkMode={darkMode}
-                roomCode={roomCode}
-                challengeUrl={displayUrl}
-              />
+              {generatedImage ? (
+                <img
+                  src={generatedImage}
+                  alt="Share Preview"
+                  className="w-[360px] mx-auto rounded-2xl shadow-lg select-none"
+                />
+              ) : (
+                <div
+                  className={`w-[360px] h-[512px] mx-auto rounded-2xl flex flex-col items-center justify-center gap-3 ${
+                    darkMode ? "bg-zinc-800/60" : "bg-stone-100"
+                  }`}
+                >
+                  <Loader2 className="w-8 h-8 animate-spin opacity-60" />
+                  <span className="text-xs font-sans font-bold tracking-wide opacity-70">
+                    Generating Screenshot...
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons: Locked to fixed 360px container, disabled while generating */}

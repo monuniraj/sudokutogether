@@ -1,9 +1,6 @@
 import { SudokuBoardState } from "../components/game/SudokuBoard";
-import {
-  evaluateBoardDidWin,
-  evaluatePerformanceSticker,
-  extractRoomCodeFromChallenge,
-} from "../components/share/ShareCard";
+
+export type ShareDifficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT" | string;
 
 export interface ShareCanvasGameState {
   boardState?: SudokuBoardState | null;
@@ -232,6 +229,132 @@ const DARK_THEMES: Record<string, ShareCanvasThemePalette> = {
   },
 };
 
+export const evaluateBoardDidWin = (
+  boardState: SudokuBoardState | null,
+  isWonProp?: boolean
+): boolean => {
+  const mistakes = boardState?.currentMistakesCount ?? 0;
+  const maxMistakes = boardState?.maxMistakesLimit ?? 3;
+  const hitMaxMistakes =
+    maxMistakes === 0
+      ? mistakes > 0
+      : maxMistakes < 999 && mistakes >= maxMistakes;
+
+  if (hitMaxMistakes) {
+    return false;
+  }
+
+  const isGridCompletelyFilled = Boolean(
+    boardState?.grid &&
+      boardState.grid.length === 9 &&
+      boardState.grid.every(
+        (row) =>
+          Array.isArray(row) &&
+          row.length === 9 &&
+          row.every((cell) => cell && cell.value !== 0)
+      )
+  );
+
+  if (!isGridCompletelyFilled) {
+    return false;
+  }
+
+  return isWonProp !== undefined ? Boolean(isWonProp) : true;
+};
+
+export const evaluatePerformanceSticker = (
+  difficulty: string,
+  seconds: number,
+  isWon: boolean = true
+): { label: string; tier: "excellent" | "great" | "none" } => {
+  if (!isWon) {
+    return { label: "", tier: "none" };
+  }
+
+  const diff = String(difficulty || "EASY").toUpperCase();
+  const thresholds: Record<string, { excellent: number; great: number }> = {
+    EASY: { excellent: 120, great: 240 },
+    MEDIUM: { excellent: 210, great: 390 },
+    HARD: { excellent: 330, great: 600 },
+    EXPERT: { excellent: 480, great: 900 },
+  };
+  const { excellent, great } = thresholds[diff] || thresholds.EASY;
+
+  if (seconds > 0 && seconds <= excellent) {
+    return { label: "EXCELLENT TIME", tier: "excellent" };
+  }
+  if (seconds > 0 && seconds <= great) {
+    return { label: "GREAT TIME", tier: "great" };
+  }
+  return { label: "", tier: "none" };
+};
+
+export const extractRoomCodeFromChallenge = (
+  challengeInput?: string,
+  roomCode?: string,
+  boardState?: SudokuBoardState | null
+): string => {
+  if (roomCode && String(roomCode).trim().length > 0) {
+    const cleanRoom = String(roomCode).trim();
+    const matchSudoku = cleanRoom.match(/SUDOKU-([A-Z0-9]+)-/i);
+    if (matchSudoku && matchSudoku[1]) return matchSudoku[1].toUpperCase();
+    return cleanRoom.toUpperCase();
+  }
+
+  if (challengeInput) {
+    const matchSudoku = challengeInput.match(/SUDOKU-([A-Z0-9]+)-/i);
+    if (matchSudoku && matchSudoku[1]) {
+      return matchSudoku[1].toUpperCase();
+    }
+    const matchQuery = challengeInput.match(/[?&]challenge=([^&#]+)/i);
+    if (matchQuery && matchQuery[1]) {
+      const token = decodeURIComponent(matchQuery[1]);
+      const innerMatch = token.match(/SUDOKU-([A-Z0-9]+)-/i);
+      if (innerMatch && innerMatch[1]) return innerMatch[1].toUpperCase();
+      return token;
+    }
+  }
+
+  if (boardState?.seed) {
+    return String(boardState.seed).padStart(6, "0").slice(-6).toUpperCase();
+  }
+
+  return "849201";
+};
+
+export const buildFreshChallengeUrl = (
+  boardState: SudokuBoardState | null,
+  difficulty: string,
+  roomCode?: string
+): {
+  fullUrl: string;
+  displayUrl: string;
+  extractedRoomCode: string;
+  challengeId: string;
+} => {
+  const diff = String(
+    difficulty || boardState?.difficulty || "EASY"
+  ).toUpperCase();
+  const seed = extractRoomCodeFromChallenge(undefined, roomCode, boardState);
+  const maxMistakes = boardState?.maxMistakesLimit ?? 3;
+  const hintLimit = (boardState as any)?.hintLimit ?? 3;
+  const challengeId = `SUDOKU-${seed}-${diff}-M${maxMistakes}-H${hintLimit}-T1`;
+
+  const origin =
+    typeof window !== "undefined" &&
+    window.location.origin &&
+    !/localhost|127\.0\.0\.1|capacitor:\/\//i.test(window.location.origin)
+      ? window.location.origin.replace(/\/+$/, "")
+      : "https://sudokusync.com";
+
+  return {
+    fullUrl: `${origin}/?challenge=${challengeId}`,
+    displayUrl: `sudokusync.com | Room Code: ${seed}`,
+    extractedRoomCode: seed,
+    challengeId,
+  };
+};
+
 const drawRoundedRect = (
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -357,7 +480,6 @@ export async function generateShareCanvas(
     ? "Can you beat my time?"
     : "Stuck! Can you help me finish this?";
 
-  // Wait briefly for web fonts if available
   if (typeof document !== "undefined" && (document as any).fonts?.ready) {
     try {
       await Promise.race([
@@ -404,7 +526,6 @@ export async function generateShareCanvas(
   const headerY = 18;
   const logoSize = 34;
 
-  // Mini 3x3 Sudoku Emblem Badge (Geometric, zero external image CORS risk)
   drawRoundedRect(ctx, 18, headerY, logoSize, logoSize, 10);
   ctx.fillStyle = "#18181B";
   ctx.fill();
@@ -536,7 +657,6 @@ export async function generateShareCanvas(
 
   const gridCells = resolvedBoard?.grid || [];
 
-  // Cell backgrounds & numbers
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
       const cellX = boardX + c * cellSize;
@@ -553,7 +673,6 @@ export async function generateShareCanvas(
           solutionGrid[r][c] !== val) ||
           hasCellConflict(gridCells, r, c, val));
 
-      // Subtle alternating 3x3 box tint or error cell tint
       const boxParity = (Math.floor(r / 3) + Math.floor(c / 3)) % 2 === 1;
       if (isMistake) {
         ctx.fillStyle = "#FEE2E2";
@@ -564,7 +683,6 @@ export async function generateShareCanvas(
       }
 
       if (val !== 0) {
-        // Exact geometric center of cell — zero baseline shift between fixed and user numbers
         const centerX = cellX + cellSize / 2;
         const centerY = cellY + cellSize / 2;
 
@@ -584,7 +702,6 @@ export async function generateShareCanvas(
 
         ctx.fillText(String(val), centerX, centerY);
       } else if (Array.isArray(cell?.notes) && cell.notes.length > 0) {
-        // Render 3x3 candidate pencil marks if cell is empty
         const subSize = cellSize / 3;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";

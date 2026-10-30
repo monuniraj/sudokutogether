@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { ShareIcon } from "./ShareIcon";
-import { ShareDifficulty } from "./ShareCard";
+import { ShareDifficulty } from "../../utils/canvasShare";
 import { SharePreviewModal } from "./SharePreviewModal";
 import { SudokuBoardState } from "../game/SudokuBoard";
 
