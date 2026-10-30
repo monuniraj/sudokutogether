@@ -7,7 +7,7 @@ export interface ShareCanvasGameState {
   grid?: {
     value: number;
     isOriginalClue: boolean;
-    notes?: number[];
+    notes?: number[] | Set<number>;
   }[][];
   solutionGrid?: number[][];
   difficulty?: string;
@@ -33,108 +33,126 @@ export interface ShareCanvasThemePalette {
   pillText: string;
   stickerBg: string;
   stickerText: string;
-  boardBg: string;
-  cellAltBg: string;
+  boardBaseBg: string;
+  cellTintBg: string;
+  crosshairSiblingBg: string;
+  activeCellBg: string;
+  identicalCellBg: string;
   gridThinLine: string;
   gridThickLine: string;
-  boardBorder: string;
   primaryText: string;
   secondaryText: string;
   clueColor: string;
   userColor: string;
   errorColor: string;
   errorCellBg: string;
+  errorSelectedBg: string;
   noteColor: string;
 }
 
+/**
+ * Exact pastel & dark color tokens mirrored from `SudokuBoard.tsx` and `index.css`.
+ */
 const LIGHT_THEMES: Record<string, ShareCanvasThemePalette> = {
   EASY: {
     cardBgStart: "#ECFDF5",
     cardBgMid: "#FDFBF7",
     cardBgEnd: "#D1FAE5",
-    bannerBg: "rgba(255, 255, 255, 0.90)",
+    bannerBg: "rgba(255, 255, 255, 0.88)",
     pillBg: "#D1FAE5",
     pillText: "#065F46",
     stickerBg: "#A7F3D0",
     stickerText: "#064E3B",
-    boardBg: "#FFFFFF",
-    cellAltBg: "#F0FDF4",
-    gridThinLine: "#D1FAE5",
-    gridThickLine: "#334155",
-    boardBorder: "#334155",
+    boardBaseBg: "#FFFFFF",
+    cellTintBg: "rgba(34, 197, 94, 0.12)",
+    crosshairSiblingBg: "#FFFFFF",
+    activeCellBg: "#86EFAC",
+    identicalCellBg: "#86EFAC",
+    gridThinLine: "rgba(6, 95, 70, 0.20)",
+    gridThickLine: "rgba(6, 95, 70, 0.55)",
     primaryText: "#1C1917",
-    secondaryText: "#64748B",
-    clueColor: "#334155",
-    userColor: "#3b82f6",
-    errorColor: "#ef4444",
+    secondaryText: "#78716C",
+    clueColor: "#1C1917",
+    userColor: "#2B6CB0",
+    errorColor: "#BE123C",
     errorCellBg: "#FEE2E2",
-    noteColor: "#64748B",
+    errorSelectedBg: "#FCA5A5",
+    noteColor: "#57534E",
   },
   MEDIUM: {
     cardBgStart: "#FFFBEB",
     cardBgMid: "#FDFBF7",
     cardBgEnd: "#FEF3C7",
-    bannerBg: "rgba(255, 255, 255, 0.90)",
+    bannerBg: "rgba(255, 255, 255, 0.88)",
     pillBg: "#FEF3C7",
     pillText: "#92400E",
     stickerBg: "#FDE68A",
     stickerText: "#78350F",
-    boardBg: "#FFFFFF",
-    cellAltBg: "#FEFCE8",
-    gridThinLine: "#FDE68A",
-    gridThickLine: "#334155",
-    boardBorder: "#334155",
+    boardBaseBg: "#FFFFFF",
+    cellTintBg: "rgba(234, 179, 8, 0.12)",
+    crosshairSiblingBg: "#FFFFFF",
+    activeCellBg: "#FCD34D",
+    identicalCellBg: "#FCD34D",
+    gridThinLine: "rgba(133, 77, 14, 0.20)",
+    gridThickLine: "rgba(133, 77, 14, 0.55)",
     primaryText: "#1C1917",
-    secondaryText: "#64748B",
-    clueColor: "#334155",
-    userColor: "#3b82f6",
-    errorColor: "#ef4444",
+    secondaryText: "#78716C",
+    clueColor: "#1C1917",
+    userColor: "#2B6CB0",
+    errorColor: "#BE123C",
     errorCellBg: "#FEE2E2",
-    noteColor: "#64748B",
+    errorSelectedBg: "#FCA5A5",
+    noteColor: "#57534E",
   },
   HARD: {
     cardBgStart: "#FAF5FF",
     cardBgMid: "#FDFBF7",
     cardBgEnd: "#F3E8FF",
-    bannerBg: "rgba(255, 255, 255, 0.90)",
+    bannerBg: "rgba(255, 255, 255, 0.88)",
     pillBg: "#F3E8FF",
     pillText: "#6B21A8",
     stickerBg: "#E9D5FF",
     stickerText: "#4C1D95",
-    boardBg: "#FFFFFF",
-    cellAltBg: "#FAF5FF",
-    gridThinLine: "#E9D5FF",
-    gridThickLine: "#334155",
-    boardBorder: "#334155",
+    boardBaseBg: "#FFFFFF",
+    cellTintBg: "rgba(168, 85, 247, 0.12)",
+    crosshairSiblingBg: "#FFFFFF",
+    activeCellBg: "#D8B4FE",
+    identicalCellBg: "#D8B4FE",
+    gridThinLine: "rgba(107, 33, 168, 0.20)",
+    gridThickLine: "rgba(107, 33, 168, 0.55)",
     primaryText: "#1C1917",
-    secondaryText: "#64748B",
-    clueColor: "#334155",
-    userColor: "#3b82f6",
-    errorColor: "#ef4444",
+    secondaryText: "#78716C",
+    clueColor: "#1C1917",
+    userColor: "#2B6CB0",
+    errorColor: "#BE123C",
     errorCellBg: "#FEE2E2",
-    noteColor: "#64748B",
+    errorSelectedBg: "#FCA5A5",
+    noteColor: "#57534E",
   },
   EXPERT: {
     cardBgStart: "#FFF1F2",
     cardBgMid: "#FDFBF7",
     cardBgEnd: "#FFE4E6",
-    bannerBg: "rgba(255, 255, 255, 0.90)",
+    bannerBg: "rgba(255, 255, 255, 0.88)",
     pillBg: "#FFE4E6",
     pillText: "#9D174D",
     stickerBg: "#FECDD3",
     stickerText: "#881337",
-    boardBg: "#FFFFFF",
-    cellAltBg: "#FFF1F2",
-    gridThinLine: "#FECDD3",
-    gridThickLine: "#334155",
-    boardBorder: "#334155",
+    boardBaseBg: "#FFFFFF",
+    cellTintBg: "rgba(244, 63, 94, 0.12)",
+    crosshairSiblingBg: "#FFFFFF",
+    activeCellBg: "#F9A8D4",
+    identicalCellBg: "#F9A8D4",
+    gridThinLine: "rgba(157, 23, 77, 0.20)",
+    gridThickLine: "rgba(157, 23, 77, 0.55)",
     primaryText: "#1C1917",
-    secondaryText: "#64748B",
-    clueColor: "#334155",
-    userColor: "#3b82f6",
-    errorColor: "#ef4444",
+    secondaryText: "#78716C",
+    clueColor: "#1C1917",
+    userColor: "#2B6CB0",
+    errorColor: "#BE123C",
     errorCellBg: "#FEE2E2",
-    noteColor: "#64748B",
+    errorSelectedBg: "#FCA5A5",
+    noteColor: "#57534E",
   },
 };
 
@@ -144,21 +162,24 @@ const DARK_THEMES: Record<string, ShareCanvasThemePalette> = {
     cardBgMid: "#121615",
     cardBgEnd: "#064e3b",
     bannerBg: "rgba(255, 255, 255, 0.06)",
-    pillBg: "rgba(16, 185, 129, 0.24)",
+    pillBg: "rgba(16, 185, 129, 0.22)",
     pillText: "#6EE7B7",
     stickerBg: "#065F46",
     stickerText: "#ECFDF5",
-    boardBg: "#1E1E24",
-    cellAltBg: "#18181D",
-    gridThinLine: "#2E2E38",
-    gridThickLine: "#64748B",
-    boardBorder: "#475569",
-    primaryText: "#F8FAFC",
-    secondaryText: "#94A3B8",
-    clueColor: "#334155",
-    userColor: "#3b82f6",
-    errorColor: "#ef4444",
-    errorCellBg: "rgba(239, 68, 68, 0.18)",
+    boardBaseBg: "#18181B",
+    cellTintBg: "#18181B",
+    crosshairSiblingBg: "#051f18",
+    activeCellBg: "#0e8365",
+    identicalCellBg: "#0e8365",
+    gridThinLine: "#054031",
+    gridThickLine: "#0b6b52",
+    primaryText: "#FAFAF9",
+    secondaryText: "#A8A29E",
+    clueColor: "#F8FAFC",
+    userColor: "#38BDF8",
+    errorColor: "#FDA4AF",
+    errorCellBg: "rgba(76, 5, 25, 0.45)",
+    errorSelectedBg: "#881337",
     noteColor: "#94A3B8",
   },
   MEDIUM: {
@@ -166,21 +187,24 @@ const DARK_THEMES: Record<string, ShareCanvasThemePalette> = {
     cardBgMid: "#161412",
     cardBgEnd: "#451a03",
     bannerBg: "rgba(255, 255, 255, 0.06)",
-    pillBg: "rgba(245, 158, 11, 0.24)",
+    pillBg: "rgba(245, 158, 11, 0.22)",
     pillText: "#FCD34D",
     stickerBg: "#78350F",
     stickerText: "#FFFBEB",
-    boardBg: "#1E1E24",
-    cellAltBg: "#18181D",
-    gridThinLine: "#2E2E38",
-    gridThickLine: "#64748B",
-    boardBorder: "#475569",
-    primaryText: "#F8FAFC",
-    secondaryText: "#94A3B8",
-    clueColor: "#334155",
-    userColor: "#3b82f6",
-    errorColor: "#ef4444",
-    errorCellBg: "rgba(239, 68, 68, 0.18)",
+    boardBaseBg: "#18181B",
+    cellTintBg: "#18181B",
+    crosshairSiblingBg: "#1f1403",
+    activeCellBg: "#713f12",
+    identicalCellBg: "#713f12",
+    gridThinLine: "#532004",
+    gridThickLine: "#7c3207",
+    primaryText: "#FAFAF9",
+    secondaryText: "#A8A29E",
+    clueColor: "#F8FAFC",
+    userColor: "#38BDF8",
+    errorColor: "#FDA4AF",
+    errorCellBg: "rgba(76, 5, 25, 0.45)",
+    errorSelectedBg: "#881337",
     noteColor: "#94A3B8",
   },
   HARD: {
@@ -188,21 +212,24 @@ const DARK_THEMES: Record<string, ShareCanvasThemePalette> = {
     cardBgMid: "#141218",
     cardBgEnd: "#3b0764",
     bannerBg: "rgba(255, 255, 255, 0.06)",
-    pillBg: "rgba(168, 85, 247, 0.24)",
+    pillBg: "rgba(168, 85, 247, 0.22)",
     pillText: "#D8B4FE",
     stickerBg: "#581C87",
     stickerText: "#FAF5FF",
-    boardBg: "#1E1E24",
-    cellAltBg: "#18181D",
-    gridThinLine: "#2E2E38",
-    gridThickLine: "#64748B",
-    boardBorder: "#475569",
-    primaryText: "#F8FAFC",
-    secondaryText: "#94A3B8",
-    clueColor: "#334155",
-    userColor: "#3b82f6",
-    errorColor: "#ef4444",
-    errorCellBg: "rgba(239, 68, 68, 0.18)",
+    boardBaseBg: "#18181B",
+    cellTintBg: "#18181B",
+    crosshairSiblingBg: "#160c2b",
+    activeCellBg: "#581db8",
+    identicalCellBg: "#581db8",
+    gridThinLine: "#31126b",
+    gridThickLine: "#4c1d95",
+    primaryText: "#FAFAF9",
+    secondaryText: "#A8A29E",
+    clueColor: "#F8FAFC",
+    userColor: "#38BDF8",
+    errorColor: "#FDA4AF",
+    errorCellBg: "rgba(76, 5, 25, 0.45)",
+    errorSelectedBg: "#881337",
     noteColor: "#94A3B8",
   },
   EXPERT: {
@@ -210,23 +237,152 @@ const DARK_THEMES: Record<string, ShareCanvasThemePalette> = {
     cardBgMid: "#181214",
     cardBgEnd: "#4c0519",
     bannerBg: "rgba(255, 255, 255, 0.06)",
-    pillBg: "rgba(244, 63, 94, 0.24)",
+    pillBg: "rgba(244, 63, 94, 0.22)",
     pillText: "#FDA4AF",
     stickerBg: "#881337",
     stickerText: "#FFF1F2",
-    boardBg: "#1E1E24",
-    cellAltBg: "#18181D",
-    gridThinLine: "#2E2E38",
-    gridThickLine: "#64748B",
-    boardBorder: "#475569",
-    primaryText: "#F8FAFC",
-    secondaryText: "#94A3B8",
-    clueColor: "#334155",
-    userColor: "#3b82f6",
-    errorColor: "#ef4444",
-    errorCellBg: "rgba(239, 68, 68, 0.18)",
+    boardBaseBg: "#18181B",
+    cellTintBg: "#18181B",
+    crosshairSiblingBg: "#210811",
+    activeCellBg: "#881337",
+    identicalCellBg: "#881337",
+    gridThinLine: "#58061d",
+    gridThickLine: "#881337",
+    primaryText: "#FAFAF9",
+    secondaryText: "#A8A29E",
+    clueColor: "#F8FAFC",
+    userColor: "#38BDF8",
+    errorColor: "#FDA4AF",
+    errorCellBg: "rgba(76, 5, 25, 0.45)",
+    errorSelectedBg: "#881337",
     noteColor: "#94A3B8",
   },
+};
+
+/**
+ * Raw SVG XML Icon Generators (Zero CORS, inline Data URL rendering)
+ */
+const getEmblemSvg = (accentColor: string): string => `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" fill="none">
+  <rect width="36" height="36" rx="10" fill="#121212"/>
+  <rect x="5" y="5" width="7.5" height="7.5" rx="2" fill="${accentColor}"/>
+  <rect x="14.25" y="5" width="7.5" height="7.5" rx="2" fill="#27272A"/>
+  <rect x="23.5" y="5" width="7.5" height="7.5" rx="2" fill="#3F3F46"/>
+  <rect x="5" y="14.25" width="7.5" height="7.5" rx="2" fill="#27272A"/>
+  <rect x="14.25" y="14.25" width="7.5" height="7.5" rx="2" fill="${accentColor}"/>
+  <rect x="23.5" y="14.25" width="7.5" height="7.5" rx="2" fill="#27272A"/>
+  <rect x="5" y="23.5" width="7.5" height="7.5" rx="2" fill="#3F3F46"/>
+  <rect x="14.25" y="23.5" width="7.5" height="7.5" rx="2" fill="#27272A"/>
+  <rect x="23.5" y="23.5" width="7.5" height="7.5" rx="2" fill="${accentColor}"/>
+</svg>`;
+
+const getSparklesSvg = (color: string): string => `
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+  <path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>
+</svg>`;
+
+const getClockSvg = (color: string): string => `
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="10"/>
+  <polyline points="12 6 12 12 16 14"/>
+</svg>`;
+
+const getTrophySvg = (color: string): string => `
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+  <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+  <path d="M4 22h16"/>
+  <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+  <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+  <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+</svg>`;
+
+const getShieldCheckSvg = (color: string): string => `
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+  <path d="m9 12 2 2 4-4"/>
+</svg>`;
+
+const getAlertCircleSvg = (color: string): string => `
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="10"/>
+  <line x1="12" x2="12" y1="8" y2="12"/>
+  <line x1="12" x2="12.01" y1="16" y2="16"/>
+</svg>`;
+
+const getFlameSvg = (color: string): string => `
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+</svg>`;
+
+const getGlobeSvg = (color: string): string => `
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="10"/>
+  <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+  <path d="M2 12h20"/>
+</svg>`;
+
+const getHashSvg = (color: string): string => `
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+  <line x1="4" x2="20" y1="9" y2="9"/>
+  <line x1="4" x2="20" y1="15" y2="15"/>
+  <line x1="10" x2="8" y1="3" y2="21"/>
+  <line x1="16" x2="14" y1="3" y2="21"/>
+</svg>`;
+
+/**
+ * Converts a raw SVG XML string into a UTF-8 Data URL, loads it into an Image,
+ * and draws it onto the 2D canvas without triggering any CORS security errors.
+ */
+export async function drawSvg(
+  ctx: CanvasRenderingContext2D,
+  svgString: string,
+  x: number,
+  y: number,
+  size: number
+): Promise<void> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, x, y, size, size);
+      resolve();
+    };
+    img.onerror = () => {
+      resolve();
+    };
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+      svgString.trim()
+    )}`;
+  });
+}
+
+const drawLogoOrEmblem = async (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  accentColor: string
+): Promise<void> => {
+  const loadedLogo = await new Promise<HTMLImageElement | null>((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = "/logo.png";
+  });
+
+  if (loadedLogo) {
+    ctx.save();
+    drawRoundedRect(ctx, x, y, size, size, 10);
+    ctx.fillStyle = "#121212";
+    ctx.fill();
+    ctx.clip();
+    ctx.drawImage(loadedLogo, x, y, size, size);
+    ctx.restore();
+  } else {
+    await drawSvg(ctx, getEmblemSvg(accentColor), x, y, size);
+  }
 };
 
 export const evaluateBoardDidWin = (
@@ -410,16 +566,71 @@ const hasCellConflict = (
 };
 
 /**
+ * Draws text at exact geometric vertical & horizontal center of `(centerX, centerY)`
+ * using `actualBoundingBoxAscent` and `actualBoundingBoxDescent` compensation
+ * so custom fonts (`Space Grotesk`, `Patrick Hand`, `JetBrains Mono`) never shift baselines.
+ */
+const drawCenteredText = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  centerX: number,
+  centerY: number
+) => {
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const metrics = ctx.measureText(text);
+  if (
+    typeof metrics.actualBoundingBoxAscent === "number" &&
+    typeof metrics.actualBoundingBoxDescent === "number"
+  ) {
+    const dy =
+      (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
+    ctx.fillText(text, centerX, centerY + dy);
+  } else {
+    ctx.fillText(text, centerX, centerY);
+  }
+};
+
+const drawLeftMiddleText = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  leftX: number,
+  centerY: number
+) => {
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  const metrics = ctx.measureText(text);
+  if (
+    typeof metrics.actualBoundingBoxAscent === "number" &&
+    typeof metrics.actualBoundingBoxDescent === "number"
+  ) {
+    const dy =
+      (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
+    ctx.fillText(text, leftX, centerY + dy);
+  } else {
+    ctx.fillText(text, leftX, centerY);
+  }
+};
+
+/**
  * Pure HTML5 2D Canvas generator for Sudoku Sync Share Cards.
- * Completely bypasses html2canvas and DOM flexbox baseline bugs by rendering
- * the card, pills, and 81 board cells directly with geometric centering
- * (`ctx.textAlign = 'center'` and `ctx.textBaseline = 'middle'`).
+ * Restores 100% visual parity with the live pastel theme, custom typography
+ * (`Space Grotesk`, `Patrick Hand`, `JetBrains Mono`), and inline SVG icons.
  */
 export async function generateShareCanvas(
   gameState: ShareCanvasGameState | SudokuBoardState | null,
   challengeId?: string,
   themeColor?: string
 ): Promise<string> {
+  // 1. Await custom web fonts before measuring or drawing on canvas
+  if (typeof document !== "undefined" && document.fonts?.ready) {
+    try {
+      await document.fonts.ready;
+    } catch {
+      // Fallback to loaded system fonts if font promise rejects
+    }
+  }
+
   const rawState = (gameState || {}) as ShareCanvasGameState;
   const resolvedBoard: SudokuBoardState | null =
     rawState.boardState !== undefined
@@ -480,20 +691,9 @@ export async function generateShareCanvas(
     ? "Can you beat my time?"
     : "Stuck! Can you help me finish this?";
 
-  if (typeof document !== "undefined" && (document as any).fonts?.ready) {
-    try {
-      await Promise.race([
-        (document as any).fonts.ready,
-        new Promise((res) => setTimeout(res, 150)),
-      ]);
-    } catch {
-      // Ignore font readiness errors and fall back to system fonts
-    }
-  }
-
   const CARD_WIDTH = 360;
-  const CARD_HEIGHT = 512;
-  const SCALE = 2; // 720x1024 crisp retina output
+  const CARD_HEIGHT = 516;
+  const SCALE = 2; // 720x1032 retina output
 
   const canvas = document.createElement("canvas");
   canvas.width = CARD_WIDTH * SCALE;
@@ -507,13 +707,15 @@ export async function generateShareCanvas(
   ctx.scale(SCALE, SCALE);
   ctx.clearRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
 
-  const sansFont =
-    '"Space Grotesk", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  const monoFont =
+  const appSansFont =
+    '"Space Grotesk", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif';
+  const appHandwritingFont =
+    '"Patrick Hand", "Architects Daughter", "Kalam", "Space Grotesk", sans-serif';
+  const appMonoFont =
     '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
-  // 1. Pastel Card Background (Rounded Rectangle)
-  const bgGrad = ctx.createLinearGradient(0, 0, CARD_WIDTH, CARD_HEIGHT);
+  // 1. Pastel Gradient Card Background (Rounded 28px)
+  const bgGrad = ctx.createLinearGradient(0, 0, CARD_WIDTH * 0.85, CARD_HEIGHT);
   bgGrad.addColorStop(0, palette.cardBgStart);
   bgGrad.addColorStop(0.52, palette.cardBgMid);
   bgGrad.addColorStop(1, palette.cardBgEnd);
@@ -522,44 +724,27 @@ export async function generateShareCanvas(
   ctx.fillStyle = bgGrad;
   ctx.fill();
 
-  // 2. Top Brand & Difficulty Header (y = 18..52)
+  // 2. Top Header: Logo/Emblem + Brand & Player Name + Difficulty Pill (y = 18..52)
   const headerY = 18;
   const logoSize = 34;
 
-  drawRoundedRect(ctx, 18, headerY, logoSize, logoSize, 10);
-  ctx.fillStyle = "#18181B";
-  ctx.fill();
+  await drawLogoOrEmblem(ctx, 18, headerY, logoSize, palette.activeCellBg);
 
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
-  ctx.lineWidth = 1;
-  for (let i = 1; i <= 2; i++) {
-    const offset = (logoSize / 3) * i;
-    ctx.beginPath();
-    ctx.moveTo(18 + offset, headerY + 5);
-    ctx.lineTo(18 + offset, headerY + logoSize - 5);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(18 + 5, headerY + offset);
-    ctx.lineTo(18 + logoSize - 5, headerY + offset);
-    ctx.stroke();
-  }
-
-  // Brand Title & Player Name
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
   ctx.fillStyle = palette.primaryText;
-  ctx.font = `900 13px ${sansFont}`;
-  ctx.fillText("SUDOKU SYNC", 60, headerY + 11);
+  ctx.font = `800 13px ${appSansFont}`;
+  drawLeftMiddleText(ctx, "SUDOKU SYNC", 60, headerY + 11);
 
   ctx.fillStyle = palette.secondaryText;
-  ctx.font = `700 10.5px ${sansFont}`;
-  ctx.fillText(playerName, 60, headerY + 25);
+  ctx.font = `700 10.5px ${appSansFont}`;
+  drawLeftMiddleText(ctx, playerName, 60, headerY + 25);
 
-  // Difficulty Pastel Pill (Top Right)
-  ctx.font = `900 10px ${sansFont}`;
-  const diffTextWidth = ctx.measureText(normalizedDiff).width;
-  const diffPillW = Math.max(58, diffTextWidth + 24);
+  // Difficulty Pastel Pill with Sparkles SVG Icon
+  ctx.font = `800 10px ${appSansFont}`;
+  const diffTextW = ctx.measureText(normalizedDiff).width;
+  const diffIconSize = 12;
+  const diffGap = 4;
+  const diffContentW = diffIconSize + diffGap + diffTextW;
+  const diffPillW = Math.max(66, diffContentW + 22);
   const diffPillH = 24;
   const diffPillX = CARD_WIDTH - 18 - diffPillW;
   const diffPillY = headerY + (logoSize - diffPillH) / 2;
@@ -568,38 +753,55 @@ export async function generateShareCanvas(
   ctx.fillStyle = palette.pillBg;
   ctx.fill();
 
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
+  const diffStartX = diffPillX + (diffPillW - diffContentW) / 2;
+  const diffCenterY = diffPillY + diffPillH / 2;
+  await drawSvg(
+    ctx,
+    getSparklesSvg(palette.pillText),
+    diffStartX,
+    diffCenterY - diffIconSize / 2,
+    diffIconSize
+  );
   ctx.fillStyle = palette.pillText;
-  ctx.fillText(
+  ctx.font = `800 10px ${appSansFont}`;
+  drawLeftMiddleText(
+    ctx,
     normalizedDiff,
-    diffPillX + diffPillW / 2,
-    diffPillY + diffPillH / 2
+    diffStartX + diffIconSize + diffGap,
+    diffCenterY
   );
 
-  // 3. Status Banner: Timer + Win/Loss Psychological Copy + Status Pill (y = 62..118)
+  // 3. Status Banner: Clock SVG + Timer + Hook Message + Status Pill (y = 62..120)
   const bannerX = 18;
   const bannerY = 62;
   const bannerW = CARD_WIDTH - 36;
-  const bannerH = 56;
+  const bannerH = 58;
 
   drawRoundedRect(ctx, bannerX, bannerY, bannerW, bannerH, 18);
   ctx.fillStyle = palette.bannerBg;
   ctx.fill();
 
-  // Timer string
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = palette.primaryText;
-  ctx.font = `900 20px ${monoFont}`;
-  ctx.fillText(timeStr, bannerX + 14, bannerY + 20);
+  // Clock SVG + Timer
+  const clockSize = 15;
+  const timerRowY = bannerY + 21;
+  await drawSvg(
+    ctx,
+    getClockSvg(palette.secondaryText),
+    bannerX + 14,
+    timerRowY - clockSize / 2,
+    clockSize
+  );
 
-  // Clean psychological hook message
   ctx.fillStyle = palette.primaryText;
-  ctx.font = `800 11px ${sansFont}`;
-  ctx.fillText(ctaCopy, bannerX + 14, bannerY + 41);
+  ctx.font = `800 20px ${appMonoFont}`;
+  drawLeftMiddleText(ctx, timeStr, bannerX + 14 + clockSize + 6, timerRowY);
 
-  // Right Status Pill (Win vs. Loss)
+  // Clean Win/Loss Hook Copy
+  ctx.fillStyle = palette.primaryText;
+  ctx.font = `700 11.5px ${appSansFont}`;
+  drawLeftMiddleText(ctx, ctaCopy, bannerX + 14, bannerY + 43);
+
+  // Right Status Pill with Vector SVG Icon
   const statusLabel = didWin
     ? rawState.isNewRecord
       ? "NEW BEST"
@@ -608,9 +810,32 @@ export async function generateShareCanvas(
       : `ERR: ${mistakes}/${maxMistakes || 3}`
     : `ERR: ${mistakes || maxMistakes || 3}/${maxMistakes || 3}`;
 
-  ctx.font = `900 9.5px ${sansFont}`;
+  const statusPillBg = didWin
+    ? rawState.isNewRecord
+      ? darkMode
+        ? "rgba(245, 158, 11, 0.22)"
+        : "#FEF3C7"
+      : palette.pillBg
+    : darkMode
+    ? "rgba(244, 63, 94, 0.22)"
+    : "#FFE4E6";
+
+  const statusPillColor = didWin
+    ? rawState.isNewRecord
+      ? darkMode
+        ? "#FCD34D"
+        : "#92400E"
+      : palette.pillText
+    : darkMode
+    ? "#FDA4AF"
+    : "#9F1239";
+
+  ctx.font = `800 9.5px ${appSansFont}`;
   const statusTextW = ctx.measureText(statusLabel).width;
-  const statusPillW = Math.max(66, statusTextW + 20);
+  const statusIconSize = 13;
+  const statusGap = 4;
+  const statusContentW = statusIconSize + statusGap + statusTextW;
+  const statusPillW = Math.max(74, statusContentW + 18);
   const statusPillH = 26;
   const statusPillX = bannerX + bannerW - 12 - statusPillW;
   const statusPillY = bannerY + (bannerH - statusPillH) / 2;
@@ -621,42 +846,62 @@ export async function generateShareCanvas(
     statusPillY,
     statusPillW,
     statusPillH,
-    10
+    11
   );
-  if (didWin) {
-    ctx.fillStyle = rawState.isNewRecord ? "#FEF3C7" : palette.pillBg;
-  } else {
-    ctx.fillStyle = darkMode ? "rgba(239, 68, 68, 0.22)" : "#FEE2E2";
-  }
+  ctx.fillStyle = statusPillBg;
   ctx.fill();
 
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  if (didWin) {
-    ctx.fillStyle = rawState.isNewRecord ? "#92400E" : palette.pillText;
-  } else {
-    ctx.fillStyle = darkMode ? "#FCA5A5" : "#B91C1C";
-  }
-  ctx.fillText(
+  const statusStartX = statusPillX + (statusPillW - statusContentW) / 2;
+  const statusCenterY = statusPillY + statusPillH / 2;
+  const statusSvg = didWin
+    ? rawState.isNewRecord
+      ? getTrophySvg(statusPillColor)
+      : getShieldCheckSvg(statusPillColor)
+    : getAlertCircleSvg(statusPillColor);
+
+  await drawSvg(
+    ctx,
+    statusSvg,
+    statusStartX,
+    statusCenterY - statusIconSize / 2,
+    statusIconSize
+  );
+  ctx.fillStyle = statusPillColor;
+  ctx.font = `800 9.5px ${appSansFont}`;
+  drawLeftMiddleText(
+    ctx,
     statusLabel,
-    statusPillX + statusPillW / 2,
-    statusPillY + statusPillH / 2
+    statusStartX + statusIconSize + statusGap,
+    statusCenterY
   );
 
-  // 4. 9x9 Sudoku Board (324x324 Square at x = 18, y = 130)
+  // 4. Authentic 9x9 Pastel Sudoku Board (324x324 Square at x = 18, y = 132)
   const boardX = 18;
-  const boardY = 130;
+  const boardY = 132;
   const boardSize = 324;
   const cellSize = boardSize / 9; // Exact 36px per cell
 
+  const gridCells = resolvedBoard?.grid || [];
+  const selectedRow =
+    !didWin && typeof resolvedBoard?.selectedRow === "number"
+      ? resolvedBoard.selectedRow
+      : null;
+  const selectedCol =
+    !didWin && typeof resolvedBoard?.selectedCol === "number"
+      ? resolvedBoard.selectedCol
+      : null;
+  const selectedVal =
+    selectedRow !== null && selectedCol !== null
+      ? gridCells[selectedRow]?.[selectedCol]?.value ?? 0
+      : 0;
+
   ctx.save();
-  drawRoundedRect(ctx, boardX, boardY, boardSize, boardSize, 16);
-  ctx.fillStyle = "#FFFFFF";
+  drawRoundedRect(ctx, boardX, boardY, boardSize, boardSize, 12);
+  ctx.fillStyle = palette.boardBaseBg;
   ctx.fill();
   ctx.clip();
 
-  const gridCells = resolvedBoard?.grid || [];
-
+  // Render 81 cells: pastel backgrounds + centered numbers
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
       const cellX = boardX + c * cellSize;
@@ -664,6 +909,18 @@ export async function generateShareCanvas(
       const cell = gridCells[r]?.[c];
       const val = cell?.value ?? 0;
       const isClue = Boolean(cell?.isOriginalClue);
+
+      const isSelected = selectedRow === r && selectedCol === c;
+      const isHighlightedSibling =
+        selectedRow !== null &&
+        selectedCol !== null &&
+        !isSelected &&
+        (selectedRow === r ||
+          selectedCol === c ||
+          (Math.floor(selectedRow / 3) === Math.floor(r / 3) &&
+            Math.floor(selectedCol / 3) === Math.floor(c / 3)));
+      const isIdenticalValue =
+        val !== 0 && selectedVal !== 0 && val === selectedVal && !isSelected;
 
       const isMistake =
         val !== 0 &&
@@ -673,12 +930,24 @@ export async function generateShareCanvas(
           solutionGrid[r][c] !== val) ||
           hasCellConflict(gridCells, r, c, val));
 
-      const boxParity = (Math.floor(r / 3) + Math.floor(c / 3)) % 2 === 1;
-      if (isMistake) {
-        ctx.fillStyle = "#FEE2E2";
+      // Exact cell fill matching live SudokuBoard.tsx
+      if (isSelected && isMistake) {
+        ctx.fillStyle = palette.errorSelectedBg;
         ctx.fillRect(cellX, cellY, cellSize, cellSize);
-      } else if (boxParity) {
-        ctx.fillStyle = palette.cellAltBg;
+      } else if (isMistake) {
+        ctx.fillStyle = palette.errorCellBg;
+        ctx.fillRect(cellX, cellY, cellSize, cellSize);
+      } else if (isSelected) {
+        ctx.fillStyle = palette.activeCellBg;
+        ctx.fillRect(cellX, cellY, cellSize, cellSize);
+      } else if (isIdenticalValue) {
+        ctx.fillStyle = palette.identicalCellBg;
+        ctx.fillRect(cellX, cellY, cellSize, cellSize);
+      } else if (isHighlightedSibling) {
+        ctx.fillStyle = palette.crosshairSiblingBg;
+        ctx.fillRect(cellX, cellY, cellSize, cellSize);
+      } else {
+        ctx.fillStyle = palette.cellTintBg;
         ctx.fillRect(cellX, cellY, cellSize, cellSize);
       }
 
@@ -686,43 +955,49 @@ export async function generateShareCanvas(
         const centerX = cellX + cellSize / 2;
         const centerY = cellY + cellSize / 2;
 
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.font = isClue
-          ? `700 20px ${sansFont}`
-          : `800 21px ${sansFont}`;
-
+        // Large, legible digits matching live board typography
         if (isClue) {
-          ctx.fillStyle = "#334155";
+          ctx.font = `500 26px ${appSansFont}`;
+          ctx.fillStyle = palette.clueColor;
         } else if (isMistake) {
-          ctx.fillStyle = "#ef4444";
+          ctx.font = `bold 28px ${appHandwritingFont}`;
+          ctx.fillStyle = palette.errorColor;
         } else {
-          ctx.fillStyle = "#3b82f6";
+          ctx.font = `bold 28px ${appHandwritingFont}`;
+          ctx.fillStyle = palette.userColor;
         }
 
-        ctx.fillText(String(val), centerX, centerY);
-      } else if (Array.isArray(cell?.notes) && cell.notes.length > 0) {
-        const subSize = cellSize / 3;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.font = `600 8.5px ${sansFont}`;
-        ctx.fillStyle = palette.noteColor;
-        for (const n of cell.notes) {
-          if (n >= 1 && n <= 9) {
-            const nr = Math.floor((n - 1) / 3);
-            const nc = (n - 1) % 3;
-            const nx = cellX + nc * subSize + subSize / 2;
-            const ny = cellY + nr * subSize + subSize / 2;
-            ctx.fillText(String(n), nx, ny);
+        drawCenteredText(ctx, String(val), centerX, centerY);
+      } else {
+        const rawNotes = cell?.notes;
+        const notesList: number[] =
+          rawNotes instanceof Set
+            ? Array.from(rawNotes)
+            : Array.isArray(rawNotes)
+            ? rawNotes
+            : [];
+
+        if (notesList.length > 0) {
+          const subSize = cellSize / 3;
+          ctx.font = `600 9px ${appSansFont}`;
+          ctx.fillStyle = palette.noteColor;
+          for (const n of notesList) {
+            if (n >= 1 && n <= 9) {
+              const nr = Math.floor((n - 1) / 3);
+              const nc = (n - 1) % 3;
+              const nx = cellX + nc * subSize + subSize / 2;
+              const ny = cellY + nr * subSize + subSize / 2;
+              drawCenteredText(ctx, String(n), nx, ny);
+            }
           }
         }
       }
     }
   }
 
-  // Thin 1px cell grid lines
+  // Thin 1.5px pastel cell grid lines
   ctx.strokeStyle = palette.gridThinLine;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1.5;
   for (let i = 1; i < 9; i++) {
     if (i % 3 === 0) continue;
     const pos = i * cellSize;
@@ -737,9 +1012,9 @@ export async function generateShareCanvas(
     ctx.stroke();
   }
 
-  // Thick 2px 3x3 box lines
-  ctx.strokeStyle = "#334155";
-  ctx.lineWidth = 2;
+  // Heavy 2.4px pastel 3x3 box divider lines
+  ctx.strokeStyle = palette.gridThickLine;
+  ctx.lineWidth = 2.4;
   for (let i = 3; i < 9; i += 3) {
     const pos = i * cellSize;
     ctx.beginPath();
@@ -755,17 +1030,21 @@ export async function generateShareCanvas(
 
   ctx.restore();
 
-  // Outer rounded board border
-  drawRoundedRect(ctx, boardX, boardY, boardSize, boardSize, 16);
-  ctx.strokeStyle = "#334155";
-  ctx.lineWidth = 2;
+  // Outer 2.4px rounded pastel board border
+  drawRoundedRect(ctx, boardX, boardY, boardSize, boardSize, 12);
+  ctx.strokeStyle = palette.gridThickLine;
+  ctx.lineWidth = 2.4;
   ctx.stroke();
 
   // Rotated Fast-Solve Sticker Badge ONLY on eligible Win (strictly hidden on Loss)
   if (didWin && stickerBadge.tier !== "none" && stickerBadge.label) {
     ctx.save();
-    ctx.font = `900 9.5px ${sansFont}`;
-    const stickerW = ctx.measureText(stickerBadge.label).width + 24;
+    ctx.font = `800 9.5px ${appSansFont}`;
+    const stickerTextW = ctx.measureText(stickerBadge.label).width;
+    const stickerIconSize = 12;
+    const stickerGap = 4;
+    const stickerContentW = stickerIconSize + stickerGap + stickerTextW;
+    const stickerW = stickerContentW + 20;
     const stickerH = 22;
     const stickerCenterX = boardX + boardSize - stickerW / 2 - 4;
     const stickerCenterY = boardY + 2;
@@ -784,29 +1063,93 @@ export async function generateShareCanvas(
     ctx.fillStyle = palette.stickerBg;
     ctx.fill();
 
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    const stickerStartX = -stickerContentW / 2;
+    const stickerSvg =
+      stickerBadge.tier === "excellent"
+        ? getFlameSvg(palette.stickerText)
+        : getSparklesSvg(palette.stickerText);
+
+    await drawSvg(
+      ctx,
+      stickerSvg,
+      stickerStartX,
+      -stickerIconSize / 2,
+      stickerIconSize
+    );
     ctx.fillStyle = palette.stickerText;
-    ctx.fillText(stickerBadge.label, 0, 0);
+    ctx.font = `800 9.5px ${appSansFont}`;
+    drawLeftMiddleText(
+      ctx,
+      stickerBadge.label,
+      stickerStartX + stickerIconSize + stickerGap,
+      0
+    );
     ctx.restore();
   }
 
-  // 5. Clean Single-Line Footer Pill (y = 466..498)
+  // 5. Clean Single-Line Footer Pill with Globe & Hash SVG Icons (y = 468..498)
   const footerX = 18;
-  const footerY = 466;
+  const footerY = 468;
   const footerW = CARD_WIDTH - 36;
   const footerH = 30;
 
-  drawRoundedRect(ctx, footerX, footerY, footerW, footerH, 12);
+  drawRoundedRect(ctx, footerX, footerY, footerW, footerH, 14);
   ctx.fillStyle = palette.pillBg;
   ctx.fill();
 
-  const footerText = `sudokusync.com | Room Code: ${extractedRoomCode}`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
+  ctx.font = `700 10.5px ${appMonoFont}`;
+  const domainText = "sudokusync.com";
+  const dividerText = " | ";
+  const roomText = `Room Code: ${extractedRoomCode}`;
+  const footerIconSize = 13;
+  const footerGap = 5;
+
+  const domainW = ctx.measureText(domainText).width;
+  const dividerW = ctx.measureText(dividerText).width;
+  const roomW = ctx.measureText(roomText).width;
+
+  const totalFooterContentW =
+    footerIconSize +
+    footerGap +
+    domainW +
+    dividerW +
+    footerIconSize +
+    footerGap +
+    roomW;
+
+  let cursorX = footerX + (footerW - totalFooterContentW) / 2;
+  const footerCenterY = footerY + footerH / 2;
+
+  await drawSvg(
+    ctx,
+    getGlobeSvg(palette.pillText),
+    cursorX,
+    footerCenterY - footerIconSize / 2,
+    footerIconSize
+  );
+  cursorX += footerIconSize + footerGap;
+
   ctx.fillStyle = palette.pillText;
-  ctx.font = `800 10.5px ${monoFont}`;
-  ctx.fillText(footerText, footerX + footerW / 2, footerY + footerH / 2);
+  ctx.font = `700 10.5px ${appMonoFont}`;
+  drawLeftMiddleText(ctx, domainText, cursorX, footerCenterY);
+  cursorX += domainW;
+
+  ctx.save();
+  ctx.globalAlpha = 0.45;
+  drawLeftMiddleText(ctx, dividerText, cursorX, footerCenterY);
+  ctx.restore();
+  cursorX += dividerW;
+
+  await drawSvg(
+    ctx,
+    getHashSvg(palette.pillText),
+    cursorX,
+    footerCenterY - footerIconSize / 2,
+    footerIconSize
+  );
+  cursorX += footerIconSize + footerGap;
+
+  drawLeftMiddleText(ctx, roomText, cursorX, footerCenterY);
 
   return canvas.toDataURL("image/png");
 }
