@@ -274,13 +274,15 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           }
         }
         .sudoku-digit-text {
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
+          position: absolute !important;
+          top: 50% !important;
+          left: 50% !important;
+          transform: translate(-50%, -50%) !important;
           line-height: 1 !important;
-          transform: translateY(0) !important;
           margin: 0 !important;
           padding: 0 !important;
+          display: block !important;
+          white-space: nowrap !important;
         }
       `}</style>
       {/* MINIMALIST PAUSE SCREEN OVERLAY */}
@@ -552,11 +554,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                     animation: isRevealing ? "inkDigitFadeIn 220ms ease-out var(--digit-delay, 0ms) forwards" : undefined,
                     willChange: "transform, opacity",
                     ["--digit-delay" as any]: `${digitRevealDelay}ms`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    lineHeight: '1 !important',
-                    transform: 'translateY(0)',
+                    lineHeight: 1,
                     margin: 0,
                     padding: 0,
                   }}
@@ -564,11 +562,11 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                   <span
                     className="sudoku-digit-text"
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      lineHeight: '1 !important',
-                      transform: 'translateY(0)',
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      lineHeight: 1,
                       margin: 0,
                       padding: 0,
                     }}

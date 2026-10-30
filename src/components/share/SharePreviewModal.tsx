@@ -11,6 +11,7 @@ import {
   ShareCard,
   ShareDifficulty,
   buildFreshChallengeUrl,
+  evaluateBoardDidWin,
 } from "./ShareCard";
 
 export interface SharePreviewModalProps {
@@ -134,14 +135,8 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     difficulty || boardState?.difficulty || "EASY"
   ).toUpperCase() as Difficulty;
 
-  const mistakes = boardState?.currentMistakesCount ?? 0;
-  const maxMistakes = boardState?.maxMistakesLimit ?? 3;
-  const didWin =
-    isWon !== undefined
-      ? Boolean(isWon)
-      : maxMistakes === 0
-      ? mistakes === 0
-      : mistakes < maxMistakes;
+  // Strict Win/Loss evaluation: requires < maxMistakes AND all 81 cells populated
+  const didWin = evaluateBoardDidWin(boardState, isWon);
 
   const { fullUrl, displayUrl, extractedRoomCode } = buildFreshChallengeUrl(
     boardState,
@@ -187,19 +182,22 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
               clonedTarget.style.height = "auto";
             }
 
-            // Enforce strict baseline centering on all cloned digits to prevent cross-OS font shifts
-            const digitNodes = clonedEl.querySelectorAll(
-              ".sudoku-digit-text, .handwriting"
-            );
+            // Enforce strict absolute centering on all cloned cell numbers to bypass html2canvas baseline shifts
+            const digitNodes = clonedEl.querySelectorAll(".sudoku-digit-text");
             digitNodes.forEach((el) => {
               if (el instanceof HTMLElement) {
-                el.style.setProperty("display", "flex", "important");
-                el.style.setProperty("align-items", "center", "important");
-                el.style.setProperty("justify-content", "center", "important");
+                el.style.setProperty("position", "absolute", "important");
+                el.style.setProperty("top", "50%", "important");
+                el.style.setProperty("left", "50%", "important");
+                el.style.setProperty(
+                  "transform",
+                  "translate(-50%, -50%)",
+                  "important"
+                );
                 el.style.setProperty("line-height", "1", "important");
-                el.style.setProperty("transform", "translateY(0)", "important");
                 el.style.setProperty("margin", "0", "important");
                 el.style.setProperty("padding", "0", "important");
+                el.style.setProperty("display", "block", "important");
               }
             });
 

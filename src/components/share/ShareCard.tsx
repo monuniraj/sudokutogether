@@ -114,6 +114,39 @@ const parseFormattedTimeToSeconds = (formatted: string): number => {
   return 180;
 };
 
+export const evaluateBoardDidWin = (
+  boardState: SudokuBoardState | null,
+  isWonProp?: boolean
+): boolean => {
+  const mistakes = boardState?.currentMistakesCount ?? 0;
+  const maxMistakes = boardState?.maxMistakesLimit ?? 3;
+  const hitMaxMistakes =
+    maxMistakes === 0
+      ? mistakes > 0
+      : maxMistakes < 999 && mistakes >= maxMistakes;
+
+  if (hitMaxMistakes) {
+    return false;
+  }
+
+  const isGridCompletelyFilled = Boolean(
+    boardState?.grid &&
+      boardState.grid.length === 9 &&
+      boardState.grid.every(
+        (row) =>
+          Array.isArray(row) &&
+          row.length === 9 &&
+          row.every((cell) => cell && cell.value !== 0)
+      )
+  );
+
+  if (!isGridCompletelyFilled) {
+    return false;
+  }
+
+  return isWonProp !== undefined ? Boolean(isWonProp) : true;
+};
+
 export const evaluatePerformanceSticker = (
   difficulty: string,
   seconds: number,
@@ -201,6 +234,12 @@ export const buildFreshChallengeUrl = (
   };
 };
 
+const alignedTextSpanStyle: React.CSSProperties = {
+  display: "inline-block",
+  verticalAlign: "middle",
+  lineHeight: 1,
+};
+
 export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
   (
     {
@@ -226,13 +265,8 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
     const mistakes = boardState?.currentMistakesCount ?? 0;
     const maxMistakes = boardState?.maxMistakesLimit ?? 3;
 
-    // Accurately evaluate win vs. loss state
-    const didWin =
-      isWon !== undefined
-        ? Boolean(isWon)
-        : maxMistakes === 0
-        ? mistakes === 0
-        : mistakes < maxMistakes;
+    // Strict Win/Loss evaluation: requires < maxMistakes AND all 81 cells populated
+    const didWin = evaluateBoardDidWin(boardState, isWon);
 
     const effectiveSeconds =
       typeof sessionSeconds === "number" && sessionSeconds > 0
@@ -284,8 +318,14 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
         className="w-[360px] max-w-[360px] mx-auto flex flex-col gap-3 select-none border-none overflow-hidden shrink-0"
       >
         {/* 1. Minimalist Brand & Player Header */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
+        <div
+          style={{ display: "flex", alignItems: "center" }}
+          className="flex items-center justify-between gap-2"
+        >
+          <div
+            style={{ display: "flex", alignItems: "center" }}
+            className="flex items-center gap-2.5"
+          >
             <div
               style={{
                 width: "34px",
@@ -306,6 +346,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
             <div className="flex flex-col leading-tight">
               <span
                 style={{
+                  ...alignedTextSpanStyle,
                   fontSize: "12.5px",
                   fontWeight: 900,
                   letterSpacing: "0.06em",
@@ -317,9 +358,11 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
               </span>
               <span
                 style={{
+                  ...alignedTextSpanStyle,
                   fontSize: "10px",
                   fontWeight: 700,
                   color: darkMode ? "#A8A29E" : "#78716C",
+                  marginTop: "3px",
                 }}
               >
                 {playerName}
@@ -330,11 +373,13 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
           {/* Difficulty Pastel Pill */}
           <div
             style={{
+              display: "flex",
+              alignItems: "center",
               backgroundColor: darkMode
                 ? palette.pillBgDark
                 : palette.pillBgLight,
               color: darkMode ? palette.pillTextDark : palette.pillTextLight,
-              padding: "4px 11px",
+              padding: "5px 11px",
               borderRadius: "9999px",
               fontSize: "10px",
               fontWeight: 900,
@@ -342,14 +387,16 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
             }}
             className="uppercase flex items-center gap-1"
           >
-            <Sparkles className="w-3 h-3" />
-            <span>{normalizedDiff}</span>
+            <Sparkles className="w-3 h-3 shrink-0" />
+            <span style={alignedTextSpanStyle}>{normalizedDiff}</span>
           </div>
         </div>
 
         {/* 2. Ultra-Minimal Time & Hook Strip (De-duplicated) */}
         <div
           style={{
+            display: "flex",
+            alignItems: "center",
             backgroundColor: darkMode
               ? "rgba(255, 255, 255, 0.05)"
               : "rgba(255, 255, 255, 0.86)",
@@ -362,19 +409,22 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
           className="flex items-center justify-between gap-3"
         >
           <div className="flex flex-col min-w-0">
-            <div className="flex items-center gap-1.5">
+            <div
+              style={{ display: "flex", alignItems: "center" }}
+              className="flex items-center gap-1.5"
+            >
               <Clock
                 className="w-3.5 h-3.5 shrink-0"
                 style={{ color: darkMode ? "#A8A29E" : "#78716C" }}
               />
               <span
                 style={{
+                  ...alignedTextSpanStyle,
                   fontSize: "20px",
                   fontWeight: 900,
                   fontFamily:
                     "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
                   color: darkMode ? "#FFFFFF" : "#1C1917",
-                  lineHeight: 1.1,
                 }}
               >
                 {time}
@@ -382,11 +432,11 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
             </div>
             <span
               style={{
+                ...alignedTextSpanStyle,
                 fontSize: "11px",
                 fontWeight: 800,
                 color: darkMode ? "#E7E5E4" : "#292524",
-                marginTop: "3px",
-                lineHeight: 1.25,
+                marginTop: "5px",
               }}
             >
               {ctaCopy}
@@ -397,6 +447,8 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
           {didWin ? (
             <div
               style={{
+                display: "flex",
+                alignItems: "center",
                 backgroundColor: isNewRecord
                   ? darkMode
                     ? "rgba(245, 158, 11, 0.22)"
@@ -414,33 +466,34 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
                 borderRadius: "12px",
                 padding: "6px 10px",
               }}
-              className="flex flex-col items-end justify-center shrink-0"
+              className="flex items-center gap-1 shrink-0"
             >
-              <div className="flex items-center gap-1">
-                {isNewRecord ? (
-                  <Trophy className="w-3.5 h-3.5" />
-                ) : (
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                )}
-                <span
-                  style={{
-                    fontSize: "9px",
-                    fontWeight: 900,
-                    letterSpacing: "0.08em",
-                  }}
-                  className="uppercase"
-                >
-                  {isNewRecord
-                    ? "NEW BEST"
-                    : bestTime
-                    ? `BEST ${bestTime}`
-                    : `ERR: ${mistakes}/${maxMistakes || 3}`}
-                </span>
-              </div>
+              {isNewRecord ? (
+                <Trophy className="w-3.5 h-3.5 shrink-0" />
+              ) : (
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+              )}
+              <span
+                style={{
+                  ...alignedTextSpanStyle,
+                  fontSize: "9px",
+                  fontWeight: 900,
+                  letterSpacing: "0.08em",
+                }}
+                className="uppercase"
+              >
+                {isNewRecord
+                  ? "NEW BEST"
+                  : bestTime
+                  ? `BEST ${bestTime}`
+                  : `ERR: ${mistakes}/${maxMistakes || 3}`}
+              </span>
             </div>
           ) : (
             <div
               style={{
+                display: "flex",
+                alignItems: "center",
                 backgroundColor: darkMode
                   ? "rgba(244, 63, 94, 0.2)"
                   : "#FFE4E6",
@@ -453,6 +506,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
               <span
                 style={{
+                  ...alignedTextSpanStyle,
                   fontSize: "9.5px",
                   fontWeight: 900,
                   letterSpacing: "0.06em",
@@ -490,10 +544,12 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
             />
           </div>
 
-          {/* Dynamic Rotated Pastel Sticker Badge (-2deg) ONLY on Fast Win */}
-          {didWin && stickerBadge.tier !== "none" && (
+          {/* Dynamic Rotated Pastel Sticker Badge (-2deg) ONLY on Fast Win; strictly hidden on Loss */}
+          {didWin && stickerBadge.tier !== "none" ? (
             <div
               style={{
+                display: "flex",
+                alignItems: "center",
                 position: "absolute",
                 top: "-8px",
                 right: "-4px",
@@ -516,18 +572,21 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
               className="border-none select-none flex items-center gap-1.5 uppercase"
             >
               {stickerBadge.tier === "excellent" ? (
-                <Flame className="w-3 h-3" />
+                <Flame className="w-3 h-3 shrink-0" />
               ) : (
-                <Sparkles className="w-3 h-3" />
+                <Sparkles className="w-3 h-3 shrink-0" />
               )}
-              <span>{stickerBadge.label}</span>
+              <span style={alignedTextSpanStyle}>{stickerBadge.label}</span>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* 4. Clean Single-Line Room Code Footer */}
         <div
           style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             backgroundColor: darkMode
               ? palette.pillBgDark
               : palette.pillBgLight,
@@ -544,10 +603,12 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
           className="flex items-center justify-center gap-2 border-none select-none"
         >
           <Globe className="w-3.5 h-3.5 shrink-0" />
-          <span>sudokusync.com</span>
-          <span className="opacity-50">|</span>
+          <span style={alignedTextSpanStyle}>sudokusync.com</span>
+          <span style={{ ...alignedTextSpanStyle, opacity: 0.5 }}>|</span>
           <Hash className="w-3.5 h-3.5 shrink-0" />
-          <span>Room Code: {extractedRoomCode}</span>
+          <span style={alignedTextSpanStyle}>
+            Room Code: {extractedRoomCode}
+          </span>
         </div>
       </div>
     );
