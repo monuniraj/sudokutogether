@@ -66,7 +66,8 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   const { fullUrl, extractedRoomCode, challengeId } = buildFreshChallengeUrl(
     boardState,
     normalizedDiff,
-    roomCode
+    roomCode,
+    playerName
   );
 
   const ctaCopy = didWin
@@ -145,7 +146,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     if (isGenerating || !generatedImage) return;
 
     const challengeUrl =
-      buildFreshChallengeUrl(challengeId) || window.location.href;
+      buildFreshChallengeUrl(challengeId, playerName) || window.location.href;
     const shareText = `Can you beat my game? Play here: ${challengeUrl}`;
     const base64Data = generatedImage.replace(/^data:image\/png;base64,/, "");
 

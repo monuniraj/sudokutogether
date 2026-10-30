@@ -373,7 +373,7 @@ const getSparklesSvg = (color: string): string => `
 </svg>`;
 
 const getClockSvg = (color: string): string => `
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
   <circle cx="12" cy="12" r="10"/>
   <polyline points="12 6 12 12 16 14"/>
 </svg>`;
@@ -606,6 +606,46 @@ export const extractRoomCodeFromChallenge = (
   return "849201";
 };
 
+/**
+ * Resolves the active user's display name from explicit props or the canonical localStorage vault,
+ * preventing any fallback to placeholder bot names like "Chloe Zen".
+ */
+export const resolveActiveSenderName = (explicitName?: string): string => {
+  const cleanedExplicit = String(explicitName || "").trim();
+  if (
+    cleanedExplicit &&
+    cleanedExplicit.toLowerCase() !== "player" &&
+    cleanedExplicit.toLowerCase() !== "chloe zen"
+  ) {
+    return cleanedExplicit;
+  }
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const activeUid =
+        localStorage.getItem("sudoku_active_auth_uid") || "guest";
+      const vaultKey =
+        !activeUid || activeUid === "guest" || activeUid.startsWith("GUEST_")
+          ? "sudoku_guest_vault"
+          : `sudoku_vault_${activeUid}`;
+      const rawVault = localStorage.getItem(vaultKey);
+      if (rawVault) {
+        const parsedVault = JSON.parse(rawVault);
+        const vaultName = String(
+          parsedVault?.profile?.displayName || parsedVault?.profile?.name || ""
+        ).trim();
+        if (vaultName && vaultName.toLowerCase() !== "chloe zen") {
+          return vaultName;
+        }
+      }
+    } catch {
+      // Ignore storage parse errors
+    }
+  }
+
+  return cleanedExplicit || "Player";
+};
+
 export interface BuiltChallengeUrlInfo {
   fullUrl: string;
   displayUrl: string;
@@ -613,16 +653,21 @@ export interface BuiltChallengeUrlInfo {
   challengeId: string;
 }
 
-export function buildFreshChallengeUrl(challengeId: string): string;
+export function buildFreshChallengeUrl(
+  challengeId: string,
+  playerName?: string
+): string;
 export function buildFreshChallengeUrl(
   boardState: SudokuBoardState | null,
   difficulty: string,
-  roomCode?: string
+  roomCode?: string,
+  playerName?: string
 ): BuiltChallengeUrlInfo;
 export function buildFreshChallengeUrl(
   boardStateOrChallengeId: SudokuBoardState | string | null,
-  difficulty?: string,
-  roomCode?: string
+  difficultyOrPlayerName?: string,
+  roomCode?: string,
+  playerName?: string
 ): string | BuiltChallengeUrlInfo {
   const origin =
     typeof window !== "undefined" &&
@@ -632,19 +677,29 @@ export function buildFreshChallengeUrl(
       : "https://sudokusync.com";
 
   if (typeof boardStateOrChallengeId === "string") {
+    const activePlayerName = resolveActiveSenderName(difficultyOrPlayerName);
+    const senderQuery = activePlayerName
+      ? `&sender=${encodeURIComponent(activePlayerName)}`
+      : "";
     const rawToken = boardStateOrChallengeId.trim();
     if (!rawToken) {
-      return `${origin}/?challenge=SUDOKU-849201-EASY-M3-H3-T1`;
+      return `${origin}/?challenge=SUDOKU-849201-EASY-M3-H3-T1${senderQuery}`;
     }
     if (/^https?:\/\//i.test(rawToken)) {
-      return rawToken;
+      return /[?&]sender=/i.test(rawToken)
+        ? rawToken
+        : `${rawToken}${rawToken.includes("?") ? "" : "?"}${senderQuery}`;
     }
-    return `${origin}/?challenge=${rawToken}`;
+    return `${origin}/?challenge=${rawToken}${senderQuery}`;
   }
 
   const boardState = boardStateOrChallengeId;
+  const activePlayerName = resolveActiveSenderName(playerName);
+  const senderQuery = activePlayerName
+    ? `&sender=${encodeURIComponent(activePlayerName)}`
+    : "";
   const diff = String(
-    difficulty || boardState?.difficulty || "EASY"
+    difficultyOrPlayerName || boardState?.difficulty || "EASY"
   ).toUpperCase();
   const seed = extractRoomCodeFromChallenge(undefined, roomCode, boardState);
   const maxMistakes = boardState?.maxMistakesLimit ?? 3;
@@ -652,7 +707,7 @@ export function buildFreshChallengeUrl(
   const challengeId = `SUDOKU-${seed}-${diff}-M${maxMistakes}-H${hintLimit}-T1`;
 
   return {
-    fullUrl: `${origin}/?challenge=${challengeId}`,
+    fullUrl: `${origin}/?challenge=${challengeId}${senderQuery}`,
     displayUrl: `sudokusync.com | Room Code: ${seed}`,
     extractedRoomCode: seed,
     challengeId,
@@ -762,10 +817,10 @@ const drawLeftMiddleText = (
 
 /**
  * Pure HTML5 2D Canvas generator for Sudoku Sync Share Cards.
- * - Vector-styled pastel achievement stickers (-2.5deg tilt, 1.5px stroke, Mint/Emerald on win, Rose/Coral on defeat)
- * - Clean Hero Solve Timer + app-native flat pastel Hook Pill
+ * - Strict borderless pastel aesthetic: soft diffused vector shadows on all pills/surfaces; ONLY the 9x9 Sudoku grid has lines
+ * - Elevated Hero Solve Timer (+20% size, `700 23px "JetBrains Mono"`) & prominent high-contrast Challenge Hook Pill
+ * - Repositioned floating vector achievement sticker shifted cleanly above the board header (`boardY - 13`) with zero overlap on Row 1
  * - Enlarged, balanced grid digits (~25px Space Grotesk clues, ~29px Patrick Hand user inputs)
- * - Dual-tone "SUDOKU SYNC" brand header with active accent blue (#2B6CB0 / #38BDF8)
  */
 export async function generateShareCanvas(
   gameState: ShareCanvasGameState | SudokuBoardState | null,
@@ -777,10 +832,10 @@ export async function generateShareCanvas(
     try {
       await Promise.allSettled([
         document.fonts.load('400 25px "Space Grotesk"'),
-        document.fonts.load('600 11px "Space Grotesk"'),
+        document.fonts.load('700 12px "Space Grotesk"'),
         document.fonts.load('700 13px "Space Grotesk"'),
         document.fonts.load('400 29px "Patrick Hand"'),
-        document.fonts.load('700 19px "JetBrains Mono"'),
+        document.fonts.load('700 23px "JetBrains Mono"'),
         document.fonts.load('700 11px "JetBrains Mono"'),
       ]);
       await document.fonts.ready;
@@ -817,7 +872,7 @@ export async function generateShareCanvas(
   };
 
   const timeStr = rawState.time || "00:00";
-  const playerName = rawState.playerName || "Player";
+  const playerName = resolveActiveSenderName(rawState.playerName);
   const solutionGrid = rawState.solutionGrid || [];
   const mistakes =
     rawState.currentMistakesCount ??
@@ -862,8 +917,8 @@ export async function generateShareCanvas(
     : "Stuck! Can you help me finish this?";
 
   const CARD_WIDTH = 360;
-  const CARD_HEIGHT = 532;
-  const SCALE = 2; // 720x1064 ultra-crisp retina output
+  const CARD_HEIGHT = 544;
+  const SCALE = 2; // 720x1088 ultra-crisp retina output
 
   const canvas = document.createElement("canvas");
   canvas.width = CARD_WIDTH * SCALE;
@@ -884,7 +939,7 @@ export async function generateShareCanvas(
   const appMonoFont =
     '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
-  // 1. Pastel Card Background (Rounded 28px)
+  // 1. Borderless Pastel Card Background (Rounded 28px)
   const bgGrad = ctx.createLinearGradient(0, 0, CARD_WIDTH * 0.85, CARD_HEIGHT);
   bgGrad.addColorStop(0, palette.cardBgStart);
   bgGrad.addColorStop(0.5, palette.cardBgMid);
@@ -894,13 +949,7 @@ export async function generateShareCanvas(
   ctx.fillStyle = bgGrad;
   ctx.fill();
 
-  // Subtle inner card border for crisp framing
-  drawRoundedRect(ctx, 0.75, 0.75, CARD_WIDTH - 1.5, CARD_HEIGHT - 1.5, 27.5);
-  ctx.strokeStyle = palette.surfaceCardBorder;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // 2. Top Brand Row: Emblem + Dual-Tone "SUDOKU SYNC" + Player Handle + Difficulty Pastel Pill (y = 16..48)
+  // 2. Top Brand Row: Emblem + Dual-Tone "SUDOKU SYNC" + Player Handle + Borderless Difficulty Pastel Pill (y = 16..48)
   const headerY = 16;
   const logoSize = 32;
 
@@ -919,7 +968,7 @@ export async function generateShareCanvas(
   ctx.font = `500 10.5px ${appSansFont}`;
   drawLeftMiddleText(ctx, playerName, 58, headerY + 24);
 
-  // Difficulty Pill (Matches live difficulty button palette from App.tsx)
+  // Borderless Difficulty Pill with soft diffused elevation
   ctx.font = `700 10px ${appMonoFont}`;
   const diffTextW = ctx.measureText(normalizedDiff).width;
   const diffIconSize = 11.5;
@@ -930,12 +979,14 @@ export async function generateShareCanvas(
   const diffPillX = CARD_WIDTH - 18 - diffPillW;
   const diffPillY = headerY + (logoSize - diffPillH) / 2;
 
-  drawRoundedRect(ctx, diffPillX, diffPillY, diffPillW, diffPillH, 12.5);
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.04)";
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 2;
+  drawRoundedRect(ctx, diffPillX, diffPillY, diffPillW, diffPillH, diffPillH / 2);
   ctx.fillStyle = palette.pillBg;
   ctx.fill();
-  ctx.strokeStyle = palette.pillBorder;
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  ctx.restore();
 
   const diffStartX = diffPillX + (diffPillW - diffContentW) / 2;
   const diffCenterY = diffPillY + diffPillH / 2;
@@ -955,31 +1006,26 @@ export async function generateShareCanvas(
     diffCenterY
   );
 
-  // 3. Vector HUD & App-Native Flat Pastel Hook Pill (y = 56..124)
+  // 3. Borderless Hero Timer HUD & Prominent Challenge Hook Pill (y = 54..128)
   const bannerX = 18;
-  const bannerY = 56;
+  const bannerY = 54;
   const bannerW = CARD_WIDTH - 36;
-  const bannerH = 66;
+  const bannerH = 72;
 
   ctx.save();
   ctx.shadowColor = darkMode
     ? "rgba(0, 0, 0, 0.25)"
     : "rgba(28, 25, 23, 0.04)";
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 12;
   ctx.shadowOffsetY = 3;
-  drawRoundedRect(ctx, bannerX, bannerY, bannerW, bannerH, 16);
+  drawRoundedRect(ctx, bannerX, bannerY, bannerW, bannerH, 18);
   ctx.fillStyle = palette.surfaceCardBg;
   ctx.fill();
   ctx.restore();
 
-  drawRoundedRect(ctx, bannerX, bannerY, bannerW, bannerH, 16);
-  ctx.strokeStyle = palette.surfaceCardBorder;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // Hero Solve Timer Row: Clean, bold tabular timer framed alongside the SVG clock icon
-  const clockSize = 15.5;
-  const timerRowY = bannerY + 20;
+  // Hero Solve Timer Row (+20% enlarged to 23px tabular JetBrains Mono)
+  const clockSize = 18.5;
+  const timerRowY = bannerY + 21;
   await drawSvg(
     ctx,
     getClockSvg(palette.timerColor),
@@ -989,10 +1035,10 @@ export async function generateShareCanvas(
   );
 
   ctx.fillStyle = palette.timerColor;
-  ctx.font = `700 19px ${appMonoFont}`;
-  drawLeftMiddleText(ctx, timeStr, bannerX + 14 + clockSize + 6.5, timerRowY);
+  ctx.font = `700 23px ${appMonoFont}`;
+  drawLeftMiddleText(ctx, timeStr, bannerX + 14 + clockSize + 7.5, timerRowY);
 
-  // Right Status Pill: ERR / Best Time vector badge
+  // Right Status Pill: Borderless ERR / Best Time vector badge
   const statusLabel = didWin
     ? rawState.bestTime
       ? `BEST ${rawState.bestTime}`
@@ -1002,14 +1048,8 @@ export async function generateShareCanvas(
   const statusPillBg = didWin
     ? palette.pillBg
     : darkMode
-    ? "rgba(244, 63, 94, 0.18)"
-    : "#FFF1F2";
-
-  const statusPillBorder = didWin
-    ? palette.pillBorder
-    : darkMode
-    ? "rgba(244, 63, 94, 0.35)"
-    : "#FECDD3";
+    ? "rgba(244, 63, 94, 0.20)"
+    : "#FFE4E6";
 
   const statusPillColor = didWin
     ? palette.pillText
@@ -1017,13 +1057,13 @@ export async function generateShareCanvas(
     ? "#FDA4AF"
     : "#BE123C";
 
-  ctx.font = `700 9.5px ${appMonoFont}`;
+  ctx.font = `700 10px ${appMonoFont}`;
   const statusTextW = ctx.measureText(statusLabel).width;
-  const statusIconSize = 12;
+  const statusIconSize = 12.5;
   const statusGap = 4;
   const statusContentW = statusIconSize + statusGap + statusTextW;
-  const statusPillW = Math.max(76, statusContentW + 18);
-  const statusPillH = 23;
+  const statusPillW = Math.max(78, statusContentW + 18);
+  const statusPillH = 24;
   const statusPillX = bannerX + bannerW - 12 - statusPillW;
   const statusPillY = timerRowY - statusPillH / 2;
 
@@ -1037,9 +1077,6 @@ export async function generateShareCanvas(
   );
   ctx.fillStyle = statusPillBg;
   ctx.fill();
-  ctx.strokeStyle = statusPillBorder;
-  ctx.lineWidth = 1;
-  ctx.stroke();
 
   const statusStartX = statusPillX + (statusPillW - statusContentW) / 2;
   const statusCenterY = statusPillY + statusPillH / 2;
@@ -1055,7 +1092,7 @@ export async function generateShareCanvas(
     statusIconSize
   );
   ctx.fillStyle = statusPillColor;
-  ctx.font = `700 9.5px ${appMonoFont}`;
+  ctx.font = `700 10px ${appMonoFont}`;
   drawLeftMiddleText(
     ctx,
     statusLabel,
@@ -1063,36 +1100,32 @@ export async function generateShareCanvas(
     statusCenterY
   );
 
-  // Viral Hook Message enclosed inside an app-native flat pastel pill (rounded-full, subtle border, high contrast)
+  // Prominent Borderless Challenge Hook Pill (rounded-full, high contrast, diffused drop shadow)
   const hookPillX = bannerX + 10;
-  const hookPillY = bannerY + 36;
+  const hookPillY = bannerY + 38;
   const hookPillW = bannerW - 20;
-  const hookPillH = 23;
+  const hookPillH = 26;
 
   const hookPillBg = didWin
     ? darkMode
-      ? "rgba(6, 78, 59, 0.45)"
-      : "#ECFDF5"
+      ? "rgba(6, 78, 59, 0.55)"
+      : "#D1FAE5"
     : darkMode
-    ? "rgba(76, 5, 25, 0.45)"
-    : "#FFF1F2";
-
-  const hookPillBorder = didWin
-    ? darkMode
-      ? "rgba(16, 185, 129, 0.35)"
-      : "rgba(5, 150, 105, 0.22)"
-    : darkMode
-    ? "rgba(244, 63, 94, 0.35)"
-    : "rgba(244, 63, 94, 0.22)";
+    ? "rgba(76, 5, 25, 0.55)"
+    : "#FFE4E6";
 
   const hookPillText = didWin
     ? darkMode
-      ? "#D1FAE5"
-      : "#065F46"
+      ? "#ECFDF5"
+      : "#064E3B"
     : darkMode
-    ? "#FECDD3"
+    ? "#FFE4E6"
     : "#9F1239";
 
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.04)";
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 2;
   drawRoundedRect(
     ctx,
     hookPillX,
@@ -1103,12 +1136,10 @@ export async function generateShareCanvas(
   );
   ctx.fillStyle = hookPillBg;
   ctx.fill();
-  ctx.strokeStyle = hookPillBorder;
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  ctx.restore();
 
   ctx.fillStyle = hookPillText;
-  ctx.font = `600 10.5px ${appSansFont}`;
+  ctx.font = `700 12px ${appSansFont}`;
   drawCenteredText(
     ctx,
     ctaCopy,
@@ -1116,9 +1147,9 @@ export async function generateShareCanvas(
     hookPillY + hookPillH / 2
   );
 
-  // 4. Authentic 9x9 Pastel Sudoku Board (324x324 Square at x = 18, y = 138)
+  // 4. Authentic 9x9 Pastel Sudoku Board (324x324 Square at x = 18, y = 152)
   const boardX = 18;
-  const boardY = 138;
+  const boardY = 152;
   const boardSize = 324;
   const cellSize = boardSize / 9; // Exact 36px per cell
 
@@ -1247,7 +1278,7 @@ export async function generateShareCanvas(
     }
   }
 
-  // Thin 1.25px pastel cell grid lines
+  // Thin 1.25px pastel cell grid lines (ONLY the Sudoku grid uses strokes)
   ctx.strokeStyle = palette.gridThinLine;
   ctx.lineWidth = 1.25;
   for (let i = 1; i < 9; i++) {
@@ -1288,7 +1319,8 @@ export async function generateShareCanvas(
   ctx.lineWidth = 2.2;
   ctx.stroke();
 
-  // 5. Vector-Styled Pastel Achievement Sticker Badge (Prominent in BOTH Win and Defeat states at -2.5deg tilt)
+  // 5. Borderless Vector-Styled Pastel Achievement Sticker Badge
+  // Shifted 13px vertically upwards (`boardY - 12`) so it sits cleanly above the board header and never overlaps Row 1 digits
   if (stickerBadge.tier !== "none" && stickerBadge.label) {
     ctx.save();
     ctx.font = `700 9.5px ${appSansFont}`;
@@ -1297,9 +1329,9 @@ export async function generateShareCanvas(
     const stickerGap = 4.5;
     const stickerContentW = stickerIconSize + stickerGap + stickerTextW;
     const stickerW = stickerContentW + 22;
-    const stickerH = 24;
+    const stickerH = 22;
 
-    // Curated Mint/Emerald (Victory / Best Time) vs Rose/Coral (Stuck / Defeat) vector pill palette
+    // Curated Mint/Emerald (Victory / Best Time) vs Rose/Coral (Stuck / Defeat) borderless vector pill palette
     const badgeBg = didWin
       ? darkMode
         ? "#064E3B"
@@ -1307,8 +1339,6 @@ export async function generateShareCanvas(
       : darkMode
       ? "#4C0519"
       : "#FFF1F2";
-
-    const badgeBorder = didWin ? "#059669" : "#F43F5E";
 
     const badgeText = didWin
       ? darkMode
@@ -1318,14 +1348,14 @@ export async function generateShareCanvas(
       ? "#FFE4E6"
       : "#BE123C";
 
-    // Organically floated over the top-right edge of the 9x9 board
-    const stickerCenterX = boardX + boardSize - stickerW / 2 - 6;
-    const stickerCenterY = boardY + 1;
+    // Positioned cleanly above the top-right of the board (`boardY - 12`) with zero overlap on Row 1 cell numbers
+    const stickerCenterX = boardX + boardSize - stickerW / 2 - 4;
+    const stickerCenterY = boardY - 12;
 
     ctx.translate(stickerCenterX, stickerCenterY);
     ctx.rotate((-2.5 * Math.PI) / 180);
 
-    // Soft vector drop shadow (rgba(0,0,0,0.06), blur: 8px, y: 3px)
+    // Borderless soft vector drop shadow (rgba(0,0,0,0.06), blur: 8px, y: 3px)
     ctx.save();
     ctx.shadowColor = "rgba(0, 0, 0, 0.06)";
     ctx.shadowBlur = 8;
@@ -1341,19 +1371,6 @@ export async function generateShareCanvas(
     ctx.fillStyle = badgeBg;
     ctx.fill();
     ctx.restore();
-
-    // Clean 1.5px subtle pastel stroke
-    drawRoundedRect(
-      ctx,
-      -stickerW / 2,
-      -stickerH / 2,
-      stickerW,
-      stickerH,
-      stickerH / 2
-    );
-    ctx.strokeStyle = badgeBorder;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
 
     const stickerStartX = -stickerContentW / 2;
     const stickerSvg =
@@ -1386,9 +1403,9 @@ export async function generateShareCanvas(
     ctx.restore();
   }
 
-  // 6. Viral Loop & Actionable Branding Footer Banner (y = 476..512)
+  // 6. Borderless Viral Loop & Actionable Branding Footer Pill (y = 490..526)
   const footerX = 18;
-  const footerY = 476;
+  const footerY = 490;
   const footerW = CARD_WIDTH - 36;
   const footerH = 36;
 
@@ -1398,15 +1415,10 @@ export async function generateShareCanvas(
     : "rgba(28, 25, 23, 0.04)";
   ctx.shadowBlur = 10;
   ctx.shadowOffsetY = 2;
-  drawRoundedRect(ctx, footerX, footerY, footerW, footerH, 14);
+  drawRoundedRect(ctx, footerX, footerY, footerW, footerH, 16);
   ctx.fillStyle = palette.footerBg;
   ctx.fill();
   ctx.restore();
-
-  drawRoundedRect(ctx, footerX, footerY, footerW, footerH, 14);
-  ctx.strokeStyle = palette.footerBorder;
-  ctx.lineWidth = 1;
-  ctx.stroke();
 
   const domainText = "sudokusync.com";
   const dividerText = "  |  ";
