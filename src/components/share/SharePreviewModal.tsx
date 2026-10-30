@@ -5,13 +5,28 @@ import html2canvas from "html2canvas";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
-import { X, Loader2, Share2, Download, Check } from "lucide-react";
 import {
-  ShareCard,
+  X,
+  Loader2,
+  Share2,
+  Download,
+  Image as ImageIcon,
+  Check,
+  Trophy,
+  Sparkles,
+  Clock,
+  Award,
+  ShieldCheck,
+  ExternalLink,
+  Flame,
+  Target,
+} from "lucide-react";
+import { SudokuBoard, Difficulty, SudokuBoardState } from "../game/SudokuBoard";
+import {
   ShareDifficulty,
   buildFreshChallengeUrl,
+  evaluatePerformanceSticker,
 } from "./ShareCard";
-import { SudokuBoardState } from "../game/SudokuBoard";
 
 export interface SharePreviewModalProps {
   isOpen: boolean;
@@ -38,11 +53,22 @@ interface GeneratedImagePayload {
   nativeUri?: string;
 }
 
+const parseFormattedTimeToSeconds = (formatted: string): number => {
+  const parts = String(formatted || "")
+    .trim()
+    .split(":")
+    .map((n) => parseInt(n, 10));
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return parts[0] * 60 + parts[1];
+  }
+  return 180;
+};
+
 export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   isOpen,
   onClose,
   boardState,
-  solutionGrid,
+  solutionGrid = [],
   difficulty,
   time,
   sessionSeconds,
@@ -54,16 +80,15 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   roomCode,
   playClickSound,
 }) => {
-  const cardRef = useRef<HTMLDivElement | null>(null);
+  const offscreenCaptureRef = useRef<HTMLDivElement | null>(null);
   const [generatedImage, setGeneratedImage] =
     useState<GeneratedImagePayload | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(true);
-  const [liveBoardDataUrl, setLiveBoardDataUrl] = useState<string | null>(null);
   const [isSavedSuccess, setIsSavedSuccess] = useState<boolean>(false);
 
   const normalizedDiff = String(
     difficulty || boardState?.difficulty || "EASY"
-  ).toUpperCase();
+  ).toUpperCase() as Difficulty;
 
   const { fullUrl, displayUrl } = buildFreshChallengeUrl(
     boardState,
@@ -73,7 +98,18 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
 
   const finalTagline =
     tagline ||
-    `मैंने इसे ${time} में सॉल्व किया! एक क्लिक में अपना रिकॉर्ड बनाने जाओ 👇`;
+    `मैंने इसे ${time} में सॉल्व किया! एक क्लिक में अपना रिकॉर्ड बनाने जाओ`;
+
+  const mistakes = boardState?.currentMistakesCount ?? 0;
+  const effectiveSeconds =
+    typeof sessionSeconds === "number" && sessionSeconds > 0
+      ? sessionSeconds
+      : parseFormattedTimeToSeconds(time);
+
+  const stickerBadge = evaluatePerformanceSticker(
+    normalizedDiff,
+    effectiveSeconds
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -89,37 +125,12 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
 
     const timer = setTimeout(async () => {
       try {
-        // 1. Capture live #live-sudoku-board if present in DOM
-        const liveBoardEl = document.getElementById("live-sudoku-board");
-        if (liveBoardEl) {
-          try {
-            const boardCanvas = await html2canvas(liveBoardEl, {
-              scale: 2,
-              useCORS: true,
-              backgroundColor: null,
-            });
-            if (!isCancelled) {
-              setLiveBoardDataUrl(boardCanvas.toDataURL("image/png"));
-              await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-          } catch (liveErr) {
-            console.error(
-              "[SharePreviewModal] Live board capture fallback to ShareCard <SudokuBoard />:",
-              liveErr
-            );
-          }
+        const targetEl = offscreenCaptureRef.current;
+        if (!targetEl) {
+          throw new Error("Off-screen capture container ref is null");
         }
 
-        if (isCancelled) return;
-
-        // 2. Capture full ShareCard (or fallback to #live-sudoku-board)
-        const targetElement =
-          cardRef.current || document.getElementById("live-sudoku-board");
-        if (!targetElement) {
-          throw new Error("ShareCard target DOM element not found");
-        }
-
-        const canvas = await html2canvas(targetElement, {
+        const canvas = await html2canvas(targetEl, {
           scale: 2,
           useCORS: true,
           backgroundColor: null,
@@ -164,8 +175,8 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
             nativeUri,
           });
         }
-      } catch (err) {
-        console.error("[SharePreviewModal] Image generation error:", err);
+      } catch (error) {
+        console.error("Capture failed:", error);
       } finally {
         if (!isCancelled) {
           setIsGenerating(false);
@@ -190,7 +201,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     roomCode,
   ]);
 
-  const handleShareWithFriends = async () => {
+  const handleShareScreenshot = async () => {
     if (playClickSound) playClickSound();
     if (!generatedImage) return;
 
@@ -212,7 +223,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
           title: "Sudoku Sync",
           text: shareText,
           url: uriToShare,
-          dialogTitle: "Share your Sudoku Triumph!",
+          dialogTitle: "SHARE SCREENSHOT",
         });
       } else {
         const { file, dataUrl } = generatedImage;
@@ -234,7 +245,6 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
             url: fullUrl,
           });
         } else {
-          // Fallback to download if Web Share API is unavailable on desktop browser
           const link = document.createElement("a");
           link.href = dataUrl;
           link.download = `sudoku-sync-${normalizedDiff.toLowerCase()}.png`;
@@ -243,12 +253,12 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
           document.body.removeChild(link);
         }
       }
-    } catch (err: any) {
-      console.error("[SharePreviewModal] Share with Friends error:", err);
+    } catch (error) {
+      console.error("Share failed:", error);
     }
   };
 
-  const handleSaveToDevice = async () => {
+  const handleSaveToGallery = async () => {
     if (playClickSound) playClickSound();
     if (!generatedImage) return;
 
@@ -279,12 +289,60 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
         setIsSavedSuccess(true);
         setTimeout(() => setIsSavedSuccess(false), 2500);
       }
-    } catch (err: any) {
-      console.error("[SharePreviewModal] Save to Device error:", err);
+    } catch (error) {
+      console.error("Save to Gallery failed:", error);
     }
   };
 
-  // Difficulty-matched pastel button tokens
+  // Difficulty-matched pastel theme tokens
+  const cardBgGradient = darkMode
+    ? normalizedDiff === "EASY"
+      ? "linear-gradient(155deg, #052e24 0%, #121615 58%, #064e3b 100%)"
+      : normalizedDiff === "MEDIUM"
+      ? "linear-gradient(155deg, #2e1c05 0%, #161412 58%, #451a03 100%)"
+      : normalizedDiff === "HARD"
+      ? "linear-gradient(155deg, #241042 0%, #141218 58%, #3b0764 100%)"
+      : "linear-gradient(155deg, #3b0819 0%, #181214 58%, #4c0519 100%)"
+    : normalizedDiff === "EASY"
+    ? "linear-gradient(155deg, #ECFDF5 0%, #FDFBF7 52%, #D1FAE5 100%)"
+    : normalizedDiff === "MEDIUM"
+    ? "linear-gradient(155deg, #FFFBEB 0%, #FDFBF7 52%, #FEF3C7 100%)"
+    : normalizedDiff === "HARD"
+    ? "linear-gradient(155deg, #FAF5FF 0%, #FDFBF7 52%, #F3E8FF 100%)"
+    : "linear-gradient(155deg, #FFF1F2 0%, #FDFBF7 52%, #FFE4E6 100%)";
+
+  const pillBg = darkMode
+    ? normalizedDiff === "EASY"
+      ? "rgba(16, 185, 129, 0.22)"
+      : normalizedDiff === "MEDIUM"
+      ? "rgba(245, 158, 11, 0.22)"
+      : normalizedDiff === "HARD"
+      ? "rgba(168, 85, 247, 0.22)"
+      : "rgba(244, 63, 94, 0.22)"
+    : normalizedDiff === "EASY"
+    ? "#D1FAE5"
+    : normalizedDiff === "MEDIUM"
+    ? "#FEF3C7"
+    : normalizedDiff === "HARD"
+    ? "#F3E8FF"
+    : "#FFE4E6";
+
+  const pillText = darkMode
+    ? normalizedDiff === "EASY"
+      ? "#6EE7B7"
+      : normalizedDiff === "MEDIUM"
+      ? "#FCD34D"
+      : normalizedDiff === "HARD"
+      ? "#D8B4FE"
+      : "#FDA4AF"
+    : normalizedDiff === "EASY"
+    ? "#065F46"
+    : normalizedDiff === "MEDIUM"
+    ? "#92400E"
+    : normalizedDiff === "HARD"
+    ? "#6B21A8"
+    : "#9D174D";
+
   const primaryShareBtnClass = darkMode
     ? normalizedDiff === "EASY"
       ? "bg-[#065f46] hover:bg-[#047857] text-[#ecfdf5]"
@@ -339,7 +397,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
                   darkMode ? "text-stone-200" : "text-stone-800"
                 }`}
               >
-                Share Your Triumph
+                SHARE SCREENSHOT
               </span>
               <button
                 type="button"
@@ -358,9 +416,9 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
               </button>
             </div>
 
-            {/* Center Preview Area: Loading Skeleton vs Generated Image */}
+            {/* Center Preview Area: Loading vs Generated Screenshot vs Error */}
             <div className="w-full flex items-center justify-center min-h-[340px] max-h-[62vh] overflow-y-auto custom-scrollbar rounded-3xl">
-              {isGenerating || !generatedImage ? (
+              {isGenerating ? (
                 <div
                   className={`w-full aspect-[4/5] rounded-3xl flex flex-col items-center justify-center gap-3 p-6 select-none animate-pulse ${
                     darkMode ? "bg-zinc-900/80" : "bg-stone-100/90"
@@ -376,42 +434,47 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
                       darkMode ? "text-stone-300" : "text-stone-600"
                     }`}
                   >
-                    Generating your Triumph...
+                    Generating Screenshot...
                   </span>
                 </div>
-              ) : (
+              ) : generatedImage ? (
                 <motion.img
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.25, ease: "easeOut" }}
                   src={generatedImage.dataUrl}
-                  alt="Sudoku Sync Triumph Card"
+                  alt="Sudoku Sync Screenshot"
                   className="w-full max-w-[330px] h-auto object-contain rounded-[26px] shadow-[0_8px_28px_rgba(0,0,0,0.08)] select-none"
                 />
+              ) : (
+                <div className="text-red-400 flex flex-col items-center">
+                  <ImageIcon className="w-10 h-10 mb-2" />
+                  <span>Failed to generate screenshot</span>
+                </div>
               )}
             </div>
 
-            {/* Action Buttons: Share with Friends & Save to Device */}
-            <div className="w-full flex flex-col sm:flex-row gap-2.5 pt-1">
+            {/* Action Buttons: Share this Screenshot & Save to Gallery */}
+            <div className="w-full flex flex-col gap-2.5 pt-1">
               <button
                 type="button"
                 disabled={isGenerating || !generatedImage}
-                onClick={handleShareWithFriends}
-                className={`flex-1 py-3.5 px-4 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center gap-2 border-none transition-all active:scale-95 shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
+                onClick={handleShareScreenshot}
+                className={`w-full py-3.5 px-4 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center border-none transition-all active:scale-95 shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
                   isGenerating || !generatedImage
                     ? "opacity-50 cursor-not-allowed"
                     : "cursor-pointer"
                 } ${primaryShareBtnClass}`}
               >
-                <Share2 className="w-4 h-4 shrink-0 stroke-[2.4]" />
-                <span>📲 Share with Friends</span>
+                <Share2 className="w-5 h-5 mr-2 shrink-0" />
+                <span>Share this Screenshot</span>
               </button>
 
               <button
                 type="button"
                 disabled={isGenerating || !generatedImage}
-                onClick={handleSaveToDevice}
-                className={`flex-1 py-3.5 px-4 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center gap-2 border-none transition-all active:scale-95 shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
+                onClick={handleSaveToGallery}
+                className={`w-full py-3.5 px-4 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center border-none transition-all active:scale-95 shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
                   isGenerating || !generatedImage
                     ? "opacity-50 cursor-not-allowed"
                     : "cursor-pointer"
@@ -423,36 +486,219 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
               >
                 {isSavedSuccess ? (
                   <>
-                    <Check className="w-4 h-4 shrink-0 text-emerald-500 stroke-[2.6]" />
-                    <span>Saved!</span>
+                    <Check className="w-5 h-5 mr-2 shrink-0 text-emerald-500" />
+                    <span>Saved to Gallery</span>
                   </>
                 ) : (
                   <>
-                    <Download className="w-4 h-4 shrink-0 stroke-[2.4]" />
-                    <span>💾 Save to Device</span>
+                    <Download className="w-5 h-5 mr-2 shrink-0" />
+                    <span>Save to Gallery</span>
                   </>
                 )}
               </button>
             </div>
 
-            {/* Hidden Offscreen ShareCard rendered when modal is open for html2canvas capture */}
-            <ShareCard
-              ref={cardRef}
-              boardState={boardState}
-              solutionGrid={solutionGrid}
-              difficulty={difficulty}
-              time={time}
-              sessionSeconds={sessionSeconds}
-              playerName={playerName}
-              tagline={finalTagline}
-              bestTime={bestTime}
-              isNewRecord={isNewRecord}
-              darkMode={darkMode}
-              hiddenOffscreen={true}
-              roomCode={roomCode}
-              challengeUrl={displayUrl}
-              liveBoardDataUrl={liveBoardDataUrl}
-            />
+            {/* PIXEL-PERFECT OFF-SCREEN CAPTURE CONTAINER (Real <SudokuBoard /> with exact boardState) */}
+            <div
+              ref={offscreenCaptureRef}
+              className="absolute top-[-9999px] left-[-9999px] w-[360px] max-w-[360px] pointer-events-none select-none overflow-hidden"
+              style={{
+                background: cardBgGradient,
+                borderRadius: "28px",
+                padding: "20px",
+                color: darkMode ? "#F5F5F4" : "#1C1917",
+                boxSizing: "border-box",
+              }}
+            >
+              <div className="flex flex-col gap-3.5 w-full">
+                {/* Brand & Difficulty Header */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      style={{
+                        width: "34px",
+                        height: "34px",
+                        borderRadius: "10px",
+                        backgroundColor: "#121212",
+                      }}
+                      className="flex items-center justify-center overflow-hidden shrink-0"
+                    >
+                      <img
+                        src="/logo.png"
+                        alt="Sudoku Sync"
+                        crossOrigin="anonymous"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-xs font-black uppercase tracking-wider">
+                        Sudoku Sync
+                      </span>
+                      <span
+                        className="text-[10px] font-bold"
+                        style={{ color: darkMode ? "#A8A29E" : "#78716C" }}
+                      >
+                        {playerName}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      backgroundColor: pillBg,
+                      color: pillText,
+                      padding: "4px 10px",
+                      borderRadius: "9999px",
+                      fontSize: "10px",
+                      fontWeight: 900,
+                    }}
+                    className="uppercase flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>{normalizedDiff}</span>
+                  </div>
+                </div>
+
+                {/* Solve Time & Record Strip */}
+                <div
+                  style={{
+                    backgroundColor: darkMode
+                      ? "rgba(255, 255, 255, 0.05)"
+                      : "rgba(255, 255, 255, 0.86)",
+                    borderRadius: "18px",
+                    padding: "10px 14px",
+                  }}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <div className="flex flex-col">
+                    <span
+                      className="text-[9px] font-extrabold uppercase tracking-wider flex items-center gap-1"
+                      style={{ color: darkMode ? "#A8A29E" : "#78716C" }}
+                    >
+                      <Clock className="w-3 h-3" />
+                      <span>SOLVE TIME</span>
+                    </span>
+                    <span className="text-2xl font-mono font-black leading-tight">
+                      {time}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      backgroundColor: pillBg,
+                      color: pillText,
+                      borderRadius: "12px",
+                      padding: "6px 10px",
+                    }}
+                    className="flex flex-col items-end justify-center shrink-0"
+                  >
+                    <div className="flex items-center gap-1">
+                      {isNewRecord ? (
+                        <Trophy className="w-3.5 h-3.5" />
+                      ) : mistakes === 0 ? (
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                      ) : (
+                        <Award className="w-3.5 h-3.5" />
+                      )}
+                      <span className="text-[9px] font-black uppercase tracking-wider">
+                        {isNewRecord
+                          ? "NEW BEST TIME!"
+                          : bestTime
+                          ? `BEST ${bestTime}`
+                          : mistakes === 0
+                          ? "FLAWLESS WIN"
+                          : "COMPLETED"}
+                      </span>
+                    </div>
+                    <span className="text-[9.5px] font-bold opacity-85 mt-0.5">
+                      {mistakes === 0
+                        ? "0 Mistakes • 100% Clean"
+                        : `${mistakes} Mistake${mistakes === 1 ? "" : "s"}`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Authentic Off-Screen <SudokuBoard /> + Dynamic Rotated Sticker */}
+                <div className="relative w-full aspect-square flex items-center justify-center">
+                  <SudokuBoard
+                    id="offscreen-authentic-sudoku-board"
+                    boardState={boardState}
+                    difficulty={normalizedDiff}
+                    solutionGrid={solutionGrid}
+                    isTimerPaused={false}
+                    onResumeSession={() => {}}
+                    visualizingBacktrack={false}
+                    highlightAreas={true}
+                    highlightIdentical={true}
+                    isNumberFirstInputMode={false}
+                    lockedNum={null}
+                    activeKeypadNum={null}
+                    darkMode={darkMode}
+                    playClickSound={() => {}}
+                    onCellClick={() => {}}
+                  />
+
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "-10px",
+                      right: "-6px",
+                      transform: "rotate(-2deg)",
+                      backgroundColor: pillBg,
+                      color: pillText,
+                      boxShadow: darkMode
+                        ? "0 8px 20px rgba(0,0,0,0.5)"
+                        : "0 8px 20px rgba(0,0,0,0.12)",
+                      padding: "5px 12px",
+                      borderRadius: "9999px",
+                      fontSize: "10px",
+                      fontWeight: 900,
+                      zIndex: 20,
+                    }}
+                    className="flex items-center gap-1 uppercase"
+                  >
+                    {stickerBadge.tier === "excellent" ? (
+                      <Flame className="w-3 h-3" />
+                    ) : stickerBadge.tier === "great" ? (
+                      <Sparkles className="w-3 h-3" />
+                    ) : (
+                      <Target className="w-3 h-3" />
+                    )}
+                    <span>{stickerBadge.label}</span>
+                  </div>
+                </div>
+
+                {/* Tagline & Unsolved Challenge Link */}
+                <div
+                  style={{
+                    backgroundColor: darkMode
+                      ? "rgba(255, 255, 255, 0.05)"
+                      : "rgba(255, 255, 255, 0.88)",
+                    borderRadius: "18px",
+                    padding: "10px 12px",
+                  }}
+                  className="flex flex-col items-center gap-1.5 text-center"
+                >
+                  <p className="text-[11.5px] font-extrabold leading-snug m-0">
+                    {finalTagline}
+                  </p>
+                  <div
+                    style={{
+                      backgroundColor: pillBg,
+                      color: pillText,
+                      borderRadius: "10px",
+                      padding: "5px 10px",
+                      fontSize: "9.5px",
+                      fontWeight: 800,
+                    }}
+                    className="w-full font-mono flex items-center justify-center gap-1.5 truncate"
+                  >
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{displayUrl}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </motion.div>
         </motion.div>
       )}

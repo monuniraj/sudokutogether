@@ -1,5 +1,14 @@
 import React, { forwardRef } from "react";
-import { Trophy, Sparkles, Clock, Award, ShieldCheck, ExternalLink } from "lucide-react";
+import {
+  Trophy,
+  Sparkles,
+  Clock,
+  Award,
+  ShieldCheck,
+  ExternalLink,
+  Flame,
+  Target,
+} from "lucide-react";
 import { SudokuBoard, Difficulty, SudokuBoardState } from "../game/SudokuBoard";
 
 export type ShareDifficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT" | string;
@@ -18,7 +27,6 @@ export interface ShareCardProps {
   hiddenOffscreen?: boolean;
   roomCode?: string;
   challengeUrl?: string;
-  liveBoardDataUrl?: string | null;
 }
 
 interface PastelPalette {
@@ -109,7 +117,7 @@ const parseFormattedTimeToSeconds = (formatted: string): number => {
 export const evaluatePerformanceSticker = (
   difficulty: string,
   seconds: number
-): string => {
+): { label: string; tier: "excellent" | "great" | "nice" } => {
   const diff = String(difficulty || "EASY").toUpperCase();
   const thresholds: Record<string, { excellent: number; great: number }> = {
     EASY: { excellent: 120, great: 240 },
@@ -120,12 +128,12 @@ export const evaluatePerformanceSticker = (
   const { excellent, great } = thresholds[diff] || thresholds.EASY;
 
   if (seconds > 0 && seconds <= excellent) {
-    return "🔥 EXCELLENT TIME";
+    return { label: "EXCELLENT TIME", tier: "excellent" };
   }
   if (seconds > 0 && seconds <= great) {
-    return "✨ GREAT TIME";
+    return { label: "GREAT TIME", tier: "great" };
   }
-  return "🎯 NICE TRY";
+  return { label: "NICE TRY", tier: "nice" };
 };
 
 export const buildFreshChallengeUrl = (
@@ -133,7 +141,9 @@ export const buildFreshChallengeUrl = (
   difficulty: string,
   roomCode?: string
 ): { fullUrl: string; displayUrl: string } => {
-  const diff = String(difficulty || boardState?.difficulty || "EASY").toUpperCase();
+  const diff = String(
+    difficulty || boardState?.difficulty || "EASY"
+  ).toUpperCase();
   const seed =
     roomCode ||
     (boardState?.seed
@@ -165,7 +175,6 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
       hiddenOffscreen = false,
       roomCode,
       challengeUrl,
-      liveBoardDataUrl,
     },
     ref
   ) => {
@@ -180,7 +189,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
         ? sessionSeconds
         : parseFormattedTimeToSeconds(time);
 
-    const stickerBadgeText = evaluatePerformanceSticker(
+    const stickerBadge = evaluatePerformanceSticker(
       normalizedDiff,
       effectiveSeconds
     );
@@ -196,9 +205,8 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
 
     const finalTagline =
       tagline ||
-      `मैंने इसे ${time} में सॉल्व किया! एक क्लिक में अपना रिकॉर्ड बनाने जाओ 👇`;
+      `मैंने इसे ${time} में सॉल्व किया! एक क्लिक में अपना रिकॉर्ड बनाने जाओ`;
 
-    // Deselected snapshot of boardState so the authentic <SudokuBoard /> renders clean
     const cleanAuthenticBoardState: SudokuBoardState | null = boardState
       ? {
           ...boardState,
@@ -209,11 +217,12 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
 
     const wrapperStyle: React.CSSProperties = hiddenOffscreen
       ? {
-          position: "fixed",
+          position: "absolute",
           left: "-9999px",
-          top: "0px",
+          top: "-9999px",
+          width: "360px",
+          maxWidth: "360px",
           pointerEvents: "none",
-          zIndex: -1,
         }
       : {};
 
@@ -222,13 +231,14 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
         <div
           ref={ref}
           style={{
-            width: "380px",
+            width: "360px",
+            maxWidth: "360px",
             background: darkMode ? palette.cardBgDark : palette.cardBgLight,
-            borderRadius: "32px",
+            borderRadius: "28px",
             boxShadow: darkMode
-              ? "0 24px 50px rgba(0, 0, 0, 0.6)"
-              : "0 20px 44px rgba(28, 25, 23, 0.08)",
-            padding: "22px",
+              ? "0 20px 45px rgba(0, 0, 0, 0.55)"
+              : "0 18px 40px rgba(28, 25, 23, 0.08)",
+            padding: "20px",
             fontFamily:
               'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             color: darkMode ? "#F5F5F4" : "#1C1917",
@@ -403,35 +413,27 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
             </div>
           </div>
 
-          {/* 3. Authentic Game Board Container + Dynamic Rotated Sticker Overlay */}
+          {/* 3. Authentic <SudokuBoard /> + Dynamic Rotated Sticker Overlay */}
           <div className="relative w-full aspect-square flex items-center justify-center my-0.5">
-            {liveBoardDataUrl ? (
-              <img
-                src={liveBoardDataUrl}
-                alt="Completed Sudoku Board"
-                className="w-full h-full object-contain rounded-xl"
+            <div className="w-full h-full pointer-events-none">
+              <SudokuBoard
+                id="share-card-authentic-board"
+                boardState={cleanAuthenticBoardState}
+                difficulty={normalizedDiff}
+                solutionGrid={solutionGrid}
+                isTimerPaused={false}
+                onResumeSession={() => {}}
+                visualizingBacktrack={false}
+                highlightAreas={true}
+                highlightIdentical={true}
+                isNumberFirstInputMode={false}
+                lockedNum={null}
+                activeKeypadNum={null}
+                darkMode={darkMode}
+                playClickSound={() => {}}
+                onCellClick={() => {}}
               />
-            ) : (
-              <div className="w-full h-full pointer-events-none">
-                <SudokuBoard
-                  id="share-card-authentic-board"
-                  boardState={cleanAuthenticBoardState}
-                  difficulty={normalizedDiff}
-                  solutionGrid={solutionGrid}
-                  isTimerPaused={false}
-                  onResumeSession={() => {}}
-                  visualizingBacktrack={false}
-                  highlightAreas={true}
-                  highlightIdentical={true}
-                  isNumberFirstInputMode={false}
-                  lockedNum={null}
-                  activeKeypadNum={null}
-                  darkMode={darkMode}
-                  playClickSound={() => {}}
-                  onCellClick={() => {}}
-                />
-              </div>
-            )}
+            </div>
 
             {/* Dynamic Premium Rotated Pastel Sticker Badge (-2deg) */}
             <div
@@ -456,9 +458,16 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
                 letterSpacing: "0.06em",
                 zIndex: 20,
               }}
-              className="border-none select-none flex items-center gap-1 uppercase"
+              className="border-none select-none flex items-center gap-1.5 uppercase"
             >
-              <span>{stickerBadgeText}</span>
+              {stickerBadge.tier === "excellent" ? (
+                <Flame style={{ width: "12px", height: "12px" }} />
+              ) : stickerBadge.tier === "great" ? (
+                <Sparkles style={{ width: "12px", height: "12px" }} />
+              ) : (
+                <Target style={{ width: "12px", height: "12px" }} />
+              )}
+              <span>{stickerBadge.label}</span>
             </div>
           </div>
 
