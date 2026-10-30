@@ -16,6 +16,9 @@ import {
 } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { Language } from "../../i18n/translations";
+import { Capacitor, registerPlugin } from "@capacitor/core";
+
+const NativeTTS = registerPlugin<any>("NativeTTS");
 
 export interface RulesModalProps {
   isOpen: boolean;
@@ -95,7 +98,9 @@ export const RulesModal: React.FC<RulesModalProps> = ({
       audioRef.current.currentTime = 0;
       audioRef.current = null;
     }
-    if (typeof window !== "undefined" && window.speechSynthesis) {
+    if (Capacitor.isNativePlatform()) {
+      NativeTTS.stop().catch(() => {});
+    } else if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
     setIsPlaying(false);
@@ -111,54 +116,59 @@ export const RulesModal: React.FC<RulesModalProps> = ({
     };
   }, [isOpen, stopAudio]);
 
-const handleToggleAudio = () => {
-  playClickSound();
+  const handleToggleAudio = () => {
+    playClickSound();
 
-  // If already playing, stop and exit
-  if (isPlaying) {
-    // Cancel any ongoing speech synthesis
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
+    // If already playing, stop and exit
+    if (isPlaying) {
+      stopAudio();
+      return;
     }
-    setIsPlaying(false);
-    return;
-  }
 
-  // Build the narration text
-  const narrationText = `${t("duelRulesTitle")}. ${t("duelRulesDesc")} ${t("classicRulesTitle")}. ${t("classicRulesDesc")} ${t("proTipsTitle")} . ${t("tip1Title")} : ${t("tip1Desc")} ${t("tip2Title")} : ${t("tip2Desc")} ${t("tip3Title")} : ${t("tip3Desc")} ${t("tip4Title")} : ${t("tip4Desc")}`;
+    // Build the narration text
+    const narrationText = `${t("duelRulesTitle")}. ${t("duelRulesDesc")} ${t("classicRulesTitle")}. ${t("classicRulesDesc")} ${t("proTipsTitle")} . ${t("tip1Title")} : ${t("tip1Desc")} ${t("tip2Title")} : ${t("tip2Desc")} ${t("tip3Title")} : ${t("tip3Desc")} ${t("tip4Title")} : ${t("tip4Desc")}`;
+    const targetBcp47 = BCP47_TAGS[language] || "en-US";
 
-  // Ensure speech synthesis is available
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-    // No TTS support – nothing to play
-    return;
-  }
+    if (Capacitor.isNativePlatform()) {
+      setIsPlaying(true);
+      NativeTTS.speak({ text: narrationText, lang: targetBcp47 })
+        .then(() => setIsPlaying(false))
+        .catch(() => setIsPlaying(false));
+      return;
+    }
 
-  // Cancel any previous utterances to respect user-activation gesture window
-  window.speechSynthesis.cancel();
+    // Ensure speech synthesis is available
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      // No TTS support – nothing to play
+      return;
+    }
 
-  const utterance = new SpeechSynthesisUtterance(narrationText);
-  const targetBcp47 = BCP47_TAGS[language] || "en-US";
-  utterance.lang = targetBcp47;
+    // Cancel any previous utterances to respect user-activation gesture window
+    window.speechSynthesis.cancel();
 
-  // Acoustic tuning (Happy & Enthusiastic vibe)
-  utterance.rate = 1.02;
-  utterance.pitch = 1.08;
-  utterance.volume = 1.0;
+    const utterance = new SpeechSynthesisUtterance(narrationText);
+    utterance.lang = targetBcp47;
 
-  // Voice selection – may return null/undefined which is fine
-  const bestVoice = getBestVoiceForLocale(targetBcp47);
-  if (bestVoice) {
-    utterance.voice = bestVoice;
-  }
+    // Acoustic tuning (Happy & Enthusiastic vibe)
+    utterance.rate = 1.02;
+    utterance.pitch = 1.08;
+    utterance.volume = 1.0;
 
-  // State handling
-  utterance.onstart = () => setIsPlaying(true);
-  utterance.onend = () => setIsPlaying(false);
-  utterance.onerror = () => setIsPlaying(false);
+    // Voice selection – may return null/undefined which is fine
+    const bestVoice = getBestVoiceForLocale(targetBcp47);
+    if (bestVoice) {
+      utterance.voice = bestVoice;
+    }
 
-  // Speak immediately
-  window.speechSynthesis.speak(utterance);
-};
+    // State handling
+    utterance.onstart = () => setIsPlaying(true);
+    utterance.onend = () => setIsPlaying(false);
+    utterance.onerror = () => setIsPlaying(false);
+
+    // Speak immediately
+    window.speechSynthesis.resume();
+    window.speechSynthesis.speak(utterance);
+  };
 
   const handleClose = () => {
     playClickSound();
