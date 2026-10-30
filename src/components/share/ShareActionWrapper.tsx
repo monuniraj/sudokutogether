@@ -1,9 +1,8 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
-import { Loader2 } from "lucide-react";
 import { ShareIcon } from "./ShareIcon";
 import {
   ShareCard,
@@ -44,7 +43,8 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
   className = "",
 }) => {
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const [isCapturing, setIsCapturing] = useState(false);
+  const [preloadedImage, setPreloadedImage] = useState<any>(null);
+  const [isPreparing, setIsPreparing] = useState<boolean>(true);
   const [liveBoardDataUrl, setLiveBoardDataUrl] = useState<string | null>(null);
 
   const { fullUrl, displayUrl } = buildFreshChallengeUrl(
@@ -57,73 +57,138 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
     tagline ||
     `मैंने इसे ${time} में सॉल्व किया! एक क्लिक में अपना रिकॉर्ड बनाने जाओ 👇`;
 
+  // Background pre-generation on mount to eliminate Web Share API transient activation timeouts
+  useEffect(() => {
+    let isCancelled = false;
+    setIsPreparing(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        // 1. Capture live #live-sudoku-board if present in DOM
+        const liveBoardEl = document.getElementById("live-sudoku-board");
+        if (liveBoardEl) {
+          try {
+            const boardCanvas = await html2canvas(liveBoardEl, {
+              scale: 2,
+              useCORS: true,
+              backgroundColor: null,
+            });
+            if (!isCancelled) {
+              setLiveBoardDataUrl(boardCanvas.toDataURL("image/png"));
+              await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+          } catch (liveErr) {
+            console.error(
+              "[ShareActionWrapper] Live board capture fallback to ShareCard <SudokuBoard />:",
+              liveErr
+            );
+          }
+        }
+
+        if (isCancelled) return;
+
+        // 2. Capture the full ShareCard widget (or fallback directly to #live-sudoku-board)
+        const targetElement =
+          cardRef.current || document.getElementById("live-sudoku-board");
+        if (!targetElement) {
+          throw new Error("Share target DOM element not found");
+        }
+
+        const canvas = await html2canvas(targetElement, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: null,
+        });
+
+        if (isCancelled) return;
+
+        if (Capacitor.isNativePlatform()) {
+          const dataUrl = canvas.toDataURL("image/png");
+          const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
+
+          const savedFile = await Filesystem.writeFile({
+            path: "share_result.png",
+            data: base64Data,
+            directory: Directory.Cache,
+          });
+
+          if (!isCancelled) {
+            setPreloadedImage({
+              uri: savedFile.uri,
+              base64Data,
+            });
+          }
+        } else {
+          const blob = await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob((b) => resolve(b), "image/png")
+          );
+
+          if (!blob) {
+            throw new Error("Failed to generate preloaded PNG blob");
+          }
+
+          const file = new File([blob], "sudoku-sync-result.png", {
+            type: "image/png",
+          });
+
+          if (!isCancelled) {
+            setPreloadedImage({
+              file,
+              blob,
+            });
+          }
+        }
+      } catch (err) {
+        console.error(
+          "[ShareActionWrapper] Background pre-generation error:",
+          err
+        );
+      } finally {
+        if (!isCancelled) {
+          setIsPreparing(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    boardState,
+    difficulty,
+    time,
+    sessionSeconds,
+    playerName,
+    bestTime,
+    isNewRecord,
+    darkMode,
+    roomCode,
+  ]);
+
   const handleShare = async () => {
     if (playClickSound) {
       playClickSound();
     }
-    if (isCapturing || !cardRef.current) return;
+    if (isPreparing || !preloadedImage) return;
 
-    setIsCapturing(true);
+    const shareText = `${finalTagline}\n${fullUrl}`;
+
     try {
-      // 1. Capture the authentic live DOM board (#live-sudoku-board) if mounted in the viewport
-      const liveBoardEl = document.getElementById("live-sudoku-board");
-      if (liveBoardEl) {
-        try {
-          const boardCanvas = await html2canvas(liveBoardEl, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: null,
-          });
-          const boardUrl = boardCanvas.toDataURL("image/png");
-          setLiveBoardDataUrl(boardUrl);
-          // Allow React a micro-frame to paint the captured live board image inside ShareCard
-          await new Promise((resolve) => setTimeout(resolve, 40));
-        } catch {
-          // If live element capture fails, ShareCard's mounted <SudokuBoard /> already provides 100% authentic rendering
-        }
-      }
-
-      // 2. Capture the complete Apple-grade ShareCard widget
-      const canvas = await html2canvas(cardRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: null,
-      });
-
-      const shareText = `${finalTagline}\n${fullUrl}`;
-
       if (Capacitor.isNativePlatform()) {
-        const dataUrl = canvas.toDataURL("image/png");
-        const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
-
-        const savedFile = await Filesystem.writeFile({
-          path: "share_result.png",
-          data: base64Data,
-          directory: Directory.Cache,
-        });
-
         await Share.share({
           title: "Sudoku Sync",
           text: shareText,
-          url: savedFile.uri,
+          url: preloadedImage.uri,
           dialogTitle: "Share your Sudoku Triumph!",
         });
       } else {
-        const blob = await new Promise<Blob | null>((resolve) =>
-          canvas.toBlob((b) => resolve(b), "image/png")
-        );
-
-        if (!blob) {
-          throw new Error("Failed to generate share image blob");
-        }
-
-        const file = new File([blob], "sudoku-sync-result.png", {
-          type: "image/png",
-        });
+        const { file, blob } = preloadedImage;
 
         if (
           typeof navigator !== "undefined" &&
           navigator.share &&
+          file &&
           (!navigator.canShare || navigator.canShare({ files: [file] }))
         ) {
           await navigator.share({
@@ -131,8 +196,8 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
             text: shareText,
             files: [file],
           });
-        } else {
-          // Desktop browser fallback: download the Apple-grade PNG widget
+        } else if (blob) {
+          // Desktop fallback: download the pre-generated PNG immediately
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
@@ -144,36 +209,18 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
         }
       }
     } catch (err: any) {
-      if (err?.name !== "AbortError") {
-        console.warn("[ShareActionWrapper] Share notice:", err);
-      }
-    } finally {
-      setIsCapturing(false);
+      console.error("[ShareActionWrapper] Share execution error:", err);
     }
   };
 
   return (
     <>
-      {isCapturing ? (
-        <button
-          type="button"
-          disabled
-          aria-label="Preparing Share Card"
-          className={`relative p-1.5 rounded-full border-none cursor-wait select-none flex items-center justify-center transition-colors ${
-            darkMode
-              ? "bg-amber-400/15 text-amber-300"
-              : "bg-amber-100/90 text-amber-800"
-          } ${className}`}
-        >
-          <Loader2 className="w-4 h-4 animate-spin" />
-        </button>
-      ) : (
-        <ShareIcon
-          onClick={handleShare}
-          darkMode={darkMode}
-          className={className}
-        />
-      )}
+      <ShareIcon
+        onClick={handleShare}
+        isLoading={isPreparing}
+        darkMode={darkMode}
+        className={className}
+      />
 
       {/* Off-screen Apple-grade ShareCard containing authentic <SudokuBoard /> + dynamic sticker + challenge link */}
       <ShareCard
