@@ -15073,6 +15073,7 @@ export default function App() {
                       playerName={getActiveDisplayName()}
                       bestTime={bestTime && bestTime > 0 ? formatTimer(bestTime) : undefined}
                       isNewRecord={isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit)}
+                      isWon={!(mistakeLimitEnabled && (boardState.maxMistakesLimit === 0 ? boardState.currentMistakesCount > 0 : boardState.currentMistakesCount >= boardState.maxMistakesLimit))}
                       darkMode={darkMode}
                       playClickSound={playClickSound}
                     />

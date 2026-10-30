@@ -23,6 +23,7 @@ export interface ShareCardProps {
   tagline?: string;
   bestTime?: string;
   isNewRecord?: boolean;
+  isWon?: boolean;
   darkMode?: boolean;
   roomCode?: string;
   challengeUrl?: string;
@@ -115,8 +116,13 @@ const parseFormattedTimeToSeconds = (formatted: string): number => {
 
 export const evaluatePerformanceSticker = (
   difficulty: string,
-  seconds: number
+  seconds: number,
+  isWon: boolean = true
 ): { label: string; tier: "excellent" | "great" | "nice" } => {
+  if (!isWon) {
+    return { label: "NICE TRY", tier: "nice" };
+  }
+
   const diff = String(difficulty || "EASY").toUpperCase();
   const thresholds: Record<string, { excellent: number; great: number }> = {
     EASY: { excellent: 120, great: 240 },
@@ -152,9 +158,16 @@ export const buildFreshChallengeUrl = (
   const hintLimit = (boardState as any)?.hintLimit ?? 3;
   const challengeId = `SUDOKU-${seed}-${diff}-M${maxMistakes}-H${hintLimit}-T1`;
 
+  const origin =
+    typeof window !== "undefined" &&
+    window.location.origin &&
+    !/localhost|127\.0\.0\.1|capacitor:\/\//i.test(window.location.origin)
+      ? window.location.origin.replace(/\/+$/, "")
+      : "https://sudokusync.com";
+
   return {
-    fullUrl: `https://play.sudokusync.com/?challenge=${challengeId}`,
-    displayUrl: `play.sudokusync.com/?challenge=${challengeId}`,
+    fullUrl: `${origin}/?challenge=${challengeId}`,
+    displayUrl: `${origin.replace(/^https?:\/\//i, "")}/?challenge=${challengeId}`,
   };
 };
 
@@ -170,6 +183,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
       tagline,
       bestTime,
       isNewRecord = false,
+      isWon,
       darkMode = false,
       roomCode,
       challengeUrl,
@@ -181,6 +195,15 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
     ).toUpperCase() as Difficulty;
     const palette = SHARE_PALETTES[normalizedDiff] || SHARE_PALETTES.EASY;
     const mistakes = boardState?.currentMistakesCount ?? 0;
+    const maxMistakes = boardState?.maxMistakesLimit ?? 3;
+
+    // Accurately evaluate win vs. loss state
+    const didWin =
+      isWon !== undefined
+        ? Boolean(isWon)
+        : maxMistakes === 0
+        ? mistakes === 0
+        : mistakes < maxMistakes;
 
     const effectiveSeconds =
       typeof sessionSeconds === "number" && sessionSeconds > 0
@@ -189,7 +212,8 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
 
     const stickerBadge = evaluatePerformanceSticker(
       normalizedDiff,
-      effectiveSeconds
+      effectiveSeconds,
+      didWin
     );
 
     const { displayUrl } = buildFreshChallengeUrl(
@@ -201,14 +225,15 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
       ? challengeUrl.replace(/^https?:\/\//i, "")
       : displayUrl;
 
-    const finalTagline =
-      tagline ||
-      `मैंने इसे ${time} में सॉल्व किया! एक क्लिक में अपना रिकॉर्ड बनाने जाओ`;
+    const finalTagline = tagline || "Can you beat my time? Tap to play!";
 
     return (
       <div
         ref={ref}
         style={{
+          width: "360px",
+          maxWidth: "360px",
+          minWidth: "360px",
           background: darkMode ? palette.cardBgDark : palette.cardBgLight,
           borderRadius: "28px",
           boxShadow: darkMode
@@ -220,7 +245,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
           color: darkMode ? "#F5F5F4" : "#1C1917",
           boxSizing: "border-box",
         }}
-        className="w-full max-w-[360px] mx-auto flex flex-col gap-3 select-none border-none overflow-hidden"
+        className="w-[360px] max-w-[360px] mx-auto flex flex-col gap-3 select-none border-none overflow-hidden shrink-0"
       >
         {/* 1. Apple-Grade Widget Header */}
         <div className="flex items-center justify-between gap-2">
@@ -286,7 +311,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
           </div>
         </div>
 
-        {/* 2. Prominent Solve Time & Best Record Hero Strip */}
+        {/* 2. Conditional Win / Loss Status Banner */}
         <div
           style={{
             backgroundColor: darkMode
@@ -300,97 +325,170 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
           }}
           className="flex items-center justify-between gap-3"
         >
-          <div className="flex flex-col">
-            <span
-              style={{
-                fontSize: "9px",
-                fontWeight: 800,
-                letterSpacing: "0.1em",
-                color: darkMode ? "#A8A29E" : "#78716C",
-              }}
-              className="uppercase flex items-center gap-1"
-            >
-              <Clock className="w-3 h-3" />
-              <span>SOLVE TIME</span>
-            </span>
-            <span
-              style={{
-                fontSize: "24px",
-                fontWeight: 900,
-                fontFamily:
-                  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                color: darkMode ? "#FFFFFF" : "#1C1917",
-                lineHeight: 1.15,
-              }}
-            >
-              {time}
-            </span>
-          </div>
+          {didWin ? (
+            <>
+              <div className="flex flex-col">
+                <span
+                  style={{
+                    fontSize: "9px",
+                    fontWeight: 800,
+                    letterSpacing: "0.1em",
+                    color: darkMode ? "#A8A29E" : "#78716C",
+                  }}
+                  className="uppercase flex items-center gap-1"
+                >
+                  <Clock className="w-3 h-3" />
+                  <span>SOLVED IN {time}</span>
+                </span>
+                <span
+                  style={{
+                    fontSize: "22px",
+                    fontWeight: 900,
+                    fontFamily:
+                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                    color: darkMode ? "#FFFFFF" : "#1C1917",
+                    lineHeight: 1.15,
+                  }}
+                >
+                  {time}
+                </span>
+              </div>
 
-          {/* Best Time / Flawless Badge */}
-          <div
-            style={{
-              backgroundColor: isNewRecord
-                ? darkMode
-                  ? "rgba(245, 158, 11, 0.22)"
-                  : "#FEF3C7"
-                : darkMode
-                ? palette.pillBgDark
-                : palette.pillBgLight,
-              color: isNewRecord
-                ? darkMode
-                  ? "#FCD34D"
-                  : "#92400E"
-                : darkMode
-                ? palette.pillTextDark
-                : palette.pillTextLight,
-              borderRadius: "12px",
-              padding: "6px 10px",
-            }}
-            className="flex flex-col items-end justify-center shrink-0"
-          >
-            <div className="flex items-center gap-1">
-              {isNewRecord ? (
-                <Trophy className="w-3.5 h-3.5" />
-              ) : mistakes === 0 ? (
-                <ShieldCheck className="w-3.5 h-3.5" />
-              ) : (
-                <Award className="w-3.5 h-3.5" />
-              )}
-              <span
+              {/* Victory / Best Record Badge */}
+              <div
                 style={{
-                  fontSize: "9px",
-                  fontWeight: 900,
-                  letterSpacing: "0.08em",
+                  backgroundColor: isNewRecord
+                    ? darkMode
+                      ? "rgba(245, 158, 11, 0.22)"
+                      : "#FEF3C7"
+                    : darkMode
+                    ? palette.pillBgDark
+                    : palette.pillBgLight,
+                  color: isNewRecord
+                    ? darkMode
+                      ? "#FCD34D"
+                      : "#92400E"
+                    : darkMode
+                    ? palette.pillTextDark
+                    : palette.pillTextLight,
+                  borderRadius: "12px",
+                  padding: "6px 10px",
                 }}
-                className="uppercase"
+                className="flex flex-col items-end justify-center shrink-0"
               >
-                {isNewRecord
-                  ? "NEW BEST TIME!"
-                  : bestTime
-                  ? `BEST ${bestTime}`
-                  : mistakes === 0
-                  ? "FLAWLESS WIN"
-                  : "COMPLETED"}
-              </span>
-            </div>
-            <span
-              style={{
-                fontSize: "9.5px",
-                fontWeight: 700,
-                opacity: 0.85,
-                marginTop: "2px",
-              }}
-            >
-              {mistakes === 0
-                ? "0 Mistakes • 100% Clean"
-                : `${mistakes} Mistake${mistakes === 1 ? "" : "s"}`}
-            </span>
-          </div>
+                <div className="flex items-center gap-1">
+                  {isNewRecord ? (
+                    <Trophy className="w-3.5 h-3.5" />
+                  ) : mistakes === 0 ? (
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                  ) : (
+                    <Award className="w-3.5 h-3.5" />
+                  )}
+                  <span
+                    style={{
+                      fontSize: "9px",
+                      fontWeight: 900,
+                      letterSpacing: "0.08em",
+                    }}
+                    className="uppercase"
+                  >
+                    {isNewRecord
+                      ? "NEW BEST TIME!"
+                      : bestTime
+                      ? `BEST ${bestTime}`
+                      : mistakes === 0
+                      ? "FLAWLESS WIN"
+                      : "COMPLETED"}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontSize: "9.5px",
+                    fontWeight: 700,
+                    opacity: 0.85,
+                    marginTop: "2px",
+                  }}
+                >
+                  {mistakes === 0
+                    ? "0 Mistakes • 100% Clean"
+                    : `${mistakes} Mistake${mistakes === 1 ? "" : "s"}`}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col">
+                <span
+                  style={{
+                    fontSize: "9px",
+                    fontWeight: 800,
+                    letterSpacing: "0.1em",
+                    color: darkMode ? "#A8A29E" : "#78716C",
+                  }}
+                  className="uppercase flex items-center gap-1"
+                >
+                  <Target className="w-3 h-3" />
+                  <span>MATCH STATUS</span>
+                </span>
+                <span
+                  style={{
+                    fontSize: "17px",
+                    fontWeight: 900,
+                    letterSpacing: "0.04em",
+                    color: darkMode ? "#FFFFFF" : "#1C1917",
+                    lineHeight: 1.25,
+                  }}
+                  className="uppercase"
+                >
+                  GAME COMPLETED
+                </span>
+              </div>
+
+              {/* Clean Loss / Completion Badge (Zero Victory/Time Badges) */}
+              <div
+                style={{
+                  backgroundColor: darkMode
+                    ? palette.pillBgDark
+                    : palette.pillBgLight,
+                  color: darkMode ? palette.pillTextDark : palette.pillTextLight,
+                  borderRadius: "12px",
+                  padding: "6px 10px",
+                }}
+                className="flex flex-col items-end justify-center shrink-0"
+              >
+                <div className="flex items-center gap-1">
+                  <Target className="w-3.5 h-3.5" />
+                  <span
+                    style={{
+                      fontSize: "9px",
+                      fontWeight: 900,
+                      letterSpacing: "0.08em",
+                    }}
+                    className="uppercase"
+                  >
+                    NICE TRY
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontSize: "9.5px",
+                    fontWeight: 700,
+                    opacity: 0.85,
+                    marginTop: "2px",
+                  }}
+                >
+                  COMPLETED
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* 3. Authentic <SudokuBoard /> + Dynamic Rotated Sticker Overlay */}
-        <div className="relative w-full aspect-square flex items-center justify-center">
+        {/* 3. Authentic <SudokuBoard /> Locked to Fixed Square (324x324) + Dynamic Rotated Sticker */}
+        <div
+          style={{ width: "324px", height: "324px" }}
+          className="relative w-[324px] h-[324px] mx-auto aspect-square flex items-center justify-center shrink-0"
+        >
           <div className="w-full h-full pointer-events-none">
             <SudokuBoard
               id="share-card-authentic-board"
@@ -446,7 +544,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
           </div>
         </div>
 
-        {/* 4. Psychological Hook & Unsolved Challenge Link Section */}
+        {/* 4. Clean English Dopamine-Hit Call to Action & Challenge URL */}
         <div
           style={{
             backgroundColor: darkMode
@@ -462,9 +560,9 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
         >
           <p
             style={{
-              fontSize: "11.5px",
+              fontSize: "12px",
               fontWeight: 800,
-              lineHeight: 1.38,
+              lineHeight: 1.35,
               color: darkMode ? "#FAFAF9" : "#1C1917",
               margin: 0,
             }}

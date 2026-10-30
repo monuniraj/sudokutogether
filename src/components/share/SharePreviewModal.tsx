@@ -25,6 +25,7 @@ export interface SharePreviewModalProps {
   tagline?: string;
   bestTime?: string;
   isNewRecord?: boolean;
+  isWon?: boolean;
   darkMode?: boolean;
   roomCode?: string;
   playClickSound?: () => void;
@@ -118,6 +119,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   tagline,
   bestTime,
   isNewRecord = false,
+  isWon,
   darkMode = false,
   roomCode,
   playClickSound,
@@ -132,15 +134,22 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     difficulty || boardState?.difficulty || "EASY"
   ).toUpperCase() as Difficulty;
 
+  const mistakes = boardState?.currentMistakesCount ?? 0;
+  const maxMistakes = boardState?.maxMistakesLimit ?? 3;
+  const didWin =
+    isWon !== undefined
+      ? Boolean(isWon)
+      : maxMistakes === 0
+      ? mistakes === 0
+      : mistakes < maxMistakes;
+
   const { fullUrl, displayUrl } = buildFreshChallengeUrl(
     boardState,
     normalizedDiff,
     roomCode
   );
 
-  const finalTagline =
-    tagline ||
-    `मैंने इसे ${time} में सॉल्व किया! एक क्लिक में अपना रिकॉर्ड बनाने जाओ`;
+  const finalTagline = tagline || "Can you beat my time? Tap to play!";
 
   useEffect(() => {
     if (!isOpen) {
@@ -165,6 +174,8 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
           scale: 2,
           useCORS: true,
           backgroundColor: null,
+          width: 360,
+          windowWidth: 360,
           onclone: (clonedDoc, clonedEl) => {
             sanitizeClonedColorsForHtml2Canvas(clonedDoc, clonedEl);
           },
@@ -231,6 +242,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     playerName,
     bestTime,
     isNewRecord,
+    didWin,
     darkMode,
     roomCode,
   ]);
@@ -239,7 +251,8 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     if (playClickSound) playClickSound();
     if (isGenerating || !generatedImage) return;
 
-    const shareText = `${finalTagline}\n${fullUrl}`;
+    const statusHeader = didWin ? `SOLVED IN ${time}` : "GAME COMPLETED";
+    const shareText = `${statusHeader} (${normalizedDiff}) — ${finalTagline}\n${fullUrl}`;
 
     try {
       if (Capacitor.isNativePlatform()) {
@@ -371,20 +384,20 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 10 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className={`relative w-full max-w-[392px] max-h-[92vh] rounded-[32px] p-4 sm:p-5 flex flex-col items-center gap-3.5 border-none shadow-[0_20px_50px_rgba(0,0,0,0.16)] overflow-y-auto custom-scrollbar z-10 ${
+            className={`relative w-[392px] max-w-[95vw] max-h-[92vh] rounded-[32px] p-4 sm:p-5 flex flex-col items-center gap-3.5 border-none shadow-[0_20px_50px_rgba(0,0,0,0.16)] overflow-y-auto custom-scrollbar z-10 ${
               darkMode
                 ? "bg-[#18181c] text-stone-100"
                 : "bg-[#FDFBF7] text-stone-900"
             }`}
           >
             {/* Top Header Strip */}
-            <div className="w-full flex items-center justify-between select-none shrink-0">
+            <div className="w-[360px] max-w-full mx-auto flex items-center justify-between select-none shrink-0">
               <span
                 className={`text-xs sm:text-sm font-sans font-black uppercase tracking-wider ${
                   darkMode ? "text-stone-200" : "text-stone-800"
                 }`}
               >
-                {isGenerating ? "Generating..." : "Share this Screenshot"}
+                {didWin ? `SOLVED IN ${time}` : "GAME COMPLETED"}
               </span>
               <button
                 type="button"
@@ -403,8 +416,8 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
               </button>
             </div>
 
-            {/* VISIBLE DOM RENDER & CAPTURE: Always visible ShareCard with authentic <SudokuBoard /> */}
-            <div className="w-full max-w-[360px] flex items-center justify-center shrink-0">
+            {/* VISIBLE DOM RENDER & CAPTURE: Fixed mobile aspect ratio container (w-[360px] max-w-[360px] mx-auto) */}
+            <div className="w-[360px] max-w-[360px] mx-auto flex items-center justify-center shrink-0">
               <ShareCard
                 ref={offscreenCaptureRef}
                 boardState={boardState}
@@ -415,15 +428,16 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
                 playerName={playerName}
                 tagline={finalTagline}
                 bestTime={bestTime}
-                isNewRecord={isNewRecord}
+                isNewRecord={isNewRecord && didWin}
+                isWon={didWin}
                 darkMode={darkMode}
                 roomCode={roomCode}
                 challengeUrl={displayUrl}
               />
             </div>
 
-            {/* Action Buttons: Disabled & dimmed while isGenerating is true, unlocked when ready */}
-            <div className="w-full max-w-[360px] flex flex-col gap-2.5 pt-0.5 shrink-0">
+            {/* Action Buttons: Locked to fixed 360px container, disabled while generating */}
+            <div className="w-[360px] max-w-[360px] mx-auto flex flex-col gap-2.5 pt-0.5 shrink-0">
               <button
                 type="button"
                 disabled={isActionDisabled}

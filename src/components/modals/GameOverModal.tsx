@@ -308,6 +308,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   sessionSeconds={sessionSeconds}
                   playerName={(userProfile?.name && userProfile.name.trim()) || getActiveDisplayName()}
                   isNewRecord={isNewRecordAchieved}
+                  isWon={!(mistakeLimitEnabled && (boardState?.maxMistakesLimit === 0 ? (boardState?.currentMistakesCount ?? 0) > 0 : (boardState?.currentMistakesCount ?? 0) >= (boardState?.maxMistakesLimit ?? 3)))}
                   darkMode={darkMode}
                   roomCode={activeRematchRoomCode}
                   playClickSound={playClickSound}
@@ -720,6 +721,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                       sessionSeconds={sessionSeconds}
                       playerName={(userProfile?.name && userProfile.name.trim()) || getActiveDisplayName()}
                       isNewRecord={isNewRecordAchieved}
+                      isWon={!(mistakeLimitEnabled && (boardState?.maxMistakesLimit === 0 ? (boardState?.currentMistakesCount ?? 0) > 0 : (boardState?.currentMistakesCount ?? 0) >= (boardState?.maxMistakesLimit ?? 3)))}
                       darkMode={darkMode}
                       roomCode={activeRematchRoomCode}
                       playClickSound={playClickSound}

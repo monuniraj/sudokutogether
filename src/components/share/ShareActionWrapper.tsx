@@ -14,6 +14,7 @@ export interface ShareActionWrapperProps {
   tagline?: string;
   bestTime?: string;
   isNewRecord?: boolean;
+  isWon?: boolean;
   darkMode?: boolean;
   roomCode?: string;
   playClickSound?: () => void;
@@ -30,6 +31,7 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
   tagline,
   bestTime,
   isNewRecord = false,
+  isWon,
   darkMode = false,
   roomCode,
   playClickSound,
@@ -64,6 +66,7 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
         tagline={tagline}
         bestTime={bestTime}
         isNewRecord={isNewRecord}
+        isWon={isWon}
         darkMode={darkMode}
         roomCode={roomCode}
         playClickSound={playClickSound}
