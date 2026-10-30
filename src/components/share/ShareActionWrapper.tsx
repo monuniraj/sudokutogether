@@ -5,12 +5,19 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import { Loader2 } from "lucide-react";
 import { ShareIcon } from "./ShareIcon";
-import { ShareCard, ShareCardBoardState, ShareDifficulty } from "./ShareCard";
+import {
+  ShareCard,
+  ShareDifficulty,
+  buildFreshChallengeUrl,
+} from "./ShareCard";
+import { SudokuBoardState } from "../game/SudokuBoard";
 
 export interface ShareActionWrapperProps {
-  boardState: ShareCardBoardState | null;
+  boardState: SudokuBoardState | null;
+  solutionGrid?: number[][];
   difficulty: ShareDifficulty;
   time: string;
+  sessionSeconds?: number;
   playerName: string;
   tagline?: string;
   bestTime?: string;
@@ -23,10 +30,12 @@ export interface ShareActionWrapperProps {
 
 export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
   boardState,
+  solutionGrid,
   difficulty,
   time,
+  sessionSeconds,
   playerName,
-  tagline = "मैंने इसे इतनी देर में सॉल्व किया! क्या आप कर सकते हैं?",
+  tagline,
   bestTime,
   isNewRecord = false,
   darkMode = false,
@@ -36,6 +45,17 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
 }) => {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [liveBoardDataUrl, setLiveBoardDataUrl] = useState<string | null>(null);
+
+  const { fullUrl, displayUrl } = buildFreshChallengeUrl(
+    boardState,
+    String(difficulty || "EASY"),
+    roomCode
+  );
+
+  const finalTagline =
+    tagline ||
+    `मैंने इसे ${time} में सॉल्व किया! एक क्लिक में अपना रिकॉर्ड बनाने जाओ 👇`;
 
   const handleShare = async () => {
     if (playClickSound) {
@@ -45,13 +65,32 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
 
     setIsCapturing(true);
     try {
+      // 1. Capture the authentic live DOM board (#live-sudoku-board) if mounted in the viewport
+      const liveBoardEl = document.getElementById("live-sudoku-board");
+      if (liveBoardEl) {
+        try {
+          const boardCanvas = await html2canvas(liveBoardEl, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: null,
+          });
+          const boardUrl = boardCanvas.toDataURL("image/png");
+          setLiveBoardDataUrl(boardUrl);
+          // Allow React a micro-frame to paint the captured live board image inside ShareCard
+          await new Promise((resolve) => setTimeout(resolve, 40));
+        } catch {
+          // If live element capture fails, ShareCard's mounted <SudokuBoard /> already provides 100% authentic rendering
+        }
+      }
+
+      // 2. Capture the complete Apple-grade ShareCard widget
       const canvas = await html2canvas(cardRef.current, {
         scale: 2,
         useCORS: true,
         backgroundColor: null,
       });
 
-      const shareText = `${tagline} (${String(difficulty).toUpperCase()} • ${time})`;
+      const shareText = `${finalTagline}\n${fullUrl}`;
 
       if (Capacitor.isNativePlatform()) {
         const dataUrl = canvas.toDataURL("image/png");
@@ -93,7 +132,7 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
             files: [file],
           });
         } else {
-          // Desktop browser fallback: trigger download so user never hits a dead end
+          // Desktop browser fallback: download the Apple-grade PNG widget
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
@@ -105,7 +144,6 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
         }
       }
     } catch (err: any) {
-      // User cancellation (AbortError) or share dismissal is normal
       if (err?.name !== "AbortError") {
         console.warn("[ShareActionWrapper] Share notice:", err);
       }
@@ -137,19 +175,23 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
         />
       )}
 
-      {/* Hidden off-screen ShareCard for html2canvas capture */}
+      {/* Off-screen Apple-grade ShareCard containing authentic <SudokuBoard /> + dynamic sticker + challenge link */}
       <ShareCard
         ref={cardRef}
         boardState={boardState}
+        solutionGrid={solutionGrid}
         difficulty={difficulty}
         time={time}
+        sessionSeconds={sessionSeconds}
         playerName={playerName}
-        tagline={tagline}
+        tagline={finalTagline}
         bestTime={bestTime}
         isNewRecord={isNewRecord}
         darkMode={darkMode}
         hiddenOffscreen={true}
         roomCode={roomCode}
+        challengeUrl={displayUrl}
+        liveBoardDataUrl={liveBoardDataUrl}
       />
     </>
   );

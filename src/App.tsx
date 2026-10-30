@@ -15066,10 +15066,11 @@ export default function App() {
                   <div className="absolute top-4 right-4 flex items-center gap-1.5 z-50">
                     <ShareActionWrapper
                       boardState={boardState}
+                      solutionGrid={solutionGrid}
                       difficulty={difficulty}
                       time={formatTimer(sessionSeconds)}
+                      sessionSeconds={sessionSeconds}
                       playerName={getActiveDisplayName()}
-                      tagline="मैंने इसे इतनी देर में सॉल्व किया! क्या आप कर सकते हैं?"
                       bestTime={bestTime && bestTime > 0 ? formatTimer(bestTime) : undefined}
                       isNewRecord={isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit)}
                       darkMode={darkMode}

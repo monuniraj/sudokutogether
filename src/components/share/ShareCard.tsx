@@ -1,26 +1,15 @@
 import React, { forwardRef } from "react";
-import { Trophy, Sparkles, Clock, Award, ShieldCheck } from "lucide-react";
+import { Trophy, Sparkles, Clock, Award, ShieldCheck, ExternalLink } from "lucide-react";
+import { SudokuBoard, Difficulty, SudokuBoardState } from "../game/SudokuBoard";
 
 export type ShareDifficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT" | string;
 
-export interface ShareCardCell {
-  value: number;
-  isOriginalClue?: boolean;
-  [key: string]: any;
-}
-
-export interface ShareCardBoardState {
-  grid?: ShareCardCell[][];
-  seed?: number | string;
-  currentMistakesCount?: number;
-  maxMistakesLimit?: number;
-  [key: string]: any;
-}
-
 export interface ShareCardProps {
-  boardState: ShareCardBoardState | null;
+  boardState: SudokuBoardState | null;
+  solutionGrid?: number[][];
   difficulty: ShareDifficulty;
   time: string;
+  sessionSeconds?: number;
   playerName: string;
   tagline?: string;
   bestTime?: string;
@@ -28,135 +17,195 @@ export interface ShareCardProps {
   darkMode?: boolean;
   hiddenOffscreen?: boolean;
   roomCode?: string;
+  challengeUrl?: string;
+  liveBoardDataUrl?: string | null;
 }
 
 interface PastelPalette {
   cardBgLight: string;
   cardBgDark: string;
-  accentLight: string;
-  accentDark: string;
   pillBgLight: string;
   pillBgDark: string;
   pillTextLight: string;
   pillTextDark: string;
-  clueBgLight: string;
-  clueBgDark: string;
-  solvedBgLight: string;
-  solvedBgDark: string;
-  solvedTextLight: string;
-  solvedTextDark: string;
-  gridBorderLight: string;
-  gridBorderDark: string;
-  subBorderLight: string;
-  subBorderDark: string;
+  stickerBgLight: string;
+  stickerBgDark: string;
+  stickerTextLight: string;
+  stickerTextDark: string;
+  stickerShadowLight: string;
+  stickerShadowDark: string;
 }
 
 const SHARE_PALETTES: Record<string, PastelPalette> = {
   EASY: {
-    cardBgLight: "linear-gradient(145deg, #ECFDF5 0%, #FDFBF7 55%, #D1FAE5 100%)",
-    cardBgDark: "linear-gradient(145deg, #052e24 0%, #121615 60%, #064e3b 100%)",
-    accentLight: "#059669",
-    accentDark: "#34D399",
+    cardBgLight: "linear-gradient(155deg, #ECFDF5 0%, #FDFBF7 52%, #D1FAE5 100%)",
+    cardBgDark: "linear-gradient(155deg, #052e24 0%, #121615 58%, #064e3b 100%)",
     pillBgLight: "#D1FAE5",
-    pillBgDark: "rgba(16, 185, 129, 0.2)",
+    pillBgDark: "rgba(16, 185, 129, 0.22)",
     pillTextLight: "#065F46",
     pillTextDark: "#6EE7B7",
-    clueBgLight: "rgba(6, 95, 70, 0.08)",
-    clueBgDark: "rgba(255, 255, 255, 0.06)",
-    solvedBgLight: "#FFFFFF",
-    solvedBgDark: "#181C1B",
-    solvedTextLight: "#047857",
-    solvedTextDark: "#34D399",
-    gridBorderLight: "rgba(6, 95, 70, 0.45)",
-    gridBorderDark: "#0b6b52",
-    subBorderLight: "rgba(6, 95, 70, 0.16)",
-    subBorderDark: "#054031",
+    stickerBgLight: "#A7F3D0",
+    stickerBgDark: "#065F46",
+    stickerTextLight: "#064E3B",
+    stickerTextDark: "#ECFDF5",
+    stickerShadowLight: "0 10px 24px rgba(5, 150, 105, 0.22)",
+    stickerShadowDark: "0 10px 24px rgba(0, 0, 0, 0.55)",
   },
   MEDIUM: {
-    cardBgLight: "linear-gradient(145deg, #FFFBEB 0%, #FDFBF7 55%, #FEF3C7 100%)",
-    cardBgDark: "linear-gradient(145deg, #2e1c05 0%, #161412 60%, #451a03 100%)",
-    accentLight: "#D97706",
-    accentDark: "#FBBF24",
+    cardBgLight: "linear-gradient(155deg, #FFFBEB 0%, #FDFBF7 52%, #FEF3C7 100%)",
+    cardBgDark: "linear-gradient(155deg, #2e1c05 0%, #161412 58%, #451a03 100%)",
     pillBgLight: "#FEF3C7",
-    pillBgDark: "rgba(245, 158, 11, 0.2)",
+    pillBgDark: "rgba(245, 158, 11, 0.22)",
     pillTextLight: "#92400E",
     pillTextDark: "#FCD34D",
-    clueBgLight: "rgba(146, 64, 14, 0.08)",
-    clueBgDark: "rgba(255, 255, 255, 0.06)",
-    solvedBgLight: "#FFFFFF",
-    solvedBgDark: "#1C1917",
-    solvedTextLight: "#B45309",
-    solvedTextDark: "#FBBF24",
-    gridBorderLight: "rgba(133, 77, 14, 0.45)",
-    gridBorderDark: "#7c3207",
-    subBorderLight: "rgba(133, 77, 14, 0.16)",
-    subBorderDark: "#532004",
+    stickerBgLight: "#FDE68A",
+    stickerBgDark: "#78350F",
+    stickerTextLight: "#78350F",
+    stickerTextDark: "#FFFBEB",
+    stickerShadowLight: "0 10px 24px rgba(217, 119, 6, 0.22)",
+    stickerShadowDark: "0 10px 24px rgba(0, 0, 0, 0.55)",
   },
   HARD: {
-    cardBgLight: "linear-gradient(145deg, #FAF5FF 0%, #FDFBF7 55%, #F3E8FF 100%)",
-    cardBgDark: "linear-gradient(145deg, #241042 0%, #141218 60%, #3b0764 100%)",
-    accentLight: "#7C3AED",
-    accentDark: "#C084FC",
+    cardBgLight: "linear-gradient(155deg, #FAF5FF 0%, #FDFBF7 52%, #F3E8FF 100%)",
+    cardBgDark: "linear-gradient(155deg, #241042 0%, #141218 58%, #3b0764 100%)",
     pillBgLight: "#F3E8FF",
-    pillBgDark: "rgba(168, 85, 247, 0.2)",
+    pillBgDark: "rgba(168, 85, 247, 0.22)",
     pillTextLight: "#6B21A8",
     pillTextDark: "#D8B4FE",
-    clueBgLight: "rgba(107, 33, 168, 0.08)",
-    clueBgDark: "rgba(255, 255, 255, 0.06)",
-    solvedBgLight: "#FFFFFF",
-    solvedBgDark: "#181520",
-    solvedTextLight: "#6D28D9",
-    solvedTextDark: "#C084FC",
-    gridBorderLight: "rgba(107, 33, 168, 0.45)",
-    gridBorderDark: "#4c1d95",
-    subBorderLight: "rgba(107, 33, 168, 0.16)",
-    subBorderDark: "#31126b",
+    stickerBgLight: "#E9D5FF",
+    stickerBgDark: "#581C87",
+    stickerTextLight: "#4C1D95",
+    stickerTextDark: "#FAF5FF",
+    stickerShadowLight: "0 10px 24px rgba(124, 58, 237, 0.22)",
+    stickerShadowDark: "0 10px 24px rgba(0, 0, 0, 0.55)",
   },
   EXPERT: {
-    cardBgLight: "linear-gradient(145deg, #FFF1F2 0%, #FDFBF7 55%, #FFE4E6 100%)",
-    cardBgDark: "linear-gradient(145deg, #3b0819 0%, #181214 60%, #4c0519 100%)",
-    accentLight: "#E11D48",
-    accentDark: "#FB7185",
+    cardBgLight: "linear-gradient(155deg, #FFF1F2 0%, #FDFBF7 52%, #FFE4E6 100%)",
+    cardBgDark: "linear-gradient(155deg, #3b0819 0%, #181214 58%, #4c0519 100%)",
     pillBgLight: "#FFE4E6",
-    pillBgDark: "rgba(244, 63, 94, 0.2)",
+    pillBgDark: "rgba(244, 63, 94, 0.22)",
     pillTextLight: "#9D174D",
     pillTextDark: "#FDA4AF",
-    clueBgLight: "rgba(157, 23, 77, 0.08)",
-    clueBgDark: "rgba(255, 255, 255, 0.06)",
-    solvedBgLight: "#FFFFFF",
-    solvedBgDark: "#1F1418",
-    solvedTextLight: "#BE123C",
-    solvedTextDark: "#FB7185",
-    gridBorderLight: "rgba(157, 23, 77, 0.45)",
-    gridBorderDark: "#881337",
-    subBorderLight: "rgba(157, 23, 77, 0.16)",
-    subBorderDark: "#58061d",
+    stickerBgLight: "#FECDD3",
+    stickerBgDark: "#881337",
+    stickerTextLight: "#881337",
+    stickerTextDark: "#FFF1F2",
+    stickerShadowLight: "0 10px 24px rgba(225, 29, 72, 0.22)",
+    stickerShadowDark: "0 10px 24px rgba(0, 0, 0, 0.55)",
   },
+};
+
+const parseFormattedTimeToSeconds = (formatted: string): number => {
+  const parts = String(formatted || "")
+    .trim()
+    .split(":")
+    .map((n) => parseInt(n, 10));
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return parts[0] * 60 + parts[1];
+  }
+  return 180;
+};
+
+export const evaluatePerformanceSticker = (
+  difficulty: string,
+  seconds: number
+): string => {
+  const diff = String(difficulty || "EASY").toUpperCase();
+  const thresholds: Record<string, { excellent: number; great: number }> = {
+    EASY: { excellent: 120, great: 240 },
+    MEDIUM: { excellent: 210, great: 390 },
+    HARD: { excellent: 330, great: 600 },
+    EXPERT: { excellent: 480, great: 900 },
+  };
+  const { excellent, great } = thresholds[diff] || thresholds.EASY;
+
+  if (seconds > 0 && seconds <= excellent) {
+    return "🔥 EXCELLENT TIME";
+  }
+  if (seconds > 0 && seconds <= great) {
+    return "✨ GREAT TIME";
+  }
+  return "🎯 NICE TRY";
+};
+
+export const buildFreshChallengeUrl = (
+  boardState: SudokuBoardState | null,
+  difficulty: string,
+  roomCode?: string
+): { fullUrl: string; displayUrl: string } => {
+  const diff = String(difficulty || boardState?.difficulty || "EASY").toUpperCase();
+  const seed =
+    roomCode ||
+    (boardState?.seed
+      ? String(boardState.seed).padStart(6, "0").slice(-6)
+      : "849201");
+  const maxMistakes = boardState?.maxMistakesLimit ?? 3;
+  const hintLimit = (boardState as any)?.hintLimit ?? 3;
+  const challengeId = `SUDOKU-${seed}-${diff}-M${maxMistakes}-H${hintLimit}-T1`;
+
+  return {
+    fullUrl: `https://play.sudokusync.com/?challenge=${challengeId}`,
+    displayUrl: `play.sudokusync.com/?challenge=${challengeId}`,
+  };
 };
 
 export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
   (
     {
       boardState,
+      solutionGrid = [],
       difficulty = "EASY",
       time = "01:15",
+      sessionSeconds,
       playerName = "Player",
-      tagline = "मैंने इसे इतनी देर में सॉल्व किया! क्या आप कर सकते हैं?",
+      tagline,
       bestTime,
       isNewRecord = false,
       darkMode = false,
       hiddenOffscreen = false,
       roomCode,
+      challengeUrl,
+      liveBoardDataUrl,
     },
     ref
   ) => {
-    const normalizedDiff = String(difficulty || "EASY").toUpperCase();
+    const normalizedDiff = String(
+      difficulty || boardState?.difficulty || "EASY"
+    ).toUpperCase() as Difficulty;
     const palette = SHARE_PALETTES[normalizedDiff] || SHARE_PALETTES.EASY;
-    const grid = boardState?.grid;
     const mistakes = boardState?.currentMistakesCount ?? 0;
-    const seedCode =
-      roomCode ||
-      (boardState?.seed ? String(boardState.seed).padStart(6, "0").slice(-6) : null);
+
+    const effectiveSeconds =
+      typeof sessionSeconds === "number" && sessionSeconds > 0
+        ? sessionSeconds
+        : parseFormattedTimeToSeconds(time);
+
+    const stickerBadgeText = evaluatePerformanceSticker(
+      normalizedDiff,
+      effectiveSeconds
+    );
+
+    const { displayUrl } = buildFreshChallengeUrl(
+      boardState,
+      normalizedDiff,
+      roomCode
+    );
+    const finalDisplayUrl = challengeUrl
+      ? challengeUrl.replace(/^https?:\/\//i, "")
+      : displayUrl;
+
+    const finalTagline =
+      tagline ||
+      `मैंने इसे ${time} में सॉल्व किया! एक क्लिक में अपना रिकॉर्ड बनाने जाओ 👇`;
+
+    // Deselected snapshot of boardState so the authentic <SudokuBoard /> renders clean
+    const cleanAuthenticBoardState: SudokuBoardState | null = boardState
+      ? {
+          ...boardState,
+          selectedRow: null,
+          selectedCol: null,
+        }
+      : null;
 
     const wrapperStyle: React.CSSProperties = hiddenOffscreen
       ? {
@@ -173,21 +222,21 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
         <div
           ref={ref}
           style={{
-            width: "360px",
+            width: "380px",
             background: darkMode ? palette.cardBgDark : palette.cardBgLight,
-            borderRadius: "28px",
+            borderRadius: "32px",
             boxShadow: darkMode
-              ? "0 20px 45px rgba(0, 0, 0, 0.55)"
-              : "0 18px 40px rgba(28, 25, 23, 0.08)",
+              ? "0 24px 50px rgba(0, 0, 0, 0.6)"
+              : "0 20px 44px rgba(28, 25, 23, 0.08)",
             padding: "22px",
             fontFamily:
               'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             color: darkMode ? "#F5F5F4" : "#1C1917",
             boxSizing: "border-box",
           }}
-          className="flex flex-col gap-4 select-none border-none overflow-hidden"
+          className="flex flex-col gap-3.5 select-none border-none overflow-hidden"
         >
-          {/* Top Brand & Difficulty Header */}
+          {/* 1. Apple-Grade Widget Header */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <div
@@ -221,13 +270,12 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
                 </span>
                 <span
                   style={{
-                    fontSize: "10px",
-                    fontWeight: 600,
+                    fontSize: "10.5px",
+                    fontWeight: 700,
                     color: darkMode ? "#A8A29E" : "#78716C",
                   }}
                 >
                   {playerName}
-                  {seedCode ? ` • #${seedCode}` : ""}
                 </span>
               </div>
             </div>
@@ -235,7 +283,9 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
             {/* Difficulty Pastel Pill */}
             <div
               style={{
-                backgroundColor: darkMode ? palette.pillBgDark : palette.pillBgLight,
+                backgroundColor: darkMode
+                  ? palette.pillBgDark
+                  : palette.pillBgLight,
                 color: darkMode ? palette.pillTextDark : palette.pillTextLight,
                 padding: "5px 12px",
                 borderRadius: "9999px",
@@ -250,14 +300,14 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
             </div>
           </div>
 
-          {/* Prominent Time & Best Time Hero Banner */}
+          {/* 2. Prominent Solve Time & Best Record Hero Strip */}
           <div
             style={{
               backgroundColor: darkMode
                 ? "rgba(255, 255, 255, 0.05)"
-                : "rgba(255, 255, 255, 0.82)",
+                : "rgba(255, 255, 255, 0.86)",
               borderRadius: "20px",
-              padding: "14px 16px",
+              padding: "12px 16px",
               boxShadow: darkMode
                 ? "0 4px 14px rgba(0,0,0,0.22)"
                 : "0 6px 18px rgba(0,0,0,0.03)",
@@ -281,7 +331,8 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
                 style={{
                   fontSize: "26px",
                   fontWeight: 900,
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
                   color: darkMode ? "#FFFFFF" : "#1C1917",
                   lineHeight: 1.15,
                 }}
@@ -290,7 +341,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
               </span>
             </div>
 
-            {/* Prominent Best Time / New Record Badge */}
+            {/* Best Time / Flawless Badge */}
             <div
               style={{
                 backgroundColor: isNewRecord
@@ -308,7 +359,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
                   ? palette.pillTextDark
                   : palette.pillTextLight,
                 borderRadius: "14px",
-                padding: "8px 12px",
+                padding: "7px 12px",
               }}
               className="flex flex-col items-end justify-center shrink-0"
             >
@@ -345,96 +396,121 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
                   marginTop: "2px",
                 }}
               >
-                {mistakes === 0 ? "0 Mistakes • 100% Clean" : `${mistakes} Mistake${mistakes === 1 ? "" : "s"}`}
+                {mistakes === 0
+                  ? "0 Mistakes • 100% Clean"
+                  : `${mistakes} Mistake${mistakes === 1 ? "" : "s"}`}
               </span>
             </div>
           </div>
 
-          {/* Mini 9x9 Completed Grid Snapshot */}
-          <div
-            style={{
-              width: "100%",
-              aspectRatio: "1 / 1",
-              borderRadius: "16px",
-              border: `2px solid ${darkMode ? palette.gridBorderDark : palette.gridBorderLight}`,
-              backgroundColor: darkMode ? palette.solvedBgDark : palette.solvedBgLight,
-              overflow: "hidden",
-              display: "grid",
-              gridTemplateColumns: "repeat(9, minmax(0, 1fr))",
-              boxShadow: darkMode
-                ? "0 4px 16px rgba(0,0,0,0.35)"
-                : "0 4px 14px rgba(0,0,0,0.04)",
-            }}
-          >
-            {Array.from({ length: 9 }).map((_, r) =>
-              Array.from({ length: 9 }).map((__, c) => {
-                const cell = grid?.[r]?.[c];
-                const val = cell?.value && cell.value > 0 ? cell.value : "";
-                const isClue = Boolean(cell?.isOriginalClue);
-
-                const borderRight =
-                  c === 2 || c === 5
-                    ? `1.8px solid ${darkMode ? palette.gridBorderDark : palette.gridBorderLight}`
-                    : c === 8
-                    ? "none"
-                    : `1px solid ${darkMode ? palette.subBorderDark : palette.subBorderLight}`;
-
-                const borderBottom =
-                  r === 2 || r === 5
-                    ? `1.8px solid ${darkMode ? palette.gridBorderDark : palette.gridBorderLight}`
-                    : r === 8
-                    ? "none"
-                    : `1px solid ${darkMode ? palette.subBorderDark : palette.subBorderLight}`;
-
-                return (
-                  <div
-                    key={`${r}-${c}`}
-                    style={{
-                      backgroundColor: isClue
-                        ? darkMode
-                          ? palette.clueBgDark
-                          : palette.clueBgLight
-                        : darkMode
-                        ? palette.solvedBgDark
-                        : palette.solvedBgLight,
-                      borderRight,
-                      borderBottom,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "13px",
-                      fontWeight: isClue ? 700 : 800,
-                      color: isClue
-                        ? darkMode
-                          ? "#E7E5E4"
-                          : "#292524"
-                        : darkMode
-                        ? palette.solvedTextDark
-                        : palette.solvedTextLight,
-                      aspectRatio: "1 / 1",
-                    }}
-                  >
-                    {val}
-                  </div>
-                );
-              })
+          {/* 3. Authentic Game Board Container + Dynamic Rotated Sticker Overlay */}
+          <div className="relative w-full aspect-square flex items-center justify-center my-0.5">
+            {liveBoardDataUrl ? (
+              <img
+                src={liveBoardDataUrl}
+                alt="Completed Sudoku Board"
+                className="w-full h-full object-contain rounded-xl"
+              />
+            ) : (
+              <div className="w-full h-full pointer-events-none">
+                <SudokuBoard
+                  id="share-card-authentic-board"
+                  boardState={cleanAuthenticBoardState}
+                  difficulty={normalizedDiff}
+                  solutionGrid={solutionGrid}
+                  isTimerPaused={false}
+                  onResumeSession={() => {}}
+                  visualizingBacktrack={false}
+                  highlightAreas={true}
+                  highlightIdentical={true}
+                  isNumberFirstInputMode={false}
+                  lockedNum={null}
+                  activeKeypadNum={null}
+                  darkMode={darkMode}
+                  playClickSound={() => {}}
+                  onCellClick={() => {}}
+                />
+              </div>
             )}
+
+            {/* Dynamic Premium Rotated Pastel Sticker Badge (-2deg) */}
+            <div
+              style={{
+                position: "absolute",
+                top: "-10px",
+                right: "-6px",
+                transform: "rotate(-2deg)",
+                backgroundColor: darkMode
+                  ? palette.stickerBgDark
+                  : palette.stickerBgLight,
+                color: darkMode
+                  ? palette.stickerTextDark
+                  : palette.stickerTextLight,
+                boxShadow: darkMode
+                  ? palette.stickerShadowDark
+                  : palette.stickerShadowLight,
+                padding: "6px 14px",
+                borderRadius: "9999px",
+                fontSize: "10.5px",
+                fontWeight: 900,
+                letterSpacing: "0.06em",
+                zIndex: 20,
+              }}
+              className="border-none select-none flex items-center gap-1 uppercase"
+            >
+              <span>{stickerBadgeText}</span>
+            </div>
           </div>
 
-          {/* Dopamine Viral Tagline Footer */}
+          {/* 4. Psychological Hook & Unsolved Challenge Link Section */}
           <div
             style={{
-              backgroundColor: darkMode ? palette.pillBgDark : palette.pillBgLight,
-              color: darkMode ? palette.pillTextDark : palette.pillTextLight,
-              borderRadius: "16px",
-              padding: "10px 14px",
-              textAlign: "center",
-              fontSize: "12px",
-              fontWeight: 800,
-              lineHeight: 1.4,
+              backgroundColor: darkMode
+                ? "rgba(255, 255, 255, 0.05)"
+                : "rgba(255, 255, 255, 0.88)",
+              borderRadius: "20px",
+              padding: "12px 14px",
+              boxShadow: darkMode
+                ? "0 4px 14px rgba(0,0,0,0.22)"
+                : "0 4px 14px rgba(0,0,0,0.03)",
             }}
+            className="flex flex-col items-center gap-2 text-center border-none"
           >
-            {tagline}
+            <p
+              style={{
+                fontSize: "12px",
+                fontWeight: 800,
+                lineHeight: 1.4,
+                color: darkMode ? "#FAFAF9" : "#1C1917",
+                margin: 0,
+              }}
+            >
+              {finalTagline}
+            </p>
+
+            {/* Clean Fresh Unsolved Challenge Link Pill */}
+            <div
+              style={{
+                backgroundColor: darkMode
+                  ? palette.pillBgDark
+                  : palette.pillBgLight,
+                color: darkMode ? palette.pillTextDark : palette.pillTextLight,
+                borderRadius: "12px",
+                padding: "6px 12px",
+                fontSize: "10px",
+                fontWeight: 800,
+                fontFamily:
+                  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                width: "100%",
+                boxSizing: "border-box",
+              }}
+              className="flex items-center justify-center gap-1.5 truncate"
+            >
+              <ExternalLink
+                style={{ width: "11px", height: "11px", flexShrink: 0 }}
+              />
+              <span className="truncate">{finalDisplayUrl}</span>
+            </div>
           </div>
         </div>
       </div>
