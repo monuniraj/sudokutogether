@@ -5,27 +5,12 @@ import html2canvas from "html2canvas";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
+import { X, Loader2, Share2, Download, Check } from "lucide-react";
+import { SudokuBoardState, Difficulty } from "../game/SudokuBoard";
 import {
-  X,
-  Loader2,
-  Share2,
-  Download,
-  Image as ImageIcon,
-  Check,
-  Trophy,
-  Sparkles,
-  Clock,
-  Award,
-  ShieldCheck,
-  ExternalLink,
-  Flame,
-  Target,
-} from "lucide-react";
-import { SudokuBoard, Difficulty, SudokuBoardState } from "../game/SudokuBoard";
-import {
+  ShareCard,
   ShareDifficulty,
   buildFreshChallengeUrl,
-  evaluatePerformanceSticker,
 } from "./ShareCard";
 
 export interface SharePreviewModalProps {
@@ -53,15 +38,72 @@ interface GeneratedImagePayload {
   nativeUri?: string;
 }
 
-const parseFormattedTimeToSeconds = (formatted: string): number => {
-  const parts = String(formatted || "")
-    .trim()
-    .split(":")
-    .map((n) => parseInt(n, 10));
-  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-    return parts[0] * 60 + parts[1];
+/**
+ * Converts modern CSS color functions (e.g. Tailwind v4 oklch/oklab/color)
+ * into standard rgb/rgba strings inside the cloned html2canvas document so
+ * html2canvas never throws "Attempting to parse an unsupported color function".
+ */
+const sanitizeClonedColorsForHtml2Canvas = (
+  clonedDoc: Document,
+  clonedRoot: HTMLElement
+) => {
+  try {
+    const cvs = clonedDoc.createElement("canvas");
+    cvs.width = 1;
+    cvs.height = 1;
+    const ctx = cvs.getContext("2d");
+    if (!ctx) return;
+
+    const toRgb = (cssColor: string): string => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = "rgba(0,0,0,0)";
+      ctx.fillStyle = cssColor;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+      if (a === 0) return "rgba(0, 0, 0, 0)";
+      if (a === 255) return `rgb(${r}, ${g}, ${b})`;
+      return `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
+    };
+
+    const colorFnRegex = /(?:oklch|oklab|lch|lab|color-mix|color)\([^)]+\)/gi;
+    const propsToSanitize = [
+      "color",
+      "background-color",
+      "border-top-color",
+      "border-right-color",
+      "border-bottom-color",
+      "border-left-color",
+      "outline-color",
+      "text-decoration-color",
+      "box-shadow",
+      "background-image",
+    ];
+
+    const view = clonedDoc.defaultView || window;
+    const nodes: Element[] = [
+      clonedDoc.documentElement,
+      clonedDoc.body,
+      clonedRoot,
+      ...Array.from(clonedRoot.querySelectorAll("*")),
+    ];
+
+    for (const node of nodes) {
+      if (!(node instanceof HTMLElement) && !(node instanceof SVGElement)) {
+        continue;
+      }
+      const computed = view.getComputedStyle(node);
+      for (const prop of propsToSanitize) {
+        const val = computed.getPropertyValue(prop);
+        if (val && colorFnRegex.test(val)) {
+          colorFnRegex.lastIndex = 0;
+          const sanitized = val.replace(colorFnRegex, (match) => toRgb(match));
+          node.style.setProperty(prop, sanitized, "important");
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[SharePreviewModal] Color sanitization warning:", err);
   }
-  return 180;
 };
 
 export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
@@ -100,17 +142,6 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     tagline ||
     `मैंने इसे ${time} में सॉल्व किया! एक क्लिक में अपना रिकॉर्ड बनाने जाओ`;
 
-  const mistakes = boardState?.currentMistakesCount ?? 0;
-  const effectiveSeconds =
-    typeof sessionSeconds === "number" && sessionSeconds > 0
-      ? sessionSeconds
-      : parseFormattedTimeToSeconds(time);
-
-  const stickerBadge = evaluatePerformanceSticker(
-    normalizedDiff,
-    effectiveSeconds
-  );
-
   useEffect(() => {
     if (!isOpen) {
       setGeneratedImage(null);
@@ -127,13 +158,16 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
       try {
         const targetEl = offscreenCaptureRef.current;
         if (!targetEl) {
-          throw new Error("Off-screen capture container ref is null");
+          throw new Error("Visible ShareCard container ref is null");
         }
 
         const canvas = await html2canvas(targetEl, {
           scale: 2,
           useCORS: true,
           backgroundColor: null,
+          onclone: (clonedDoc, clonedEl) => {
+            sanitizeClonedColorsForHtml2Canvas(clonedDoc, clonedEl);
+          },
         });
 
         if (isCancelled) return;
@@ -182,7 +216,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
           setIsGenerating(false);
         }
       }
-    }, 300);
+    }, 350);
 
     return () => {
       isCancelled = true;
@@ -203,7 +237,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
 
   const handleShareScreenshot = async () => {
     if (playClickSound) playClickSound();
-    if (!generatedImage) return;
+    if (isGenerating || !generatedImage) return;
 
     const shareText = `${finalTagline}\n${fullUrl}`;
 
@@ -223,7 +257,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
           title: "Sudoku Sync",
           text: shareText,
           url: uriToShare,
-          dialogTitle: "SHARE SCREENSHOT",
+          dialogTitle: "Share this Screenshot",
         });
       } else {
         const { file, dataUrl } = generatedImage;
@@ -260,7 +294,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
 
   const handleSaveToGallery = async () => {
     if (playClickSound) playClickSound();
-    if (!generatedImage) return;
+    if (isGenerating || !generatedImage) return;
 
     const fileName = `sudoku-sync-${normalizedDiff.toLowerCase()}-${Date.now()}.png`;
 
@@ -294,55 +328,6 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     }
   };
 
-  // Difficulty-matched pastel theme tokens
-  const cardBgGradient = darkMode
-    ? normalizedDiff === "EASY"
-      ? "linear-gradient(155deg, #052e24 0%, #121615 58%, #064e3b 100%)"
-      : normalizedDiff === "MEDIUM"
-      ? "linear-gradient(155deg, #2e1c05 0%, #161412 58%, #451a03 100%)"
-      : normalizedDiff === "HARD"
-      ? "linear-gradient(155deg, #241042 0%, #141218 58%, #3b0764 100%)"
-      : "linear-gradient(155deg, #3b0819 0%, #181214 58%, #4c0519 100%)"
-    : normalizedDiff === "EASY"
-    ? "linear-gradient(155deg, #ECFDF5 0%, #FDFBF7 52%, #D1FAE5 100%)"
-    : normalizedDiff === "MEDIUM"
-    ? "linear-gradient(155deg, #FFFBEB 0%, #FDFBF7 52%, #FEF3C7 100%)"
-    : normalizedDiff === "HARD"
-    ? "linear-gradient(155deg, #FAF5FF 0%, #FDFBF7 52%, #F3E8FF 100%)"
-    : "linear-gradient(155deg, #FFF1F2 0%, #FDFBF7 52%, #FFE4E6 100%)";
-
-  const pillBg = darkMode
-    ? normalizedDiff === "EASY"
-      ? "rgba(16, 185, 129, 0.22)"
-      : normalizedDiff === "MEDIUM"
-      ? "rgba(245, 158, 11, 0.22)"
-      : normalizedDiff === "HARD"
-      ? "rgba(168, 85, 247, 0.22)"
-      : "rgba(244, 63, 94, 0.22)"
-    : normalizedDiff === "EASY"
-    ? "#D1FAE5"
-    : normalizedDiff === "MEDIUM"
-    ? "#FEF3C7"
-    : normalizedDiff === "HARD"
-    ? "#F3E8FF"
-    : "#FFE4E6";
-
-  const pillText = darkMode
-    ? normalizedDiff === "EASY"
-      ? "#6EE7B7"
-      : normalizedDiff === "MEDIUM"
-      ? "#FCD34D"
-      : normalizedDiff === "HARD"
-      ? "#D8B4FE"
-      : "#FDA4AF"
-    : normalizedDiff === "EASY"
-    ? "#065F46"
-    : normalizedDiff === "MEDIUM"
-    ? "#92400E"
-    : normalizedDiff === "HARD"
-    ? "#6B21A8"
-    : "#9D174D";
-
   const primaryShareBtnClass = darkMode
     ? normalizedDiff === "EASY"
       ? "bg-[#065f46] hover:bg-[#047857] text-[#ecfdf5]"
@@ -359,6 +344,8 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     ? "bg-[#E9D5FF] hover:bg-[#D8B4FE] text-[#4C1D95]"
     : "bg-[#FECDD3] hover:bg-[#FDA4AF] text-[#881337]";
 
+  const isActionDisabled = isGenerating || !generatedImage;
+
   const modalContent = (
     <AnimatePresence>
       {isOpen && (
@@ -367,7 +354,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22, ease: "easeOut" }}
-          className="fixed inset-0 z-[10050] bg-black/55 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+          className="fixed inset-0 z-[10050] bg-black/55 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
           {/* Backdrop click dismisser */}
@@ -380,24 +367,24 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
           />
 
           <motion.div
-            initial={{ opacity: 0, scale: 0.94, y: 18 }}
+            initial={{ opacity: 0, scale: 0.96, y: 14 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 12 }}
-            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            className={`relative w-full max-w-md rounded-[32px] p-5 sm:p-6 flex flex-col items-center gap-4 border-none shadow-[0_20px_50px_rgba(0,0,0,0.16)] overflow-hidden z-10 ${
+            exit={{ opacity: 0, scale: 0.96, y: 10 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className={`relative w-full max-w-[392px] max-h-[92vh] rounded-[32px] p-4 sm:p-5 flex flex-col items-center gap-3.5 border-none shadow-[0_20px_50px_rgba(0,0,0,0.16)] overflow-y-auto custom-scrollbar z-10 ${
               darkMode
                 ? "bg-[#18181c] text-stone-100"
                 : "bg-[#FDFBF7] text-stone-900"
             }`}
           >
             {/* Top Header Strip */}
-            <div className="w-full flex items-center justify-between select-none">
+            <div className="w-full flex items-center justify-between select-none shrink-0">
               <span
                 className={`text-xs sm:text-sm font-sans font-black uppercase tracking-wider ${
                   darkMode ? "text-stone-200" : "text-stone-800"
                 }`}
               >
-                SHARE SCREENSHOT
+                {isGenerating ? "Generating..." : "Share this Screenshot"}
               </span>
               <button
                 type="button"
@@ -416,68 +403,54 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
               </button>
             </div>
 
-            {/* Center Preview Area: Loading vs Generated Screenshot vs Error */}
-            <div className="w-full flex items-center justify-center min-h-[340px] max-h-[62vh] overflow-y-auto custom-scrollbar rounded-3xl">
-              {isGenerating ? (
-                <div
-                  className={`w-full aspect-[4/5] rounded-3xl flex flex-col items-center justify-center gap-3 p-6 select-none animate-pulse ${
-                    darkMode ? "bg-zinc-900/80" : "bg-stone-100/90"
-                  }`}
-                >
-                  <Loader2
-                    className={`w-8 h-8 animate-spin ${
-                      darkMode ? "text-amber-300" : "text-amber-600"
-                    }`}
-                  />
-                  <span
-                    className={`text-xs sm:text-sm font-sans font-bold tracking-wide ${
-                      darkMode ? "text-stone-300" : "text-stone-600"
-                    }`}
-                  >
-                    Generating Screenshot...
-                  </span>
-                </div>
-              ) : generatedImage ? (
-                <motion.img
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.25, ease: "easeOut" }}
-                  src={generatedImage.dataUrl}
-                  alt="Sudoku Sync Screenshot"
-                  className="w-full max-w-[330px] h-auto object-contain rounded-[26px] shadow-[0_8px_28px_rgba(0,0,0,0.08)] select-none"
-                />
-              ) : (
-                <div className="text-red-400 flex flex-col items-center">
-                  <ImageIcon className="w-10 h-10 mb-2" />
-                  <span>Failed to generate screenshot</span>
-                </div>
-              )}
+            {/* VISIBLE DOM RENDER & CAPTURE: Always visible ShareCard with authentic <SudokuBoard /> */}
+            <div className="w-full max-w-[360px] flex items-center justify-center shrink-0">
+              <ShareCard
+                ref={offscreenCaptureRef}
+                boardState={boardState}
+                solutionGrid={solutionGrid}
+                difficulty={normalizedDiff}
+                time={time}
+                sessionSeconds={sessionSeconds}
+                playerName={playerName}
+                tagline={finalTagline}
+                bestTime={bestTime}
+                isNewRecord={isNewRecord}
+                darkMode={darkMode}
+                roomCode={roomCode}
+                challengeUrl={displayUrl}
+              />
             </div>
 
-            {/* Action Buttons: Share this Screenshot & Save to Gallery */}
-            <div className="w-full flex flex-col gap-2.5 pt-1">
+            {/* Action Buttons: Disabled & dimmed while isGenerating is true, unlocked when ready */}
+            <div className="w-full max-w-[360px] flex flex-col gap-2.5 pt-0.5 shrink-0">
               <button
                 type="button"
-                disabled={isGenerating || !generatedImage}
+                disabled={isActionDisabled}
                 onClick={handleShareScreenshot}
-                className={`w-full py-3.5 px-4 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center border-none transition-all active:scale-95 shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
-                  isGenerating || !generatedImage
+                className={`w-full py-3.5 px-4 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center border-none transition-all shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
+                  isActionDisabled
                     ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer"
+                    : "cursor-pointer active:scale-95"
                 } ${primaryShareBtnClass}`}
               >
                 <Share2 className="w-5 h-5 mr-2 shrink-0" />
-                <span>Share this Screenshot</span>
+                <span>
+                  {isGenerating ? "Generating..." : "Share this Screenshot"}
+                </span>
+                {isGenerating && (
+                  <Loader2 className="animate-spin w-4 h-4 ml-2 inline shrink-0" />
+                )}
               </button>
 
               <button
                 type="button"
-                disabled={isGenerating || !generatedImage}
+                disabled={isActionDisabled}
                 onClick={handleSaveToGallery}
-                className={`w-full py-3.5 px-4 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center border-none transition-all active:scale-95 shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
-                  isGenerating || !generatedImage
+                className={`w-full py-3.5 px-4 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center border-none transition-all shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
+                  isActionDisabled
                     ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer"
+                    : "cursor-pointer active:scale-95"
                 } ${
                   darkMode
                     ? "bg-zinc-800 hover:bg-zinc-700 text-stone-200"
@@ -487,217 +460,18 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
                 {isSavedSuccess ? (
                   <>
                     <Check className="w-5 h-5 mr-2 shrink-0 text-emerald-500" />
-                    <span>Saved to Gallery</span>
+                    <span>Save to Gallery</span>
                   </>
                 ) : (
                   <>
                     <Download className="w-5 h-5 mr-2 shrink-0" />
                     <span>Save to Gallery</span>
+                    {isGenerating && (
+                      <Loader2 className="animate-spin w-4 h-4 ml-2 inline shrink-0" />
+                    )}
                   </>
                 )}
               </button>
-            </div>
-
-            {/* PIXEL-PERFECT OFF-SCREEN CAPTURE CONTAINER (Real <SudokuBoard /> with exact boardState) */}
-            <div
-              ref={offscreenCaptureRef}
-              className="absolute top-[-9999px] left-[-9999px] w-[360px] max-w-[360px] pointer-events-none select-none overflow-hidden"
-              style={{
-                background: cardBgGradient,
-                borderRadius: "28px",
-                padding: "20px",
-                color: darkMode ? "#F5F5F4" : "#1C1917",
-                boxSizing: "border-box",
-              }}
-            >
-              <div className="flex flex-col gap-3.5 w-full">
-                {/* Brand & Difficulty Header */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      style={{
-                        width: "34px",
-                        height: "34px",
-                        borderRadius: "10px",
-                        backgroundColor: "#121212",
-                      }}
-                      className="flex items-center justify-center overflow-hidden shrink-0"
-                    >
-                      <img
-                        src="/logo.png"
-                        alt="Sudoku Sync"
-                        crossOrigin="anonymous"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="flex flex-col leading-tight">
-                      <span className="text-xs font-black uppercase tracking-wider">
-                        Sudoku Sync
-                      </span>
-                      <span
-                        className="text-[10px] font-bold"
-                        style={{ color: darkMode ? "#A8A29E" : "#78716C" }}
-                      >
-                        {playerName}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      backgroundColor: pillBg,
-                      color: pillText,
-                      padding: "4px 10px",
-                      borderRadius: "9999px",
-                      fontSize: "10px",
-                      fontWeight: 900,
-                    }}
-                    className="uppercase flex items-center gap-1"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span>{normalizedDiff}</span>
-                  </div>
-                </div>
-
-                {/* Solve Time & Record Strip */}
-                <div
-                  style={{
-                    backgroundColor: darkMode
-                      ? "rgba(255, 255, 255, 0.05)"
-                      : "rgba(255, 255, 255, 0.86)",
-                    borderRadius: "18px",
-                    padding: "10px 14px",
-                  }}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <div className="flex flex-col">
-                    <span
-                      className="text-[9px] font-extrabold uppercase tracking-wider flex items-center gap-1"
-                      style={{ color: darkMode ? "#A8A29E" : "#78716C" }}
-                    >
-                      <Clock className="w-3 h-3" />
-                      <span>SOLVE TIME</span>
-                    </span>
-                    <span className="text-2xl font-mono font-black leading-tight">
-                      {time}
-                    </span>
-                  </div>
-
-                  <div
-                    style={{
-                      backgroundColor: pillBg,
-                      color: pillText,
-                      borderRadius: "12px",
-                      padding: "6px 10px",
-                    }}
-                    className="flex flex-col items-end justify-center shrink-0"
-                  >
-                    <div className="flex items-center gap-1">
-                      {isNewRecord ? (
-                        <Trophy className="w-3.5 h-3.5" />
-                      ) : mistakes === 0 ? (
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                      ) : (
-                        <Award className="w-3.5 h-3.5" />
-                      )}
-                      <span className="text-[9px] font-black uppercase tracking-wider">
-                        {isNewRecord
-                          ? "NEW BEST TIME!"
-                          : bestTime
-                          ? `BEST ${bestTime}`
-                          : mistakes === 0
-                          ? "FLAWLESS WIN"
-                          : "COMPLETED"}
-                      </span>
-                    </div>
-                    <span className="text-[9.5px] font-bold opacity-85 mt-0.5">
-                      {mistakes === 0
-                        ? "0 Mistakes • 100% Clean"
-                        : `${mistakes} Mistake${mistakes === 1 ? "" : "s"}`}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Authentic Off-Screen <SudokuBoard /> + Dynamic Rotated Sticker */}
-                <div className="relative w-full aspect-square flex items-center justify-center">
-                  <SudokuBoard
-                    id="offscreen-authentic-sudoku-board"
-                    boardState={boardState}
-                    difficulty={normalizedDiff}
-                    solutionGrid={solutionGrid}
-                    isTimerPaused={false}
-                    onResumeSession={() => {}}
-                    visualizingBacktrack={false}
-                    highlightAreas={true}
-                    highlightIdentical={true}
-                    isNumberFirstInputMode={false}
-                    lockedNum={null}
-                    activeKeypadNum={null}
-                    darkMode={darkMode}
-                    playClickSound={() => {}}
-                    onCellClick={() => {}}
-                  />
-
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "-10px",
-                      right: "-6px",
-                      transform: "rotate(-2deg)",
-                      backgroundColor: pillBg,
-                      color: pillText,
-                      boxShadow: darkMode
-                        ? "0 8px 20px rgba(0,0,0,0.5)"
-                        : "0 8px 20px rgba(0,0,0,0.12)",
-                      padding: "5px 12px",
-                      borderRadius: "9999px",
-                      fontSize: "10px",
-                      fontWeight: 900,
-                      zIndex: 20,
-                    }}
-                    className="flex items-center gap-1 uppercase"
-                  >
-                    {stickerBadge.tier === "excellent" ? (
-                      <Flame className="w-3 h-3" />
-                    ) : stickerBadge.tier === "great" ? (
-                      <Sparkles className="w-3 h-3" />
-                    ) : (
-                      <Target className="w-3 h-3" />
-                    )}
-                    <span>{stickerBadge.label}</span>
-                  </div>
-                </div>
-
-                {/* Tagline & Unsolved Challenge Link */}
-                <div
-                  style={{
-                    backgroundColor: darkMode
-                      ? "rgba(255, 255, 255, 0.05)"
-                      : "rgba(255, 255, 255, 0.88)",
-                    borderRadius: "18px",
-                    padding: "10px 12px",
-                  }}
-                  className="flex flex-col items-center gap-1.5 text-center"
-                >
-                  <p className="text-[11.5px] font-extrabold leading-snug m-0">
-                    {finalTagline}
-                  </p>
-                  <div
-                    style={{
-                      backgroundColor: pillBg,
-                      color: pillText,
-                      borderRadius: "10px",
-                      padding: "5px 10px",
-                      fontSize: "9.5px",
-                      fontWeight: 800,
-                    }}
-                    className="w-full font-mono flex items-center justify-center gap-1.5 truncate"
-                  >
-                    <ExternalLink className="w-3 h-3 shrink-0" />
-                    <span className="truncate">{displayUrl}</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </motion.div>
         </motion.div>

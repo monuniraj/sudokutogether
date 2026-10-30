@@ -24,7 +24,6 @@ export interface ShareCardProps {
   bestTime?: string;
   isNewRecord?: boolean;
   darkMode?: boolean;
-  hiddenOffscreen?: boolean;
   roomCode?: string;
   challengeUrl?: string;
 }
@@ -172,7 +171,6 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
       bestTime,
       isNewRecord = false,
       darkMode = false,
-      hiddenOffscreen = false,
       roomCode,
       challengeUrl,
     },
@@ -207,319 +205,293 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
       tagline ||
       `मैंने इसे ${time} में सॉल्व किया! एक क्लिक में अपना रिकॉर्ड बनाने जाओ`;
 
-    const cleanAuthenticBoardState: SudokuBoardState | null = boardState
-      ? {
-          ...boardState,
-          selectedRow: null,
-          selectedCol: null,
-        }
-      : null;
-
-    const wrapperStyle: React.CSSProperties = hiddenOffscreen
-      ? {
-          position: "absolute",
-          left: "-9999px",
-          top: "-9999px",
-          width: "360px",
-          maxWidth: "360px",
-          pointerEvents: "none",
-        }
-      : {};
-
     return (
-      <div style={wrapperStyle}>
-        <div
-          ref={ref}
-          style={{
-            width: "360px",
-            maxWidth: "360px",
-            background: darkMode ? palette.cardBgDark : palette.cardBgLight,
-            borderRadius: "28px",
-            boxShadow: darkMode
-              ? "0 20px 45px rgba(0, 0, 0, 0.55)"
-              : "0 18px 40px rgba(28, 25, 23, 0.08)",
-            padding: "20px",
-            fontFamily:
-              'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            color: darkMode ? "#F5F5F4" : "#1C1917",
-            boxSizing: "border-box",
-          }}
-          className="flex flex-col gap-3.5 select-none border-none overflow-hidden"
-        >
-          {/* 1. Apple-Grade Widget Header */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "10px",
-                  backgroundColor: "#121212",
-                  boxShadow: "0 4px 10px rgba(0,0,0,0.14)",
-                }}
-                className="flex items-center justify-center overflow-hidden shrink-0"
-              >
-                <img
-                  src="/logo.png"
-                  alt="Sudoku Sync"
-                  crossOrigin="anonymous"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="flex flex-col leading-tight">
-                <span
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 900,
-                    letterSpacing: "0.06em",
-                    color: darkMode ? "#FAFAF9" : "#1C1917",
-                  }}
-                  className="uppercase"
-                >
-                  Sudoku Sync
-                </span>
-                <span
-                  style={{
-                    fontSize: "10.5px",
-                    fontWeight: 700,
-                    color: darkMode ? "#A8A29E" : "#78716C",
-                  }}
-                >
-                  {playerName}
-                </span>
-              </div>
-            </div>
-
-            {/* Difficulty Pastel Pill */}
+      <div
+        ref={ref}
+        style={{
+          background: darkMode ? palette.cardBgDark : palette.cardBgLight,
+          borderRadius: "28px",
+          boxShadow: darkMode
+            ? "0 20px 45px rgba(0, 0, 0, 0.55)"
+            : "0 18px 40px rgba(28, 25, 23, 0.08)",
+          padding: "18px",
+          fontFamily:
+            'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          color: darkMode ? "#F5F5F4" : "#1C1917",
+          boxSizing: "border-box",
+        }}
+        className="w-full max-w-[360px] mx-auto flex flex-col gap-3 select-none border-none overflow-hidden"
+      >
+        {/* 1. Apple-Grade Widget Header */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
             <div
               style={{
-                backgroundColor: darkMode
-                  ? palette.pillBgDark
-                  : palette.pillBgLight,
-                color: darkMode ? palette.pillTextDark : palette.pillTextLight,
-                padding: "5px 12px",
-                borderRadius: "9999px",
-                fontSize: "10px",
-                fontWeight: 900,
-                letterSpacing: "0.08em",
+                width: "34px",
+                height: "34px",
+                borderRadius: "10px",
+                backgroundColor: "#121212",
+                boxShadow: "0 4px 10px rgba(0,0,0,0.14)",
               }}
-              className="uppercase flex items-center gap-1"
+              className="flex items-center justify-center overflow-hidden shrink-0"
             >
-              <Sparkles style={{ width: "11px", height: "11px" }} />
-              <span>{normalizedDiff}</span>
+              <img
+                src="/logo.png"
+                alt="Sudoku Sync"
+                crossOrigin="anonymous"
+                className="w-full h-full object-cover"
+              />
             </div>
-          </div>
-
-          {/* 2. Prominent Solve Time & Best Record Hero Strip */}
-          <div
-            style={{
-              backgroundColor: darkMode
-                ? "rgba(255, 255, 255, 0.05)"
-                : "rgba(255, 255, 255, 0.86)",
-              borderRadius: "20px",
-              padding: "12px 16px",
-              boxShadow: darkMode
-                ? "0 4px 14px rgba(0,0,0,0.22)"
-                : "0 6px 18px rgba(0,0,0,0.03)",
-            }}
-            className="flex items-center justify-between gap-3"
-          >
-            <div className="flex flex-col">
+            <div className="flex flex-col leading-tight">
               <span
                 style={{
-                  fontSize: "9px",
-                  fontWeight: 800,
-                  letterSpacing: "0.1em",
-                  color: darkMode ? "#A8A29E" : "#78716C",
-                }}
-                className="uppercase flex items-center gap-1"
-              >
-                <Clock style={{ width: "11px", height: "11px" }} />
-                <span>SOLVE TIME</span>
-              </span>
-              <span
-                style={{
-                  fontSize: "26px",
+                  fontSize: "12.5px",
                   fontWeight: 900,
-                  fontFamily:
-                    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                  color: darkMode ? "#FFFFFF" : "#1C1917",
-                  lineHeight: 1.15,
+                  letterSpacing: "0.06em",
+                  color: darkMode ? "#FAFAF9" : "#1C1917",
                 }}
+                className="uppercase"
               >
-                {time}
+                Sudoku Sync
               </span>
-            </div>
-
-            {/* Best Time / Flawless Badge */}
-            <div
-              style={{
-                backgroundColor: isNewRecord
-                  ? darkMode
-                    ? "rgba(245, 158, 11, 0.22)"
-                    : "#FEF3C7"
-                  : darkMode
-                  ? palette.pillBgDark
-                  : palette.pillBgLight,
-                color: isNewRecord
-                  ? darkMode
-                    ? "#FCD34D"
-                    : "#92400E"
-                  : darkMode
-                  ? palette.pillTextDark
-                  : palette.pillTextLight,
-                borderRadius: "14px",
-                padding: "7px 12px",
-              }}
-              className="flex flex-col items-end justify-center shrink-0"
-            >
-              <div className="flex items-center gap-1">
-                {isNewRecord ? (
-                  <Trophy style={{ width: "13px", height: "13px" }} />
-                ) : mistakes === 0 ? (
-                  <ShieldCheck style={{ width: "13px", height: "13px" }} />
-                ) : (
-                  <Award style={{ width: "13px", height: "13px" }} />
-                )}
-                <span
-                  style={{
-                    fontSize: "9px",
-                    fontWeight: 900,
-                    letterSpacing: "0.08em",
-                  }}
-                  className="uppercase"
-                >
-                  {isNewRecord
-                    ? "NEW BEST TIME!"
-                    : bestTime
-                    ? `BEST ${bestTime}`
-                    : mistakes === 0
-                    ? "FLAWLESS WIN"
-                    : "COMPLETED"}
-                </span>
-              </div>
               <span
                 style={{
                   fontSize: "10px",
                   fontWeight: 700,
-                  opacity: 0.85,
-                  marginTop: "2px",
+                  color: darkMode ? "#A8A29E" : "#78716C",
                 }}
               >
-                {mistakes === 0
-                  ? "0 Mistakes • 100% Clean"
-                  : `${mistakes} Mistake${mistakes === 1 ? "" : "s"}`}
+                {playerName}
               </span>
             </div>
           </div>
 
-          {/* 3. Authentic <SudokuBoard /> + Dynamic Rotated Sticker Overlay */}
-          <div className="relative w-full aspect-square flex items-center justify-center my-0.5">
-            <div className="w-full h-full pointer-events-none">
-              <SudokuBoard
-                id="share-card-authentic-board"
-                boardState={cleanAuthenticBoardState}
-                difficulty={normalizedDiff}
-                solutionGrid={solutionGrid}
-                isTimerPaused={false}
-                onResumeSession={() => {}}
-                visualizingBacktrack={false}
-                highlightAreas={true}
-                highlightIdentical={true}
-                isNumberFirstInputMode={false}
-                lockedNum={null}
-                activeKeypadNum={null}
-                darkMode={darkMode}
-                playClickSound={() => {}}
-                onCellClick={() => {}}
-              />
-            </div>
-
-            {/* Dynamic Premium Rotated Pastel Sticker Badge (-2deg) */}
-            <div
-              style={{
-                position: "absolute",
-                top: "-10px",
-                right: "-6px",
-                transform: "rotate(-2deg)",
-                backgroundColor: darkMode
-                  ? palette.stickerBgDark
-                  : palette.stickerBgLight,
-                color: darkMode
-                  ? palette.stickerTextDark
-                  : palette.stickerTextLight,
-                boxShadow: darkMode
-                  ? palette.stickerShadowDark
-                  : palette.stickerShadowLight,
-                padding: "6px 14px",
-                borderRadius: "9999px",
-                fontSize: "10.5px",
-                fontWeight: 900,
-                letterSpacing: "0.06em",
-                zIndex: 20,
-              }}
-              className="border-none select-none flex items-center gap-1.5 uppercase"
-            >
-              {stickerBadge.tier === "excellent" ? (
-                <Flame style={{ width: "12px", height: "12px" }} />
-              ) : stickerBadge.tier === "great" ? (
-                <Sparkles style={{ width: "12px", height: "12px" }} />
-              ) : (
-                <Target style={{ width: "12px", height: "12px" }} />
-              )}
-              <span>{stickerBadge.label}</span>
-            </div>
-          </div>
-
-          {/* 4. Psychological Hook & Unsolved Challenge Link Section */}
+          {/* Difficulty Pastel Pill */}
           <div
             style={{
               backgroundColor: darkMode
-                ? "rgba(255, 255, 255, 0.05)"
-                : "rgba(255, 255, 255, 0.88)",
-              borderRadius: "20px",
-              padding: "12px 14px",
-              boxShadow: darkMode
-                ? "0 4px 14px rgba(0,0,0,0.22)"
-                : "0 4px 14px rgba(0,0,0,0.03)",
+                ? palette.pillBgDark
+                : palette.pillBgLight,
+              color: darkMode ? palette.pillTextDark : palette.pillTextLight,
+              padding: "4px 11px",
+              borderRadius: "9999px",
+              fontSize: "10px",
+              fontWeight: 900,
+              letterSpacing: "0.08em",
             }}
-            className="flex flex-col items-center gap-2 text-center border-none"
+            className="uppercase flex items-center gap-1"
           >
-            <p
-              style={{
-                fontSize: "12px",
-                fontWeight: 800,
-                lineHeight: 1.4,
-                color: darkMode ? "#FAFAF9" : "#1C1917",
-                margin: 0,
-              }}
-            >
-              {finalTagline}
-            </p>
+            <Sparkles className="w-3 h-3" />
+            <span>{normalizedDiff}</span>
+          </div>
+        </div>
 
-            {/* Clean Fresh Unsolved Challenge Link Pill */}
-            <div
+        {/* 2. Prominent Solve Time & Best Record Hero Strip */}
+        <div
+          style={{
+            backgroundColor: darkMode
+              ? "rgba(255, 255, 255, 0.05)"
+              : "rgba(255, 255, 255, 0.86)",
+            borderRadius: "18px",
+            padding: "10px 14px",
+            boxShadow: darkMode
+              ? "0 4px 14px rgba(0,0,0,0.22)"
+              : "0 6px 18px rgba(0,0,0,0.03)",
+          }}
+          className="flex items-center justify-between gap-3"
+        >
+          <div className="flex flex-col">
+            <span
               style={{
-                backgroundColor: darkMode
-                  ? palette.pillBgDark
-                  : palette.pillBgLight,
-                color: darkMode ? palette.pillTextDark : palette.pillTextLight,
-                borderRadius: "12px",
-                padding: "6px 12px",
-                fontSize: "10px",
+                fontSize: "9px",
                 fontWeight: 800,
+                letterSpacing: "0.1em",
+                color: darkMode ? "#A8A29E" : "#78716C",
+              }}
+              className="uppercase flex items-center gap-1"
+            >
+              <Clock className="w-3 h-3" />
+              <span>SOLVE TIME</span>
+            </span>
+            <span
+              style={{
+                fontSize: "24px",
+                fontWeight: 900,
                 fontFamily:
                   "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                width: "100%",
-                boxSizing: "border-box",
+                color: darkMode ? "#FFFFFF" : "#1C1917",
+                lineHeight: 1.15,
               }}
-              className="flex items-center justify-center gap-1.5 truncate"
             >
-              <ExternalLink
-                style={{ width: "11px", height: "11px", flexShrink: 0 }}
-              />
-              <span className="truncate">{finalDisplayUrl}</span>
+              {time}
+            </span>
+          </div>
+
+          {/* Best Time / Flawless Badge */}
+          <div
+            style={{
+              backgroundColor: isNewRecord
+                ? darkMode
+                  ? "rgba(245, 158, 11, 0.22)"
+                  : "#FEF3C7"
+                : darkMode
+                ? palette.pillBgDark
+                : palette.pillBgLight,
+              color: isNewRecord
+                ? darkMode
+                  ? "#FCD34D"
+                  : "#92400E"
+                : darkMode
+                ? palette.pillTextDark
+                : palette.pillTextLight,
+              borderRadius: "12px",
+              padding: "6px 10px",
+            }}
+            className="flex flex-col items-end justify-center shrink-0"
+          >
+            <div className="flex items-center gap-1">
+              {isNewRecord ? (
+                <Trophy className="w-3.5 h-3.5" />
+              ) : mistakes === 0 ? (
+                <ShieldCheck className="w-3.5 h-3.5" />
+              ) : (
+                <Award className="w-3.5 h-3.5" />
+              )}
+              <span
+                style={{
+                  fontSize: "9px",
+                  fontWeight: 900,
+                  letterSpacing: "0.08em",
+                }}
+                className="uppercase"
+              >
+                {isNewRecord
+                  ? "NEW BEST TIME!"
+                  : bestTime
+                  ? `BEST ${bestTime}`
+                  : mistakes === 0
+                  ? "FLAWLESS WIN"
+                  : "COMPLETED"}
+              </span>
             </div>
+            <span
+              style={{
+                fontSize: "9.5px",
+                fontWeight: 700,
+                opacity: 0.85,
+                marginTop: "2px",
+              }}
+            >
+              {mistakes === 0
+                ? "0 Mistakes • 100% Clean"
+                : `${mistakes} Mistake${mistakes === 1 ? "" : "s"}`}
+            </span>
+          </div>
+        </div>
+
+        {/* 3. Authentic <SudokuBoard /> + Dynamic Rotated Sticker Overlay */}
+        <div className="relative w-full aspect-square flex items-center justify-center">
+          <div className="w-full h-full pointer-events-none">
+            <SudokuBoard
+              id="share-card-authentic-board"
+              boardState={boardState}
+              difficulty={normalizedDiff}
+              solutionGrid={solutionGrid}
+              isTimerPaused={false}
+              onResumeSession={() => {}}
+              visualizingBacktrack={false}
+              highlightAreas={true}
+              highlightIdentical={true}
+              isNumberFirstInputMode={false}
+              lockedNum={null}
+              activeKeypadNum={null}
+              darkMode={darkMode}
+              playClickSound={() => {}}
+              onCellClick={() => {}}
+            />
+          </div>
+
+          {/* Dynamic Premium Rotated Pastel Sticker Badge (-2deg) */}
+          <div
+            style={{
+              position: "absolute",
+              top: "-8px",
+              right: "-4px",
+              transform: "rotate(-2deg)",
+              backgroundColor: darkMode
+                ? palette.stickerBgDark
+                : palette.stickerBgLight,
+              color: darkMode
+                ? palette.stickerTextDark
+                : palette.stickerTextLight,
+              boxShadow: darkMode
+                ? palette.stickerShadowDark
+                : palette.stickerShadowLight,
+              padding: "5px 12px",
+              borderRadius: "9999px",
+              fontSize: "10px",
+              fontWeight: 900,
+              letterSpacing: "0.06em",
+            }}
+            className="border-none select-none flex items-center gap-1.5 uppercase"
+          >
+            {stickerBadge.tier === "excellent" ? (
+              <Flame className="w-3 h-3" />
+            ) : stickerBadge.tier === "great" ? (
+              <Sparkles className="w-3 h-3" />
+            ) : (
+              <Target className="w-3 h-3" />
+            )}
+            <span>{stickerBadge.label}</span>
+          </div>
+        </div>
+
+        {/* 4. Psychological Hook & Unsolved Challenge Link Section */}
+        <div
+          style={{
+            backgroundColor: darkMode
+              ? "rgba(255, 255, 255, 0.05)"
+              : "rgba(255, 255, 255, 0.88)",
+            borderRadius: "18px",
+            padding: "10px 12px",
+            boxShadow: darkMode
+              ? "0 4px 14px rgba(0,0,0,0.22)"
+              : "0 4px 14px rgba(0,0,0,0.03)",
+          }}
+          className="flex flex-col items-center gap-1.5 text-center border-none"
+        >
+          <p
+            style={{
+              fontSize: "11.5px",
+              fontWeight: 800,
+              lineHeight: 1.38,
+              color: darkMode ? "#FAFAF9" : "#1C1917",
+              margin: 0,
+            }}
+          >
+            {finalTagline}
+          </p>
+
+          {/* Clean Fresh Unsolved Challenge Link Pill */}
+          <div
+            style={{
+              backgroundColor: darkMode
+                ? palette.pillBgDark
+                : palette.pillBgLight,
+              color: darkMode ? palette.pillTextDark : palette.pillTextLight,
+              borderRadius: "10px",
+              padding: "5px 10px",
+              fontSize: "9.5px",
+              fontWeight: 800,
+              fontFamily:
+                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+              width: "100%",
+              boxSizing: "border-box",
+            }}
+            className="flex items-center justify-center gap-1.5 truncate"
+          >
+            <ExternalLink className="w-3 h-3 shrink-0" />
+            <span className="truncate">{finalDisplayUrl}</span>
           </div>
         </div>
       </div>
