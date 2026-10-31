@@ -1,4 +1,5 @@
 import { SudokuBoardState } from "../components/game/SudokuBoard";
+import { getCurrentLanguage, DIFFICULTY_TRANSLATIONS } from "../i18n/useTranslation";
 
 export type ShareDifficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT" | string;
 
@@ -22,7 +23,350 @@ export interface ShareCanvasGameState {
   currentMistakesCount?: number;
   maxMistakesLimit?: number;
   seed?: string | number;
+  language?: string;
 }
+
+
+export interface ShareI18nStrings {
+  sticker: {
+    record: string;
+    excellent: string;
+    great: string;
+    solved: string;
+    defeat_close: string;
+    defeat_freeze: string;
+    defeat_backup: string;
+  };
+  hook: {
+    win_record: (time: string) => string;
+    win_normal: (time: string) => string;
+    defeat: string;
+  };
+  hud: {
+    best: (time: string) => string;
+    err: (count: number, max: number) => string;
+  };
+  footer: {
+    room_code: string;
+  };
+  modal: {
+    title: string;
+    generating: string;
+    btn_share: string;
+    btn_save: string;
+    toast_copied: string;
+    share_title: string;
+    share_msg: (url: string) => string;
+  };
+}
+
+export const SHARE_I18N: Record<string, ShareI18nStrings> = {
+  en: {
+    sticker: {
+      record: "NEW RECORD!",
+      excellent: "EXCELLENT TIME",
+      great: "GREAT TIME",
+      solved: "SOLVED",
+      defeat_close: "SO CLOSE!",
+      defeat_freeze: "BRAIN FREEZE!",
+      defeat_backup: "NEED BACKUP!",
+    },
+    hook: {
+      win_record: (t) => `New best time ${t}! Can you beat it?`,
+      win_normal: (t) => `I beat this puzzle in ${t}! Beat my time!`,
+      defeat: "Stuck! Can you finish this puzzle?",
+    },
+    hud: {
+      best: (t) => `BEST ${t}`,
+      err: (c, m) => `ERR: ${c}/${m}`,
+    },
+    footer: {
+      room_code: "Room Code: ",
+    },
+    modal: {
+      title: "SHARE SCREENSHOT",
+      generating: "Generating Screenshot...",
+      btn_share: "Share this Screenshot",
+      btn_save: "Save to Gallery",
+      toast_copied: "Link copied to clipboard! Paste it alongside your image.",
+      share_title: "Sudoku Sync Challenge",
+      share_msg: (url) => `Can you beat my game? Play here: ${url}`,
+    },
+  },
+  hi: {
+    sticker: {
+      record: "नया रिकॉर्ड!",
+      excellent: "गज़ब की स्पीड!",
+      great: "शानदार टाइम!",
+      solved: "पहेली हल!",
+      defeat_close: "बस थोड़ा सा रह गया!",
+      defeat_freeze: "दिमाग की बत्ती गुल!",
+      defeat_backup: "मदद चाहिए!",
+    },
+    hook: {
+      win_record: (t) => `नया बेस्ट रिकॉर्ड ${t}! दम है तो तोड़ के दिखाओ!`,
+      win_normal: (t) => `मैंने इसे ${t} में हल किया! मेरा टाइम बीट करो!`,
+      defeat: "अटक गया यार! क्या तुम इसे पूरा कर सकते हो?",
+    },
+    hud: {
+      best: (t) => `बेस्ट ${t}`,
+      err: (c, m) => `गलती: ${c}/${m}`,
+    },
+    footer: {
+      room_code: "कमरा कोड: ",
+    },
+    modal: {
+      title: "स्क्रीनशॉट शेयर करें",
+      generating: "स्क्रीनशॉट बन रहा है...",
+      btn_share: "स्क्रीनशॉट शेयर करें",
+      btn_save: "गैलरी में सेव करें",
+      toast_copied: "लिंक कॉपी हो गया! इमेज के साथ पेस्ट करें।",
+      share_title: "सुडोकू सिंक चैलेंज",
+      share_msg: (url) => `क्या तुम मेरा स्कोर हरा सकते हो? यहाँ खेलो: ${url}`,
+    },
+  },
+  de: {
+    sticker: {
+      record: "NEUER REKORD!",
+      excellent: "TOP-ZEIT!",
+      great: "STARK GELÖST!",
+      solved: "GELÖST",
+      defeat_close: "FAST GESCHAFFT!",
+      defeat_freeze: "KNOTEN IM KOPF!",
+      defeat_backup: "BRAUCHE HILFE!",
+    },
+    hook: {
+      win_record: (t) => `Neuer Rekord in ${t}! Kannst du das toppen?`,
+      win_normal: (t) => `In ${t} gelöst! Schlag meine Zeit!`,
+      defeat: "Ich hänge fest! Kannst du das beenden?",
+    },
+    hud: {
+      best: (t) => `BEST ${t}`,
+      err: (c, m) => `FEHLER: ${c}/${m}`,
+    },
+    footer: {
+      room_code: "Raum-Code: ",
+    },
+    modal: {
+      title: "SCREENSHOT TEILEN",
+      generating: "Erstelle Screenshot...",
+      btn_share: "Screenshot teilen",
+      btn_save: "In Galerie speichern",
+      toast_copied: "Link kopiert! Zusammen mit dem Bild einfügen.",
+      share_title: "Sudoku Sync Challenge",
+      share_msg: (url) => `Schlägst du meine Zeit? Jetzt spielen: ${url}`,
+    },
+  },
+  ja: {
+    sticker: {
+      record: "新記録達成！",
+      excellent: "神タイム！",
+      great: "ナイスクリア！",
+      solved: "クリア！",
+      defeat_close: "あと一歩だった！",
+      defeat_freeze: "脳がフリーズ！",
+      defeat_backup: "誰か助けて！",
+    },
+    hook: {
+      win_record: (t) => `自己ベスト ${t} 達成！この記録抜ける？`,
+      win_normal: (t) => `${t} でクリア！タイムアタック勝負だ！`,
+      defeat: "ギブアップ…！代わりにクリアしてくれる？",
+    },
+    hud: {
+      best: (t) => `ベスト ${t}`,
+      err: (c, m) => `ミス: ${c}/${m}`,
+    },
+    footer: {
+      room_code: "ルームコード: ",
+    },
+    modal: {
+      title: "スクリーンショット共有",
+      generating: "画像を生成中...",
+      btn_share: "スクショをシェア",
+      btn_save: "アルバムに保存",
+      toast_copied: "リンクをコピーしました！画像と一緒にシェアしてね。",
+      share_title: "数独シンク 対戦チャレンジ",
+      share_msg: (url) => `私のタイムに勝てるかな？ここから挑戦：${url}`,
+    },
+  },
+  ko: {
+    sticker: {
+      record: "신기록 달성!",
+      excellent: "역대급 스피드!",
+      great: "나이스 클리어!",
+      solved: "클리어!",
+      defeat_close: "아깝다, 한 끗 차이!",
+      defeat_freeze: "뇌정지 옴!",
+      defeat_backup: "도움이 필요해!",
+    },
+    hook: {
+      win_record: (t) => `새로운 기록 ${t}! 나 이길 수 있어?`,
+      win_normal: (t) => `${t}만에 클리어! 내 기록 깨봐!`,
+      defeat: "여기서 막힘... 대신 풀어줄 사람?",
+    },
+    hud: {
+      best: (t) => `최고 ${t}`,
+      err: (c, m) => `오답: ${c}/${m}`,
+    },
+    footer: {
+      room_code: "방 코드: ",
+    },
+    modal: {
+      title: "스크린샷 공유",
+      generating: "이미지 생성 중...",
+      btn_share: "스크린샷 공유하기",
+      btn_save: "갤러리에 저장",
+      toast_copied: "링크 복사 완료! 이미지와 함께 붙여넣으세요.",
+      share_title: "스도쿠 싱크 챌린지",
+      share_msg: (url) => `내 기록 넘을 수 있어? 도전해봐: ${url}`,
+    },
+  },
+  es: {
+    sticker: {
+      record: "¡NUEVO RÉCORD!",
+      excellent: "¡TIEMPAZO!",
+      great: "¡BUEN TIEMPO!",
+      solved: "RESUELTO",
+      defeat_close: "¡POR NADA!",
+      defeat_freeze: "¡CEREBRO FRITO!",
+      defeat_backup: "¡NECESITO AYUDA!",
+    },
+    hook: {
+      win_record: (t) => `¡Nuevo récord en ${t}! ¿Podrás superarlo?`,
+      win_normal: (t) => `¡Lo completé en ${t}! ¡A ver si me ganas!`,
+      defeat: "¡Me quedé atascado! ¿Puedes terminarlo tú?",
+    },
+    hud: {
+      best: (t) => `RÉCORD ${t}`,
+      err: (c, m) => `FALLOS: ${c}/${m}`,
+    },
+    footer: {
+      room_code: "Código de sala: ",
+    },
+    modal: {
+      title: "COMPARTIR CAPTURA",
+      generating: "Generando captura...",
+      btn_share: "Compartir captura",
+      btn_save: "Guardar en galería",
+      toast_copied: "¡Enlace copiado! Pégalo junto con tu imagen.",
+      share_title: "Desafío Sudoku Sync",
+      share_msg: (url) => `¿Puedes ganarme? Juega aquí: ${url}`,
+    },
+  },
+  fr: {
+    sticker: {
+      record: "NOUVEAU RECORD !",
+      excellent: "CHRONO PARFAIT !",
+      great: "BIEN JOUÉ !",
+      solved: "RÉSOLU",
+      defeat_close: "À ÇA DU BUT !",
+      defeat_freeze: "PAGE BLANCHE !",
+      defeat_backup: "À L'AIDE !",
+    },
+    hook: {
+      win_record: (t) => `Nouveau record en ${t} ! Capable de faire mieux ?`,
+      win_normal: (t) => `Terminé en ${t} ! Bats mon chrono !`,
+      defeat: "Je cale ! Tu peux finir cette grille ?",
+    },
+    hud: {
+      best: (t) => `TOP ${t}`,
+      err: (c, m) => `ERREURS : ${c}/${m}`,
+    },
+    footer: {
+      room_code: "Code de salon : ",
+    },
+    modal: {
+      title: "PARTAGER LA CAPTURE",
+      generating: "Génération en cours...",
+      btn_share: "Partager la capture",
+      btn_save: "Enregistrer dans la galerie",
+      toast_copied: "Lien copié ! Colle-le avec ton image.",
+      share_title: "Défi Sudoku Sync",
+      share_msg: (url) => `Tu peux battre mon score ? Reçois le défi : ${url}`,
+    },
+  },
+  it: {
+    sticker: {
+      record: "NUOVO RECORD!",
+      excellent: "TEMPO BOMBA!",
+      great: "OTTIMO TEMPO!",
+      solved: "RISOLTO",
+      defeat_close: "QUASI FATTA!",
+      defeat_freeze: "BLOCCO TOTALE!",
+      defeat_backup: "SERVE UN AIUTO!",
+    },
+    hook: {
+      win_record: (t) => `Nuovo record in ${t}! Riesci a battermi?`,
+      win_normal: (t) => `Finito in ${t}! Sfida il mio tempo!`,
+      defeat: "Mi sono bloccato! Riesci a finirlo tu?",
+    },
+    hud: {
+      best: (t) => `TOP ${t}`,
+      err: (c, m) => `ERRORI: ${c}/${m}`,
+    },
+    footer: {
+      room_code: "Codice stanza: ",
+    },
+    modal: {
+      title: "CONDIVIDI SCREENSHOT",
+      generating: "Creazione in corso...",
+      btn_share: "Condividi screenshot",
+      btn_save: "Salva nella galleria",
+      toast_copied: "Link copiato! Incollalo insieme alla tua immagine.",
+      share_title: "Sfida Sudoku Sync",
+      share_msg: (url) => `Riesci a battermi? Gioca qui: ${url}`,
+    },
+  },
+  pt: {
+    sticker: {
+      record: "NOVO RECORDE!",
+      excellent: "TEMPO MONSTRO!",
+      great: "MANDOU BEM!",
+      solved: "RESOLVIDO",
+      defeat_close: "FOI POR POUCO!",
+      defeat_freeze: "DEU TILT!",
+      defeat_backup: "SOCORRO, TRAVEI!",
+    },
+    hook: {
+      win_record: (t) => `Novo recorde de ${t}! Duvido você bater!`,
+      win_normal: (t) => `Fechei em ${t}! Tenta bater meu tempo!`,
+      defeat: "Travei legal! Consegue terminar esse pra mim?",
+    },
+    hud: {
+      best: (t) => `MELHOR ${t}`,
+      err: (c, m) => `ERROS: ${c}/${m}`,
+    },
+    footer: {
+      room_code: "Código da sala: ",
+    },
+    modal: {
+      title: "COMPARTILHAR CAPTURA",
+      generating: "Gerando captura...",
+      btn_share: "Compartilhar captura",
+      btn_save: "Salvar na galeria",
+      toast_copied: "Link copiado! Cole junto com a sua imagem.",
+      share_title: "Desafio Sudoku Sync",
+      share_msg: (url) => `Consegue me vencer? Jogue aqui: ${url}`,
+    },
+  },
+};
+SHARE_I18N["pt-BR"] = SHARE_I18N["pt"];
+
+export const getShareI18n = (lang?: string): ShareI18nStrings => {
+  const code = (lang || getCurrentLanguage() || "en").toLowerCase();
+  if (SHARE_I18N[code]) return SHARE_I18N[code];
+  const shortCode = code.split("-")[0];
+  if (SHARE_I18N[shortCode]) return SHARE_I18N[shortCode];
+  return SHARE_I18N.en;
+};
+
+export const getLocalizedDifficulty = (diff: string, lang?: string): string => {
+  const normalizedKey = diff.toLowerCase() as 'easy' | 'medium' | 'hard' | 'expert';
+  const rawLang = (lang || getCurrentLanguage() || "en").toLowerCase();
+  const langKey = rawLang === 'pt-br' ? 'pt' : rawLang.split('-')[0];
+  const translated = DIFFICULTY_TRANSLATIONS[langKey]?.[normalizedKey] || DIFFICULTY_TRANSLATIONS.en?.[normalizedKey] || diff;
+  return translated.toUpperCase();
+};
 
 export interface ShareCanvasThemePalette {
   cardBgStart: string;
@@ -578,17 +922,19 @@ export const evaluatePerformanceSticker = (
   seconds: number,
   isWon: boolean = true,
   isNewRecord: boolean = false,
-  filledCellsCount: number = 0
+  filledCellsCount: number = 0,
+  lang?: string
 ): { label: string; tier: StickerBadgeTier } => {
+  const i18n = getShareI18n(lang);
   if (!isWon) {
     if (filledCellsCount >= 68) {
-      return { label: "SO CLOSE!", tier: "defeat_close" };
+      return { label: i18n.sticker.defeat_close, tier: "defeat_close" };
     }
-    return { label: "BRAIN FREEZE!", tier: "defeat_freeze" };
+    return { label: i18n.sticker.defeat_freeze, tier: "defeat_freeze" };
   }
 
   if (isNewRecord) {
-    return { label: "NEW RECORD!", tier: "record" };
+    return { label: i18n.sticker.record, tier: "record" };
   }
 
   const diff = String(difficulty || "EASY").toUpperCase();
@@ -601,12 +947,12 @@ export const evaluatePerformanceSticker = (
   const { excellent, great } = thresholds[diff] || thresholds.EASY;
 
   if (seconds > 0 && seconds <= excellent) {
-    return { label: "EXCELLENT TIME", tier: "excellent" };
+    return { label: i18n.sticker.excellent, tier: "excellent" };
   }
   if (seconds > 0 && seconds <= great) {
-    return { label: "GREAT TIME", tier: "great" };
+    return { label: i18n.sticker.great, tier: "great" };
   }
-  return { label: "SOLVED", tier: "solved" };
+  return { label: i18n.sticker.solved, tier: "solved" };
 };
 
 export const extractRoomCodeFromChallenge = (
@@ -935,17 +1281,23 @@ export async function generateShareCanvas(
     }
   }
 
+  const activeLang = rawState.language || getCurrentLanguage() || "en";
+  const i18n = getShareI18n(activeLang);
+
   const effectiveSeconds =
     typeof rawState.sessionSeconds === "number" && rawState.sessionSeconds > 0
       ? rawState.sessionSeconds
       : parseFormattedTimeToSeconds(timeStr);
 
+  const isRecordWin = Boolean(rawState.isNewRecord && didWin);
+
   const stickerBadge = evaluatePerformanceSticker(
     normalizedDiff,
     effectiveSeconds,
     didWin,
-    Boolean(rawState.isNewRecord && didWin),
-    filledCellsCount
+    isRecordWin,
+    filledCellsCount,
+    activeLang
   );
 
   const extractedRoomCode = extractRoomCodeFromChallenge(
@@ -955,8 +1307,10 @@ export async function generateShareCanvas(
   );
 
   const ctaCopy = didWin
-    ? `I beat this puzzle in ${timeStr}! Beat my time!`
-    : "Stuck! Can you finish this puzzle?";
+    ? (isRecordWin ? i18n.hook.win_record(timeStr) : i18n.hook.win_normal(timeStr))
+    : i18n.hook.defeat;
+
+  const localizedDiff = getLocalizedDifficulty(normalizedDiff, activeLang);
 
   const CARD_WIDTH = 360;
   const CARD_HEIGHT = 546;
@@ -977,7 +1331,7 @@ export async function generateShareCanvas(
   ctx.clearRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
 
   const appSansFont =
-    '"Space Grotesk", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif';
+    '"Space Grotesk", "Noto Sans", "Noto Sans Devanagari", "Hiragino Kaku Gothic ProN", "Malgun Gothic", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif';
   const appHandwritingFont =
     '"Patrick Hand", "Architects Daughter", "Kalam", cursive, sans-serif';
   const appMonoFont =
@@ -1012,9 +1366,15 @@ export async function generateShareCanvas(
   ctx.font = `500 10.5px ${appSansFont}`;
   drawLeftMiddleText(ctx, playerName, 58, headerY + 24);
 
-  // Borderless Difficulty Pill with soft diffused elevation
-  ctx.font = `700 10px ${appMonoFont}`;
-  const diffTextW = ctx.measureText(normalizedDiff).width;
+  // Borderless Localized Difficulty Pill with auto-scaling & soft diffused elevation
+  let diffFontSize = 10;
+  ctx.font = `700 ${diffFontSize}px ${appSansFont}`;
+  let diffTextW = ctx.measureText(localizedDiff).width;
+  while (diffTextW > 64 && diffFontSize > 8) {
+    diffFontSize -= 0.5;
+    ctx.font = `700 ${diffFontSize}px ${appSansFont}`;
+    diffTextW = ctx.measureText(localizedDiff).width;
+  }
   const diffIconSize = 11.5;
   const diffGap = 4.5;
   const diffContentW = diffIconSize + diffGap + diffTextW;
@@ -1051,10 +1411,10 @@ export async function generateShareCanvas(
     diffIconSize
   );
   ctx.fillStyle = palette.pillText;
-  ctx.font = `700 10px ${appMonoFont}`;
+  ctx.font = `700 ${diffFontSize}px ${appSansFont}`;
   drawLeftMiddleText(
     ctx,
-    normalizedDiff,
+    localizedDiff,
     diffStartX + diffIconSize + diffGap,
     diffCenterY
   );
@@ -1091,12 +1451,12 @@ export async function generateShareCanvas(
   ctx.font = `700 23px ${appMonoFont}`;
   drawLeftMiddleText(ctx, timeStr, bannerX + 14 + clockSize + 7.5, timerRowY);
 
-  // Right Status Pill: Borderless ERR / Best Time vector badge
+  // Right Status Pill: Borderless ERR / Best Time vector badge (Localized)
   const statusLabel = didWin
     ? rawState.bestTime
-      ? `BEST ${rawState.bestTime}`
-      : `ERR: ${mistakes}/${maxMistakes || 3}`
-    : `ERR: ${mistakes || maxMistakes || 3}/${maxMistakes || 3}`;
+      ? i18n.hud.best(rawState.bestTime)
+      : i18n.hud.err(mistakes, maxMistakes || 3)
+    : i18n.hud.err(mistakes || maxMistakes || 3, maxMistakes || 3);
 
   const statusPillBg = didWin
     ? darkMode
@@ -1198,7 +1558,15 @@ export async function generateShareCanvas(
   ctx.restore();
 
   ctx.fillStyle = hookPillText;
-  ctx.font = `700 11.5px ${appSansFont}`;
+  const maxHookTextW = hookPillW - 20;
+  let hookFontSize = 11.5;
+  ctx.font = `700 ${hookFontSize}px ${appSansFont}`;
+  let hookMeasuredW = ctx.measureText(ctaCopy).width;
+  while (hookMeasuredW > maxHookTextW && hookFontSize > 8.5) {
+    hookFontSize -= 0.5;
+    ctx.font = `700 ${hookFontSize}px ${appSansFont}`;
+    hookMeasuredW = ctx.measureText(ctaCopy).width;
+  }
   drawCenteredText(
     ctx,
     ctaCopy,
@@ -1383,8 +1751,15 @@ export async function generateShareCanvas(
   // sitting naturally without overlapping Row 1 cell digits.
   if (stickerBadge.tier !== "none" && stickerBadge.label) {
     ctx.save();
-    ctx.font = `700 11.5px ${appSansFont}`;
-    const stickerTextW = ctx.measureText(stickerBadge.label).width;
+    let stickerFontSize = 11.5;
+    ctx.font = `700 ${stickerFontSize}px ${appSansFont}`;
+    let stickerTextW = ctx.measureText(stickerBadge.label).width;
+    const maxStickerAllowedW = 145;
+    while (stickerTextW > maxStickerAllowedW && stickerFontSize > 9) {
+      stickerFontSize -= 0.5;
+      ctx.font = `700 ${stickerFontSize}px ${appSansFont}`;
+      stickerTextW = ctx.measureText(stickerBadge.label).width;
+    }
     const stickerIconSize = 15;
     const stickerGap = 5.5;
     const stickerContentW = stickerIconSize + stickerGap + stickerTextW;
@@ -1456,7 +1831,7 @@ export async function generateShareCanvas(
       stickerIconSize
     );
     ctx.fillStyle = badgeText;
-    ctx.font = `700 11.5px ${appSansFont}`;
+    ctx.font = `700 ${stickerFontSize}px ${appSansFont}`;
     drawLeftMiddleText(
       ctx,
       stickerBadge.label,
@@ -1490,7 +1865,7 @@ export async function generateShareCanvas(
 
   const domainText = "sudokusync.com";
   const dividerText = "  |  ";
-  const roomLabelText = "Room Code: ";
+  const roomLabelText = i18n.footer.room_code;
   const roomCodeValue = extractedRoomCode;
   const footerIconSize = 15;
   const footerGap = 5;

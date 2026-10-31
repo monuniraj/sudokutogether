@@ -6,11 +6,14 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import { X, Loader2, Share2, Download, Check } from "lucide-react";
 import { SudokuBoardState, Difficulty } from "../game/SudokuBoard";
+import { useTranslation } from "../../i18n/useTranslation";
 import {
   generateShareCanvas,
   ShareDifficulty,
   buildFreshChallengeUrl,
   evaluateBoardDidWin,
+  SHARE_I18N,
+  getShareI18n,
 } from "../../utils/canvasShare";
 
 export interface SharePreviewModalProps {
@@ -29,6 +32,7 @@ export interface SharePreviewModalProps {
   darkMode?: boolean;
   roomCode?: string;
   playClickSound?: () => void;
+  language?: string;
 }
 
 const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
@@ -51,7 +55,12 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   darkMode = false,
   roomCode,
   playClickSound,
+  language: propLanguage,
 }) => {
+  const { language: hookLanguage } = useTranslation();
+  const activeLang = propLanguage || hookLanguage || "en";
+  const i18n = getShareI18n(activeLang);
+
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(true);
   const [isSavedSuccess, setIsSavedSuccess] = useState<boolean>(false);
@@ -72,8 +81,8 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   );
 
   const ctaCopy = didWin
-    ? `I beat this puzzle in ${time}! Beat my time!`
-    : "Stuck! Can you finish this puzzle?";
+    ? (isNewRecord ? i18n.hook.win_record(time) : i18n.hook.win_normal(time))
+    : i18n.hook.defeat;
 
   useEffect(() => {
     if (!isOpen) {
@@ -102,6 +111,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
           isWon: didWin,
           darkMode,
           roomCode,
+          language: activeLang,
         };
         const themeColor = normalizedDiff;
         const url = await generateShareCanvas(
@@ -149,18 +159,14 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
 
     const challengeUrl =
       buildFreshChallengeUrl(challengeId, playerName) || window.location.href;
-    const shareText = `Can you beat my game? Play here: ${challengeUrl}`;
+    const shareText = i18n.modal.share_msg(challengeUrl);
     const base64Data = generatedImage.replace(/^data:image\/png;base64,/, "");
 
     const triggerClipboardToast = () => {
-      setClipboardToast(
-        "Link copied to clipboard! Paste it alongside your image."
-      );
+      setClipboardToast(i18n.modal.toast_copied);
       setTimeout(() => {
         setClipboardToast((prev) =>
-          prev === "Link copied to clipboard! Paste it alongside your image."
-            ? null
-            : prev
+          prev === i18n.modal.toast_copied ? null : prev
         );
       }, 3800);
     };
@@ -200,7 +206,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
         });
 
         await Share.share({
-          title: "Sudoku Sync Challenge",
+          title: i18n.modal.share_title,
           text: shareText,
           url: savedFile.uri,
           dialogTitle: "Share this Screenshot",
@@ -213,7 +219,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
 
         const shareData: ShareData = {
           files: [imageFile],
-          title: "Sudoku Sync Challenge",
+          title: i18n.modal.share_title,
           text: `Can you beat my game? Play here: ${challengeUrl}`,
           url: challengeUrl,
         };
@@ -225,13 +231,13 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
             await copyChallengeToClipboard();
             await navigator.share({
               files: [imageFile],
-              title: "Sudoku Sync Challenge",
+              title: i18n.modal.share_title,
               text: shareText,
             });
           } else {
             await copyChallengeToClipboard();
             await navigator.share({
-              title: "Sudoku Sync Challenge",
+              title: i18n.modal.share_title,
               text: shareText,
               url: challengeUrl,
             });
@@ -339,7 +345,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
                   darkMode ? "text-stone-200" : "text-stone-800"
                 }`}
               >
-                SHARE SCREENSHOT
+                {i18n.modal.title}
               </span>
               <button
                 type="button"
@@ -374,7 +380,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
                 >
                   <Loader2 className="w-8 h-8 animate-spin opacity-60" />
                   <span className="text-xs font-sans font-bold tracking-wide opacity-70">
-                    Generating Screenshot...
+                    {i18n.modal.generating}
                   </span>
                 </div>
               )}
@@ -409,7 +415,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
               >
                 <Share2 className="w-5 h-5 mr-2 shrink-0" />
                 <span>
-                  {isGenerating ? "Generating..." : "Share this Screenshot"}
+                  {isGenerating ? i18n.modal.generating : i18n.modal.btn_share}
                 </span>
                 {isGenerating && (
                   <Loader2 className="animate-spin w-4 h-4 ml-2 inline shrink-0" />
@@ -433,12 +439,12 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
                 {isSavedSuccess ? (
                   <>
                     <Check className="w-5 h-5 mr-2 shrink-0 text-emerald-500" />
-                    <span>Save to Gallery</span>
+                    <span>{i18n.modal.btn_save}</span>
                   </>
                 ) : (
                   <>
                     <Download className="w-5 h-5 mr-2 shrink-0" />
-                    <span>Save to Gallery</span>
+                    <span>{i18n.modal.btn_save}</span>
                     {isGenerating && (
                       <Loader2 className="animate-spin w-4 h-4 ml-2 inline shrink-0" />
                     )}
