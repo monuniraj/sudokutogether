@@ -55,6 +55,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(true);
   const [isSavedSuccess, setIsSavedSuccess] = useState<boolean>(false);
+  const [clipboardToast, setClipboardToast] = useState<string | null>(null);
 
   const normalizedDiff = String(
     difficulty || boardState?.difficulty || "EASY"
@@ -71,14 +72,15 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   );
 
   const ctaCopy = didWin
-    ? "Can you beat my time?"
-    : "Stuck! Can you help me finish this?";
+    ? `I beat this puzzle in ${time}! Beat my time!`
+    : "Stuck! Can you finish this puzzle?";
 
   useEffect(() => {
     if (!isOpen) {
       setGeneratedImage(null);
       setIsGenerating(true);
       setIsSavedSuccess(false);
+      setClipboardToast(null);
       return;
     }
 
@@ -150,10 +152,39 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     const shareText = `Can you beat my game? Play here: ${challengeUrl}`;
     const base64Data = generatedImage.replace(/^data:image\/png;base64,/, "");
 
+    const triggerClipboardToast = () => {
+      setClipboardToast(
+        "Link copied to clipboard! Paste it alongside your image."
+      );
+      setTimeout(() => {
+        setClipboardToast((prev) =>
+          prev === "Link copied to clipboard! Paste it alongside your image."
+            ? null
+            : prev
+        );
+      }, 3800);
+    };
+
+    // Synchronously initiate clipboard write during active user gesture on non-native platforms
+    // so desktop file sharing (which may strip accompanying text/URL) always retains the playable link
+    if (!Capacitor.isNativePlatform()) {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        navigator.clipboard
+          .writeText(shareText)
+          .then(() => {
+            triggerClipboardToast();
+          })
+          .catch(() => {
+            // Ignore clipboard permission errors in restricted contexts
+          });
+      }
+    }
+
     const copyChallengeToClipboard = async () => {
       if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
         try {
           await navigator.clipboard.writeText(shareText);
+          triggerClipboardToast();
         } catch {
           // Ignore clipboard permission errors in restricted contexts
         }
@@ -351,6 +382,21 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
 
             {/* Action Buttons: Locked to fixed 360px container, disabled while generating */}
             <div className="w-[360px] max-w-[360px] mx-auto flex flex-col gap-2.5 pt-0.5 shrink-0">
+              {clipboardToast && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  className={`w-full py-2 px-3 rounded-xl text-[11px] font-sans font-bold text-center flex items-center justify-center gap-1.5 border-none shadow-[0_4px_12px_rgba(0,0,0,0.06)] ${
+                    darkMode
+                      ? "bg-[#064E3B] text-[#6EE7B7]"
+                      : "bg-[#ECFDF5] text-[#047857]"
+                  }`}
+                >
+                  <Check className="w-3.5 h-3.5 shrink-0" />
+                  <span>{clipboardToast}</span>
+                </motion.div>
+              )}
               <button
                 type="button"
                 disabled={isActionDisabled}
