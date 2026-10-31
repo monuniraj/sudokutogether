@@ -712,21 +712,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     </button>
                   </div>
 
-                  {/* Right: Share + Lock toggle & Close button securely pinned */}
+                  {/* Right: Lock toggle & Close button securely pinned */}
                   <div className="flex items-center gap-1.5 sm:gap-2 pr-1">
-                    <ShareActionWrapper
-                      boardState={boardState}
-                      difficulty={difficulty}
-                      time={formatTimer(sessionSeconds)}
-                      sessionSeconds={sessionSeconds}
-                      playerName={(userProfile?.name && userProfile.name.trim()) || getActiveDisplayName()}
-                      isNewRecord={isNewRecordAchieved}
-                      isWon={!(mistakeLimitEnabled && (boardState?.maxMistakesLimit === 0 ? (boardState?.currentMistakesCount ?? 0) > 0 : (boardState?.currentMistakesCount ?? 0) >= (boardState?.maxMistakesLimit ?? 3)))}
-                      darkMode={darkMode}
-                      roomCode={activeRematchRoomCode}
-                      playClickSound={playClickSound}
-                    />
-
                     <button
                       onClick={() => {
                         playClickSound();
