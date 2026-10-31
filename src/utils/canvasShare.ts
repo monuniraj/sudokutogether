@@ -353,7 +353,7 @@ const DARK_THEMES: Record<string, ShareCanvasThemePalette> = {
  * Raw SVG XML Icon Generators (Zero CORS, inline UTF-8 Data URL rendering)
  */
 const getEmblemSvg = (accentColor: string): string => `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 36 36" fill="none">
   <rect width="36" height="36" rx="10" fill="#121212"/>
   <rect x="5.5" y="5.5" width="7" height="7" rx="1.8" fill="${accentColor}"/>
   <rect x="14.5" y="5.5" width="7" height="7" rx="1.8" fill="#27272A"/>
@@ -453,6 +453,8 @@ const getHashSvg = (color: string): string => `
 /**
  * Converts a raw SVG XML string into a UTF-8 Data URL, loads it into an Image,
  * and draws it onto the 2D canvas without triggering any CORS security errors.
+ * Ensures the SVG vector is rasterized at high-DPI resolution (minimum 4x logical size)
+ * before being drawn to guarantee razor-sharp edges.
  */
 export async function drawSvg(
   ctx: CanvasRenderingContext2D,
@@ -464,14 +466,34 @@ export async function drawSvg(
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, x, y, size, size);
+      ctx.restore();
       resolve();
     };
     img.onerror = () => {
       resolve();
     };
+
+    const targetPx = Math.max(96, Math.round(size * 4));
+    let enhancedSvg = svgString.trim();
+    if (enhancedSvg.includes("<svg")) {
+      if (/width="[^"]*"/i.test(enhancedSvg) && /height="[^"]*"/i.test(enhancedSvg)) {
+        enhancedSvg = enhancedSvg
+          .replace(/width="[^"]*"/i, `width="${targetPx}"`)
+          .replace(/height="[^"]*"/i, `height="${targetPx}"`);
+      } else {
+        enhancedSvg = enhancedSvg.replace(
+          /<svg([^>]*)>/i,
+          `<svg$1 width="${targetPx}" height="${targetPx}">`
+        );
+      }
+    }
+
     img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
-      svgString.trim()
+      enhancedSvg
     )}`;
   });
 }
@@ -489,19 +511,23 @@ const drawLogoOrEmblem = async (
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
     img.src = "/logo.png";
+    setTimeout(() => resolve(null), 400);
   });
 
-  if (loadedLogo) {
-    ctx.save();
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  if (loadedLogo && (loadedLogo.naturalWidth || loadedLogo.width) >= 128) {
     drawRoundedRect(ctx, x, y, size, size, 9);
     ctx.fillStyle = "#121212";
     ctx.fill();
     ctx.clip();
     ctx.drawImage(loadedLogo, x, y, size, size);
-    ctx.restore();
   } else {
     await drawSvg(ctx, getEmblemSvg(accentColor), x, y, size);
   }
+  ctx.restore();
 };
 
 export const evaluateBoardDidWin = (
@@ -934,7 +960,7 @@ export async function generateShareCanvas(
 
   const CARD_WIDTH = 360;
   const CARD_HEIGHT = 546;
-  const SCALE = 2; // 720x1092 ultra-crisp retina output
+  const SCALE = 3; // 1080x1638 razor-sharp high-DPI supersampled output (3x)
 
   const canvas = document.createElement("canvas");
   canvas.width = CARD_WIDTH * SCALE;
@@ -946,6 +972,8 @@ export async function generateShareCanvas(
   }
 
   ctx.scale(SCALE, SCALE);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.clearRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
 
   const appSansFont =
@@ -1528,6 +1556,33 @@ export async function generateShareCanvas(
   drawLeftMiddleText(ctx, roomCodeValue, cursorX, footerCenterY);
 
   return canvas.toDataURL("image/png");
+}
+
+/**
+ * Lossless PNG Blob export helper guaranteeing zero compression artifacts.
+ */
+export const canvasToBlob = (
+  canvas: HTMLCanvasElement
+): Promise<Blob | null> => {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
+};
+
+/**
+ * Convenience helper returning a lossless image/png Blob directly.
+ */
+export async function generateShareCanvasBlob(
+  gameState: ShareCanvasGameState | SudokuBoardState | null,
+  challengeId?: string,
+  themeColor?: string
+): Promise<Blob | null> {
+  const dataUrl = await generateShareCanvas(gameState, challengeId, themeColor);
+  if (typeof fetch !== "undefined") {
+    const res = await fetch(dataUrl);
+    return await res.blob();
+  }
+  return null;
 }
 
 export default generateShareCanvas;
