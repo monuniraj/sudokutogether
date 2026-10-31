@@ -1197,80 +1197,127 @@ const drawLeftMiddleText = (
   }
 };
 
-export const TAPE_THEMES: Record<string, {
-  light: { fill: string; text: string; chipBg: string; chipText: string };
-  dark: { fill: string; text: string; chipBg: string; chipText: string };
-}> = {
-  EASY: {
-    light: { fill: "#D1FAE5", text: "#065F46", chipBg: "#059669", chipText: "#FFFFFF" },
-    dark:  { fill: "#064E3B", text: "#A7F3D0", chipBg: "#10B981", chipText: "#062E22" }
-  },
-  MEDIUM: {
-    light: { fill: "#FEF3C7", text: "#92400E", chipBg: "#D97706", chipText: "#FFFFFF" },
-    dark:  { fill: "#78350F", text: "#FDE68A", chipBg: "#F59E0B", chipText: "#2A1B07" }
-  },
-  HARD: {
-    light: { fill: "#E0E7FF", text: "#3730A3", chipBg: "#4F46E5", chipText: "#FFFFFF" },
-    dark:  { fill: "#312E81", text: "#C7D2FE", chipBg: "#6366F1", chipText: "#0F172A" }
-  },
-  EXPERT: {
-    light: { fill: "#FFE4E6", text: "#9F1239", chipBg: "#E11D48", chipText: "#FFFFFF" },
-    dark:  { fill: "#881337", text: "#FECDD3", chipBg: "#F43F5E", chipText: "#1E1B4B" }
-  }
-};
+/**
+ * Native Canvas Vector Icons (Zero Emojis, Crisp Path2D/Line Vectors)
+ */
+export function drawVectorAlertTriangle(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  color: string
+): void {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.9;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // Triangle path
+  const half = size / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + half, y + 1.2);
+  ctx.lineTo(x + size - 1.2, y + size - 1.2);
+  ctx.lineTo(x + 1.2, y + size - 1.2);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Exclamation stem
+  ctx.beginPath();
+  ctx.moveTo(x + half, y + size * 0.42);
+  ctx.lineTo(x + half, y + size * 0.65);
+  ctx.stroke();
+
+  // Exclamation dot
+  ctx.beginPath();
+  ctx.arc(x + half, y + size * 0.81, 1.15, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+export function drawVectorZap(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  color: string
+): void {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.2;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // Lightning bolt path
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.58, y + 1);
+  ctx.lineTo(x + size * 0.18, y + size * 0.54);
+  ctx.lineTo(x + size * 0.48, y + size * 0.54);
+  ctx.lineTo(x + size * 0.42, y + size - 1);
+  ctx.lineTo(x + size * 0.82, y + size * 0.46);
+  ctx.lineTo(x + size * 0.52, y + size * 0.46);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+}
 
 export function getChallengeTapeStrings(lang: string, didWin: boolean, timeStr: string): { line1: string; line2: string } {
   const norm = (lang || "en").toLowerCase();
   if (norm.startsWith("hi")) {
     return {
-      line1: didWin ? `⚡ ${timeStr} में हल किया!` : "⚠️ अटक गया यार!",
+      line1: didWin ? `${timeStr} में हल किया!` : "अटक गया यार!",
       line2: didWin ? "मेरा टाइम बीट करके दिखाओ!" : "क्या तुम इसे पूरा कर सकते हो?"
     };
   }
   if (norm.startsWith("de")) {
     return {
-      line1: didWin ? `⚡ IN ${timeStr} GELÖST!` : "⚠️ FESTGESTECKT!",
+      line1: didWin ? `IN ${timeStr} GELÖST!` : "FESTGESTECKT!",
       line2: didWin ? "SCHLAG MEINE ZEIT!" : "KANNST DU DAS BEENDEN?"
     };
   }
   if (norm.startsWith("ja")) {
     return {
-      line1: didWin ? `⚡ ${timeStr}でクリア！` : "⚠️ ギブアップ！",
+      line1: didWin ? `${timeStr}でクリア！` : "ギブアップ！",
       line2: didWin ? "私のタイムを超えられる？" : "代わりにクリアしてくれる？"
     };
   }
   if (norm.startsWith("ko")) {
     return {
-      line1: didWin ? `⚡ ${timeStr}만에 성공!` : "⚠️ 뇌정지 옴!",
+      line1: didWin ? `${timeStr}만에 성공!` : "뇌정지 옴!",
       line2: didWin ? "내 기록 깰 수 있어?" : "이어서 풀어볼래?"
     };
   }
   if (norm.startsWith("es")) {
     return {
-      line1: didWin ? `⚡ ¡RESUELTO EN ${timeStr}!` : "⚠️ ¡ME RENDÍ!",
+      line1: didWin ? `¡RESUELTO EN ${timeStr}!` : "¡ME RENDÍ!",
       line2: didWin ? "¡SUPERA MI TIEMPO!" : "¿PUEDES TERMINARLO?"
     };
   }
   if (norm.startsWith("fr")) {
     return {
-      line1: didWin ? `⚡ RÉSOLU EN ${timeStr} !` : "⚠️ BLOQUÉ !",
+      line1: didWin ? `RÉSOLU EN ${timeStr} !` : "BLOQUÉ !",
       line2: didWin ? "BATS MON CHRONO !" : "PEUX-TU LE FINIR ?"
     };
   }
   if (norm.startsWith("it")) {
     return {
-      line1: didWin ? `⚡ RISOLTO IN ${timeStr}!` : "⚠️ BLOCCATO!",
+      line1: didWin ? `RISOLTO IN ${timeStr}!` : "BLOCCATO!",
       line2: didWin ? "BATTI IL MIO TEMPO!" : "PUOI FINIRLO TU?"
     };
   }
   if (norm.startsWith("pt")) {
     return {
-      line1: didWin ? `⚡ RESOLVIDO EM ${timeStr}!` : "⚠️ TRAVOU!",
+      line1: didWin ? `RESOLVIDO EM ${timeStr}!` : "TRAVOU!",
       line2: didWin ? "SUPERE MEU TEMPO!" : "CONSEGUE TERMINAR?"
     };
   }
   return {
-    line1: didWin ? `⚡ SOLVED IN ${timeStr}!` : "⚠️ STUCK!",
+    line1: didWin ? `SOLVED IN ${timeStr}!` : "STUCK!",
     line2: didWin ? "BEAT MY TIME IF YOU CAN!" : "CAN YOU FINISH THIS PUZZLE?"
   };
 }
@@ -1770,17 +1817,41 @@ export async function generateShareCanvas(
   ctx.lineWidth = 2.2;
   ctx.stroke();
 
+  // Shared Badge Theme Tokens (Direct SSOT for both diagonal challenge tape and floating achievement badge)
+  const badgeBg = didWin
+    ? darkMode
+      ? "#064E3B"
+      : "#ECFDF5"
+    : darkMode
+    ? "#4C0519"
+    : "#FFF1F2";
+
+  const badgeText = didWin
+    ? darkMode
+      ? "#6EE7B7"
+      : "#047857"
+    : darkMode
+    ? "#FDA4AF"
+    : "#BE123C";
+
+  const badgeChipText = didWin
+    ? darkMode
+      ? "#064E3B"
+      : "#FFFFFF"
+    : darkMode
+    ? "#4C0519"
+    : "#FFFFFF";
+
   // 4B. Refined Solid Diagonal (-5.5deg) Challenge Sticker over Center of 9x9 Grid (Rows 4 & 5)
   const gridCenterX = boardX + boardSize / 2; // 180
   const gridCenterY = boardY + boardSize / 2; // 316
   const diagTapeW = Math.round(boardSize * 0.90); // Strictly 90% of grid width = 292px
   const diagTapeH = 74;
 
-  const tapeTheme = (TAPE_THEMES[normalizedDiff] || TAPE_THEMES.EASY)[darkMode ? "dark" : "light"];
-  const diagTapeBg = tapeTheme.fill;
-  const diagTapeTextColor = tapeTheme.text;
-  const diagChipBg = tapeTheme.chipBg;
-  const diagChipTextColor = tapeTheme.chipText;
+  const diagTapeBg = badgeBg;
+  const diagTapeTextColor = badgeText;
+  const diagChipBg = badgeText;
+  const diagChipTextColor = badgeChipText;
 
   ctx.save();
   ctx.translate(gridCenterX, gridCenterY);
@@ -1806,18 +1877,49 @@ export async function generateShareCanvas(
   // Strict Locale Purity text lines
   const tapeStrings = getChallengeTapeStrings(activeLang, didWin, timeStr);
 
-  // Line 1 (18px-20px Bold, 2.5x size): Localized hook
-  const maxLine1W = diagTapeW - 24;
+  // Line 1: Pure Canvas Vector Icon + Localized Hook (18.5px Bold, 2.5x size)
+  const line1IconSize = 17;
+  const line1Gap = 6.5;
+  const maxLine1TextW = diagTapeW - line1IconSize - line1Gap - 28;
   let line1FontSize = 18.5;
   ctx.font = `700 ${line1FontSize}px ${appSansFont}`;
-  let line1MeasuredW = ctx.measureText(tapeStrings.line1).width;
-  while (line1MeasuredW > maxLine1W && line1FontSize > 14) {
+  let line1TextW = ctx.measureText(tapeStrings.line1).width;
+  while (line1TextW > maxLine1TextW && line1FontSize > 13) {
     line1FontSize -= 0.5;
     ctx.font = `700 ${line1FontSize}px ${appSansFont}`;
-    line1MeasuredW = ctx.measureText(tapeStrings.line1).width;
+    line1TextW = ctx.measureText(tapeStrings.line1).width;
   }
+
+  const line1TotalW = line1IconSize + line1Gap + line1TextW;
+  const line1StartX = -line1TotalW / 2;
+  const line1Y = -18;
+
+  if (didWin) {
+    drawVectorZap(
+      ctx,
+      line1StartX,
+      line1Y - line1IconSize / 2,
+      line1IconSize,
+      diagTapeTextColor
+    );
+  } else {
+    drawVectorAlertTriangle(
+      ctx,
+      line1StartX,
+      line1Y - line1IconSize / 2,
+      line1IconSize,
+      diagTapeTextColor
+    );
+  }
+
   ctx.fillStyle = diagTapeTextColor;
-  drawCenteredText(ctx, tapeStrings.line1, 0, -18);
+  ctx.font = `700 ${line1FontSize}px ${appSansFont}`;
+  drawLeftMiddleText(
+    ctx,
+    tapeStrings.line1,
+    line1StartX + line1IconSize + line1Gap,
+    line1Y
+  );
 
   // Line 2 (13.5px Bold): Localized question
   const maxLine2W = diagTapeW - 24;
@@ -1879,23 +1981,6 @@ export async function generateShareCanvas(
     const stickerContentW = stickerIconSize + stickerGap + stickerTextW;
     const stickerW = stickerContentW + 26;
     const stickerH = 26.5;
-
-    // Dual-Theme Victory (#ECFDF5/#047857 light, #064E3B/#6EE7B7 dark) vs Defeat (#FFF1F2/#BE123C light, #4C0519/#FDA4AF dark)
-    const badgeBg = didWin
-      ? darkMode
-        ? "#064E3B"
-        : "#ECFDF5"
-      : darkMode
-      ? "#4C0519"
-      : "#FFF1F2";
-
-    const badgeText = didWin
-      ? darkMode
-        ? "#6EE7B7"
-        : "#047857"
-      : darkMode
-      ? "#FDA4AF"
-      : "#BE123C";
 
     const stickerCenterX = boardX + boardSize - stickerW / 2 - 4;
     const stickerCenterY = boardY - 7;
