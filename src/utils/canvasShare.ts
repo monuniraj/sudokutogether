@@ -1197,6 +1197,84 @@ const drawLeftMiddleText = (
   }
 };
 
+export const TAPE_THEMES: Record<string, {
+  light: { fill: string; text: string; chipBg: string; chipText: string };
+  dark: { fill: string; text: string; chipBg: string; chipText: string };
+}> = {
+  EASY: {
+    light: { fill: "#D1FAE5", text: "#065F46", chipBg: "#059669", chipText: "#FFFFFF" },
+    dark:  { fill: "#064E3B", text: "#A7F3D0", chipBg: "#10B981", chipText: "#062E22" }
+  },
+  MEDIUM: {
+    light: { fill: "#FEF3C7", text: "#92400E", chipBg: "#D97706", chipText: "#FFFFFF" },
+    dark:  { fill: "#78350F", text: "#FDE68A", chipBg: "#F59E0B", chipText: "#2A1B07" }
+  },
+  HARD: {
+    light: { fill: "#E0E7FF", text: "#3730A3", chipBg: "#4F46E5", chipText: "#FFFFFF" },
+    dark:  { fill: "#312E81", text: "#C7D2FE", chipBg: "#6366F1", chipText: "#0F172A" }
+  },
+  EXPERT: {
+    light: { fill: "#FFE4E6", text: "#9F1239", chipBg: "#E11D48", chipText: "#FFFFFF" },
+    dark:  { fill: "#881337", text: "#FECDD3", chipBg: "#F43F5E", chipText: "#1E1B4B" }
+  }
+};
+
+export function getChallengeTapeStrings(lang: string, didWin: boolean, timeStr: string): { line1: string; line2: string } {
+  const norm = (lang || "en").toLowerCase();
+  if (norm.startsWith("hi")) {
+    return {
+      line1: didWin ? `⚡ ${timeStr} में हल किया!` : "⚠️ अटक गया यार!",
+      line2: didWin ? "मेरा टाइम बीट करके दिखाओ!" : "क्या तुम इसे पूरा कर सकते हो?"
+    };
+  }
+  if (norm.startsWith("de")) {
+    return {
+      line1: didWin ? `⚡ IN ${timeStr} GELÖST!` : "⚠️ FESTGESTECKT!",
+      line2: didWin ? "SCHLAG MEINE ZEIT!" : "KANNST DU DAS BEENDEN?"
+    };
+  }
+  if (norm.startsWith("ja")) {
+    return {
+      line1: didWin ? `⚡ ${timeStr}でクリア！` : "⚠️ ギブアップ！",
+      line2: didWin ? "私のタイムを超えられる？" : "代わりにクリアしてくれる？"
+    };
+  }
+  if (norm.startsWith("ko")) {
+    return {
+      line1: didWin ? `⚡ ${timeStr}만에 성공!` : "⚠️ 뇌정지 옴!",
+      line2: didWin ? "내 기록 깰 수 있어?" : "이어서 풀어볼래?"
+    };
+  }
+  if (norm.startsWith("es")) {
+    return {
+      line1: didWin ? `⚡ ¡RESUELTO EN ${timeStr}!` : "⚠️ ¡ME RENDÍ!",
+      line2: didWin ? "¡SUPERA MI TIEMPO!" : "¿PUEDES TERMINARLO?"
+    };
+  }
+  if (norm.startsWith("fr")) {
+    return {
+      line1: didWin ? `⚡ RÉSOLU EN ${timeStr} !` : "⚠️ BLOQUÉ !",
+      line2: didWin ? "BATS MON CHRONO !" : "PEUX-TU LE FINIR ?"
+    };
+  }
+  if (norm.startsWith("it")) {
+    return {
+      line1: didWin ? `⚡ RISOLTO IN ${timeStr}!` : "⚠️ BLOCCATO!",
+      line2: didWin ? "BATTI IL MIO TEMPO!" : "PUOI FINIRLO TU?"
+    };
+  }
+  if (norm.startsWith("pt")) {
+    return {
+      line1: didWin ? `⚡ RESOLVIDO EM ${timeStr}!` : "⚠️ TRAVOU!",
+      line2: didWin ? "SUPERE MEU TEMPO!" : "CONSEGUE TERMINAR?"
+    };
+  }
+  return {
+    line1: didWin ? `⚡ SOLVED IN ${timeStr}!` : "⚠️ STUCK!",
+    line2: didWin ? "BEAT MY TIME IF YOU CAN!" : "CAN YOU FINISH THIS PUZZLE?"
+  };
+}
+
 /**
  * Pure HTML5 2D Canvas generator for Sudoku Sync Share Cards.
  * - Full Light & Dark Mode adaptation across card surfaces, stickers, HUD pills, and footer
@@ -1214,12 +1292,14 @@ export async function generateShareCanvas(
     try {
       await Promise.allSettled([
         document.fonts.load('400 25px "Space Grotesk"'),
-        document.fonts.load('700 11.5px "Space Grotesk"'),
-        document.fonts.load('700 12.5px "Space Grotesk"'),
+        document.fonts.load('700 18.5px "Space Grotesk"'),
+        document.fonts.load('700 13.5px "Space Grotesk"'),
         document.fonts.load('700 13px "Space Grotesk"'),
+        document.fonts.load('700 11.5px "Space Grotesk"'),
         document.fonts.load('400 29px "Patrick Hand"'),
-        document.fonts.load('700 23px "JetBrains Mono"'),
+        document.fonts.load('700 24px "JetBrains Mono"'),
         document.fonts.load('700 13px "JetBrains Mono"'),
+        document.fonts.load('700 11.5px "JetBrains Mono"'),
       ]);
       await document.fonts.ready;
     } catch {
@@ -1362,8 +1442,8 @@ export async function generateShareCanvas(
   ctx.fillStyle = palette.timerColor; // Active theme accent blue (#2B6CB0 / #38BDF8)
   drawLeftMiddleText(ctx, "SYNC", 58 + sudokuWordW, headerY + 10);
 
-  ctx.fillStyle = palette.secondaryText;
-  ctx.font = `500 10.5px ${appSansFont}`;
+  ctx.fillStyle = darkMode ? "#F8FAFC" : "#1E293B";
+  ctx.font = `700 11px ${appSansFont}`;
   drawLeftMiddleText(ctx, playerName, 58, headerY + 24);
 
   // Borderless Localized Difficulty Pill with auto-scaling & soft diffused elevation
@@ -1419,43 +1499,44 @@ export async function generateShareCanvas(
     diffCenterY
   );
 
-  // 3. Borderless Hero Timer HUD & Prominent Challenge Hook Pill (y = 54..128)
+  // 3. Compact 40px White HUD Box (y = 63..103, 15px clearance below header)
   const bannerX = 18;
-  const bannerY = 54;
+  const bannerY = 63;
   const bannerW = CARD_WIDTH - 36;
-  const bannerH = 72;
+  const bannerH = 40;
 
   ctx.save();
   ctx.shadowColor = darkMode
     ? "rgba(0, 0, 0, 0.28)"
     : "rgba(28, 25, 23, 0.04)";
-  ctx.shadowBlur = 12;
-  ctx.shadowOffsetY = 3;
-  drawRoundedRect(ctx, bannerX, bannerY, bannerW, bannerH, 18);
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 2;
+  drawRoundedRect(ctx, bannerX, bannerY, bannerW, bannerH, 14);
   ctx.fillStyle = palette.surfaceCardBg;
   ctx.fill();
   ctx.restore();
 
-  // Hero Solve Timer Row (+20% enlarged to 23px tabular JetBrains Mono)
-  const clockSize = 18.5;
-  const timerRowY = bannerY + 21;
+  const timerRowY = bannerY + bannerH / 2;
+
+  // Hero Solve Timer on the left (24px bold tabular JetBrains Mono with 18px vector clock)
+  const clockSize = 18;
   await drawSvg(
     ctx,
     getClockSvg(palette.timerColor),
-    bannerX + 14,
+    bannerX + 12,
     timerRowY - clockSize / 2,
     clockSize
   );
 
   ctx.fillStyle = palette.timerColor;
-  ctx.font = `700 23px ${appMonoFont}`;
-  drawLeftMiddleText(ctx, timeStr, bannerX + 14 + clockSize + 7.5, timerRowY);
+  ctx.font = `700 24px ${appMonoFont}`;
+  drawLeftMiddleText(ctx, timeStr, bannerX + 12 + clockSize + 6.5, timerRowY);
 
-  // Right Status Pill: Borderless ERR / Best Time vector badge (Localized)
+  // Right Status Pill: Borderless ERR / FLAWLESS / Best Time vector badge (Localized), vertically centered
   const statusLabel = didWin
     ? rawState.bestTime
       ? i18n.hud.best(rawState.bestTime)
-      : i18n.hud.err(mistakes, maxMistakes || 3)
+      : (mistakes === 0 ? "FLAWLESS" : i18n.hud.err(mistakes, maxMistakes || 3))
     : i18n.hud.err(mistakes || maxMistakes || 3, maxMistakes || 3);
 
   const statusPillBg = didWin
@@ -1474,14 +1555,14 @@ export async function generateShareCanvas(
     ? "#FDA4AF"
     : "#BE123C";
 
-  ctx.font = `700 10px ${appMonoFont}`;
+  ctx.font = `700 10.5px ${appMonoFont}`;
   const statusTextW = ctx.measureText(statusLabel).width;
-  const statusIconSize = 12.5;
+  const statusIconSize = 12;
   const statusGap = 4;
   const statusContentW = statusIconSize + statusGap + statusTextW;
-  const statusPillW = Math.max(78, statusContentW + 18);
+  const statusPillW = Math.max(76, statusContentW + 16);
   const statusPillH = 24;
-  const statusPillX = bannerX + bannerW - 12 - statusPillW;
+  const statusPillX = bannerX + bannerW - 10 - statusPillW;
   const statusPillY = timerRowY - statusPillH / 2;
 
   drawRoundedRect(
@@ -1496,7 +1577,7 @@ export async function generateShareCanvas(
   ctx.fill();
 
   const statusStartX = statusPillX + (statusPillW - statusContentW) / 2;
-  const statusCenterY = statusPillY + statusPillH / 2;
+  const statusCenterY = timerRowY;
   const statusSvg = didWin
     ? getShieldCheckSvg(statusPillColor)
     : getAlertCircleSvg(statusPillColor);
@@ -1509,69 +1590,12 @@ export async function generateShareCanvas(
     statusIconSize
   );
   ctx.fillStyle = statusPillColor;
-  ctx.font = `700 10px ${appMonoFont}`;
+  ctx.font = `700 10.5px ${appMonoFont}`;
   drawLeftMiddleText(
     ctx,
     statusLabel,
     statusStartX + statusIconSize + statusGap,
     statusCenterY
-  );
-
-  // Prominent Borderless Challenge Hook Pill (rounded-full, high contrast, diffused drop shadow)
-  const hookPillX = bannerX + 10;
-  const hookPillY = bannerY + 38;
-  const hookPillW = bannerW - 20;
-  const hookPillH = 26;
-
-  const hookPillBg = didWin
-    ? darkMode
-      ? "#064E3B"
-      : "#ECFDF5"
-    : darkMode
-    ? "#4C0519"
-    : "#FFF1F2";
-
-  const hookPillText = didWin
-    ? darkMode
-      ? "#6EE7B7"
-      : "#047857"
-    : darkMode
-    ? "#FDA4AF"
-    : "#BE123C";
-
-  ctx.save();
-  ctx.shadowColor = darkMode
-    ? "rgba(0, 0, 0, 0.20)"
-    : "rgba(0, 0, 0, 0.04)";
-  ctx.shadowBlur = 6;
-  ctx.shadowOffsetY = 2;
-  drawRoundedRect(
-    ctx,
-    hookPillX,
-    hookPillY,
-    hookPillW,
-    hookPillH,
-    hookPillH / 2
-  );
-  ctx.fillStyle = hookPillBg;
-  ctx.fill();
-  ctx.restore();
-
-  ctx.fillStyle = hookPillText;
-  const maxHookTextW = hookPillW - 20;
-  let hookFontSize = 11.5;
-  ctx.font = `700 ${hookFontSize}px ${appSansFont}`;
-  let hookMeasuredW = ctx.measureText(ctaCopy).width;
-  while (hookMeasuredW > maxHookTextW && hookFontSize > 8.5) {
-    hookFontSize -= 0.5;
-    ctx.font = `700 ${hookFontSize}px ${appSansFont}`;
-    hookMeasuredW = ctx.measureText(ctaCopy).width;
-  }
-  drawCenteredText(
-    ctx,
-    ctaCopy,
-    hookPillX + hookPillW / 2,
-    hookPillY + hookPillH / 2
   );
 
   // 4. Authentic 9x9 Pastel Sudoku Board (324x324 Square at x = 18, y = 154)
@@ -1746,6 +1770,96 @@ export async function generateShareCanvas(
   ctx.lineWidth = 2.2;
   ctx.stroke();
 
+  // 4B. Refined Solid Diagonal (-5.5deg) Challenge Sticker over Center of 9x9 Grid (Rows 4 & 5)
+  const gridCenterX = boardX + boardSize / 2; // 180
+  const gridCenterY = boardY + boardSize / 2; // 316
+  const diagTapeW = Math.round(boardSize * 0.90); // Strictly 90% of grid width = 292px
+  const diagTapeH = 74;
+
+  const tapeTheme = (TAPE_THEMES[normalizedDiff] || TAPE_THEMES.EASY)[darkMode ? "dark" : "light"];
+  const diagTapeBg = tapeTheme.fill;
+  const diagTapeTextColor = tapeTheme.text;
+  const diagChipBg = tapeTheme.chipBg;
+  const diagChipTextColor = tapeTheme.chipText;
+
+  ctx.save();
+  ctx.translate(gridCenterX, gridCenterY);
+  ctx.rotate((-5.5 * Math.PI) / 180);
+
+  // Subtle soft shadow: rgba(0, 0, 0, 0.12), blur: 8px, offsetY: 3px
+  ctx.save();
+  ctx.shadowColor = darkMode ? "rgba(0, 0, 0, 0.40)" : "rgba(0, 0, 0, 0.12)";
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 3;
+  drawRoundedRect(
+    ctx,
+    -diagTapeW / 2,
+    -diagTapeH / 2,
+    diagTapeW,
+    diagTapeH,
+    10
+  );
+  ctx.fillStyle = diagTapeBg;
+  ctx.fill();
+  ctx.restore();
+
+  // Strict Locale Purity text lines
+  const tapeStrings = getChallengeTapeStrings(activeLang, didWin, timeStr);
+
+  // Line 1 (18px-20px Bold, 2.5x size): Localized hook
+  const maxLine1W = diagTapeW - 24;
+  let line1FontSize = 18.5;
+  ctx.font = `700 ${line1FontSize}px ${appSansFont}`;
+  let line1MeasuredW = ctx.measureText(tapeStrings.line1).width;
+  while (line1MeasuredW > maxLine1W && line1FontSize > 14) {
+    line1FontSize -= 0.5;
+    ctx.font = `700 ${line1FontSize}px ${appSansFont}`;
+    line1MeasuredW = ctx.measureText(tapeStrings.line1).width;
+  }
+  ctx.fillStyle = diagTapeTextColor;
+  drawCenteredText(ctx, tapeStrings.line1, 0, -18);
+
+  // Line 2 (13.5px Bold): Localized question
+  const maxLine2W = diagTapeW - 24;
+  let line2FontSize = 13.5;
+  ctx.font = `700 ${line2FontSize}px ${appSansFont}`;
+  let line2MeasuredW = ctx.measureText(tapeStrings.line2).width;
+  while (line2MeasuredW > maxLine2W && line2FontSize > 10) {
+    line2FontSize -= 0.5;
+    ctx.font = `700 ${line2FontSize}px ${appSansFont}`;
+    line2MeasuredW = ctx.measureText(tapeStrings.line2).width;
+  }
+  ctx.fillStyle = diagTapeTextColor;
+  drawCenteredText(ctx, tapeStrings.line2, 0, 2);
+
+  // Line 3 (Solid Room Chip): Contrasting pill reading "# Room Code: {code}" (or localized "# कमरा कोड: {code}")
+  const cleanRoomPrefix = i18n.footer.room_code.trim();
+  const chipRoomLabel = cleanRoomPrefix.startsWith("#") ? cleanRoomPrefix : `# ${cleanRoomPrefix}`;
+  const chipText = `${chipRoomLabel} ${extractedRoomCode}`;
+
+  ctx.font = `700 11.5px ${appMonoFont}`;
+  const chipTextW = ctx.measureText(chipText).width;
+  const chipW = Math.min(diagTapeW - 32, chipTextW + 18);
+  const chipH = 19;
+  const chipY = 22;
+
+  drawRoundedRect(
+    ctx,
+    -chipW / 2,
+    chipY - chipH / 2,
+    chipW,
+    chipH,
+    chipH / 2
+  );
+  ctx.fillStyle = diagChipBg;
+  ctx.fill();
+
+  ctx.fillStyle = diagChipTextColor;
+  ctx.font = `700 11.5px ${appMonoFont}`;
+  drawCenteredText(ctx, chipText, 0, chipY);
+
+  ctx.restore();
+
   // 5. Enlarged (+20%) Borderless Vector-Styled Pastel Achievement Sticker Badge
   // Anchored cleanly right above the top board boundary with a subtle 5px vertical drop (`boardY - 7`),
   // sitting naturally without overlapping Row 1 cell digits.
@@ -1865,7 +1979,8 @@ export async function generateShareCanvas(
 
   const domainText = "sudokusync.com";
   const dividerText = "  |  ";
-  const roomLabelText = i18n.footer.room_code;
+  const cleanFooterPrefix = i18n.footer.room_code.trim();
+  const roomLabelText = cleanFooterPrefix.startsWith("#") ? `${cleanFooterPrefix} ` : `# ${cleanFooterPrefix} `;
   const roomCodeValue = extractedRoomCode;
   const footerIconSize = 15;
   const footerGap = 5;
@@ -1883,8 +1998,6 @@ export async function generateShareCanvas(
     footerGap +
     domainW +
     dividerW +
-    footerIconSize +
-    footerGap +
     roomLabelW +
     roomCodeW;
 
@@ -1911,15 +2024,6 @@ export async function generateShareCanvas(
   drawLeftMiddleText(ctx, dividerText, cursorX, footerCenterY);
   ctx.restore();
   cursorX += dividerW;
-
-  await drawSvg(
-    ctx,
-    getHashSvg(footerRoomCodeColor),
-    cursorX,
-    footerCenterY - footerIconSize / 2,
-    footerIconSize
-  );
-  cursorX += footerIconSize + footerGap;
 
   ctx.fillStyle = footerLabelColor;
   ctx.font = `600 12px ${appSansFont}`;
