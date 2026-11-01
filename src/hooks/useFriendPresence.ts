@@ -7,7 +7,7 @@ import { getActiveAuthUid, loadVault, isHydrationWriteLocked } from "../utils/st
 
 const INCOGNITO_STORAGE_KEY = "sudoku_is_incognito";
 const INCOGNITO_EVENT = "sudoku_incognito_change";
-const HEARTBEAT_INTERVAL_MS = 10 * 60 * 1000; // 10-minute heartbeat throttle for active sessions
+const HEARTBEAT_INTERVAL_MS = 25 * 1000; // 25-second heartbeat throttle for active sessions (under 45s cutoff)
 
 export { PRESENCE_TIMEOUT_MS };
 
@@ -20,9 +20,14 @@ export interface FriendPresenceState {
   getFriendStatus: (
     friendId: string,
     fallbackStatus?: "online" | "offline",
-    fallbackLastActive?: any
+    fallbackLastActive?: any,
+    friendAuthUid?: string
   ) => "online" | "offline";
-  getFriendLastActive: (friendId: string, fallbackLastActive?: any) => any;
+  getFriendLastActive: (
+    friendId: string,
+    fallbackLastActive?: any,
+    friendAuthUid?: string
+  ) => any;
 }
 
 /**
@@ -31,11 +36,14 @@ export interface FriendPresenceState {
 function getStoredUserId(): string | null {
   try {
     const authUser = auth.currentUser;
-    if (authUser && !authUser.isAnonymous && authUser.uid) {
+    if (authUser?.uid) {
       return authUser.uid;
     }
     const activeUid = getActiveAuthUid();
-    const vault = loadVault(activeUid || "guest");
+    if (activeUid && activeUid !== "guest") {
+      return activeUid;
+    }
+    const vault = loadVault("guest");
     if (vault?.profile?.id) return String(vault.profile.id);
   } catch {}
   return null;
@@ -49,7 +57,7 @@ function getScopedIncognitoKey(uid?: string | null): string {
   if (!effectiveUid) {
     try {
       const authUser = auth.currentUser;
-      if (authUser && !authUser.isAnonymous) {
+      if (authUser?.uid) {
         effectiveUid = authUser.uid;
       }
     } catch {}
@@ -90,7 +98,7 @@ export function useFriendPresence(
   useEffect(() => {
     if (!explicitUserId) {
       const unsub = onAuthStateChanged(auth, (user) => {
-        if (user && !user.isAnonymous && user.uid) {
+        if (user?.uid) {
           setResolvedUserId(user.uid);
         } else {
           setResolvedUserId(getStoredUserId());
@@ -135,7 +143,7 @@ export function useFriendPresence(
     if (prevId && prevId !== userId) {
       if (prevId !== "GUEST" && prevId !== "guest" && prevId !== "GUEST_ANON" && !isHydrationWriteLocked(prevId)) {
         console.log(`[useFriendPresence] User ID transitioned from ${prevId} to ${userId || "none"}. Broadcasting offline for ${prevId}.`);
-        const prevRef = doc(db, "users", prevId);
+        const prevRef = doc(db, "presence", prevId);
         setDoc(
           prevRef,
           {
@@ -152,15 +160,17 @@ export function useFriendPresence(
     prevUserIdRef.current = userId || null;
   }, [userId]);
 
-  // Broadcast presence to Firestore
+  // Broadcast presence to Firestore (/presence/{currentId})
   const broadcastStatus = useCallback(async (status: "online" | "offline") => {
-    const currentId = userId || getStoredUserId();
-    if (!currentId || currentId === "GUEST" || currentId === "guest" || currentId === "GUEST_ANON" || isHydrationWriteLocked(currentId)) return;
+    const activeAuthUser = auth.currentUser;
+    const currentId = activeAuthUser?.uid || userId || getStoredUserId();
+    if (!currentId || currentId === "GUEST" || currentId === "guest" || currentId === "GUEST_ANON" || currentId.startsWith("GUEST_") || isHydrationWriteLocked(currentId)) return;
+    if (!activeAuthUser || activeAuthUser.uid !== currentId) return;
 
     try {
-      const userRef = doc(db, "users", currentId);
+      const presenceRef = doc(db, "presence", currentId);
       await setDoc(
-        userRef,
+        presenceRef,
         {
           id: currentId,
           status,
@@ -309,7 +319,7 @@ export function useFriendPresence(
 
     uniqueIds.forEach((friendId) => {
       try {
-        const friendRef = doc(db, "users", friendId);
+        const friendRef = doc(db, "presence", friendId);
         const unsub = onSnapshot(
           friendRef,
           (snap) => {
@@ -319,7 +329,7 @@ export function useFriendPresence(
               const lastActive = data?.lastActive || data?.updatedAt || null;
               const lastActiveMs = getTimestampMillis(lastActive);
 
-              // 15-minute sliding cutoff: only online if rawStatus is online AND lastActive is within 15 minutes
+              // 45-second sliding cutoff: only online if rawStatus is online AND lastActive is within 45 seconds
               const isRecent =
                 lastActiveMs !== null && Date.now() - lastActiveMs <= PRESENCE_TIMEOUT_MS;
               const effectiveStatus: "online" | "offline" =
@@ -333,6 +343,12 @@ export function useFriendPresence(
               if (lastActive) {
                 setFriendLastActiveMap((prev) => ({ ...prev, [friendId]: lastActive }));
               }
+            } else {
+              // Document does not exist or was deleted; ensure clean offline status
+              setFriendPresenceMap((prev) => {
+                if (prev[friendId] === "offline") return prev;
+                return { ...prev, [friendId]: "offline" };
+              });
             }
           },
           (err) => {
@@ -382,7 +398,8 @@ export function useFriendPresence(
     (
       friendId: string,
       fallbackStatus?: "online" | "offline",
-      fallbackLastActive?: any
+      fallbackLastActive?: any,
+      friendAuthUid?: string
     ): "online" | "offline" => {
       const currentId = userId || getStoredUserId();
 
@@ -390,18 +407,24 @@ export function useFriendPresence(
         return "offline";
       }
 
-      if (friendId === currentId) {
+      if (friendId === currentId || (friendAuthUid && friendAuthUid === currentId)) {
         return isIncognito ? "offline" : "online";
       }
 
       // Check raw status from real-time presence map or fallback
-      const rawStatus = friendPresenceMap[friendId] || fallbackStatus;
+      const rawStatus =
+        friendPresenceMap[friendId] ||
+        (friendAuthUid ? friendPresenceMap[friendAuthUid] : undefined) ||
+        fallbackStatus;
       if (rawStatus !== "online") {
         return "offline";
       }
 
       // If marked online, enforce 15-minute sliding presence cutoff
-      const targetLastActive = friendLastActiveMap[friendId] ?? fallbackLastActive;
+      const targetLastActive =
+        friendLastActiveMap[friendId] ??
+        (friendAuthUid ? friendLastActiveMap[friendAuthUid] : undefined) ??
+        fallbackLastActive;
       const lastActiveMs = getTimestampMillis(targetLastActive);
 
       if (lastActiveMs !== null && Date.now() - lastActiveMs <= PRESENCE_TIMEOUT_MS) {
@@ -416,11 +439,14 @@ export function useFriendPresence(
 
   // Helper to resolve a friend's lastActive timestamp
   const getFriendLastActive = useCallback(
-    (friendId: string, fallbackLastActive?: any): any => {
+    (friendId: string, fallbackLastActive?: any, friendAuthUid?: string): any => {
       if (friendLastActiveMap[friendId]) {
         return friendLastActiveMap[friendId];
       }
-      return fallbackLastActive;
+      if (friendAuthUid && friendLastActiveMap[friendAuthUid]) {
+        return friendLastActiveMap[friendAuthUid];
+      }
+      return fallbackLastActive ?? null;
     },
     [friendLastActiveMap]
   );

@@ -614,6 +614,18 @@ const getApiOrigin = (): string => {
 };
 
 
+const hashRoomPin = async (pin: string, salt: string): Promise<string> => {
+  if (!pin) return "";
+  try {
+    const data = new TextEncoder().encode(pin.trim().toLowerCase() + ":" + salt.trim());
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return pin.trim();
+  }
+};
+
 const encodePass = (str: string): string => {
   if (!str) return "";
   try {
@@ -1631,15 +1643,16 @@ export const isGuestNamespaceLocked = (): boolean => guestNamespaceLock;
 export const getScopedKey = (baseKey: string, uid?: string | null): string => {
   if (guestNamespaceLock) return `sudoku_guest_${baseKey}`;
   let effectiveUid = uid;
+  const authUser = auth.currentUser;
   if (effectiveUid === undefined) {
-    const authUser = auth.currentUser;
     if (authUser && !authUser.isAnonymous) {
       effectiveUid = authUser.uid;
     } else {
       effectiveUid = getActiveAuthUid() || "guest";
     }
   }
-  const isGuest = !effectiveUid || effectiveUid === "guest" || effectiveUid === "GUEST" || effectiveUid.startsWith("GUEST_");
+  const isAnonymous = Boolean(authUser?.isAnonymous && (!effectiveUid || effectiveUid === authUser.uid));
+  const isGuest = isAnonymous || !effectiveUid || effectiveUid === "guest" || effectiveUid === "GUEST" || effectiveUid.startsWith("GUEST_");
   return isGuest ? `sudoku_guest_${baseKey}` : `sudoku_user_${effectiveUid}_${baseKey}`;
 };
 
@@ -1724,7 +1737,6 @@ export default function App() {
       return;
     }
     safetyTimeoutRef.current = setTimeout(() => {
-      console.log("[Auth] 3.5s initial auth resolution safety timeout reached. Unlocking app UI.");
       setIsAppReady(true);
       setIsAuthHydrating(false);
       isHydrationCompleteRef.current = true;
@@ -1924,6 +1936,30 @@ export default function App() {
   const [isVerifyingInviteJoinName, setIsVerifyingInviteJoinName] = useState<boolean>(false);
   const inviteJoinCallbackRef = useRef<(() => void) | null>(null);
   const isProcessingQueueRef = useRef<boolean>(false);
+
+  // Guarantees an active Firebase Auth user exists before initiating any Firestore cloud write
+  const ensureActiveAuthUser = useCallback(async (): Promise<any> => {
+    if (auth.currentUser) return auth.currentUser;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      return null;
+    }
+    try {
+      const authTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Anonymous auth timeout")), 3500)
+      );
+      const cred = await Promise.race([signInAnonymously(auth), authTimeout]);
+      if (cred && cred.user) {
+        if (userProfileRef.current && !userProfileRef.current.isSynced && userProfileRef.current.id !== cred.user.uid) {
+          userProfileRef.current = { ...userProfileRef.current, id: cred.user.uid };
+          setUserProfile(prev => prev ? { ...prev, id: cred.user.uid } : null);
+        }
+        return cred.user;
+      }
+      return auth.currentUser || null;
+    } catch {
+      return auth.currentUser || null;
+    }
+  }, []);
 
   const checkIsDisplayNameConfigured = (): boolean => {
     // 1. Manually configured flag is paramount
@@ -2191,6 +2227,7 @@ export default function App() {
   // List of past players/friends to present under 'Invite Friends'
   const [multiplayerPlayers, setMultiplayerPlayers] = useState<Array<{
     id: string;
+    authUid?: string;
     name: string;
     isFriend: boolean;
     status: 'online' | 'offline';
@@ -2232,25 +2269,55 @@ export default function App() {
 
       const scopedPast = getScopedKey("past_players", currentUid);
       const saved = localStorage.getItem(scopedPast);
+      const guestIdentity = getOrCreateGuestIdentity();
+      const guestVault = loadVault("guest");
+      const myIdSet = new Set([
+        currentUid,
+        getActiveAuthUid(),
+        guestIdentity.id,
+        guestVault.profile?.id,
+        userProfileRef.current?.id,
+        userProfile?.id
+      ].filter(Boolean) as string[]);
+
+      const mergeDeduplicated = (rawList: any[]): any[] => {
+        const merged: any[] = [];
+        for (const p of rawList) {
+          if (!p || !p.id) continue;
+          if (myIdSet.has(p.id) || (p.authUid && myIdSet.has(p.authUid)) || (p.guestId && myIdSet.has(p.guestId))) continue;
+          if (p.id === "USER_88201" || p.id === "GUEST_99210" || p.id === "USER_33104" || p.id === "GUEST_ANON" || p.id === "me") continue;
+
+          const existingIdx = merged.findIndex(m => m.id === p.id);
+
+          if (existingIdx >= 0) {
+            const existing = merged[existingIdx];
+            merged[existingIdx] = {
+              ...existing,
+              ...p,
+              id: p.id,
+              isFriend: Boolean(existing.isFriend || p.isFriend),
+              name: (existing.name && !existing.name.startsWith("Voyager ") && !existing.name.startsWith("Guest_")) ? existing.name : (p.name || existing.name),
+              lastPlayedAt: Math.max(existing.lastPlayedAt || 0, p.lastPlayedAt || 0) || undefined,
+              status: existing.status === "online" || p.status === "online" ? "online" : "offline",
+              inviteStatus: "idle" as const
+            };
+          } else {
+            merged.push({
+              ...p,
+              authUid: p.authUid || (!p.id.startsWith("GUEST_") ? p.id : undefined),
+              inviteStatus: "idle" as const,
+              inviteSentTimestamp: undefined,
+              declinedTimestamp: undefined
+            });
+          }
+        }
+        return merged;
+      };
 
       if (saved) {
         const parsed = JSON.parse(saved) as any[];
         if (Array.isArray(parsed)) {
-          // Filter out legacy simulated demo bots and self
-          return parsed
-            .filter(p =>
-              p && p.id &&
-              p.id !== "USER_88201" &&
-              p.id !== "GUEST_99210" &&
-              p.id !== "USER_33104" &&
-              (!currentStoredId || p.id !== currentStoredId)
-            )
-            .map(p => ({
-              ...p,
-              inviteStatus: "idle" as const,
-              inviteSentTimestamp: undefined,
-              declinedTimestamp: undefined
-            }));
+          return mergeDeduplicated(parsed);
         }
       } else {
         // Fallback: strictly check scoped friends and recent_players
@@ -2269,9 +2336,7 @@ export default function App() {
             ...parsedFriends.map(p => ({ ...p, isFriend: true })),
             ...parsedRecent.filter(r => !parsedFriends.some(f => f.id === r.id)).map(p => ({ ...p, isFriend: false }))
           ];
-          return combined
-            .filter(p => p && p.id && (!currentStoredId || p.id !== currentStoredId))
-            .map(p => ({ ...p, inviteStatus: "idle" as const }));
+          return mergeDeduplicated(combined);
         }
 
         // Canonical guest vault fallback
@@ -2370,14 +2435,25 @@ export default function App() {
   }, [multiplayerPlayers, userProfile?.id]);
 
   const drawerPlayerIds = useMemo(() => {
-    const myId = userProfile?.id;
-    return (multiplayerPlayers || [])
-      .map((p: any) => p.id)
-      .filter((id: string) => Boolean(id) && id !== myId);
-  }, [multiplayerPlayers, userProfile?.id]);
+    const myIds = new Set([
+      userProfile?.id,
+      userProfileRef.current?.id,
+      auth.currentUser?.uid,
+      authUser?.uid,
+      getOrCreateGuestIdentity().id,
+      loadVault("guest").profile?.id,
+      getActiveAuthUid()
+    ].filter(Boolean));
+    const ids = new Set<string>();
+    (multiplayerPlayers || []).forEach((p: any) => {
+      if (p.id && !myIds.has(p.id)) ids.add(p.id);
+      if (p.authUid && !myIds.has(p.authUid)) ids.add(p.authUid);
+    });
+    return Array.from(ids);
+  }, [multiplayerPlayers, userProfile?.id, authUser?.uid]);
   const isGuestSession = !authUser || authUser.isAnonymous || (userProfile?.id && userProfile.id.startsWith("GUEST_"));
   const effectivePresenceId = isGuestSession
-    ? (userProfile?.id || auth.currentUser?.uid || null)
+    ? (auth.currentUser?.uid || authUser?.uid || null)
     : ((isSyncingCloudData || !isHydrationCompleteRef.current || isHydrationWriteLocked(authUser?.uid || userProfile?.id))
       ? null
       : (authUser?.uid || userProfile?.id));
@@ -2418,6 +2494,7 @@ export default function App() {
     hintLimit?: number;
     timerEnabled: boolean;
     password?: string;
+    pinHash?: string;
     senderName?: string;
   } | null>(null);
   const [enteredInvitePassword, setEnteredInvitePassword] = useState<string>("");
@@ -3205,6 +3282,22 @@ export default function App() {
       sessionStorage.setItem("sudoku_web_push_dismissed", "true");
     } catch {}
   }, []);
+
+  // Re-evaluate web push banner mounting immediately when anonymous session or app ready resolves
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      try {
+        const isDismissed = sessionStorage.getItem("sudoku_web_push_dismissed") === "true";
+        if (!isDismissed) {
+          setShowWebPushPrompt(true);
+        }
+      } catch {}
+    } else {
+      setShowWebPushPrompt(false);
+    }
+  }, [authUser?.uid, isAppReady]);
 
   // Reference to current active board state across the app
   const boardStateRef = useRef<BoardState | null>(null);
@@ -4436,12 +4529,24 @@ export default function App() {
             const pastPlayersSnap = await getDocs(collection(db, "users", uid, "past_players"));
             let loadedPlayers: Array<{
               id: string;
+              authUid?: string;
               name: string;
               isFriend: boolean;
               status: 'online' | 'offline';
               inviteStatus: 'idle' | 'sent' | 'joined' | 'declined';
               lastPlayedAt?: number;
             }> = [];
+
+            const guestIdentity = getOrCreateGuestIdentity();
+            const selfIds = new Set([
+              uid,
+              auth.currentUser?.uid,
+              authUser?.uid,
+              userProfileRef.current?.id,
+              guestIdentity.id,
+              loadVault("guest").profile?.id,
+              getActiveAuthUid()
+            ].filter(Boolean));
 
             if (!pastPlayersSnap.empty) {
               pastPlayersSnap.forEach((d) => {
@@ -4450,10 +4555,12 @@ export default function App() {
                   d.id !== "USER_88201" &&
                   d.id !== "GUEST_99210" &&
                   d.id !== "USER_33104" &&
-                  d.id !== uid
+                  !selfIds.has(d.id) &&
+                  (!dData.authUid || !selfIds.has(dData.authUid))
                 ) {
                   loadedPlayers.push({
                     id: d.id,
+                    authUid: dData.authUid,
                     name: dData.name || "Player",
                     isFriend: !!dData.isFriend,
                     status: "offline",
@@ -4471,7 +4578,8 @@ export default function App() {
                   p.id !== "USER_88201" &&
                   p.id !== "GUEST_99210" &&
                   p.id !== "USER_33104" &&
-                  p.id !== uid
+                  !selfIds.has(p.id) &&
+                  (!p.authUid || !selfIds.has(p.authUid))
                 )
                 .map((p: any) => ({
                   id: p.id,
@@ -4970,7 +5078,6 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (isLoggingOutRef.current) {
-        console.log("[Auth] onAuthStateChanged ignored because logout is actively executing.");
         return;
       }
       setAuthUser(user);
@@ -5002,45 +5109,41 @@ export default function App() {
           savedGamesRef.current = guestVault.savedGames;
           setPersonalBestTimes(guestVault.bestTimes);
           personalBestTimesRef.current = guestVault.bestTimes;
-        } catch (e) {
-          console.warn("[Auth] Guest vault load error:", e);
-        }
+        } catch {}
 
         if (isExplicitLogoutRef.current) {
-          console.log("[Auth] Suppressed background anonymous session initialization following explicit logout.");
           isExplicitLogoutRef.current = false;
           setIsAppReady(true);
         } else {
-          signInAnonymously(auth).catch((err) => {
-            console.warn("[Auth] Background anonymous session init error:", err);
-          }).finally(() => {
+          signInAnonymously(auth).catch(() => {}).finally(() => {
             setIsAppReady(true);
           });
         }
       } else if (user.isAnonymous) {
         currentHydratedUidRef.current = user.uid;
         setIsAuthHydrating(false);
+        setActiveAuthUid("guest");
         setIsAppReady(true);
 
         const curProfile = userProfileRef.current;
         if (!curProfile?.isSynced) {
           const genericNames = ["Anonymous", "Guest Voyager", "Anonymous Voyager", "Guest Solver", "Guest", "Player"];
-          if (!curProfile || !curProfile.name || genericNames.includes(curProfile.name.trim())) {
-            const guestVault = loadVault("guest");
-            const guestIdentity = getOrCreateGuestIdentity();
-            const safeName = (guestVault.profile.displayName && !genericNames.includes(guestVault.profile.displayName))
+          const guestVault = loadVault("guest");
+          const guestIdentity = getOrCreateGuestIdentity();
+          const safeName = (curProfile?.name && !genericNames.includes(curProfile.name.trim()))
+            ? curProfile.name
+            : ((guestVault.profile.displayName && !genericNames.includes(guestVault.profile.displayName))
               ? guestVault.profile.displayName
-              : guestIdentity.displayName;
-            const sanitizedProfile = {
-              id: guestIdentity.id,
-              name: safeName,
-              displayName: safeName,
-              avatarColor: curProfile?.avatarColor || guestVault.profile.avatarColor || "#8B5CF6",
-              isSynced: false
-            };
-            setUserProfile(sanitizedProfile);
-            userProfileRef.current = sanitizedProfile;
-          }
+              : guestIdentity.displayName);
+          const sanitizedProfile = {
+            id: user.uid,
+            name: safeName,
+            displayName: safeName,
+            avatarColor: curProfile?.avatarColor || guestVault.profile.avatarColor || "#8B5CF6",
+            isSynced: false
+          };
+          setUserProfile(sanitizedProfile);
+          userProfileRef.current = sanitizedProfile;
         }
       } else if (user && !user.isAnonymous) {
         // Re-entrance guard: if user is already hydrated in memory, prevent re-zeroing and unlock immediately
@@ -5167,21 +5270,17 @@ export default function App() {
               document.documentElement.classList.remove("dark");
             }
           }
-        } catch (fastHydrateErr) {
-          console.warn("[Auth] Fast local cache hydration error in onAuthStateChanged:", fastHydrateErr);
-        }
+        } catch {}
 
         // Unified Cloud Data Hydration: onAuthStateChanged is the single driver of cloud-to-local hydration.
         // Exception: while an interactive Google login is in flight, handleConnectGoogle sequences
         // (guest-stat flush -> hydrate) itself, so a parallel run here would be wiped by that flush.
         if (isConnectingRef.current) {
-          console.log("[Auth] Hydration deferred to handleConnectGoogle (login in flight).");
+          // Hydration deferred to handleConnectGoogle (login in flight)
         } else {
           try {
             await hydrateUserFromCloudRef.current(user.uid, user, true);
-          } catch (err) {
-            console.warn("[Auth] Unified hydration error in onAuthStateChanged:", err);
-          }
+          } catch {}
         }
       }
     });
@@ -5413,13 +5512,11 @@ export default function App() {
     }
     isConnectingRef.current = false;
     setIsConnectingGoogle(false);
-    console.log("[Auth] Google sign-in cancelled by user.");
   }, []);
 
   const handleConnectGoogle = async () => {
     setGuestNamespaceLock(false);
     if (isConnectingRef.current || isConnectingGoogle) {
-      console.warn("[Auth] Connect Google already in flight. Aborting duplicate trigger.");
       return;
     }
     isConnectingRef.current = true;
@@ -5432,7 +5529,6 @@ export default function App() {
     // 12-second safety timeout guard
     loginTimeoutRef.current = setTimeout(() => {
       if (isConnectingRef.current) {
-        console.warn("[Auth] Google Sign-In 12s safety timeout reached. Resetting connecting state.");
         loginCancelledRef.current = true;
         isConnectingRef.current = false;
         setIsConnectingGoogle(false);
@@ -5467,8 +5563,25 @@ export default function App() {
         });
       }
 
+      // Explicitly mark prior guest session offline in /presence/{oldGuestUid} synchronously before Google sign-in
+      const oldGuestUid = auth.currentUser?.uid;
+      if (oldGuestUid && wasAnonymous) {
+        try {
+          await setDoc(doc(db, "presence", oldGuestUid), {
+            id: oldGuestUid,
+            status: "offline",
+            lastActive: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (presenceErr) {
+          console.warn("[Auth] Failed to set old guest offline before Google sign-in:", presenceErr);
+        }
+      }
+
+      // Cleanup any active room session/listeners bound to the old token to prevent permission errors
+      cleanupRoomSession();
+
       if (loginCancelledRef.current) {
-        console.log("[Auth] Google Sign-In was cancelled prior to auth trigger.");
         return;
       }
 
@@ -5495,10 +5608,6 @@ export default function App() {
           try {
             finalUser = (await linkWithCredential(credentialUser, credential)).user;
           } catch (linkError: any) {
-            console.warn("[Auth] Native linkWithCredential notice:", {
-              code: linkError?.code,
-              message: linkError?.message
-            });
             if (
               linkError.code === "auth/credential-already-in-use" ||
               linkError.code === "auth/account-exists-with-different-credential"
@@ -5525,7 +5634,6 @@ export default function App() {
           finalUser = signInResult.user;
         } catch (popupErr: any) {
           if (popupErr?.code === "auth/popup-blocked") {
-            console.warn("[Auth] Popup blocked by browser policy, falling back to signInWithRedirect");
             await signInWithRedirect(auth, provider);
             return;
           }
@@ -5534,7 +5642,6 @@ export default function App() {
       }
 
       if (loginCancelledRef.current) {
-        console.log("[Auth] Google Sign-In completed after cancel/timeout. Discarding result.");
         // Auth state already changed and the listener deferred to us: hydrate so the session isn't left empty.
         if (finalUser && !finalUser.isAnonymous) {
           hydrateUserFromCloudRef.current(finalUser.uid, finalUser, true).catch(() => { });
@@ -5560,18 +5667,14 @@ export default function App() {
         // Await full cloud hydration so all Firestore reads (profile, stats, settings, friends) commit to localStorage
         try {
           await hydrateUserFromCloudRef.current(finalUser.uid, finalUser, true);
-        } catch (hErr) {
-          console.warn("[Auth] Cloud hydration wait notice in handleConnectGoogle:", hErr);
-        }
+        } catch {}
       }
     } catch (err: any) {
       if (loginCancelledRef.current) {
-        console.log("[Auth] Error ignored because login was cancelled or timed out:", err);
         return;
       }
       const code = err?.code || "";
       if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request" || code === "12501" || code === "SIGN_IN_CANCELLED") {
-        console.log("[Auth] User dismissed Google Sign-In dialog.");
         return;
       }
       console.error("[Auth] Google Sign-In error:", {
@@ -5603,7 +5706,6 @@ export default function App() {
     }
 
     if (isLoggingOutRef.current) {
-      console.warn("[Auth] Logout already in flight. Aborting duplicate trigger.");
       return;
     }
 
@@ -5629,19 +5731,21 @@ export default function App() {
             updateData[platformField] = "";
           }
           await setDoc(userRef, updateData, { merge: true }).catch(() => { });
-        } catch (err) {
-          console.warn("[Auth] Error updating user presence/token in Firestore on logout:", err);
-        }
+        } catch {}
       }
 
-      // 2. Broadcast { status: "offline", lastActive: serverTimestamp() } (non-blocking)
-      if (currentUid) {
+      // 2. Broadcast { status: "offline", lastActive: serverTimestamp() } synchronously before signing out
+      if (currentUid && !currentUid.startsWith("GUEST_") && currentUid !== "guest") {
         try {
           await setDoc(doc(db, "presence", currentUid), {
+            id: currentUid,
             status: "offline",
-            lastActive: serverTimestamp()
-          }, { merge: true }).catch(() => { });
-        } catch { }
+            lastActive: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (presenceErr) {
+          console.warn("[Auth] Failed to broadcast offline on logout:", presenceErr);
+        }
       }
 
       // FIX 2: Point the active storage namespace at the guest drawer BEFORE any purge/reset below.
@@ -5749,7 +5853,7 @@ export default function App() {
 
       // 7. Revoke Firebase Auth session (after all state and storage is reset to guest)
       currentHydratedUidRef.current = null;
-      await signOut(auth).catch((err) => console.warn("[Auth] Firebase signout notice:", err));
+      await signOut(auth).catch(() => {});
 
       addLog("👤 Returned to clean local guest session.");
       showToast(t("loggedOutToast"));
@@ -5757,7 +5861,6 @@ export default function App() {
 
     } catch (err: any) {
       const friendlyMsg = getSanitizedAuthErrorMessage(err);
-      console.warn("[Auth] Logout notice:", err?.code || "unknown_error");
       showToast(friendlyMsg);
     } finally {
       setGuestNamespaceLock(false);
@@ -6361,11 +6464,9 @@ export default function App() {
 
   // Real-time listener for incoming invites from Firestore
   useEffect(() => {
-    // 1. स्मार्ट ID चेकर: अगर Google से लॉग-इन है तो authUser.uid लो; अगर Guest/Anonymous है तो userProfile.id ("GUEST_XXXX") लो
-    const activeId = (authUser && !authUser.isAnonymous && authUser.uid)
-      ? authUser.uid
-      : (userProfile?.id || authUser?.uid);
-    if (!activeId) return; // अगर कोई ID नहीं है, तो यहीं रुक जाओ
+    // Strict SSOT: Always bind incoming invites to the underlying Firebase Auth UID
+    const activeId = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null);
+    if (!activeId || activeId.startsWith("GUEST_") || activeId === "guest") return;
 
     console.log(`[Firestore] Subscribing to incoming invites for user: ${activeId}`);
     const invitesCol = collection(db, "invites");
@@ -6788,28 +6889,45 @@ export default function App() {
     }
   }, []);
 
-  const saveOpponentsToPastPlayers = async (opponents: Array<{ id: string, name: string }>) => {
+  const saveOpponentsToPastPlayers = async (opponents: Array<{ id: string; name: string; authUid?: string }>) => {
     const currentUserId = userProfile?.id;
-    if (!currentUserId) return;
+    const currentAuthUid = auth.currentUser?.uid;
+    if (!currentUserId && !currentAuthUid) return;
 
-    // Filter out self and anonymous guests
-    const filteredOpponents = opponents.filter(opp =>
-      opp.id &&
-      opp.id !== currentUserId &&
-      opp.id !== "GUEST_ANON" &&
-      opp.id !== "me"
-    );
+    // Filter out self and anonymous guests with comprehensive self-identity set
+    const guestIdentity = getOrCreateGuestIdentity();
+    const guestVault = loadVault("guest");
+    const selfIds = new Set([
+      currentUserId,
+      currentAuthUid,
+      authUser?.uid,
+      userProfile?.id,
+      userProfileRef.current?.id,
+      guestIdentity.id,
+      guestVault.profile?.id,
+      getActiveAuthUid()
+    ].filter(Boolean) as string[]);
+
+    const filteredOpponents = opponents.filter(opp => {
+      if (!opp || !opp.id) return false;
+      if (selfIds.has(opp.id)) return false;
+      if (opp.authUid && selfIds.has(opp.authUid)) return false;
+      if ((opp as any).guestId && selfIds.has((opp as any).guestId)) return false;
+      if (opp.id === "GUEST_ANON" || opp.id === "me") return false;
+      return true;
+    });
     if (filteredOpponents.length === 0) return;
 
     console.log("[Multiplayer] Saving opponents to past players:", filteredOpponents);
 
-    // 1. Update local state `multiplayerPlayers`
+    // 1. Update local state `multiplayerPlayers` with de-duplication
     setMultiplayerPlayers(prev => {
       let next = [...prev];
       let updated = false;
 
       filteredOpponents.forEach(opp => {
         const index = next.findIndex(p => p.id === opp.id);
+
         if (index === -1) {
           next.push({
             id: opp.id,
@@ -6818,18 +6936,17 @@ export default function App() {
             status: "offline" as const,
             inviteStatus: "idle" as const,
             lastPlayedAt: Date.now()
-          });
+          } as any);
           updated = true;
         } else {
-          // Update name if changed, and update lastPlayedAt
-          let hasChanges = false;
-          let updatedPlayer = { ...next[index], lastPlayedAt: Date.now() };
-          hasChanges = true; // Always update lastPlayedAt when match ends
-
-          if (opp.name && updatedPlayer.name !== opp.name) {
+          let updatedPlayer = {
+            ...next[index],
+            id: opp.id,
+            lastPlayedAt: Math.max((next[index] as any).lastPlayedAt || 0, Date.now())
+          };
+          if (opp.name && updatedPlayer.name !== opp.name && !opp.name.startsWith("Voyager ") && !opp.name.startsWith("Guest_")) {
             updatedPlayer.name = opp.name;
           }
-
           next[index] = updatedPlayer;
           updated = true;
         }
@@ -6838,7 +6955,11 @@ export default function App() {
       return updated ? next : prev;
     });
 
-    // 2. Write to Firestore `users/{currentUserId}/past_players/{opponentId}`
+    // 2. Write to Firestore `users/{currentUserId}/past_players/{opponentId}` ONLY for synced authenticated users
+    if (!authUser || authUser.isAnonymous || !userProfile?.isSynced || !currentUserId) {
+      return;
+    }
+
     try {
       for (const opp of filteredOpponents) {
         // Find if they are currently marked as a friend locally
@@ -6848,6 +6969,7 @@ export default function App() {
         const pastPlayerRef = doc(db, "users", currentUserId, "past_players", opp.id);
         await setDoc(pastPlayerRef, {
           id: opp.id,
+          authUid: opp.authUid || (!opp.id.startsWith("GUEST_") ? opp.id : null),
           name: opp.name || "Player",
           isFriend: isFriendVal,
           timestamp: serverTimestamp()
@@ -7037,16 +7159,15 @@ export default function App() {
     }
 
     // TARGET ROSTER GUARD: Validate intended recipient if direct targeted invite
-    const currentAuthUid = auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null;
-    const currentProfileId = userProfileRef.current?.id || userProfile?.id;
-    const activePersonaId = currentAuthUid || currentProfileId;
+    const currentCandidateIds = new Set(
+      [auth.currentUser?.uid, authUser?.uid, userProfileRef.current?.id, userProfile?.id, getOrCreateGuestIdentity().id, getActiveAuthUid()]
+        .filter(Boolean) as string[]
+    );
+    const activePersonaId = auth.currentUser?.uid || userProfileRef.current?.id || userProfile?.id || getOrCreateGuestIdentity().id;
 
     const expectedTargetUid = options?.targetUid || options?.toUserId;
     if (expectedTargetUid) {
-      const isTargetMatch = Boolean(
-        (currentAuthUid && currentAuthUid === expectedTargetUid) ||
-        (currentProfileId && currentProfileId === expectedTargetUid)
-      );
+      const isTargetMatch = currentCandidateIds.has(expectedTargetUid);
       if (!isTargetMatch) {
         console.warn(`[RosterGuard] Blocked direct join: room ${roomCode} was targeted to ${expectedTargetUid}, but active persona is ${activePersonaId}`);
         showToast("This invite is for another account");
@@ -7073,10 +7194,7 @@ export default function App() {
             const invData = inviteSnap.data();
             const targetRecipient = invData.toUserId || invData.recipientId;
             if (targetRecipient) {
-              const isTargetMatch = Boolean(
-                (currentAuthUid && currentAuthUid === targetRecipient) ||
-                (currentProfileId && currentProfileId === targetRecipient)
-              );
+              const isTargetMatch = currentCandidateIds.has(targetRecipient);
               if (!isTargetMatch) {
                 console.warn(`[RosterGuard] Blocked join: invite ${options.inviteDocId} targeted to ${targetRecipient}, active is ${activePersonaId}`);
                 showToast("This invite is for another account");
@@ -7178,7 +7296,11 @@ export default function App() {
         puzzle2D = Array(9).fill(null).map((_, r) =>
           Array(9).fill(null).map((_, c) => Number(rData.puzzleFlat[r * 9 + c]))
         );
-        if (Array.isArray(rData.solutionFlat) && rData.solutionFlat.length === 81) {
+        // Check local memory cache first for instant 0ms retrieval
+        const cached = puzzleCache.get(`${diff}_${seed}`);
+        if (cached?.solved && Array.isArray(cached.solved) && cached.solved.length === 9) {
+          solution2D = cached.solved.map(r => [...r]);
+        } else if (Array.isArray(rData.solutionFlat) && rData.solutionFlat.length === 81) {
           solution2D = Array(9).fill(null).map((_, r) =>
             Array(9).fill(null).map((_, c) => Number(rData.solutionFlat[r * 9 + c]))
           );
@@ -7189,7 +7311,7 @@ export default function App() {
         puzzle2D = rData.puzzle;
         solution2D = rData.solution;
       } else {
-        // Deterministic fallback using room seed and diff if flat arrays were omitted
+        // Fallback only if room document was created without puzzleFlat
         const fallbackBoard = generateFlatBoardForSeed(diff, seed);
         puzzle2D = fallbackBoard.puzzle;
         solution2D = fallbackBoard.solved;
@@ -7710,10 +7832,16 @@ export default function App() {
             body,
             icon: '/pwa-192x192.png',
             badge: '/favicon-48x48.png',
-            vibrate: [300, 150, 300],
-            tag: 'sudoku-duel-alert',
+            vibrate: [200, 100, 200],
+            tag: 'sudoku-invite',
             renotify: true,
-            data: { gameId, password, senderName }
+            requireInteraction: false,
+            data: {
+              gameId,
+              password,
+              senderName,
+              click_action: `/?challenge=${encodeURIComponent(gameId)}&pw=${encodeURIComponent(password)}&sender=${encodeURIComponent(senderName)}`
+            }
           } as any);
           console.log("[Push] Dispatched web background notification via SW.");
         } catch (err) {
@@ -9234,13 +9362,29 @@ export default function App() {
         if (challengeMode && !isDisconnected) {
           setEndGameStep(1); // Always start on Screen 1 (Results) when game first ends
           setPendingRematchSeed(null);
+          const guestIdentity = getOrCreateGuestIdentity();
+          const guestVault = loadVault("guest");
+          const selfIds = new Set([
+            auth.currentUser?.uid,
+            authUser?.uid,
+            userProfile?.id,
+            userProfileRef.current?.id,
+            guestIdentity.id,
+            guestVault.profile?.id,
+            getActiveAuthUid()
+          ].filter(Boolean) as string[]);
+
           // Populate rematchParticipants immediately when game is over without triggering effect cleanup
           const currentList = syncedLeaderboardRef.current.length > 0 ? syncedLeaderboardRef.current : syncedLeaderboard;
-          const currentUid = userProfileRef.current?.id || userProfile?.id;
           const othersList: Array<{ id: string; name: string; isReal: boolean }> = [];
           currentList.forEach(r => {
-            if (r.userId !== currentUid && !othersList.some(o => o.id === r.userId)) {
-              othersList.push({ id: r.userId, name: r.playerName, isReal: true });
+            const participantId = r.userId;
+            const participantAuth = (r as any).authUid;
+            if (!participantId || selfIds.has(participantId) || (participantAuth && selfIds.has(participantAuth))) {
+              return;
+            }
+            if (!othersList.some(o => o.id === participantId)) {
+              othersList.push({ id: participantId, name: r.playerName, isReal: true });
             }
           });
           setRematchParticipants(othersList);
@@ -9435,14 +9579,13 @@ export default function App() {
 
     // TARGET ROSTER GUARD: If this direct invite targets a specific user, verify active persona
     if (targetUid) {
-      const currentAuthUid = auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null;
-      const currentProfileId = userProfileRef.current?.id || userProfile?.id;
-      const isTargetMatch = Boolean(
-        (currentAuthUid && currentAuthUid === targetUid) ||
-        (currentProfileId && currentProfileId === targetUid)
+      const currentCandidateIds = new Set(
+        [auth.currentUser?.uid, authUser?.uid, userProfileRef.current?.id, userProfile?.id, getOrCreateGuestIdentity().id, getActiveAuthUid()]
+          .filter(Boolean) as string[]
       );
+      const isTargetMatch = currentCandidateIds.has(targetUid);
       if (!isTargetMatch) {
-        console.warn(`[RosterGuard] Blocked direct challenge load: target was ${targetUid}, active persona is ${currentAuthUid || currentProfileId}`);
+        console.warn(`[RosterGuard] Blocked direct challenge load: target was ${targetUid}, active persona is ${auth.currentUser?.uid || userProfileRef.current?.id || userProfile?.id}`);
         showToast("This invite is for another account");
         return;
       }
@@ -9471,38 +9614,39 @@ export default function App() {
             : (rData.hintLimit !== undefined ? Number(rData.hintLimit) : 3);
           const rTimer = rData.timerEnabled !== undefined ? Boolean(rData.timerEnabled) : true;
           const isLocked = Boolean(rData.isLocked);
-          const storedPin = (rData.pin || rData.roomPin || "").trim();
+          const storedPinHash = (rData.pinHash || "").trim();
+          const legacyPin = (rData.pin || rData.roomPin || "").trim();
 
           const rawSuppliedPw = (queryPw || "").trim();
           const decodedPw = rawSuppliedPw ? decodePass(rawSuppliedPw).trim() : "";
           let isPinMatch = false;
-          try {
-            const uriDecoded = decodeURIComponent(rawSuppliedPw).trim();
-            isPinMatch = Boolean(
-              storedPin.length > 0 &&
-              (rawSuppliedPw === storedPin || decodedPw === storedPin || uriDecoded === storedPin)
-            );
-          } catch (e) {
-            isPinMatch = Boolean(
-              storedPin.length > 0 &&
-              (rawSuppliedPw === storedPin || decodedPw === storedPin)
-            );
+          if (storedPinHash.length > 0) {
+            const rawHash = await hashRoomPin(rawSuppliedPw, code);
+            const decodedHash = decodedPw ? await hashRoomPin(decodedPw, code) : "";
+            isPinMatch = Boolean(rawHash === storedPinHash || (decodedHash && decodedHash === storedPinHash));
+          } else if (legacyPin.length > 0) {
+            try {
+              const uriDecoded = decodeURIComponent(rawSuppliedPw).trim();
+              isPinMatch = Boolean(rawSuppliedPw === legacyPin || decodedPw === legacyPin || uriDecoded === legacyPin);
+            } catch {
+              isPinMatch = Boolean(rawSuppliedPw === legacyPin || decodedPw === legacyPin);
+            }
           }
 
-          if (!isLocked || storedPin.length === 0 || isPinMatch) {
+          if (!isLocked || (!storedPinHash && !legacyPin) || isPinMatch) {
             // Unlocked or authorized via link credentials
             // GUEST PRESERVATION: Check if guest display name needs to be configured first (Public Share Link & Unlocked Room)
             const isConfigured = checkIsDisplayNameConfigured();
             if (!isConfigured) {
               inviteJoinCallbackRef.current = () => {
-                handleAcceptAndLaunchInvite(code, undefined, storedPin, true, rData, targetUid);
+                handleAcceptAndLaunchInvite(code, undefined, rawSuppliedPw || decodedPw, true, rData, targetUid);
               };
               setInviteJoinName(getActiveDisplayName());
               setInviteJoinError(null);
               setShowInviteJoinNamePopup(true);
               return;
             }
-            await handleAcceptAndLaunchInvite(code, undefined, storedPin, true, rData, targetUid);
+            await handleAcceptAndLaunchInvite(code, undefined, rawSuppliedPw || decodedPw, true, rData, targetUid);
             return;
           }
 
@@ -9516,7 +9660,8 @@ export default function App() {
             maxMistakes: rMistakes,
             hintLimit: rHints,
             timerEnabled: rTimer,
-            password: storedPin,
+            pinHash: storedPinHash,
+            password: legacyPin,
             senderName: cleanSender
           });
           setShowInviteModal(true);
@@ -9861,7 +10006,7 @@ export default function App() {
 
     // Only write Firestore room record when online — offline sessions are solo-only and need no room document
     if (isOnline) {
-      const activeHostId = userProfile?.id || auth.currentUser?.uid || getOrCreateGuestIdentity().id;
+      const activeHostId = auth.currentUser?.uid || userProfile?.id || getOrCreateGuestIdentity().id;
       const activeHostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
 
       setDoc(doc(db, "rooms", roomCode), {
@@ -9877,7 +10022,7 @@ export default function App() {
         hintsLimit: 3,
         timerEnabled: initialTimer,
         isLocked: false,
-        pin: "",
+        pinHash: "",
         status: "active",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -9954,8 +10099,7 @@ export default function App() {
     if (updates.timerEnabled !== undefined) payload.timerEnabled = updates.timerEnabled;
     if (updates.isLocked !== undefined) payload.isLocked = updates.isLocked;
     if (updates.pin !== undefined) {
-      payload.pin = updates.pin;
-      payload.roomPin = updates.pin;
+      payload.pinHash = updates.pin ? await hashRoomPin(updates.pin, code) : "";
     }
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.isClosed !== undefined) payload.isClosed = updates.isClosed;
@@ -10040,6 +10184,7 @@ export default function App() {
           const puzzleFlat = (boardState as any)?.initialGrid
             ? (boardState as any).initialGrid.flat()
             : (boardState.grid ? boardState.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)).flat() : null);
+          const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, roomCode) : "";
 
           await setDoc(doc(db, "rooms", roomCode), {
             roomCode: roomCode,
@@ -10054,7 +10199,7 @@ export default function App() {
             hintsLimit: boardState.hintsRemaining !== undefined ? boardState.hintsRemaining : 3,
             timerEnabled: timerEnabled,
             isLocked: isRoomLocked,
-            pin: isRoomLocked ? roomPin : "",
+            pinHash: hashedPin,
             status: "active",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -10226,9 +10371,10 @@ export default function App() {
     }));
     addLog(`📤 Custom challenge invite dispatched to player.`);
 
+    const activeAuth = await ensureActiveAuthUser();
     const seed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
     const activeRoomCode = String(seed).padStart(6, '0').slice(-6);
-    const currentUserId = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || getOrCreateGuestIdentity().id;
+    const currentUserId = activeAuth?.uid || userProfile?.id;
     const currentUserName = getActiveDisplayName() || userProfileRef.current?.displayName || userProfileRef.current?.name || getOrCreateGuestIdentity().displayName;
 
     // Ensure room is synced with current settings before invite is dispatched
@@ -10239,20 +10385,8 @@ export default function App() {
       timerEnabled: challengeTimerEnabled
     });
 
-    // Resolve target player ID if target has migrated to Google UID
-    let targetPlayerId = playerId;
-    try {
-      // Follow migratedTo chains (max 3 hops) for ANY target id, not just GUEST_-prefixed ones
-      for (let hop = 0; hop < 3; hop++) {
-        const targetDoc = await getDoc(doc(db, "users", targetPlayerId));
-        const migrated = targetDoc.exists() ? targetDoc.data()?.migratedTo : null;
-        if (!migrated || typeof migrated !== "string" || migrated === targetPlayerId) break;
-        console.log(`[Firestore] Target player ${targetPlayerId} resolved to migrated UID: ${migrated}`);
-        targetPlayerId = migrated;
-      }
-    } catch (checkErr) {
-      console.debug("[Firestore] Notice resolving target player migration:", checkErr);
-    }
+    // Target the intact recipient playerId directly
+    const targetPlayerId = playerId;
 
     if (!targetPlayerId || targetPlayerId === currentUserId || targetPlayerId === guardSenderId || targetPlayerId === authUser?.uid) {
       console.warn("[INVITE BLOCKED] Resolved target is identical to sender UID.");
@@ -10499,9 +10633,7 @@ export default function App() {
 
     const authUser = auth.currentUser;
     const isGuest = !authUser || authUser.isAnonymous || userProfile?.isSynced === false;
-    const targetUid = (!authUser || authUser.isAnonymous)
-      ? (getActiveAuthUid() || "guest")
-      : authUser.uid;
+    const targetUid = isGuest ? "guest" : authUser.uid;
 
     const completedGameRecord: CompletedGame = {
       id: finalGameId,
@@ -10574,7 +10706,7 @@ export default function App() {
       personalBestTimesRef.current = updatedVault.bestTimes;
     }
 
-    if (targetUid === "guest" || targetUid.startsWith("GUEST_")) {
+    if (isGuest || targetUid === "guest" || targetUid.startsWith("GUEST_")) {
       incrementGuestGameCount();
       syncGuestSnapshotInRealtime({
         completedGames: updatedVault.completedGames,
@@ -10993,6 +11125,10 @@ export default function App() {
 
   // Submit a completed game result to Firestore, with 1 retry and offline queuing
   const submitGameResult = async (rBody: any, attempt = 1): Promise<void> => {
+    const activeAuth = await ensureActiveAuthUser();
+    const effectiveUserId = activeAuth?.uid || rBody.userId;
+    const effectivePlayerName = rBody.playerName || getActiveDisplayName();
+
     // Logical speed barrier: a win under 15s is physically implausible. Do NOT drop the payload
     // (opponents would hang on "Solving..."); convert it into a forfeit so their result screen resolves.
     // Derived per call from the untouched rBody, so retries and offline-queue replays re-evaluate identically.
@@ -11005,15 +11141,15 @@ export default function App() {
       console.warn(`[Anti-Cheat] Implausible solve time (${rBody.timeSec}s) converted to forfeit.`);
     }
 
-    console.log(`[Firestore] Submitting result. ID: ${rBody.challengeId}, User: ${rBody.userId}, Attempt: ${attempt}`);
+    console.log(`[Firestore] Submitting result. ID: ${rBody.challengeId}, User: ${effectiveUserId}, Attempt: ${attempt}`);
     try {
       const docId = getSeedDocId(rBody.challengeId);
-      const participantRef = doc(db, "challenge_results", docId, "participants", rBody.userId);
+      const participantRef = doc(db, "challenge_results", docId, "participants", effectiveUserId);
 
       const newRecord = {
         challengeId: rBody.challengeId,
-        userId: rBody.userId,
-        playerName: rBody.playerName,
+        userId: effectiveUserId,
+        playerName: effectivePlayerName,
         timeSec: effTimeSec,
         mistakes: effMistakes,
         isWon: effIsWon,
@@ -11025,10 +11161,10 @@ export default function App() {
 
       await setDoc(participantRef, newRecord);
       try {
-        const roomPlayerRef = doc(db, "rooms", rBody.challengeId, "players", rBody.userId);
+        const roomPlayerRef = doc(db, "rooms", rBody.challengeId, "players", effectiveUserId);
         await setDoc(roomPlayerRef, {
-          id: rBody.userId,
-          name: rBody.playerName,
+          id: effectiveUserId,
+          name: effectivePlayerName,
           status: effStatus,
           timeSec: effTimeSec,
           mistakes: effMistakes,
@@ -11040,8 +11176,8 @@ export default function App() {
         const roomDocRef = doc(db, "rooms", rBody.challengeId);
         await setDoc(roomDocRef, {
           status: "active",
-          lastCompletedUid: rBody.userId,
-          lastCompletedBy: rBody.playerName,
+          lastCompletedUid: effectiveUserId,
+          lastCompletedBy: effectivePlayerName,
           lastCompletedTime: effTimeSec || 0,
           lastCompletedAt: serverTimestamp()
         }, { merge: true });
@@ -11055,7 +11191,12 @@ export default function App() {
         const querySnapshot = await getDocs(participantsCol);
         const opponents = querySnapshot.docs.map(d => {
           const data = d.data();
-          return { id: data.userId, name: data.playerName };
+          const effectiveId = data.authUid || data.userId || d.id;
+          return {
+            id: effectiveId,
+            authUid: data.authUid || (!effectiveId.startsWith("GUEST_") ? effectiveId : undefined),
+            name: data.playerName || "Player"
+          };
         });
         saveOpponentsToPastPlayers(opponents);
       } catch (err) {
@@ -11170,16 +11311,25 @@ export default function App() {
     }
 
     const pName = getActiveDisplayName();
-    const userId = userProfile?.id || getOrCreateGuestIdentity().id;
+    const activeAuth = await ensureActiveAuthUser();
+    const authUid = activeAuth?.uid || auth.currentUser?.uid || authUser?.uid;
+    if (!authUid) {
+      console.warn("[Firestore] registerChallengeJoin skipped: No authenticated user session.");
+      return;
+    }
+    const guestIdentity = getOrCreateGuestIdentity();
+    const guestId = guestIdentity.id;
 
     try {
       const docId = getSeedDocId(challengeId);
-      const participantRef = doc(db, "challenge_results", docId, "participants", userId);
+      const participantRef = doc(db, "challenge_results", docId, "participants", authUid);
       const existing = await getDoc(participantRef);
       if (!existing.exists() || existing.data()?.status === "left" || existing.data()?.status === "abandoned" || existing.data()?.status === "disconnected") {
         await setDoc(participantRef, {
           challengeId,
-          userId,
+          userId: authUid,
+          authUid,
+          guestId,
           playerName: pName,
           timeSec: 0,
           mistakes: 0,
@@ -11189,13 +11339,15 @@ export default function App() {
           date: new Date().toISOString(),
           timestamp: serverTimestamp()
         }, { merge: true });
-        console.log(`[Firestore] Registered join for ${userId} (${pName}) on ${challengeId}`);
+        console.log(`[Firestore] Registered join for ${authUid} (${pName}) on ${challengeId}`);
       }
 
       // Also register active presence in room players collection
-      const playerRef = doc(db, "rooms", challengeId, "players", userId);
+      const playerRef = doc(db, "rooms", challengeId, "players", authUid);
       await setDoc(playerRef, {
-        id: userId,
+        id: authUid,
+        authUid,
+        guestId,
         name: pName,
         status: "active",
         updatedAt: serverTimestamp()
@@ -11273,12 +11425,20 @@ export default function App() {
       setIsLoadingLeaderboard(false);
 
       // Auto-save all participants as past players
-      const opponents = results.map(r => ({ id: r.userId, name: r.playerName }));
+      const opponents = results.map(r => {
+        const effectiveId = (r as any).authUid || r.userId;
+        return {
+          id: effectiveId,
+          authUid: (r as any).authUid || (!effectiveId.startsWith("GUEST_") ? effectiveId : undefined),
+          name: r.playerName
+        };
+      });
       saveOpponentsToPastPlayers(opponents);
 
       // Also enrich completedGames if the active game is already saved in history
       if (results.length > 0) {
-        const activeUid = getActiveAuthUid() || "guest";
+        const isGuest = !authUser || authUser.isAnonymous || userProfile?.isSynced === false;
+        const activeUid = isGuest ? "guest" : authUser.uid;
         updateVault((prevVault) => {
           const index = prevVault.completedGames.findIndex(g => g.id === activeGameId || (challengeSeed && g.seed === challengeSeed));
           if (index === -1) return prevVault;
@@ -11509,21 +11669,34 @@ export default function App() {
   useEffect(() => {
     if (!showCreateChallengeModal || !isOnline || !rematchGameId) return;
 
+    const guestIdentity = getOrCreateGuestIdentity();
+    const guestVault = loadVault("guest");
+    const selfIds = new Set([
+      auth.currentUser?.uid,
+      authUser?.uid,
+      userProfile?.id,
+      userProfileRef.current?.id,
+      guestIdentity.id,
+      guestVault.profile?.id,
+      getActiveAuthUid()
+    ].filter(Boolean) as string[]);
+
     const roomPlayersCol = collection(db, "rooms", rematchGameId, "players");
     const unsub = onSnapshot(roomPlayersCol, (snapshot) => {
-      const joined: Array<{ id: string; name: string; updatedAt?: any }> = [];
+      const joined: Array<{ id: string; name: string; authUid?: string; updatedAt?: any }> = [];
       const leftIds: string[] = [];
 
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         const uId = data.id || docSnap.id;
-        if (!uId || uId === userProfile?.id) return;
+        const uAuth = data.authUid;
+        if (!uId || selfIds.has(uId) || (uAuth && selfIds.has(uAuth))) return;
 
         const isLeft = data.status === "left" || data.status === "abandoned" || data.status === "disconnected";
         const isActive = data.status === "active" || data.status === "joined";
 
         if (isActive) {
-          joined.push({ id: uId, name: data.name || "Player", updatedAt: data.updatedAt });
+          joined.push({ id: uId, name: data.name || "Player", authUid: uAuth, updatedAt: data.updatedAt });
         } else if (isLeft) {
           leftIds.push(uId);
         }
@@ -11536,11 +11709,11 @@ export default function App() {
         setMultiplayerPlayers(prev => {
           let next = [...prev];
           let changed = false;
-          joined.forEach(({ id, name }) => {
-            if (id === userProfile?.id) return;
-            const existing = next.findIndex(p => p.id === id);
+          joined.forEach(({ id, name, authUid: jAuth }) => {
+            if (selfIds.has(id) || (jAuth && selfIds.has(jAuth))) return;
+            const existing = next.findIndex(p => p.id === id || (jAuth && (p as any).authUid === jAuth));
             if (existing === -1) {
-              next.push({ id, name, isFriend: false, status: "online" as const, inviteStatus: "idle" as const, lastPlayedAt: now });
+              next.push({ id, name, authUid: jAuth, isFriend: false, status: "online" as const, inviteStatus: "idle" as const, lastPlayedAt: now } as any);
               changed = true;
             } else if (next[existing].status !== "online") {
               next[existing] = { ...next[existing], status: "online" as const };
@@ -11815,10 +11988,23 @@ export default function App() {
       const roomJoined = new Set<string>();
       const roomLeft = new Set<string>();
       const roomFinished = new Set<string>();
+      const guestIdentity = getOrCreateGuestIdentity();
+      const guestVault = loadVault("guest");
+      const selfIds = new Set([
+        auth.currentUser?.uid,
+        authUser?.uid,
+        userProfile?.id,
+        userProfileRef.current?.id,
+        guestIdentity.id,
+        guestVault.profile?.id,
+        getActiveAuthUid()
+      ].filter(Boolean) as string[]);
+
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         const uId = data.id || docSnap.id;
-        if (uId && uId !== userProfile?.id) {
+        const uAuth = data.authUid;
+        if (uId && !selfIds.has(uId) && (!uAuth || !selfIds.has(uAuth))) {
           const isTerminated = data.status === "completed" || data.status === "victory" || data.status === "mistake_game_over";
           if (isTerminated) {
             roomFinished.add(uId);
@@ -12444,7 +12630,7 @@ export default function App() {
   };
 
   // Mid-game Solo to Multiplayer Escalation: Initializes Firestore room document with flat arrays and attaches listeners
-  const handleOpenMidGameMultiplayer = () => {
+  const handleOpenMidGameMultiplayer = async () => {
     playClickSound();
     setIsTimerPaused(true);
 
@@ -12508,6 +12694,8 @@ export default function App() {
     const activeHostId = userProfile?.id || auth.currentUser?.uid || getOrCreateGuestIdentity().id;
     const activeHostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
 
+    const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, liveRoomCode) : "";
+
     // Write canonical room to Firestore with flat arrays (safe against nested array errors)
     setDoc(doc(db, "rooms", liveRoomCode), {
       roomCode: liveRoomCode,
@@ -12522,7 +12710,7 @@ export default function App() {
       hintsLimit: midHints,
       timerEnabled: timerEnabled,
       isLocked: isRoomLocked,
-      pin: isRoomLocked && roomPin ? roomPin : "",
+      pinHash: hashedPin,
       status: "active",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -13816,11 +14004,13 @@ export default function App() {
 
   // Gate multiplayer vs solo end-game modal based on active participant count (>= 2)
   const participantCount = Array.isArray(syncedLeaderboard) ? syncedLeaderboard.length : 0;
+  const myAuthUid = auth.currentUser?.uid || authUser?.uid;
   const hasJoinedOpponents = Boolean(
-    syncedLeaderboard && syncedLeaderboard.some(r => r.userId && r.userId !== userProfile?.id)
+    syncedLeaderboard && syncedLeaderboard.some(r => r.userId && r.userId !== userProfile?.id && (!myAuthUid || r.userId !== myAuthUid))
   );
+  const isMultiplayerGame = Boolean(challengeMode || activeGameId || rematchGameId || challengeSeed);
   const isTrueMultiplayer = Boolean(
-    challengeMode && isOnline && (participantCount >= 2 || hasJoinedOpponents || endGameStep === 2)
+    isMultiplayerGame && isOnline && (participantCount >= 2 || hasJoinedOpponents || endGameStep === 2)
   );
 
   return (
@@ -15033,6 +15223,7 @@ export default function App() {
 
                       const hostId = userProfile?.id || authUser?.uid || getOrCreateGuestIdentity().id;
                       const hostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
+                      const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, roomCode) : "";
 
                       await setDoc(doc(db, "rooms", roomCode), {
                         roomCode: roomCode,
@@ -15047,7 +15238,7 @@ export default function App() {
                         hintsLimit: challengeHintLimit,
                         timerEnabled: challengeTimerEnabled,
                         isLocked: isRoomLocked,
-                        pin: isRoomLocked ? roomPin : "",
+                        pinHash: hashedPin,
                         status: "active",
                         createdAt: serverTimestamp(),
                         updatedAt: serverTimestamp(),
@@ -15650,7 +15841,7 @@ export default function App() {
                     }
 
                     return activeFriends.map(friend => {
-                      const isOnline = getDrawerFriendStatus(friend.id, friend.status) === "online";
+                      const isOnline = getDrawerFriendStatus(friend.id, friend.status, undefined, (friend as any).authUid) === "online";
                       return (
                         <div
                           key={friend.id}
@@ -15958,15 +16149,15 @@ export default function App() {
                         ) : (
                           [...multiplayerPlayers.filter(p => p.isFriend)]
                             .sort((a, b) => {
-                              const isOnlineA = getDrawerFriendStatus(a.id, a.status) === "online";
-                              const isOnlineB = getDrawerFriendStatus(b.id, b.status) === "online";
+                              const isOnlineA = getDrawerFriendStatus(a.id, a.status, undefined, (a as any).authUid) === "online";
+                              const isOnlineB = getDrawerFriendStatus(b.id, b.status, undefined, (b as any).authUid) === "online";
                               if (isOnlineA !== isOnlineB) return isOnlineA ? -1 : 1;
                               return (a.name || "").localeCompare(b.name || "");
                             })
                             .map((friend, index) => {
                               const isAnimated = index < 5;
-                              const effectiveStatus = getDrawerFriendStatus(friend.id, friend.status);
-                              const effectiveLastActive = getDrawerFriendLastActive(friend.id, (friend as any).lastActive || friend.lastPlayedAt);
+                              const effectiveStatus = getDrawerFriendStatus(friend.id, friend.status, undefined, (friend as any).authUid);
+                              const effectiveLastActive = getDrawerFriendLastActive(friend.id, (friend as any).lastActive || friend.lastPlayedAt, (friend as any).authUid);
                               const card = (
                                 <div
                                   className={`p-2.5 rounded-xl border flex items-center justify-between transition-all w-full shrink-0 ${darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-200" : "bg-stone-50/45 border-stone-200/50 text-stone-850"
@@ -16032,16 +16223,16 @@ export default function App() {
                         ) : (
                           [...multiplayerPlayers.filter(p => !p.isFriend)]
                             .sort((a, b) => {
-                              const isOnlineA = getDrawerFriendStatus(a.id, a.status) === "online";
-                              const isOnlineB = getDrawerFriendStatus(b.id, b.status) === "online";
+                              const isOnlineA = getDrawerFriendStatus(a.id, a.status, undefined, (a as any).authUid) === "online";
+                              const isOnlineB = getDrawerFriendStatus(b.id, b.status, undefined, (b as any).authUid) === "online";
                               if (isOnlineA !== isOnlineB) return isOnlineA ? -1 : 1;
                               return (a.name || "").localeCompare(b.name || "");
                             })
                             .map((player, index) => {
                               const isRequested = requestedFriendIds.includes(player.id);
                               const isAnimated = index < 5;
-                              const effectiveStatus = getDrawerFriendStatus(player.id, player.status);
-                              const effectiveLastActive = getDrawerFriendLastActive(player.id, (player as any).lastActive || player.lastPlayedAt);
+                              const effectiveStatus = getDrawerFriendStatus(player.id, player.status, undefined, (player as any).authUid);
+                              const effectiveLastActive = getDrawerFriendLastActive(player.id, (player as any).lastActive || player.lastPlayedAt, (player as any).authUid);
                               const card = (
                                 <div
                                   className={`p-2.5 rounded-xl border flex items-center justify-between transition-all w-full shrink-0 ${darkMode ? "bg-zinc-950/45 border-zinc-800 text-stone-200" : "bg-stone-50/45 border-stone-200/50 text-stone-850"
@@ -16998,8 +17189,8 @@ export default function App() {
                   <div className="flex flex-col gap-1.5 max-h-[150px] overflow-y-auto pr-1 no-scrollbar-y">
                     {[...multiplayerPlayers]
                       .sort((a, b) => {
-                        const isOnlineA = getDrawerFriendStatus(a.id, a.status) === 'online';
-                        const isOnlineB = getDrawerFriendStatus(b.id, b.status) === 'online';
+                        const isOnlineA = getDrawerFriendStatus(a.id, a.status, undefined, (a as any).authUid) === 'online';
+                        const isOnlineB = getDrawerFriendStatus(b.id, b.status, undefined, (b as any).authUid) === 'online';
                         if (isOnlineA && !isOnlineB) return -1;
                         if (!isOnlineA && isOnlineB) return 1;
                         return 0;
@@ -17007,8 +17198,8 @@ export default function App() {
                       .map((player, idx) => {
                         const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
                         const isAnimated = idx < 5;
-                        const effectiveStatus = getDrawerFriendStatus(player.id, player.status);
-                        const effectiveLastActive = getDrawerFriendLastActive(player.id, (player as any).lastActive || player.lastPlayedAt);
+                        const effectiveStatus = getDrawerFriendStatus(player.id, player.status, undefined, (player as any).authUid);
+                        const effectiveLastActive = getDrawerFriendLastActive(player.id, (player as any).lastActive || player.lastPlayedAt, (player as any).authUid);
                         const rowBgClass = isJoined
                           ? (darkMode ? "bg-[#064e3b]/30 text-[#a7f3d0]" : "bg-[#E8F5E9] text-[#1B5E20]")
                           : (darkMode ? "bg-zinc-900/40 text-stone-300" : "bg-white/60 text-stone-800");
@@ -17482,7 +17673,7 @@ export default function App() {
                   <div className="flex flex-col gap-2">
                     {rematchParticipants.map((p) => {
                       const hasInvited = rematchInvitedPlayers.has(p.id);
-                      const isOnline = getDrawerFriendStatus(p.id, (p as any).status) === 'online';
+                      const isOnline = getDrawerFriendStatus(p.id, (p as any).status, undefined, (p as any).authUid) === 'online';
                       return (
                         <div
                           key={p.id}
@@ -17621,9 +17812,15 @@ export default function App() {
           handleMaybeLaterChallenge();
           setShowInviteModal(false);
         }}
-        onAccept={() => {
+        onAccept={async () => {
           // Password check
-          if (incomingChallengeDetails?.password) {
+          if (incomingChallengeDetails?.pinHash) {
+            const enteredHash = await hashRoomPin(enteredInvitePassword, incomingChallengeId);
+            if (enteredHash !== incomingChallengeDetails.pinHash) {
+              setInvitePasswordError("Incorrect Password");
+              return;
+            }
+          } else if (incomingChallengeDetails?.password) {
             const correct = incomingChallengeDetails.password.trim().toLowerCase();
             const entered = enteredInvitePassword.trim().toLowerCase();
             if (entered !== correct) {
@@ -18148,8 +18345,8 @@ export default function App() {
                             }
 
                             // Online players first (live presence synced)
-                            const statusA = getDrawerFriendStatus(a.id, a.status);
-                            const statusB = getDrawerFriendStatus(b.id, b.status);
+                            const statusA = getDrawerFriendStatus(a.id, a.status, undefined, (a as any).authUid);
+                            const statusB = getDrawerFriendStatus(b.id, b.status, undefined, (b as any).authUid);
                             const isOnlineA = statusA === 'online';
                             const isOnlineB = statusB === 'online';
                             if (isOnlineA !== isOnlineB) return isOnlineA ? -1 : 1;
@@ -18164,8 +18361,8 @@ export default function App() {
 
                         const renderRow = (player: any, index: number) => {
                           const { isJoined, isPendingSent, isDeclined, isLeft, remainingSeconds } = getInviteCooldownState(player.id);
-                          const effectiveStatus = getDrawerFriendStatus(player.id, player.status);
-                          const effectiveLastActive = getDrawerFriendLastActive(player.id, (player as any).lastActive || player.lastPlayedAt);
+                          const effectiveStatus = getDrawerFriendStatus(player.id, player.status, undefined, (player as any).authUid);
+                          const effectiveLastActive = getDrawerFriendLastActive(player.id, (player as any).lastActive || player.lastPlayedAt, (player as any).authUid);
                           const isAnimated = index < 5;
                           const cardContent = (
                             <div

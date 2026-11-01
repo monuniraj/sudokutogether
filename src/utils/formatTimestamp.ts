@@ -1,4 +1,4 @@
-export const PRESENCE_TIMEOUT_MS = 15 * 60 * 1000; // 15-minute sliding presence cutoff
+export const PRESENCE_TIMEOUT_MS = 45 * 1000; // 45-second sliding presence cutoff for active heartbeats
 
 /**
  * Robust utility to extract epoch milliseconds from any Firestore Timestamp,
