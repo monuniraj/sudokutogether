@@ -1711,25 +1711,28 @@ export async function generateShareCanvas(
           solutionGrid[r][c] !== val) ||
           hasCellConflict(gridCells, r, c, val));
 
-      // Exact cell background fill matching live SudokuBoard.tsx
-      if (isSelected && isMistake) {
-        ctx.fillStyle = palette.errorSelectedBg;
-        ctx.fillRect(cellX, cellY, cellSize, cellSize);
-      } else if (isMistake) {
-        ctx.fillStyle = palette.errorCellBg;
-        ctx.fillRect(cellX, cellY, cellSize, cellSize);
-      } else if (isSelected) {
-        ctx.fillStyle = palette.activeCellBg;
-        ctx.fillRect(cellX, cellY, cellSize, cellSize);
-      } else if (isIdenticalValue) {
-        ctx.fillStyle = palette.identicalCellBg;
-        ctx.fillRect(cellX, cellY, cellSize, cellSize);
-      } else if (isHighlightedSibling) {
-        ctx.fillStyle = palette.crosshairSiblingBg;
-        ctx.fillRect(cellX, cellY, cellSize, cellSize);
-      } else {
-        ctx.fillStyle = palette.cellTintBg;
-        ctx.fillRect(cellX, cellY, cellSize, cellSize);
+      // Exact cell background fill matching live SudokuBoard.tsx (bypassed on player-filled cells)
+      const isPlayerFilled = !isClue && val !== 0;
+      if (!isPlayerFilled) {
+        if (isSelected && isMistake) {
+          ctx.fillStyle = palette.errorSelectedBg;
+          ctx.fillRect(cellX, cellY, cellSize, cellSize);
+        } else if (isMistake) {
+          ctx.fillStyle = palette.errorCellBg;
+          ctx.fillRect(cellX, cellY, cellSize, cellSize);
+        } else if (isSelected) {
+          ctx.fillStyle = palette.activeCellBg;
+          ctx.fillRect(cellX, cellY, cellSize, cellSize);
+        } else if (isIdenticalValue) {
+          ctx.fillStyle = palette.identicalCellBg;
+          ctx.fillRect(cellX, cellY, cellSize, cellSize);
+        } else if (isHighlightedSibling) {
+          ctx.fillStyle = palette.crosshairSiblingBg;
+          ctx.fillRect(cellX, cellY, cellSize, cellSize);
+        } else {
+          ctx.fillStyle = palette.cellTintBg;
+          ctx.fillRect(cellX, cellY, cellSize, cellSize);
+        }
       }
 
       if (val !== 0) {
@@ -1753,7 +1756,7 @@ export async function generateShareCanvas(
         // Authentic 9-Pass Blue Marker Redaction (Obscure filled digits)
         if (!isClue) {
           ctx.save();
-          ctx.strokeStyle = '#0284C7';
+          ctx.strokeStyle = darkMode ? '#38BDF8' : '#0284C7';
           ctx.lineWidth = 3.4;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
@@ -1844,74 +1847,111 @@ export async function generateShareCanvas(
   ctx.lineWidth = 2.2;
   ctx.stroke();
 
-  // Shared Badge Theme Tokens for floating achievement badge
-  const badgeBg = didWin
-    ? darkMode
-      ? "#064E3B"
-      : "#ECFDF5"
-    : darkMode
-    ? "#4C0519"
-    : "#FFF1F2";
+interface UnifiedStickerPalette {
+  fill: string;
+  text: string;
+  border?: string;
+  chipFill: string;
+  chipText: string;
+}
 
-  const badgeText = didWin
-    ? darkMode
-      ? "#6EE7B7"
-      : "#047857"
-    : darkMode
-    ? "#FDA4AF"
-    : "#BE123C";
+function getUnifiedStickerPalette(
+  didWin: boolean,
+  diffKey: string,
+  darkMode: boolean
+): UnifiedStickerPalette {
+  if (!didWin) {
+    if (darkMode) {
+      return {
+        fill: "#4C0519", // Elevated Deep Velvet Plum
+        border: "#9F1239", // Subtle Ruby Stroke
+        text: "#FFE4E6", // Crisp Soft Rose/White
+        chipFill: "#2A0812", // Dark Maroon Fill
+        chipText: "#FECDD3", // High-Contrast Accent Text
+      };
+    }
+    return {
+      fill: "#FECDD3", // Balanced Soft Rose/Coral
+      text: "#881337", // Deep Contrast Crimson
+      chipFill: "#E11D48", // Accent Red Fill
+      chipText: "#FFFFFF",
+    };
+  }
 
-  // Vibrant Hero Sticker Contrast Matrix (Zero Red-on-Red Clash)
-  const HERO_STICKER_THEMES: Record<
-    string,
-    { fill: string; text: string; icon: string; chipFill: string; chipText: string }
-  > = {
-    EASY: {
-      fill: "#10B981", // Solid Punchy Mint
-      text: "#FFFFFF",
-      icon: "#FFFFFF",
-      chipFill: "#064E3B",
-      chipText: "#FFFFFF",
-    },
-    MEDIUM: {
-      fill: "#F59E0B", // Solid Warm Sunburst Amber
-      text: "#451A03", // Deep Dark Espresso
-      icon: "#451A03",
-      chipFill: "#78350F",
-      chipText: "#FFFFFF",
-    },
-    HARD: {
-      fill: "#4F46E5", // Solid Electric Indigo
-      text: "#FFFFFF",
-      icon: "#FFFFFF",
-      chipFill: "#1E1B4B",
-      chipText: "#FFFFFF",
-    },
-    EXPERT: {
-      fill: "#E11D48", // Solid Vibrant Hazard Crimson
-      text: "#FFFFFF", // Crisp Pure White
-      icon: "#FFFFFF",
-      chipFill: "#4C0519", // Deep Midnight Wine
-      chipText: "#FFFFFF",
-    },
-    DEFEAT: {
-      fill: "#E11D48", // Solid Vibrant Hazard Crimson
-      text: "#FFFFFF", // Crisp Pure White
-      icon: "#FFFFFF",
-      chipFill: "#4C0519", // Deep Midnight Wine
-      chipText: "#FFFFFF",
-    },
-  };
+  const diff = String(diffKey || "EASY").toUpperCase();
+  switch (diff) {
+    case "MEDIUM":
+      return darkMode
+        ? {
+            fill: "#78350F", // Elevated Warm Bronze
+            border: "#F59E0B",
+            text: "#FEF3C7",
+            chipFill: "#3B1705",
+            chipText: "#FEF3C7",
+          }
+        : {
+            fill: "#FCD34D", // Golden Amber
+            text: "#78350F", // Dark Espresso
+            chipFill: "#B45309",
+            chipText: "#FFFFFF",
+          };
+    case "HARD":
+      return darkMode
+        ? {
+            fill: "#312E81", // Elevated Sapphire
+            border: "#6366F1",
+            text: "#E0E7FF",
+            chipFill: "#171544",
+            chipText: "#E0E7FF",
+          }
+        : {
+            fill: "#A5B4FC", // Soft Indigo
+            text: "#1E1B4B", // Deep Midnight
+            chipFill: "#4338CA",
+            chipText: "#FFFFFF",
+          };
+    case "EXPERT":
+      return darkMode
+        ? {
+            fill: "#881337", // Elevated Dark Wine
+            border: "#F43F5E",
+            text: "#FFE4E6",
+            chipFill: "#4C0519",
+            chipText: "#FFE4E6",
+          }
+        : {
+            fill: "#FB7185", // Soft Ruby
+            text: "#881337", // Deep Burgundy
+            chipFill: "#BE123C",
+            chipText: "#FFFFFF",
+          };
+    case "EASY":
+    default:
+      return darkMode
+        ? {
+            fill: "#064E3B", // Elevated Jade
+            border: "#10B981",
+            text: "#D1FAE5",
+            chipFill: "#022C22",
+            chipText: "#D1FAE5",
+          }
+        : {
+            fill: "#6EE7B7", // Fresh Mint
+            text: "#064E3B", // Deep Forest
+            chipFill: "#047857",
+            chipText: "#FFFFFF",
+          };
+  }
+}
 
-  const activeHeroTheme = !didWin
-    ? HERO_STICKER_THEMES.DEFEAT
-    : HERO_STICKER_THEMES[normalizedDiff] || HERO_STICKER_THEMES.EASY;
+  // Unified Sticker & Badge Zen Theme Palette
+  const activeStickerTheme = getUnifiedStickerPalette(didWin, normalizedDiff, darkMode);
 
-  const diagTapeBg = activeHeroTheme.fill;
-  const diagTapeTextColor = activeHeroTheme.text;
-  const diagTapeIconColor = activeHeroTheme.icon;
-  const diagChipBg = activeHeroTheme.chipFill;
-  const diagChipTextColor = activeHeroTheme.chipText;
+  const diagTapeBg = activeStickerTheme.fill;
+  const diagTapeTextColor = activeStickerTheme.text;
+  const diagTapeIconColor = activeStickerTheme.text;
+  const diagChipBg = activeStickerTheme.chipFill;
+  const diagChipTextColor = activeStickerTheme.chipText;
 
   // 4B. High-Contrast Diagonal (-5.5deg) Hero Sticker over Center of 9x9 Grid (Rows 4 & 5)
   const gridCenterX = boardX + boardSize / 2; // 180
@@ -1938,6 +1978,11 @@ export async function generateShareCanvas(
   );
   ctx.fillStyle = diagTapeBg;
   ctx.fill();
+  if (activeStickerTheme.border) {
+    ctx.strokeStyle = activeStickerTheme.border;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
   ctx.restore();
 
   // Strict Locale Purity text lines
@@ -2069,24 +2114,29 @@ export async function generateShareCanvas(
       stickerH,
       stickerH / 2
     );
-    ctx.fillStyle = badgeBg;
+    ctx.fillStyle = activeStickerTheme.fill;
     ctx.fill();
+    if (activeStickerTheme.border) {
+      ctx.strokeStyle = activeStickerTheme.border;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
     ctx.restore();
 
     const stickerStartX = -stickerContentW / 2;
     const stickerSvg =
       stickerBadge.tier === "defeat_freeze"
-        ? getBrainSvg(badgeText)
+        ? getBrainSvg(activeStickerTheme.text)
         : stickerBadge.tier === "record"
-        ? getZapSvg(badgeText)
+        ? getZapSvg(activeStickerTheme.text)
         : stickerBadge.tier === "excellent" ||
           stickerBadge.tier === "defeat_close"
-        ? getFlameSvg(badgeText)
+        ? getFlameSvg(activeStickerTheme.text)
         : stickerBadge.tier === "great"
-        ? getStarSvg(badgeText)
+        ? getStarSvg(activeStickerTheme.text)
         : stickerBadge.tier === "defeat_backup"
-        ? getEyeSvg(badgeText)
-        : getTrophySvg(badgeText);
+        ? getEyeSvg(activeStickerTheme.text)
+        : getTrophySvg(activeStickerTheme.text);
 
     await drawSvg(
       ctx,
@@ -2095,7 +2145,7 @@ export async function generateShareCanvas(
       -stickerIconSize / 2,
       stickerIconSize
     );
-    ctx.fillStyle = badgeText;
+    ctx.fillStyle = activeStickerTheme.text;
     ctx.font = `700 ${stickerFontSize}px ${appSansFont}`;
     drawLeftMiddleText(
       ctx,
@@ -2105,7 +2155,6 @@ export async function generateShareCanvas(
     );
     ctx.restore();
   }
-
   // 6. Scaled-Up (+15-20%) Borderless Footer Banner (y = 490..528)
   const footerX = 18;
   const footerY = 490;
