@@ -178,3 +178,4 @@ export function recordGamePlayedAndReschedule(lang: string): void {
     console.warn("[RetentionNotifier] Failed to record game played date:", err);
   }
 }
+
