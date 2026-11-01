@@ -15,7 +15,7 @@ export const GuestBannerPill: React.FC<GuestBannerPillProps> = ({
   className = "",
 }) => {
   const [isVisible, setIsVisible] = useState<boolean>(() => shouldShowGuestPrompt(true));
-  const { language } = useTranslation();
+  const { t } = useTranslation();
 
   if (!isVisible) return null;
 
@@ -25,17 +25,12 @@ export const GuestBannerPill: React.FC<GuestBannerPillProps> = ({
     setIsVisible(false);
   };
 
-  const isHindi = Boolean(language && language.toLowerCase().startsWith("hi"));
-
-  const bannerText = isHindi
-    ? "अतिथि मोड में हैं। अपने रिकॉर्ड और दोस्त सुरक्षित रखने के लिए Google जोड़ें।"
-    : "Playing as Guest. Connect Google to save your records & friend list.";
-
-  const connectButtonText = isHindi ? "Google जोड़ें" : "Connect";
+  const bannerText = t("guest_pill_text");
+  const connectButtonText = t("guest_pill_action");
 
   return (
     <div
-      className={`w-full p-3 sm:p-3.5 mb-2 rounded-2xl flex items-center justify-between gap-3 shadow-xs select-none transition-all duration-200 ${
+      className={`w-full p-2.5 sm:p-3 mb-2 rounded-2xl flex items-center justify-between gap-2.5 shadow-xs select-none transition-all duration-200 ${
         darkMode
           ? "bg-amber-950/40 text-amber-100 shadow-[0_4px_16px_rgba(0,0,0,0.25)]"
           : "bg-[#FEF3C7]/90 text-amber-950 shadow-[0_2px_10px_rgba(180,83,9,0.06)]"
@@ -44,15 +39,15 @@ export const GuestBannerPill: React.FC<GuestBannerPillProps> = ({
       role="region"
       aria-label="Guest Mode Reminder"
     >
-      <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex items-center gap-2 min-w-0 flex-1">
         <div
-          className={`p-2 rounded-xl shrink-0 flex items-center justify-center ${
+          className={`p-1.5 rounded-xl shrink-0 flex items-center justify-center ${
             darkMode ? "bg-amber-900/60 text-amber-300" : "bg-amber-100 text-amber-700"
           }`}
         >
-          <Sparkles className="w-4 h-4 shrink-0" />
+          <Sparkles className="w-3.5 h-3.5 shrink-0" />
         </div>
-        <p className="text-[11.5px] sm:text-xs font-medium leading-snug line-clamp-2 text-left">
+        <p className="text-[11px] sm:text-xs font-medium leading-tight text-left min-w-0 flex-1 line-clamp-2">
           {bannerText}
         </p>
       </div>
@@ -61,11 +56,7 @@ export const GuestBannerPill: React.FC<GuestBannerPillProps> = ({
         <button
           type="button"
           onClick={onConnectGoogle}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs border-none ${
-            darkMode
-              ? "bg-amber-400 hover:bg-amber-300 text-amber-950"
-              : "bg-amber-600 hover:bg-amber-700 text-white"
-          }`}
+          className="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all bg-white hover:bg-gray-50 active:bg-gray-100 text-[#1F2937] border border-gray-200 shadow-xs cursor-pointer shrink-0"
         >
           <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
             <path
@@ -85,13 +76,13 @@ export const GuestBannerPill: React.FC<GuestBannerPillProps> = ({
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          <span>{connectButtonText}</span>
+          <span className="truncate">{connectButtonText}</span>
         </button>
 
         <button
           type="button"
           onClick={handleDismiss}
-          className={`p-1.5 rounded-lg opacity-60 hover:opacity-100 transition-opacity cursor-pointer border-none ${
+          className={`p-1.5 rounded-lg opacity-60 hover:opacity-100 transition-opacity cursor-pointer border-none shrink-0 ${
             darkMode ? "text-amber-300 hover:bg-amber-900/40" : "text-amber-800 hover:bg-amber-100"
           }`}
           title="Dismiss for 24 hours"

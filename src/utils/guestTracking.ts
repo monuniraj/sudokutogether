@@ -58,3 +58,4 @@ export function shouldShowGuestPrompt(isGuest: boolean, threshold = GUEST_PROMPT
   if (isGuestPromptMuted()) return false;
   return getGuestGamesCount() >= threshold;
 }
+

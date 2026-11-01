@@ -427,7 +427,12 @@ export type TranslationKey =
   | "accountDeletedToast"
   | "confirmGuestModePrompt"
   | "validEmailAlert"
-  | "validPhoneAlert";
+  | "validPhoneAlert"
+  | "guest_pill_text"
+  | "guest_pill_action"
+  | "web_push_title"
+  | "web_push_desc"
+  | "web_push_enable";
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -839,6 +844,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     confirmGuestModePrompt: "Disconnect security identity and return to offline Guest mode?",
     validEmailAlert: "Please supply your correct personal Gmail address to register.",
     validPhoneAlert: "Please fill in a valid phone number.",
+    guest_pill_text: "Guest mode • Connect Google to save progress",
+    guest_pill_action: "Connect",
+    web_push_title: "Never miss a challenge",
+    web_push_desc: "Turn on notifications to get instant room invites.",
+    web_push_enable: "Enable",
   },
   hi: {
     playerInsights: "खिलाड़ी अंतर्दृष्टि",
@@ -1249,6 +1259,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     confirmGuestModePrompt: "क्या आप सुरक्षा पहचान डिस्कनेक्ट करके ऑफ़लाइन गेस्ट मोड में लौटना चाहते हैं?",
     validEmailAlert: "कृपया पंजीकरण के लिए अपना सही व्यक्तिगत Gmail पता दर्ज करें।",
     validPhoneAlert: "कृपया एक मान्य फ़ोन नंबर दर्ज करें।",
+    guest_pill_text: "गेस्ट मोड • प्रोग्रेस सेव करने के लिए Google जोड़ें",
+    guest_pill_action: "जोड़ें",
+    web_push_title: "कोई चुनौती न छूटे",
+    web_push_desc: "तुरंत रूम इनवाइट पाने के लिए नोटिफिकेशन ऑन करें।",
+    web_push_enable: "ऑन करें",
   },
   de: {
     playerInsights: "Spieler-Einblicke",
@@ -1659,6 +1674,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     confirmGuestModePrompt: "Sicherheitsidentität trennen und zum Offline-Gastmodus zurückkehren?",
     validEmailAlert: "Bitte gib deine gültige Gmail-Adresse zur Registrierung an.",
     validPhoneAlert: "Bitte gib eine gültige Telefonnummer ein.",
+    guest_pill_text: "Gastmodus • Fortschritt mit Google sichern",
+    guest_pill_action: "Verbinden",
+    web_push_title: "Keine Duelle verpassen",
+    web_push_desc: "Aktiviere Benachrichtigungen für sofortige Raumeinladungen.",
+    web_push_enable: "Aktivieren",
   },
   ja: {
     playerInsights: "プレイヤーデータ",
@@ -2069,6 +2089,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     confirmGuestModePrompt: "アカウント連携を解除してオフラインのゲストモードに戻りますか？",
     validEmailAlert: "登録には有効な個人のGmailアドレスを入力してください。",
     validPhoneAlert: "有効な電話番号を入力してください。",
+    guest_pill_text: "ゲスト中 • 進行状況をGoogleで保存",
+    guest_pill_action: "接続",
+    web_push_title: "対戦通知を受け取る",
+    web_push_desc: "部屋への招待をすぐに受け取れるよう通知をオンにしてください。",
+    web_push_enable: "有効にする",
   },
   ko: {
     playerInsights: "플레이어 통계",
@@ -2479,6 +2504,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     confirmGuestModePrompt: "계정 연동을 해제하고 오프라인 게스트 모드로 돌아가시겠습니까?",
     validEmailAlert: "등록하려면 본인의 올바른 Gmail 주소를 입력해 주세요.",
     validPhoneAlert: "올바른 전화번호를 입력해 주세요.",
+    guest_pill_text: "게스트 모드 • Google로 진행 상황 저장",
+    guest_pill_action: "연결",
+    web_push_title: "실시간 대결 알림",
+    web_push_desc: "초대를 바로 받으려면 알림을 켜세요.",
+    web_push_enable: "켜기",
   },
   es: {
     playerInsights: "Estadísticas",
@@ -2889,6 +2919,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     confirmGuestModePrompt: "¿Desconectar identidad de seguridad y volver al modo invitado sin conexión?",
     validEmailAlert: "Introduce una dirección de Gmail válida para registrarte.",
     validPhoneAlert: "Introduce un número de teléfono válido.",
+    guest_pill_text: "Modo invitado • Guarda tu progreso con Google",
+    guest_pill_action: "Conectar",
+    web_push_title: "No te pierdas retos",
+    web_push_desc: "Activa notificaciones para recibir invitaciones al instante.",
+    web_push_enable: "Activar",
   },
   fr: {
     playerInsights: "Statistiques Joueur",
@@ -3299,6 +3334,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     confirmGuestModePrompt: "Déconnecter votre compte et revenir au mode invité hors ligne ?",
     validEmailAlert: "Veuillez indiquer votre adresse Gmail personnelle pour vous inscrire.",
     validPhoneAlert: "Veuillez renseigner un numéro de téléphone valide.",
+    guest_pill_text: "Mode invité • Enregistrez avec Google",
+    guest_pill_action: "Connecter",
+    web_push_title: "Ne manquez aucun défi",
+    web_push_desc: "Activez les notifications pour recevoir les invitations.",
+    web_push_enable: "Activer",
   },
   it: {
     playerInsights: "Statistiche Giocatore",
@@ -3709,6 +3749,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     confirmGuestModePrompt: "Vuoi disconnettere l'identità e tornare alla modalità Ospite offline?",
     validEmailAlert: "Inserisci un indirizzo Gmail valido per registrarti.",
     validPhoneAlert: "Inserisci un numero di telefono valido.",
+    guest_pill_text: "Modalità ospite • Salva con Google",
+    guest_pill_action: "Connetti",
+    web_push_title: "Non perdere nessuna sfida",
+    web_push_desc: "Attiva le notifiche per ricevere inviti immediati.",
+    web_push_enable: "Attiva",
   },
   "pt-BR": {
     playerInsights: "Estatísticas",
@@ -4119,5 +4164,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     confirmGuestModePrompt: "Desconectar conta e retornar ao modo Convidado offline?",
     validEmailAlert: "Por favor, informe seu endereço do Gmail válido para registrar.",
     validPhoneAlert: "Por favor, preencha um número de telefone válido.",
+    guest_pill_text: "Modo convidado • Salve seu progresso com o Google",
+    guest_pill_action: "Conectar",
+    web_push_title: "Não perca desafios",
+    web_push_desc: "Ative notificações para receber convites instantâneos.",
+    web_push_enable: "Ativar",
   },
 };

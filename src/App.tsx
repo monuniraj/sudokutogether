@@ -3177,6 +3177,13 @@ export default function App() {
     if (typeof window === "undefined" || !("Notification" in window)) return false;
     if (Notification.permission !== "default") return false;
     try {
+      const dismissedAtRaw = localStorage.getItem("sudoku_web_push_dismissed_at");
+      if (dismissedAtRaw) {
+        const dismissedAt = Number(dismissedAtRaw);
+        if (dismissedAt && Date.now() - dismissedAt < 24 * 60 * 60 * 1000) {
+          return false;
+        }
+      }
       return !sessionStorage.getItem("sudoku_web_push_dismissed");
     } catch {
       return false;
@@ -3193,6 +3200,7 @@ export default function App() {
   const handleDismissWebPush = useCallback(() => {
     setShowWebPushPrompt(false);
     try {
+      localStorage.setItem("sudoku_web_push_dismissed_at", String(Date.now()));
       sessionStorage.setItem("sudoku_web_push_dismissed", "true");
     } catch {}
   }, []);
@@ -14070,10 +14078,10 @@ export default function App() {
                       </div>
                       <div className="flex flex-col min-w-0 text-left">
                         <span className="text-xs font-bold leading-tight truncate">
-                          Challenge Notifications
+                          {t("web_push_title")}
                         </span>
                         <span className="text-[11px] leading-tight opacity-80 truncate">
-                          Get alerted when challenged
+                          {t("web_push_desc")}
                         </span>
                       </div>
                     </div>
@@ -14083,7 +14091,7 @@ export default function App() {
                         className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm active:scale-95 transition-all cursor-pointer"
                         style={{ border: "none" }}
                       >
-                        Turn On
+                        {t("web_push_enable")}
                       </button>
                       <button
                         onClick={handleDismissWebPush}
