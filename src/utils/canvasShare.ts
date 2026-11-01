@@ -1749,6 +1749,33 @@ export async function generateShareCanvas(
         }
 
         drawCenteredText(ctx, String(val), centerX, centerY);
+
+        // Authentic 9-Pass Blue Marker Redaction (Obscure filled digits)
+        if (!isClue) {
+          ctx.save();
+          ctx.strokeStyle = '#0284C7';
+          ctx.lineWidth = 3.4;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+
+          const cx = cellX + cellSize / 2;
+          const cy = cellY + cellSize / 2;
+
+          ctx.moveTo(cx - 12, cy - 13);
+          ctx.lineTo(cx + 12, cy - 10);
+          ctx.lineTo(cx - 13, cy - 7);
+          ctx.lineTo(cx + 13, cy - 4);
+          ctx.lineTo(cx - 12, cy - 1);
+          ctx.lineTo(cx + 13, cy + 2);
+          ctx.lineTo(cx - 13, cy + 5);
+          ctx.lineTo(cx + 12, cy + 8);
+          ctx.lineTo(cx - 12, cy + 11);
+          ctx.lineTo(cx + 11, cy + 13);
+
+          ctx.stroke();
+          ctx.restore();
+        }
       } else {
         const rawNotes = cell?.notes;
         const notesList: number[] =
@@ -1817,7 +1844,7 @@ export async function generateShareCanvas(
   ctx.lineWidth = 2.2;
   ctx.stroke();
 
-  // Shared Badge Theme Tokens (Direct SSOT for both diagonal challenge tape and floating achievement badge)
+  // Shared Badge Theme Tokens for floating achievement badge
   const badgeBg = didWin
     ? darkMode
       ? "#064E3B"
@@ -1834,41 +1861,80 @@ export async function generateShareCanvas(
     ? "#FDA4AF"
     : "#BE123C";
 
-  const badgeChipText = didWin
-    ? darkMode
-      ? "#064E3B"
-      : "#FFFFFF"
-    : darkMode
-    ? "#4C0519"
-    : "#FFFFFF";
+  // Vibrant Hero Sticker Contrast Matrix (Zero Red-on-Red Clash)
+  const HERO_STICKER_THEMES: Record<
+    string,
+    { fill: string; text: string; icon: string; chipFill: string; chipText: string }
+  > = {
+    EASY: {
+      fill: "#10B981", // Solid Punchy Mint
+      text: "#FFFFFF",
+      icon: "#FFFFFF",
+      chipFill: "#064E3B",
+      chipText: "#FFFFFF",
+    },
+    MEDIUM: {
+      fill: "#F59E0B", // Solid Warm Sunburst Amber
+      text: "#451A03", // Deep Dark Espresso
+      icon: "#451A03",
+      chipFill: "#78350F",
+      chipText: "#FFFFFF",
+    },
+    HARD: {
+      fill: "#4F46E5", // Solid Electric Indigo
+      text: "#FFFFFF",
+      icon: "#FFFFFF",
+      chipFill: "#1E1B4B",
+      chipText: "#FFFFFF",
+    },
+    EXPERT: {
+      fill: "#E11D48", // Solid Vibrant Hazard Crimson
+      text: "#FFFFFF", // Crisp Pure White
+      icon: "#FFFFFF",
+      chipFill: "#4C0519", // Deep Midnight Wine
+      chipText: "#FFFFFF",
+    },
+    DEFEAT: {
+      fill: "#E11D48", // Solid Vibrant Hazard Crimson
+      text: "#FFFFFF", // Crisp Pure White
+      icon: "#FFFFFF",
+      chipFill: "#4C0519", // Deep Midnight Wine
+      chipText: "#FFFFFF",
+    },
+  };
 
-  // 4B. Refined Solid Diagonal (-5.5deg) Challenge Sticker over Center of 9x9 Grid (Rows 4 & 5)
+  const activeHeroTheme = !didWin
+    ? HERO_STICKER_THEMES.DEFEAT
+    : HERO_STICKER_THEMES[normalizedDiff] || HERO_STICKER_THEMES.EASY;
+
+  const diagTapeBg = activeHeroTheme.fill;
+  const diagTapeTextColor = activeHeroTheme.text;
+  const diagTapeIconColor = activeHeroTheme.icon;
+  const diagChipBg = activeHeroTheme.chipFill;
+  const diagChipTextColor = activeHeroTheme.chipText;
+
+  // 4B. High-Contrast Diagonal (-5.5deg) Hero Sticker over Center of 9x9 Grid (Rows 4 & 5)
   const gridCenterX = boardX + boardSize / 2; // 180
   const gridCenterY = boardY + boardSize / 2; // 316
-  const diagTapeW = Math.round(boardSize * 0.90); // Strictly 90% of grid width = 292px
-  const diagTapeH = 74;
-
-  const diagTapeBg = badgeBg;
-  const diagTapeTextColor = badgeText;
-  const diagChipBg = badgeText;
-  const diagChipTextColor = badgeChipText;
+  const diagTapeW = Math.round(boardSize * 0.96); // 96% of grid width = 311px
+  const diagTapeH = 84; // 84px height
 
   ctx.save();
   ctx.translate(gridCenterX, gridCenterY);
   ctx.rotate((-5.5 * Math.PI) / 180);
 
-  // Subtle soft shadow: rgba(0, 0, 0, 0.12), blur: 8px, offsetY: 3px
+  // Soft drop shadow: rgba(0, 0, 0, 0.16), blur: 10px, offsetY: 4px
   ctx.save();
-  ctx.shadowColor = darkMode ? "rgba(0, 0, 0, 0.40)" : "rgba(0, 0, 0, 0.12)";
-  ctx.shadowBlur = 8;
-  ctx.shadowOffsetY = 3;
+  ctx.shadowColor = darkMode ? "rgba(0, 0, 0, 0.45)" : "rgba(0, 0, 0, 0.16)";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 4;
   drawRoundedRect(
     ctx,
     -diagTapeW / 2,
     -diagTapeH / 2,
     diagTapeW,
     diagTapeH,
-    10
+    12
   );
   ctx.fillStyle = diagTapeBg;
   ctx.fill();
@@ -1877,14 +1943,14 @@ export async function generateShareCanvas(
   // Strict Locale Purity text lines
   const tapeStrings = getChallengeTapeStrings(activeLang, didWin, timeStr);
 
-  // Line 1: Pure Canvas Vector Icon + Localized Hook (18.5px Bold, 2.5x size)
-  const line1IconSize = 17;
-  const line1Gap = 6.5;
+  // Line 1: Pure Canvas Vector Icon + Localized Hook (21px Bold Tabular)
+  const line1IconSize = 19;
+  const line1Gap = 7;
   const maxLine1TextW = diagTapeW - line1IconSize - line1Gap - 28;
-  let line1FontSize = 18.5;
+  let line1FontSize = 21;
   ctx.font = `700 ${line1FontSize}px ${appSansFont}`;
   let line1TextW = ctx.measureText(tapeStrings.line1).width;
-  while (line1TextW > maxLine1TextW && line1FontSize > 13) {
+  while (line1TextW > maxLine1TextW && line1FontSize > 14) {
     line1FontSize -= 0.5;
     ctx.font = `700 ${line1FontSize}px ${appSansFont}`;
     line1TextW = ctx.measureText(tapeStrings.line1).width;
@@ -1892,7 +1958,7 @@ export async function generateShareCanvas(
 
   const line1TotalW = line1IconSize + line1Gap + line1TextW;
   const line1StartX = -line1TotalW / 2;
-  const line1Y = -18;
+  const line1Y = -21;
 
   if (didWin) {
     drawVectorZap(
@@ -1900,7 +1966,7 @@ export async function generateShareCanvas(
       line1StartX,
       line1Y - line1IconSize / 2,
       line1IconSize,
-      diagTapeTextColor
+      diagTapeIconColor
     );
   } else {
     drawVectorAlertTriangle(
@@ -1908,7 +1974,7 @@ export async function generateShareCanvas(
       line1StartX,
       line1Y - line1IconSize / 2,
       line1IconSize,
-      diagTapeTextColor
+      diagTapeIconColor
     );
   }
 
@@ -1921,12 +1987,12 @@ export async function generateShareCanvas(
     line1Y
   );
 
-  // Line 2 (13.5px Bold): Localized question
+  // Line 2 (14px Bold): Localized subtitle / challenge question
   const maxLine2W = diagTapeW - 24;
-  let line2FontSize = 13.5;
+  let line2FontSize = 14;
   ctx.font = `700 ${line2FontSize}px ${appSansFont}`;
   let line2MeasuredW = ctx.measureText(tapeStrings.line2).width;
-  while (line2MeasuredW > maxLine2W && line2FontSize > 10) {
+  while (line2MeasuredW > maxLine2W && line2FontSize > 10.5) {
     line2FontSize -= 0.5;
     ctx.font = `700 ${line2FontSize}px ${appSansFont}`;
     line2MeasuredW = ctx.measureText(tapeStrings.line2).width;
@@ -1934,16 +2000,16 @@ export async function generateShareCanvas(
   ctx.fillStyle = diagTapeTextColor;
   drawCenteredText(ctx, tapeStrings.line2, 0, 2);
 
-  // Line 3 (Solid Room Chip): Contrasting pill reading "# Room Code: {code}" (or localized "# कमरा कोड: {code}")
+  // Line 3 (Dedicated Room Pill): Contrasting pill reading "# Room Code: {code}" in 12px bold monospace
   const cleanRoomPrefix = i18n.footer.room_code.trim();
   const chipRoomLabel = cleanRoomPrefix.startsWith("#") ? cleanRoomPrefix : `# ${cleanRoomPrefix}`;
   const chipText = `${chipRoomLabel} ${extractedRoomCode}`;
 
-  ctx.font = `700 11.5px ${appMonoFont}`;
+  ctx.font = `700 12px ${appMonoFont}`;
   const chipTextW = ctx.measureText(chipText).width;
-  const chipW = Math.min(diagTapeW - 32, chipTextW + 18);
-  const chipH = 19;
-  const chipY = 22;
+  const chipW = Math.min(diagTapeW - 32, chipTextW + 20);
+  const chipH = 20;
+  const chipY = 25;
 
   drawRoundedRect(
     ctx,
@@ -1951,13 +2017,13 @@ export async function generateShareCanvas(
     chipY - chipH / 2,
     chipW,
     chipH,
-    chipH / 2
+    10
   );
   ctx.fillStyle = diagChipBg;
   ctx.fill();
 
   ctx.fillStyle = diagChipTextColor;
-  ctx.font = `700 11.5px ${appMonoFont}`;
+  ctx.font = `700 12px ${appMonoFont}`;
   drawCenteredText(ctx, chipText, 0, chipY);
 
   ctx.restore();
