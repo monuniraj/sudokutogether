@@ -13,6 +13,8 @@ import { CreateChallengeModal } from "./components/modals/CreateChallengeModal";
 import { GameOverModal } from "./components/modals/GameOverModal";
 import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
 import { ShareActionWrapper } from "./components/share/ShareActionWrapper";
+import { GuestBannerPill } from "./components/auth/GuestBannerPill";
+import { incrementGuestGameCount } from "./utils/guestTracking";
 import { SudokuBoard, CompletionPulse } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
 import { ConfettiBurst } from "./components/common/ConfettiBurst";
@@ -10564,6 +10566,7 @@ export default function App() {
     }
 
     if (targetUid === "guest" || targetUid.startsWith("GUEST_")) {
+      incrementGuestGameCount();
       syncGuestSnapshotInRealtime({
         completedGames: updatedVault.completedGames,
         totalGamesPlayed: updatedVault.stats.totalGamesPlayed,
@@ -14095,6 +14098,11 @@ export default function App() {
                       </button>
                     </div>
                   </div>
+                )}
+
+                {/* 👤 ISOLATED GUEST BANNER PILL */}
+                {isGuestSession && (
+                  <GuestBannerPill onConnectGoogle={handleConnectGoogle} darkMode={darkMode} />
                 )}
 
                 {/* 📌 PREMIUM FLOATING STICKY NOTE (CHIT) */}
