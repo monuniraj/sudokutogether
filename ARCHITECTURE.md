@@ -681,6 +681,11 @@
     * **3-Tier Contextual State Engine & 9-Language Localization:** Tracks `sudoku_last_played_date` (YYYY-MM-DD) and `sudoku_days_inactive` in pure `localStorage`. Evaluates player state into 3 distinct tiers: Tier A (Default / Has not played today: *"Evening Reset"* / *"रात का ब्रेक"*), Tier B (Nightcap / Has played today: *"Nightcap"* / *"दिन का अंत"*), and Tier C (3+ days inactive: *"A 2-min pause"* / *"2 मिनट का पॉज़"*). Features full idiomatic dictionaries across 9 languages (`hi`, `en`, `ja`, `es`, `de`, `fr`, `ko`, `pt`, `ru`).
     * **Surgical App.tsx Integration (3 Declarative Lines):** Injected import at `src/App.tsx:154`, hooked `scheduleDailyZenNotification(language)` on startup/mount (`src/App.tsx:11879`), and hooked `recordGamePlayedAndReschedule(language)` upon game completion inside `saveGameToHistory` (`src/App.tsx:10587`).
 
+38. **Isolated Itch.io / HTML5 Portal Build Pipeline (`vite.config.itch.ts`, `package.json`):**
+    * **Dedicated Vite Configuration (`vite.config.itch.ts`):** Created isolated build configuration specifically for Itch.io and iframe web portals. Sets `base: './'` to enforce relative asset resolution, and outputs to `dist-itch/` (`emptyOutDir: true`).
+    * **Head Asset Link Normalization Plugin:** Injects a lightweight `transformIndexHtml` hook that normalizes static `<head>` favicon, manifest, and logo tags from root `/` to `./`, guaranteeing 100% relative path resolution when embedded inside arbitrary iframe subpaths (e.g. `*.ssl.hwcdn.net/html/.../`).
+    * **Zero Regression on Firebase & Capacitor:** The standard production build (`npm run build`) and output folder (`dist/`) used by Firebase Hosting (`firebase.json`) and Capacitor Android (`capacitor.config.ts`) remain completely untouched.
+
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**
    * **Root Cause:** When testing on Laptop and Phone logged into the same Google account (`uid`), self-exclusion filters hide the other device.

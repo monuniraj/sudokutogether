@@ -1,6 +1,8 @@
 node_modules/
 build/
 dist/
+dist-itch/
+*.zip
 coverage/
 .DS_Store
 *.log
