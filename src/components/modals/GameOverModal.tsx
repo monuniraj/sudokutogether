@@ -21,7 +21,6 @@ import {
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { formatActiveStatus } from "../../utils/formatTimestamp";
-import { ShareActionWrapper } from "../share/ShareActionWrapper";
 import { auth } from "../../firebase";
 import { getActiveAuthUid, loadVault } from "../../utils/storageEngine";
 
@@ -311,19 +310,6 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 </span>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <ShareActionWrapper
-                  boardState={boardState}
-                  difficulty={difficulty}
-                  time={formatTimer(sessionSeconds)}
-                  sessionSeconds={sessionSeconds}
-                  playerName={(userProfile?.name && userProfile.name.trim()) || getActiveDisplayName()}
-                  isNewRecord={isNewRecordAchieved}
-                  isWon={!(mistakeLimitEnabled && (boardState?.maxMistakesLimit === 0 ? (boardState?.currentMistakesCount ?? 0) > 0 : (boardState?.currentMistakesCount ?? 0) >= (boardState?.maxMistakesLimit ?? 3)))}
-                  darkMode={darkMode}
-                  roomCode={activeRematchRoomCode}
-                  playClickSound={playClickSound}
-                />
-
                 <button
                   onClick={() => {
                     playClickSound();
