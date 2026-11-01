@@ -683,7 +683,7 @@
 
 38. **Isolated Itch.io / HTML5 Portal Build Pipeline (`vite.config.itch.ts`, `package.json`):**
     * **Dedicated Vite Configuration (`vite.config.itch.ts`):** Created isolated build configuration specifically for Itch.io and iframe web portals. Sets `base: './'` to enforce relative asset resolution, and outputs to `dist-itch/` (`emptyOutDir: true`).
-    * **Head Asset Link Normalization Plugin:** Injects a lightweight `transformIndexHtml` hook that normalizes static `<head>` favicon, manifest, and logo tags from root `/` to `./`, guaranteeing 100% relative path resolution when embedded inside arbitrary iframe subpaths (e.g. `*.ssl.hwcdn.net/html/.../`).
+    * **Head & Bundle Asset Normalization Plugin:** Injects a dual-layer normalization plugin: `transformIndexHtml` normalizes static `<head>` favicon, manifest, and logo tags from root `/` to `./`, while `closeBundle` recursively traverses emitted `.html`, `.js`, and `.css` files in `dist-itch` and converts literal `"/logo.png"` string paths to `"./logo.png"`, guaranteeing 100% relative path resolution and 0 404 errors when embedded inside arbitrary iframe subpaths (e.g. `*.ssl.hwcdn.net/html/.../`).
     * **Zero Regression on Firebase & Capacitor:** The standard production build (`npm run build`) and output folder (`dist/`) used by Firebase Hosting (`firebase.json`) and Capacitor Android (`capacitor.config.ts`) remain completely untouched.
 
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
