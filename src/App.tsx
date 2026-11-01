@@ -151,6 +151,7 @@ import { LocalNotifications } from "@capacitor/local-notifications";
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { triggerHapticTap, triggerHapticError, triggerHapticCompletion, triggerHaptic, isHapticsEnabled, setGlobalHapticsEnabled } from "./utils/haptics";
 import { playThemeFeedback, applyThemeToggle } from "./utils/themeFeedback";
+import { scheduleDailyZenNotification, recordGamePlayedAndReschedule } from "./utils/retentionNotifier";
 import { getToken, onMessage } from "firebase/messaging";
 import { messaging } from "./firebase";
 
@@ -10583,6 +10584,8 @@ export default function App() {
       });
     }
 
+    recordGamePlayedAndReschedule(language);
+
     // Remove from pendingchallenges list if matches active ID to keep cleanly in sync
     const cleanRoomCode = extractRoomCodeFromChallenge({ id: finalGameId, seed: gameSeed });
     setPendingChallenges(prev => {
@@ -11873,6 +11876,7 @@ export default function App() {
   // Process offline sync queue on app startup, window focus, online status, and Capacitor app resume
   useEffect(() => {
     // Initial sync check on mount
+    scheduleDailyZenNotification(language);
     processOfflineSyncQueue();
 
     const handleFocusOrOnline = () => {

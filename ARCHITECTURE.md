@@ -649,6 +649,12 @@
     * **Exhaustive 9-Language Localization (`src/i18n/translations.ts`):** Added keys `guest_pill_text`, `guest_pill_action`, `web_push_title`, `web_push_desc`, and `web_push_enable` across all 9 supported languages (`en`, `hi`, `de`, `ja`, `ko`, `es`, `fr`, `it`, `pt-BR`) with natural, culturally idiomatic mobile gaming phrasing.
     * **Surgical App.tsx Mounting & 24h Web Push Cooldown Engine:** Injected single counter increment into `saveGameToHistory` (`targetUid === "guest"`), declared `<GuestBannerPill />` inside `#home-screen-inner-container` above the floating difficulty chit, and added a 24-hour dismissal cooldown engine (`sudoku_web_push_dismissed_at`) for the Web Push prompt along with full i18n key bindings.
 
+37. **Isolated Local 8:30 PM Retention Scheduler (`src/utils/retentionNotifier.ts`, `App.tsx`):**
+    * **Decoupled Native Retention Scheduler (`retentionNotifier.ts`):** Created standalone notification scheduler that configures Android notification channel `"daily-zen-reminder"` (Importance: 3 / Low-Default, Visibility: 1 / Public lock-screen banner) via `@capacitor/local-notifications`. Calculates exact target device local time at 20:30 (8:30 PM) — targeting today if `< 20:30`, or tomorrow if past 20:30.
+    * **Web Graceful Degradation:** All native plugin calls are gated behind `Capacitor.isNativePlatform()`, ensuring complete silent degradation on Web/Chromium browsers without throws or permission prompts.
+    * **3-Tier Contextual State Engine & 9-Language Localization:** Tracks `sudoku_last_played_date` (YYYY-MM-DD) and `sudoku_days_inactive` in pure `localStorage`. Evaluates player state into 3 distinct tiers: Tier A (Default / Has not played today: *"Evening Reset"* / *"रात का ब्रेक"*), Tier B (Nightcap / Has played today: *"Nightcap"* / *"दिन का अंत"*), and Tier C (3+ days inactive: *"A 2-min pause"* / *"2 मिनट का पॉज़"*). Features full idiomatic dictionaries across 9 languages (`hi`, `en`, `ja`, `es`, `de`, `fr`, `ko`, `pt`, `ru`).
+    * **Surgical App.tsx Integration (3 Declarative Lines):** Injected import at `src/App.tsx:154`, hooked `scheduleDailyZenNotification(language)` on startup/mount (`src/App.tsx:11879`), and hooked `recordGamePlayedAndReschedule(language)` upon game completion inside `saveGameToHistory` (`src/App.tsx:10587`).
+
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**
    * **Root Cause:** When testing on Laptop and Phone logged into the same Google account (`uid`), self-exclusion filters hide the other device.
