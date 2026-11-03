@@ -686,6 +686,11 @@
     * **Head & Bundle Asset Normalization Plugin:** Injects a dual-layer normalization plugin: `transformIndexHtml` normalizes static `<head>` favicon, manifest, and logo tags from root `/` to `./`, while `closeBundle` recursively traverses emitted `.html`, `.js`, and `.css` files in `dist-itch` and converts literal `"/logo.png"` string paths to `"./logo.png"`, guaranteeing 100% relative path resolution and 0 404 errors when embedded inside arbitrary iframe subpaths (e.g. `*.ssl.hwcdn.net/html/.../`).
     * **Zero Regression on Firebase & Capacitor:** The standard production build (`npm run build`) and output folder (`dist/`) used by Firebase Hosting (`firebase.json`) and Capacitor Android (`capacitor.config.ts`) remain completely untouched.
 
+39. **CrazyGames SDK v3 Isolated Wrapper Service (`src/services/CrazyGamesSDK.ts`, `src/vite-env.d.ts`, `index.html`):**
+    * **Global Typing (`src/vite-env.d.ts`):** Augmented `Window` interface with optional `CrazyGames?: any` to guarantee clean TypeScript builds.
+    * **Non-Blocking CDN Script Injection (`index.html`):** Injected `<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>` into `<head>`.
+    * **Isolated Safe Wrapper Service (`src/services/CrazyGamesSDK.ts`):** Exported `initCrazyGames()` and `getCrazyGamesUser()` with defensive checks (`typeof window !== "undefined"`, `window.CrazyGames`, try/catch error handling) that gracefully no-op outside CrazyGames environments (standalone web, Capacitor APK, Itch.io) with zero mutation to existing Firebase auth or gameplay states.
+
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**
    * **Root Cause:** When testing on Laptop and Phone logged into the same Google account (`uid`), self-exclusion filters hide the other device.
