@@ -152,7 +152,7 @@ import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { triggerHapticTap, triggerHapticError, triggerHapticCompletion, triggerHaptic, isHapticsEnabled, setGlobalHapticsEnabled } from "./utils/haptics";
 import { playThemeFeedback, applyThemeToggle } from "./utils/themeFeedback";
 import { scheduleDailyZenNotification, recordGamePlayedAndReschedule } from "./utils/retentionNotifier";
-import { initCrazyGames, getCrazyGamesUser, getCrazyGamesData, setCrazyGamesData, getCrazyGamesInviteLink } from "./services/CrazyGamesSDK";
+import { initCrazyGames, getCrazyGamesUser, getCrazyGamesData, setCrazyGamesData, getCrazyGamesInviteLink, isCrazyGamesActive } from "./services/CrazyGamesSDK";
 import { getToken, onMessage } from "firebase/messaging";
 import { messaging } from "./firebase";
 
@@ -5162,7 +5162,7 @@ export default function App() {
               let platformSource: 'playstore' | 'crazygames' | 'poki' | 'web' = 'web';
               if (Capacitor.isNativePlatform()) {
                 platformSource = 'playstore';
-              } else if (typeof window !== 'undefined' && (window as any).CrazyGames) {
+              } else if (isCrazyGamesActive()) {
                 platformSource = 'crazygames';
               } else if (typeof window !== 'undefined' && (window as any).PokiSDK) {
                 platformSource = 'poki';

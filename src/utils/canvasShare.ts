@@ -1,5 +1,6 @@
 import { SudokuBoardState } from "../components/game/SudokuBoard";
 import { getCurrentLanguage, DIFFICULTY_TRANSLATIONS } from "../i18n/useTranslation";
+import { isCrazyGamesActive } from "../services/CrazyGamesSDK";
 
 export type ShareDifficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT" | string;
 
@@ -1090,7 +1091,7 @@ export function buildFreshChallengeUrl(
 
   return {
     fullUrl: `${origin}/?challenge=${challengeId}${senderQuery}`,
-    displayUrl: `${typeof window !== "undefined" && Boolean(window.CrazyGames) ? "Play on CrazyGames.com" : "sudokusync.com"} | Room Code: ${seed}`,
+    displayUrl: `${isCrazyGamesActive() ? "Play on CrazyGames.com" : "sudokusync.com"} | Room Code: ${seed}`,
     extractedRoomCode: seed,
     challengeId,
   };
@@ -1708,11 +1709,11 @@ export async function generateShareCanvas(
         !didWin &&
         val !== 0 &&
         !isClue &&
-        ((solutionGrid.length === 9 &&
+        (solutionGrid.length === 9 &&
           solutionGrid[r]?.[c] !== undefined &&
-          solutionGrid[r][c] !== 0 &&
-          solutionGrid[r][c] !== val) ||
-          hasCellConflict(gridCells, r, c, val));
+          solutionGrid[r][c] !== 0
+          ? solutionGrid[r][c] !== val
+          : hasCellConflict(gridCells, r, c, val));
 
       // Exact cell background fill matching live SudokuBoard.tsx (bypassed on player-filled cells)
       const isPlayerFilled = !isClue && val !== 0;
@@ -2185,7 +2186,7 @@ function getUnifiedStickerPalette(
   ctx.fill();
   ctx.restore();
 
-  const isCrazyGames = typeof window !== "undefined" && Boolean(window.CrazyGames);
+  const isCrazyGames = isCrazyGamesActive();
   const domainText = isCrazyGames ? "Play on CrazyGames.com" : "sudokusync.com";
   const dividerText = "  |  ";
   const cleanFooterPrefix = i18n.footer.room_code.trim();

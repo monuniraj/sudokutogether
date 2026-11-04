@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 /**
  * CrazyGames SDK v3 Isolated Wrapper Service
  * Provides safe initialization, user retrieval, cloud data persistence, and invite links
@@ -13,10 +15,44 @@ declare global {
 let isInitialized = false;
 
 /**
- * Checks whether CrazyGames SDK is present in window.
+ * Robust Multi-Tier check whether the app is actively running in the CrazyGames platform.
+ * Gracefully rejects native Capacitor builds and standalone web domains (sudokusync.com).
  */
 export function isCrazyGamesActive(): boolean {
-  return typeof window !== "undefined" && Boolean(window.CrazyGames);
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  // 1. Never active on native mobile apps (Capacitor Play Store / Android)
+  try {
+    if (Capacitor.isNativePlatform()) {
+      return false;
+    }
+  } catch {
+    // Ignore Capacitor check failure
+  }
+
+  // 2. Never active on official standalone web / Firebase domains
+  try {
+    const host = window.location.hostname.toLowerCase();
+    if (
+      host.includes("sudokusync.com") ||
+      host.includes("web.app") ||
+      host.includes("firebaseapp.com")
+    ) {
+      return false;
+    }
+
+    // 3. Must be running on CrazyGames domain/referrer or have SDK environment === 'crazygames'
+    const isCgHost =
+      host.includes("crazygames") ||
+      (typeof document !== "undefined" && document.referrer.toLowerCase().includes("crazygames"));
+    const cgEnv = window.CrazyGames?.SDK?.environment;
+
+    return Boolean(window.CrazyGames && (isCgHost || cgEnv === "crazygames"));
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -24,7 +60,7 @@ export function isCrazyGamesActive(): boolean {
  * Gracefully no-ops if running outside CrazyGames (standalone web, Capacitor APK, Itch.io).
  */
 export async function initCrazyGames(): Promise<void> {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || !isCrazyGamesActive()) {
     return;
   }
 
@@ -51,7 +87,7 @@ export async function initCrazyGames(): Promise<void> {
  * Returns the user object if authenticated, or null if unauthenticated / running outside CrazyGames.
  */
 export async function getCrazyGamesUser(): Promise<any | null> {
-  if (typeof window === "undefined" || !window.CrazyGames?.SDK?.user) {
+  if (typeof window === "undefined" || !isCrazyGamesActive() || !window.CrazyGames?.SDK?.user) {
     return null;
   }
 
@@ -69,7 +105,7 @@ export async function getCrazyGamesUser(): Promise<any | null> {
  * Returns null if not running on CrazyGames or if the key does not exist.
  */
 export async function getCrazyGamesData(key: string): Promise<string | null> {
-  if (typeof window === "undefined" || !window.CrazyGames?.SDK?.data?.getItem) {
+  if (typeof window === "undefined" || !isCrazyGamesActive() || !window.CrazyGames?.SDK?.data?.getItem) {
     return null;
   }
 
@@ -87,7 +123,7 @@ export async function getCrazyGamesData(key: string): Promise<string | null> {
  * Gracefully no-ops if not running on CrazyGames.
  */
 export async function setCrazyGamesData(key: string, value: string): Promise<void> {
-  if (typeof window === "undefined" || !window.CrazyGames?.SDK?.data?.setItem) {
+  if (typeof window === "undefined" || !isCrazyGamesActive() || !window.CrazyGames?.SDK?.data?.setItem) {
     return;
   }
 
@@ -101,15 +137,18 @@ export async function setCrazyGamesData(key: string, value: string): Promise<voi
 /**
  * Generates a CrazyGames dynamic invite link via SDK.game.inviteLink.
  * Returns the invite link string, or null if unavailable / running outside CrazyGames.
+ * Protected by strict isCrazyGamesActive guard and a 600ms fail-safe timeout to prevent hanging UI threads.
  */
 export async function getCrazyGamesInviteLink(params: Record<string, string>): Promise<string | null> {
-  if (typeof window === "undefined" || !window.CrazyGames?.SDK?.game?.inviteLink) {
+  if (typeof window === "undefined" || !isCrazyGamesActive() || !window.CrazyGames?.SDK?.game?.inviteLink) {
     return null;
   }
 
   try {
-    const link = await window.CrazyGames.SDK.game.inviteLink(params);
-    return typeof link === "string" && link ? link : null;
+    const linkPromise = Promise.resolve(window.CrazyGames.SDK.game.inviteLink(params));
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 600));
+    const result = await Promise.race([linkPromise, timeoutPromise]);
+    return typeof result === "string" && result ? result : null;
   } catch (error) {
     console.warn("[CrazyGamesSDK] Failed to generate invite link:", error);
     return null;
