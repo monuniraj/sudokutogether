@@ -1705,10 +1705,12 @@ export async function generateShareCanvas(
         val !== 0 && selectedVal !== 0 && val === selectedVal && !isSelected;
 
       const isMistake =
+        !didWin &&
         val !== 0 &&
         !isClue &&
         ((solutionGrid.length === 9 &&
           solutionGrid[r]?.[c] !== undefined &&
+          solutionGrid[r][c] !== 0 &&
           solutionGrid[r][c] !== val) ||
           hasCellConflict(gridCells, r, c, val));
 
@@ -1757,9 +1759,10 @@ export async function generateShareCanvas(
         // Authentic 9-Pass Blue / Red Marker Redaction (Obscure filled digits)
         if (!isClue) {
           ctx.save();
-          ctx.strokeStyle = isMistake
+          const markerColor = isMistake
             ? '#ef4444'
             : (darkMode ? '#38BDF8' : '#0284C7');
+          ctx.strokeStyle = markerColor;
           ctx.lineWidth = 3.4;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
@@ -1780,6 +1783,7 @@ export async function generateShareCanvas(
           ctx.lineTo(cx + 11, cy + 13);
 
           ctx.stroke();
+          ctx.closePath();
           ctx.restore();
         }
       } else {
@@ -1844,33 +1848,11 @@ export async function generateShareCanvas(
 
   ctx.restore();
 
-  // Outer 3D embossed rounded pastel board border
+  // Outer rounded pastel board border
   drawRoundedRect(ctx, boardX, boardY, boardSize, boardSize, 12);
   ctx.strokeStyle = palette.gridThickLine;
   ctx.lineWidth = 2.4;
   ctx.stroke();
-
-  // 3D Embossed Inset Bevel (Top-Left Specular Sunlight Highlight)
-  ctx.save();
-  ctx.lineWidth = 1.2;
-  ctx.strokeStyle = darkMode ? "rgba(255, 255, 255, 0.15)" : "rgba(255, 255, 255, 0.85)";
-  ctx.beginPath();
-  ctx.moveTo(boardX + 12, boardY + 1.2);
-  ctx.lineTo(boardX + boardSize - 12, boardY + 1.2);
-  ctx.moveTo(boardX + 1.2, boardY + 12);
-  ctx.lineTo(boardX + 1.2, boardY + boardSize - 12);
-  ctx.stroke();
-
-  // 3D Embossed Inset Bevel (Bottom-Right Shadow Depth)
-  ctx.lineWidth = 1.4;
-  ctx.strokeStyle = darkMode ? "rgba(0, 0, 0, 0.40)" : (palette.surfaceCardBorder || "rgba(0, 0, 0, 0.12)");
-  ctx.beginPath();
-  ctx.moveTo(boardX + 12, boardY + boardSize - 1.2);
-  ctx.lineTo(boardX + boardSize - 12, boardY + boardSize - 1.2);
-  ctx.moveTo(boardX + boardSize - 1.2, boardY + 12);
-  ctx.lineTo(boardX + boardSize - 1.2, boardY + boardSize - 12);
-  ctx.stroke();
-  ctx.restore();
 
 interface UnifiedStickerPalette {
   fill: string;
