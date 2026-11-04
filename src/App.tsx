@@ -5156,47 +5156,71 @@ export default function App() {
           setUserProfile(sanitizedProfile);
           userProfileRef.current = sanitizedProfile;
 
-          // Non-blocking CrazyGames profile synchronization for anonymous session
+          // Non-blocking Platform Source & Profile synchronization for anonymous session
           (async () => {
             try {
-              await initCrazyGames();
-              const cgUser = await getCrazyGamesUser();
-              if (cgUser && cgUser.username) {
-                const cleanUsername = String(cgUser.username).trim().slice(0, 30);
-                if (cleanUsername && !userProfileRef.current?.isSynced) {
-                  const updatedProfile = {
-                    ...(userProfileRef.current || sanitizedProfile),
-                    id: user.uid,
-                    name: cleanUsername,
-                    displayName: cleanUsername,
-                    crazyGamesId: cgUser.id ? String(cgUser.id) : undefined,
-                    isSynced: false
-                  };
-                  userProfileRef.current = updatedProfile as any;
-                  setUserProfile(updatedProfile as any);
+              let platformSource: 'playstore' | 'crazygames' | 'poki' | 'web' = 'web';
+              if (Capacitor.isNativePlatform()) {
+                platformSource = 'playstore';
+              } else if (typeof window !== 'undefined' && (window as any).CrazyGames) {
+                platformSource = 'crazygames';
+              } else if (typeof window !== 'undefined' && (window as any).PokiSDK) {
+                platformSource = 'poki';
+              } else {
+                platformSource = 'web';
+              }
 
-                  updateVault((v) => ({
-                    ...v,
-                    profile: {
-                      ...v.profile,
+              let resolvedName = sanitizedProfile.name;
+              let cgUserId: string | null = null;
+              let cgUsername: string | null = null;
+
+              if (platformSource === 'crazygames') {
+                await initCrazyGames();
+                const cgUser = await getCrazyGamesUser();
+                if (cgUser && cgUser.username) {
+                  const cleanUsername = String(cgUser.username).trim().slice(0, 30);
+                  if (cleanUsername && !userProfileRef.current?.isSynced) {
+                    resolvedName = cleanUsername;
+                    cgUserId = cgUser.id ? String(cgUser.id) : null;
+                    cgUsername = cleanUsername;
+
+                    const updatedProfile = {
+                      ...(userProfileRef.current || sanitizedProfile),
+                      id: user.uid,
+                      name: cleanUsername,
                       displayName: cleanUsername,
-                      name: cleanUsername
-                    }
-                  }), "guest");
+                      crazyGamesId: cgUserId || undefined,
+                      isSynced: false
+                    };
+                    userProfileRef.current = updatedProfile as any;
+                    setUserProfile(updatedProfile as any);
 
-                  const userDocRef = doc(db, "users", user.uid);
-                  setDoc(userDocRef, {
-                    id: user.uid,
-                    name: cleanUsername,
-                    displayName: cleanUsername,
-                    crazyGamesId: cgUser.id ? String(cgUser.id) : null,
-                    crazyGamesUsername: cleanUsername,
-                    updatedAt: serverTimestamp()
-                  }, { merge: true }).catch(err => {
-                    console.warn("[CrazyGames] Firestore sync warning:", err);
-                  });
+                    updateVault((v) => ({
+                      ...v,
+                      profile: {
+                        ...v.profile,
+                        displayName: cleanUsername,
+                        name: cleanUsername
+                      }
+                    }), "guest");
+                  }
                 }
               }
+
+              const userDocRef = doc(db, "users", user.uid);
+              const payload: Record<string, any> = {
+                id: user.uid,
+                name: resolvedName,
+                displayName: resolvedName,
+                source: platformSource,
+                updatedAt: serverTimestamp()
+              };
+              if (cgUserId) payload.crazyGamesId = cgUserId;
+              if (cgUsername) payload.crazyGamesUsername = cgUsername;
+
+              setDoc(userDocRef, payload, { merge: true }).catch(err => {
+                console.warn("[Profile] Anonymous Firestore source sync warning:", err);
+              });
 
               // Restore CrazyGames persistent player stats if available
               const savedStatsJson = await getCrazyGamesData("playerStats");
