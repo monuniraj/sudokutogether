@@ -152,6 +152,7 @@ import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { triggerHapticTap, triggerHapticError, triggerHapticCompletion, triggerHaptic, isHapticsEnabled, setGlobalHapticsEnabled } from "./utils/haptics";
 import { playThemeFeedback, applyThemeToggle } from "./utils/themeFeedback";
 import { scheduleDailyZenNotification, recordGamePlayedAndReschedule } from "./utils/retentionNotifier";
+import { initCrazyGames, getCrazyGamesUser } from "./services/CrazyGamesSDK";
 import { getToken, onMessage } from "firebase/messaging";
 import { messaging } from "./firebase";
 
@@ -5144,6 +5145,52 @@ export default function App() {
           };
           setUserProfile(sanitizedProfile);
           userProfileRef.current = sanitizedProfile;
+
+          // Non-blocking CrazyGames profile synchronization for anonymous session
+          (async () => {
+            try {
+              await initCrazyGames();
+              const cgUser = await getCrazyGamesUser();
+              if (cgUser && cgUser.username) {
+                const cleanUsername = String(cgUser.username).trim().slice(0, 30);
+                if (cleanUsername && !userProfileRef.current?.isSynced) {
+                  const updatedProfile = {
+                    ...(userProfileRef.current || sanitizedProfile),
+                    id: user.uid,
+                    name: cleanUsername,
+                    displayName: cleanUsername,
+                    crazyGamesId: cgUser.id ? String(cgUser.id) : undefined,
+                    isSynced: false
+                  };
+                  userProfileRef.current = updatedProfile as any;
+                  setUserProfile(updatedProfile as any);
+
+                  updateVault((v) => ({
+                    ...v,
+                    profile: {
+                      ...v.profile,
+                      displayName: cleanUsername,
+                      name: cleanUsername
+                    }
+                  }), "guest");
+
+                  const userDocRef = doc(db, "users", user.uid);
+                  setDoc(userDocRef, {
+                    id: user.uid,
+                    name: cleanUsername,
+                    displayName: cleanUsername,
+                    crazyGamesId: cgUser.id ? String(cgUser.id) : null,
+                    crazyGamesUsername: cleanUsername,
+                    updatedAt: serverTimestamp()
+                  }, { merge: true }).catch(err => {
+                    console.warn("[CrazyGames] Firestore sync warning:", err);
+                  });
+                }
+              }
+            } catch (err) {
+              console.warn("[CrazyGames] Background user hydration notice:", err);
+            }
+          })();
         }
       } else if (user && !user.isAnonymous) {
         // Re-entrance guard: if user is already hydrated in memory, prevent re-zeroing and unlock immediately

@@ -3,6 +3,12 @@
  * Provides safe initialization and user retrieval without mutating Firebase auth or UI state.
  */
 
+declare global {
+  interface Window {
+    CrazyGames?: any;
+  }
+}
+
 let isInitialized = false;
 
 /**
@@ -49,4 +55,3 @@ export async function getCrazyGamesUser(): Promise<any | null> {
     return null;
   }
 }
-

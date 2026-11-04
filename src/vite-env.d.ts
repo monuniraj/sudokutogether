@@ -1,6 +1,9 @@
 /// <reference types="vite/client" />
 
-interface Window {
-  CrazyGames?: any;
+declare global {
+  interface Window {
+    CrazyGames?: any;
+  }
 }
 
+export {};
