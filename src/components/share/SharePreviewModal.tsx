@@ -41,6 +41,9 @@ const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
   return await response.blob();
 };
 
+// Deterministic in-memory canvas cache: fires once per game completion / language change / theme toggle
+const canvasShareCache = new Map<string, string>();
+
 export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   isOpen,
   onClose,
@@ -68,7 +71,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
   const [clipboardToast, setClipboardToast] = useState<string | null>(null);
 
   const normalizedDiff = String(
-    difficulty || boardState?.difficulty || "EASY"
+    boardState?.difficulty || (boardState as any)?.state?.difficulty || difficulty || "EASY"
   ).toUpperCase() as Difficulty;
 
   // Strict Win/Loss evaluation: requires < maxMistakes AND all 81 cells populated
@@ -87,10 +90,26 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) {
-      setGeneratedImage(null);
       setIsGenerating(true);
       setIsSavedSuccess(false);
       setClipboardToast(null);
+      return;
+    }
+
+    const cacheKey = [
+      boardState?.seed || challengeId || "game",
+      normalizedDiff,
+      activeLang,
+      darkMode ? "dark" : "light",
+      didWin ? "win" : "loss",
+      sessionSeconds || time,
+      boardState?.currentMistakesCount ?? 0
+    ].join("::");
+
+    const cached = canvasShareCache.get(cacheKey);
+    if (cached) {
+      setGeneratedImage(cached);
+      setIsGenerating(false);
       return;
     }
 
@@ -121,6 +140,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
           themeColor
         );
 
+        canvasShareCache.set(cacheKey, url);
         if (!isCancelled) {
           setGeneratedImage(url);
         }

@@ -409,14 +409,14 @@ export interface ShareCanvasThemePalette {
  */
 const LIGHT_THEMES: Record<string, ShareCanvasThemePalette> = {
   EASY: {
-    cardBgStart: "#F2FBF7",
+    cardBgStart: "#F0FDF4",
     cardBgMid: "#FDFBF7",
-    cardBgEnd: "#E6F8EF",
+    cardBgEnd: "#DCFCE7",
     surfaceCardBg: "#FFFFFF",
-    surfaceCardBorder: "rgba(6, 95, 70, 0.10)",
+    surfaceCardBorder: "rgba(6, 95, 70, 0.15)",
     pillBg: "#D1FAE5",
     pillText: "#065F46",
-    pillBorder: "rgba(6, 95, 70, 0.16)",
+    pillBorder: "rgba(6, 95, 70, 0.20)",
     stickerBg: "#ECFDF5",
     stickerText: "#047857",
     stickerBorder: "#059669",
@@ -427,7 +427,7 @@ const LIGHT_THEMES: Record<string, ShareCanvasThemePalette> = {
     activeCellBg: "#86EFAC",
     identicalCellBg: "#86EFAC",
     gridThinLine: "rgba(6, 95, 70, 0.20)",
-    gridThickLine: "rgba(6, 95, 70, 0.55)",
+    gridThickLine: "rgba(6, 95, 70, 0.45)",
     primaryText: "#1C1917",
     secondaryText: "#78716C",
     timerColor: "#2B6CB0",
@@ -444,14 +444,14 @@ const LIGHT_THEMES: Record<string, ShareCanvasThemePalette> = {
     footerAccent: "#334155",
   },
   MEDIUM: {
-    cardBgStart: "#FFFDF0",
+    cardBgStart: "#FEFCE8",
     cardBgMid: "#FDFBF7",
     cardBgEnd: "#FEF9C3",
     surfaceCardBg: "#FFFFFF",
-    surfaceCardBorder: "rgba(133, 77, 14, 0.12)",
+    surfaceCardBorder: "rgba(133, 77, 14, 0.15)",
     pillBg: "#FFF99D",
     pillText: "#854D0E",
-    pillBorder: "rgba(133, 77, 14, 0.18)",
+    pillBorder: "rgba(133, 77, 14, 0.20)",
     stickerBg: "#ECFDF5",
     stickerText: "#047857",
     stickerBorder: "#059669",
@@ -459,10 +459,10 @@ const LIGHT_THEMES: Record<string, ShareCanvasThemePalette> = {
     boardBaseBg: "#FFFFFF",
     cellTintBg: "rgba(234, 179, 8, 0.12)",
     crosshairSiblingBg: "#FFFFFF",
-    activeCellBg: "#FCD34D",
-    identicalCellBg: "#FCD34D",
+    activeCellBg: "#FDE047",
+    identicalCellBg: "#FDE047",
     gridThinLine: "rgba(133, 77, 14, 0.20)",
-    gridThickLine: "rgba(133, 77, 14, 0.55)",
+    gridThickLine: "rgba(133, 77, 14, 0.45)",
     primaryText: "#1C1917",
     secondaryText: "#78716C",
     timerColor: "#2B6CB0",
@@ -483,10 +483,10 @@ const LIGHT_THEMES: Record<string, ShareCanvasThemePalette> = {
     cardBgMid: "#FDFBF7",
     cardBgEnd: "#F3E8FF",
     surfaceCardBg: "#FFFFFF",
-    surfaceCardBorder: "rgba(107, 33, 168, 0.10)",
+    surfaceCardBorder: "rgba(107, 33, 168, 0.15)",
     pillBg: "#F3E8FF",
     pillText: "#6B21A8",
-    pillBorder: "rgba(107, 33, 168, 0.16)",
+    pillBorder: "rgba(107, 33, 168, 0.20)",
     stickerBg: "#ECFDF5",
     stickerText: "#047857",
     stickerBorder: "#059669",
@@ -497,7 +497,7 @@ const LIGHT_THEMES: Record<string, ShareCanvasThemePalette> = {
     activeCellBg: "#D8B4FE",
     identicalCellBg: "#D8B4FE",
     gridThinLine: "rgba(107, 33, 168, 0.20)",
-    gridThickLine: "rgba(107, 33, 168, 0.55)",
+    gridThickLine: "rgba(107, 33, 168, 0.45)",
     primaryText: "#1C1917",
     secondaryText: "#78716C",
     timerColor: "#2B6CB0",
@@ -518,10 +518,10 @@ const LIGHT_THEMES: Record<string, ShareCanvasThemePalette> = {
     cardBgMid: "#FDFBF7",
     cardBgEnd: "#FFE4E6",
     surfaceCardBg: "#FFFFFF",
-    surfaceCardBorder: "rgba(157, 23, 77, 0.10)",
+    surfaceCardBorder: "rgba(157, 23, 77, 0.15)",
     pillBg: "#FFE4E6",
     pillText: "#9D174D",
-    pillBorder: "rgba(157, 23, 77, 0.16)",
+    pillBorder: "rgba(157, 23, 77, 0.20)",
     stickerBg: "#ECFDF5",
     stickerText: "#047857",
     stickerBorder: "#059669",
@@ -532,7 +532,7 @@ const LIGHT_THEMES: Record<string, ShareCanvasThemePalette> = {
     activeCellBg: "#F9A8D4",
     identicalCellBg: "#F9A8D4",
     gridThinLine: "rgba(157, 23, 77, 0.20)",
-    gridThickLine: "rgba(157, 23, 77, 0.55)",
+    gridThickLine: "rgba(157, 23, 77, 0.45)",
     primaryText: "#1C1917",
     secondaryText: "#78716C",
     timerColor: "#2B6CB0",
@@ -1363,8 +1363,9 @@ export async function generateShareCanvas(
       : null;
 
   const normalizedDiff = String(
-    rawState.difficulty ||
-      resolvedBoard?.difficulty ||
+    resolvedBoard?.difficulty ||
+      (rawState?.boardState as any)?.difficulty ||
+      rawState.difficulty ||
       themeColor ||
       "EASY"
   ).toUpperCase();
@@ -1753,10 +1754,12 @@ export async function generateShareCanvas(
 
         drawCenteredText(ctx, String(val), centerX, centerY);
 
-        // Authentic 9-Pass Blue Marker Redaction (Obscure filled digits)
+        // Authentic 9-Pass Blue / Red Marker Redaction (Obscure filled digits)
         if (!isClue) {
           ctx.save();
-          ctx.strokeStyle = darkMode ? '#38BDF8' : '#0284C7';
+          ctx.strokeStyle = isMistake
+            ? '#ef4444'
+            : (darkMode ? '#38BDF8' : '#0284C7');
           ctx.lineWidth = 3.4;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
@@ -1841,11 +1844,33 @@ export async function generateShareCanvas(
 
   ctx.restore();
 
-  // Outer 2.2px rounded pastel board border
+  // Outer 3D embossed rounded pastel board border
   drawRoundedRect(ctx, boardX, boardY, boardSize, boardSize, 12);
   ctx.strokeStyle = palette.gridThickLine;
-  ctx.lineWidth = 2.2;
+  ctx.lineWidth = 2.4;
   ctx.stroke();
+
+  // 3D Embossed Inset Bevel (Top-Left Specular Sunlight Highlight)
+  ctx.save();
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = darkMode ? "rgba(255, 255, 255, 0.15)" : "rgba(255, 255, 255, 0.85)";
+  ctx.beginPath();
+  ctx.moveTo(boardX + 12, boardY + 1.2);
+  ctx.lineTo(boardX + boardSize - 12, boardY + 1.2);
+  ctx.moveTo(boardX + 1.2, boardY + 12);
+  ctx.lineTo(boardX + 1.2, boardY + boardSize - 12);
+  ctx.stroke();
+
+  // 3D Embossed Inset Bevel (Bottom-Right Shadow Depth)
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = darkMode ? "rgba(0, 0, 0, 0.40)" : (palette.surfaceCardBorder || "rgba(0, 0, 0, 0.12)");
+  ctx.beginPath();
+  ctx.moveTo(boardX + 12, boardY + boardSize - 1.2);
+  ctx.lineTo(boardX + boardSize - 12, boardY + boardSize - 1.2);
+  ctx.moveTo(boardX + boardSize - 1.2, boardY + 12);
+  ctx.lineTo(boardX + boardSize - 1.2, boardY + boardSize - 12);
+  ctx.stroke();
+  ctx.restore();
 
 interface UnifiedStickerPalette {
   fill: string;
@@ -1871,9 +1896,10 @@ function getUnifiedStickerPalette(
       };
     }
     return {
-      fill: "#FECDD3", // Balanced Soft Rose/Coral
+      fill: "#FECDD3", // Frosty Rose Red
+      border: "#E11D48", // Crisp Crimson Border
       text: "#881337", // Deep Contrast Crimson
-      chipFill: "#E11D48", // Accent Red Fill
+      chipFill: "#BE123C", // Accent Red Fill
       chipText: "#FFFFFF",
     };
   }

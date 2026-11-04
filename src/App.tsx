@@ -14891,7 +14891,7 @@ export default function App() {
                   <div className="w-full flex items-center justify-center p-0.5 overflow-hidden relative rounded-xl">
                     <SudokuBoard
                       boardState={boardState}
-                      difficulty={difficulty}
+                      difficulty={boardState?.difficulty || difficulty}
                       solutionGrid={solutionGrid}
                       isTimerPaused={isTimerPaused && !boardState?.isGameOver}
                       onResumeSession={() => setIsTimerPaused(false)}
@@ -15466,7 +15466,7 @@ export default function App() {
                     <ShareActionWrapper
                       boardState={boardState}
                       solutionGrid={solutionGrid}
-                      difficulty={difficulty}
+                      difficulty={boardState?.difficulty || difficulty}
                       time={formatTimer(sessionSeconds)}
                       sessionSeconds={sessionSeconds}
                       playerName={getActiveDisplayName()}

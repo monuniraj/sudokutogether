@@ -702,6 +702,12 @@
     * **Dedicated Global Overlay Mounting:** Renders a dedicated `<GameOverModal>` instance driven strictly by `isOpen={Boolean(notificationResultModal)}` on top of any screen with zero forced redirects. When closed, it simply resets `setNotificationResultModal(null)`, allowing the user to seamlessly resume reviewing their solo board and reopening the solo victory screen with zero state corruption.
     * **Seamless Rematch Flow:** If the user initiates a rematch or replay from the notification result modal, it cleanly transitions into active matchmaking and launches the new room session.
 
+41. **Canvas Screenshot Difficulty SSOT & Light Mode 3D Embossed Aesthetics (`src/utils/canvasShare.ts`, `SharePreviewModal.tsx`, `App.tsx`):**
+    * **SSOT Precedence Inversion:** Fixed state mismatch where global Home Screen `difficulty` was overriding `boardState.difficulty`. In `App.tsx`, `SharePreviewModal.tsx`, and `canvasShare.ts`, `boardState?.difficulty` is now evaluated first as the immutable Single Source of Truth, ensuring finished Expert games never render as Easy.
+    * **Deterministic Canvas Caching (`canvasShareCache`):** Introduced in-memory Map cache keyed by `seed`, `difficulty`, `language`, `theme`, `win/loss`, `seconds`, and `mistakes`. Opening the share preview fires exactly once per game completion / language change / theme toggle, providing 0ms instant display.
+    * **Light Mode Color Science & 3D Embossed Borders:** Updated `LIGHT_THEMES` palette tokens for Easy, Medium, Hard, and Expert. Injected double-inset bevel highlight (`rgba(255, 255, 255, 0.85)` specular top-left) and shadow depth (bottom-right) for an embossed tactile finish.
+    * **Mistake Red Marker Scratch Marks:** Injected `ctx.strokeStyle = isMistake ? '#ef4444' : ...` so mistaken cells receive distinct red scratch marks, while correct user numbers retain the blue redaction marker.
+
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**
    * **Root Cause:** When testing on Laptop and Phone logged into the same Google account (`uid`), self-exclusion filters hide the other device.
