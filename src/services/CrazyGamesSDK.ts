@@ -13,17 +13,20 @@ declare global {
 }
 
 let isInitialized = false;
+let initPromise: Promise<void> | null = null;
 
 /**
  * Robust Multi-Tier check whether the app is actively running in the CrazyGames platform.
  * Gracefully rejects native Capacitor builds and standalone web domains (sudokusync.com).
+ * Accurately detects CrazyGames across top-level domain, sandboxed preview iframes,
+ * ancestor origins, referrers, and portal test query parameters.
  */
 export function isCrazyGamesActive(): boolean {
   if (typeof window === "undefined") {
     return false;
   }
 
-  // 1. Never active on native mobile apps (Capacitor Play Store / Android)
+  // 1. Immediately return false on native mobile apps (Capacitor Play Store / Android)
   try {
     if (Capacitor.isNativePlatform()) {
       return false;
@@ -32,7 +35,7 @@ export function isCrazyGamesActive(): boolean {
     // Ignore Capacitor check failure
   }
 
-  // 2. Never active on official standalone web / Firebase domains
+  // 2. Immediately return false on official standalone web / Firebase domains
   try {
     const host = window.location.hostname.toLowerCase();
     if (
@@ -43,20 +46,45 @@ export function isCrazyGamesActive(): boolean {
       return false;
     }
 
-    // 3. Must be running on CrazyGames domain/referrer or have SDK environment === 'crazygames'
-    const isCgHost =
-      host.includes("crazygames") ||
-      (typeof document !== "undefined" && document.referrer.toLowerCase().includes("crazygames"));
+    // 3. Check for CrazyGames URL query parameters (e.g. ?useLocalSdk=true or ?crazygames=true)
+    const search = window.location.search.toLowerCase();
+    if (search.includes("uselocalsdk") || search.includes("crazygames")) {
+      return true;
+    }
+
+    // 4. Check ancestor origins (available in Chromium for sandboxed/cross-origin iframes)
+    try {
+      const ancestors = (window.location as any).ancestorOrigins;
+      if (ancestors && ancestors.length > 0) {
+        for (let i = 0; i < ancestors.length; i++) {
+          if (String(ancestors[i]).toLowerCase().includes("crazygames")) {
+            return true;
+          }
+        }
+      }
+    } catch {
+      // Ignore ancestor security errors
+    }
+
+    // 5. Check host, referrer, iframe hierarchy, or SDK environment
+    const isCgHost = host.includes("crazygames");
+    const isCgReferrer = typeof document !== "undefined" && document.referrer.toLowerCase().includes("crazygames");
+    const isEmbeddedInIframe = window.parent !== window;
     const cgEnv = window.CrazyGames?.SDK?.environment;
 
-    return Boolean(window.CrazyGames && (isCgHost || cgEnv === "crazygames"));
+    return Boolean(
+      isCgHost ||
+      isCgReferrer ||
+      cgEnv === "crazygames" ||
+      (isEmbeddedInIframe && !host.includes("sudokusync.com"))
+    );
   } catch {
     return false;
   }
 }
 
 /**
- * Initializes the CrazyGames SDK v3.
+ * Initializes the CrazyGames SDK v3 with resilient 100ms polling.
  * Gracefully no-ops if running outside CrazyGames (standalone web, Capacitor APK, Itch.io).
  */
 export async function initCrazyGames(): Promise<void> {
@@ -64,21 +92,72 @@ export async function initCrazyGames(): Promise<void> {
     return;
   }
 
-  if (!window.CrazyGames) {
-    console.log("[CrazyGamesSDK] window.CrazyGames is not available; continuing normal gameplay.");
-    return;
-  }
-
   if (isInitialized) {
     return;
   }
 
+  if (initPromise) {
+    return initPromise;
+  }
+
+  initPromise = (async () => {
+    // Resilient polling for window.CrazyGames?.SDK (100ms interval, timeout 3500ms)
+    const startTime = Date.now();
+    const timeoutMs = 3500;
+
+    while (!window.CrazyGames?.SDK && (Date.now() - startTime) < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    if (!window.CrazyGames?.SDK) {
+      console.warn("[CrazyGamesSDK] Timed out waiting for window.CrazyGames.SDK script to load; continuing normal gameplay.");
+      return;
+    }
+
+    try {
+      await window.CrazyGames.SDK.init();
+      isInitialized = true;
+      console.log("[CrazyGamesSDK] Initialized successfully. Environment:", window.CrazyGames.SDK.environment || "crazygames");
+    } catch (error) {
+      console.warn("[CrazyGamesSDK] Initialization failed or ignored:", error);
+    }
+  })();
+
+  return initPromise;
+}
+
+/**
+ * Safely notifies CrazyGames that active gameplay has started or resumed.
+ * Must be called when the player is actively interacting with a puzzle.
+ */
+export function crazyGamesGameplayStart(): void {
+  if (typeof window === "undefined" || !isCrazyGamesActive()) {
+    return;
+  }
   try {
-    await window.CrazyGames.SDK.init();
-    isInitialized = true;
-    console.log("[CrazyGamesSDK] Initialized successfully.");
+    if (window.CrazyGames?.SDK?.game?.gameplayStart) {
+      window.CrazyGames.SDK.game.gameplayStart();
+      console.log("[CrazyGamesSDK] gameplayStart signaled.");
+    }
   } catch (error) {
-    console.warn("[CrazyGamesSDK] Initialization failed or ignored:", error);
+    console.warn("[CrazyGamesSDK] Failed to signal gameplayStart:", error);
+  }
+}
+
+/**
+ * Safely notifies CrazyGames that active gameplay has stopped (paused, menu, game over).
+ */
+export function crazyGamesGameplayStop(): void {
+  if (typeof window === "undefined" || !isCrazyGamesActive()) {
+    return;
+  }
+  try {
+    if (window.CrazyGames?.SDK?.game?.gameplayStop) {
+      window.CrazyGames.SDK.game.gameplayStop();
+      console.log("[CrazyGamesSDK] gameplayStop signaled.");
+    }
+  } catch (error) {
+    console.warn("[CrazyGamesSDK] Failed to signal gameplayStop:", error);
   }
 }
 

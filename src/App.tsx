@@ -152,7 +152,7 @@ import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { triggerHapticTap, triggerHapticError, triggerHapticCompletion, triggerHaptic, isHapticsEnabled, setGlobalHapticsEnabled } from "./utils/haptics";
 import { playThemeFeedback, applyThemeToggle } from "./utils/themeFeedback";
 import { scheduleDailyZenNotification, recordGamePlayedAndReschedule } from "./utils/retentionNotifier";
-import { initCrazyGames, getCrazyGamesUser, getCrazyGamesData, setCrazyGamesData, getCrazyGamesInviteLink, isCrazyGamesActive } from "./services/CrazyGamesSDK";
+import { initCrazyGames, getCrazyGamesUser, getCrazyGamesData, setCrazyGamesData, getCrazyGamesInviteLink, isCrazyGamesActive, crazyGamesGameplayStart, crazyGamesGameplayStop } from "./services/CrazyGamesSDK";
 import { getToken, onMessage } from "firebase/messaging";
 import { messaging } from "./firebase";
 
@@ -9458,6 +9458,27 @@ export default function App() {
       }
     }
   }, [boardState?.isGameOver]);
+
+  // Synchronize CrazyGames gameplay lifecycle (gameplayStart / gameplayStop)
+  useEffect(() => {
+    if (!isCrazyGamesActive()) return;
+
+    const isPlaying =
+      currentScreen === "game" &&
+      !showGameOverModal &&
+      !boardState?.isGameOver &&
+      !isTimerPaused;
+
+    if (isPlaying) {
+      crazyGamesGameplayStart();
+    } else {
+      crazyGamesGameplayStop();
+    }
+
+    return () => {
+      if (isCrazyGamesActive()) crazyGamesGameplayStop();
+    };
+  }, [currentScreen, showGameOverModal, boardState?.isGameOver, isTimerPaused]);
 
   const hasTriggeredGameOverRef = useRef(false);
   const gameOverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
