@@ -2486,6 +2486,16 @@ export default function App() {
   const [viewingRankingsGame, setViewingRankingsGame] = useState<CompletedGame | null>(null);
   const [historyRankings, setHistoryRankings] = useState<any[]>([]);
   const [isLoadingHistoryRankings, setIsLoadingHistoryRankings] = useState<boolean>(false);
+  const [notificationResultModal, setNotificationResultModal] = useState<{
+    roomCode: string;
+    seed: number;
+    difficulty: Difficulty;
+    participants: any[];
+    mistakesLimit: number;
+    hintsLimit: number;
+    timerEnabled: boolean;
+    endGameStep?: 1 | 2;
+  } | null>(null);
   const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
   const [incomingChallengeId, setIncomingChallengeId] = useState<string | null>(null);
   const [incomingChallengeDetails, setIncomingChallengeDetails] = useState<{
@@ -6767,6 +6777,7 @@ export default function App() {
   const closeTopmostModal = (): boolean => {
     if (openDropdown) { setOpenDropdown(null); return true; }
     if (playerToUnfriend) { setPlayerToUnfriend(null); return true; }
+    if (notificationResultModal) { setNotificationResultModal(null); return true; }
     if (viewingRankingsGame) { setViewingRankingsGame(null); return true; }
     if (showDeleteAccountModal) { setShowDeleteAccountModal(false); return true; }
     if (showResetSettingsModal) {
@@ -6807,6 +6818,7 @@ export default function App() {
     let count = 0;
     if (openDropdown) count++;
     if (playerToUnfriend) count++;
+    if (notificationResultModal) count++;
     if (viewingRankingsGame) count++;
     if (showDeleteAccountModal) count++;
     if (showResetSettingsModal) count++;
@@ -7576,8 +7588,8 @@ export default function App() {
 
   const isViewingResultsRef = useRef<boolean>(false);
   useEffect(() => {
-    isViewingResultsRef.current = showGameOverModal || Boolean(viewingRankingsGame);
-  }, [showGameOverModal, viewingRankingsGame]);
+    isViewingResultsRef.current = showGameOverModal || Boolean(viewingRankingsGame) || Boolean(notificationResultModal);
+  }, [showGameOverModal, viewingRankingsGame, notificationResultModal]);
 
   const handleViewChallengeResults = async (roomCode: string, forceOpenModal = false) => {
     const rawCode = String(roomCode || "").trim();
@@ -7615,7 +7627,7 @@ export default function App() {
     }
 
     // If results modal is already active for this room, skip redundant room fetch cascade
-    if (showGameOverModal && activeGameId === cleanRoomCode) {
+    if ((showGameOverModal && activeGameId === cleanRoomCode) || (notificationResultModal && notificationResultModal.roomCode === cleanRoomCode)) {
       console.log(`[Results] GameOverModal already active for room ${cleanRoomCode}. Skipped redundant fetch cascade.`);
       return;
     }
@@ -7648,52 +7660,41 @@ export default function App() {
       return;
     }
 
-    // 2. ZERO-LATENCY OPTIMISTIC MODAL OPEN:
-    // Resolve cached match from local state to display standings in 0 milliseconds
-    const seedNum = parseInt(cleanRoomCode, 10) || challengeSeed || 100000;
+    // 2. ZERO-LATENCY OPTIMISTIC MODAL OPEN VIA ISOLATED NOTIFICATION RESULT STATE:
+    // Resolve cached match from local state without mutating active game session states
+    const seedNum = parseInt(cleanRoomCode, 10) || 100000;
     const cachedMatch = (completedGames || []).find((g: any) =>
       g.id === cleanRoomCode ||
       String(g.seed).slice(-6) === cleanRoomCode ||
       g.seed === seedNum
     );
 
-    // Preserve active solo board without destroying it if user is currently playing solo
-    if (boardState && !challengeMode && !boardState.isGameOver) {
-      preservedSoloBoardRef.current = {
-        boardState,
-        sessionSeconds,
-        difficulty,
-        timerEnabled,
-        mistakeLimitEnabled
-      };
-    }
+    const currentLocalName = (userProfile?.name && userProfile.name.trim()) || getActiveDisplayName();
+    const initialParticipants = (cachedMatch?.participants && Array.isArray(cachedMatch.participants) && cachedMatch.participants.length > 0)
+      ? cachedMatch.participants
+      : [{
+          userId: userProfile?.id || "me",
+          playerName: currentLocalName,
+          timeSec: cachedMatch?.timeSec || 0,
+          elapsedTime: cachedMatch?.timeSec || 0,
+          mistakes: cachedMatch?.mistakes || 0,
+          hints: cachedMatch?.hints || 0,
+          isWon: cachedMatch ? Boolean(cachedMatch.isWon) : true,
+          status: "completed",
+          isPending: false
+        }];
 
-    // Seed local syncedLeaderboard with cached participants if available, or current local user fallback
-    if (cachedMatch?.participants && Array.isArray(cachedMatch.participants) && cachedMatch.participants.length > 0) {
-      setSyncedLeaderboard(cachedMatch.participants);
-    } else if (syncedLeaderboard.length === 0) {
-      const currentLocalName = (userProfile?.name && userProfile.name.trim()) || getActiveDisplayName();
-      setSyncedLeaderboard([{
-        userId: userProfile?.id || "me",
-        playerName: currentLocalName,
-        timeSec: cachedMatch?.timeSec || sessionSeconds || 0,
-        elapsedTime: cachedMatch?.timeSec || sessionSeconds || 0,
-        mistakes: cachedMatch?.mistakes || 0,
-        hints: cachedMatch?.hints || 0,
-        isWon: cachedMatch ? Boolean(cachedMatch.isWon) : true,
-        status: "completed",
-        isPending: false
-      }]);
-    }
-
-    setActiveGameId(cleanRoomCode);
-    setRematchGameId(cleanRoomCode);
-    setChallengeSeed(seedNum);
-    if (cachedMatch?.difficulty) {
-      setChallengeDifficulty((cachedMatch.difficulty).toUpperCase() as Difficulty);
-    }
-    setChallengeMode(true);
-    setEndGameStep(1);
+    const matchDiff = ((cachedMatch?.difficulty || "EASY") as string).toUpperCase() as Difficulty;
+    setNotificationResultModal({
+      roomCode: cleanRoomCode,
+      seed: seedNum,
+      difficulty: matchDiff,
+      participants: initialParticipants,
+      mistakesLimit: cachedMatch?.maxMistakes || 3,
+      hintsLimit: cachedMatch?.hintLimit || 3,
+      timerEnabled: true,
+      endGameStep: 1
+    });
 
     // Dismiss ONLY completed-result notifications for this room and NEVER delete an active game invite
     setPendingChallenges(prev => {
@@ -7708,10 +7709,6 @@ export default function App() {
       } catch (e) { }
       return updated;
     });
-
-    // Immediately open results overlay without blocking on network queries
-    navigateToScreen("game");
-    setShowGameOverModal(true);
 
     // 3. BACKGROUND STANDINGS SYNC:
     // Run Firestore reads/aggregations asynchronously in the background and update props gracefully
@@ -7795,14 +7792,18 @@ export default function App() {
         }
 
         const resultsList = Array.from(mergedMap.values());
-        if (resultsList.length > 0) {
-          setSyncedLeaderboard(resultsList);
-        }
-        if (roomData?.seed) setChallengeSeed(Number(roomData.seed));
-        if (roomData?.difficulty) setChallengeDifficulty((roomData.difficulty).toUpperCase() as Difficulty);
-        if (roomData?.mistakesLimit !== undefined) setChallengeMistakeLimit(roomData.mistakesLimit);
-        if (roomData?.hintsLimit !== undefined) setChallengeHintLimit(roomData.hintsLimit);
-        if (roomData?.timerEnabled !== undefined) setChallengeTimerEnabled(roomData.timerEnabled);
+        setNotificationResultModal(prev => {
+          if (!prev || prev.roomCode !== cleanRoomCode) return prev;
+          return {
+            ...prev,
+            participants: resultsList.length > 0 ? resultsList : prev.participants,
+            seed: roomData?.seed ? Number(roomData.seed) : prev.seed,
+            difficulty: roomData?.difficulty ? (roomData.difficulty).toUpperCase() as Difficulty : prev.difficulty,
+            mistakesLimit: roomData?.mistakesLimit !== undefined ? roomData.mistakesLimit : prev.mistakesLimit,
+            hintsLimit: roomData?.hintsLimit !== undefined ? roomData.hintsLimit : prev.hintsLimit,
+            timerEnabled: roomData?.timerEnabled !== undefined ? roomData.timerEnabled : prev.timerEnabled,
+          };
+        });
       } catch (err) {
         console.error("[Results] Background standings sync error:", err);
       }
@@ -11985,7 +11986,8 @@ export default function App() {
     showDeleteAccountModal ||
     showLoginRequiredModal ||
     showTargetLoginRequiredModal ||
-    showHistoryChallengeModal
+    showHistoryChallengeModal ||
+    Boolean(notificationResultModal)
   );
   useLayoutEffect(() => {
     if (isPauseModalOpen) {
@@ -17459,6 +17461,130 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 🏆 ISOLATED NOTIFICATION MULTIPLAYER RESULT MODAL */}
+      {Boolean(notificationResultModal) && (
+        <GameOverModal
+          isOpen={Boolean(notificationResultModal)}
+          isMultiplayer={true}
+          completedGames={completedGames}
+          onClose={() => {
+            setNotificationResultModal(null);
+            setShowCelebrationConfetti(false);
+            setLockedNum(null);
+            setActiveKeypadNum(null);
+          }}
+          darkMode={darkMode}
+          difficulty={notificationResultModal?.difficulty || "EASY"}
+          boardState={{
+            seed: notificationResultModal?.seed,
+            isGameOver: true,
+            maxMistakesLimit: notificationResultModal?.mistakesLimit || 3,
+            currentMistakesCount: 0,
+            hintsCount: 0
+          }}
+          mistakeLimitEnabled={Boolean(notificationResultModal?.mistakesLimit && notificationResultModal.mistakesLimit <= 3)}
+          sessionSeconds={(() => {
+            const myUid = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid();
+            const myResult = notificationResultModal?.participants?.find((p: any) => p.userId === myUid);
+            return myResult ? Number(myResult.timeSec || myResult.elapsedTime || 0) : 0;
+          })()}
+          syncedLeaderboard={notificationResultModal?.participants || []}
+          userProfile={userProfile}
+          checkIsDisplayNameConfigured={checkIsDisplayNameConfigured}
+          getActiveDisplayName={getActiveDisplayName}
+          isNewRecordAchieved={false}
+          formatTimer={formatTimer}
+          playClickSound={playClickSound}
+          onSameGameReplay={async () => {
+            const seed = notificationResultModal?.seed || (Math.floor(Math.random() * 900000) + 100000);
+            const roomCode = notificationResultModal?.roomCode || String(seed).padStart(6, '0').slice(-6);
+            const diff = notificationResultModal?.difficulty || "EASY";
+            const parts = notificationResultModal?.participants || [];
+
+            setRematchMatchMode("replay");
+            const othersList: Array<{ id: string; name: string; isReal: boolean }> = [];
+            parts.forEach((r: any) => {
+              if (r.userId !== userProfile?.id && !othersList.some(o => o.id === r.userId)) {
+                othersList.push({ id: r.userId, name: r.playerName, isReal: true });
+              }
+            });
+            setLastGameParticipants(othersList);
+            setRematchParticipants(othersList);
+            setRematchGameId(roomCode);
+            setChallengeSeed(seed);
+            setPendingRematchSeed(seed);
+            setChallengeDifficulty(diff);
+            setRematchInvitedPlayers(new Set());
+            setLobbyAcceptedUserIds(new Set());
+            setRematchInviteStates({});
+
+            setNotificationResultModal(prev => prev ? { ...prev, endGameStep: 2 } : null);
+          }}
+          onNewGameClick={() => {
+            const diff = notificationResultModal?.difficulty || "EASY";
+            setNotificationResultModal(null);
+            setOpenedCreateFromMultiplayerResult(true);
+            openCreateRoomModal(diff, true);
+          }}
+          endGameStep={notificationResultModal?.endGameStep || 1}
+          setEndGameStep={(step) => {
+            setNotificationResultModal(prev => prev ? { ...prev, endGameStep: step } : null);
+          }}
+          rematchGameId={notificationResultModal?.roomCode || ""}
+          challengeSeed={notificationResultModal?.seed || 100000}
+          isRoomLocked={isRoomLocked}
+          setIsRoomLocked={setIsRoomLocked}
+          roomPin={roomPin}
+          setRoomPin={setRoomPin}
+          updateRoomSettingsInFirestore={updateRoomSettingsInFirestore}
+          copyToClipboard={copyToClipboard}
+          showCopiedToast={showCopiedToast}
+          multiplayerPlayers={multiplayerPlayers}
+          getInviteCooldownState={getInviteCooldownState}
+          handleToggleFriend={handleToggleFriend}
+          handleInviteFriend={handleInviteFriend}
+          handleReinviteAll={handleReinviteAll}
+          isInvitingAll={isInvitingAll}
+          shareChallengeLink={shareChallengeLink}
+          onStartRematchGame={() => {
+            if (!isOnline) {
+              showToast(t("noInternetConnection") || "No internet connection");
+              return;
+            }
+            const targetSeed = pendingRematchSeed ?? notificationResultModal?.seed ?? 100000;
+            const roomCode = notificationResultModal?.roomCode || String(targetSeed).padStart(6, '0').slice(-6);
+            const diff = notificationResultModal?.difficulty || "EASY";
+            const mLimit = notificationResultModal?.mistakesLimit || 3;
+            const tEnabled = notificationResultModal?.timerEnabled ?? true;
+            const hLimit = notificationResultModal?.hintsLimit || 3;
+
+            setNotificationResultModal(null);
+            addLog(`⚔️ Launching match duel in room #${roomCode}...`);
+            setActiveGameId(roomCode);
+            setRematchGameId(roomCode);
+            setChallengeMode(true);
+            setChallengeSeed(targetSeed);
+            setChallengeDifficulty(diff);
+            setChallengeMistakeLimit(mLimit);
+            setChallengeTimerEnabled(tEnabled);
+            setChallengeHintLimit(hLimit);
+            setDifficulty(diff);
+            setMistakeLimitEnabled(mLimit !== 999);
+            setTimerEnabled(tEnabled);
+
+            registerChallengeJoin(roomCode);
+            generateAndSetNewPuzzle(diff, targetSeed, mLimit, tEnabled, hLimit, undefined, true);
+            setSessionSeconds(0);
+            setIsTimerPaused(false);
+            setShowGameOverModal(false);
+            setEndGameStep(1);
+            navigateToScreen("game");
+            try { window.history.replaceState({ view: "game" }, "", window.location.pathname); } catch (e) { }
+            showToast(t("matchStartedToast"));
+          }}
+        />
+      )}
 
       {/* 🏆 HISTORICAL CHALLENGE RANKINGS MODAL */}
       <AnimatePresence>
