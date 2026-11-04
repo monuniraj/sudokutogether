@@ -152,7 +152,7 @@ import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { triggerHapticTap, triggerHapticError, triggerHapticCompletion, triggerHaptic, isHapticsEnabled, setGlobalHapticsEnabled } from "./utils/haptics";
 import { playThemeFeedback, applyThemeToggle } from "./utils/themeFeedback";
 import { scheduleDailyZenNotification, recordGamePlayedAndReschedule } from "./utils/retentionNotifier";
-import { initCrazyGames, getCrazyGamesUser } from "./services/CrazyGamesSDK";
+import { initCrazyGames, getCrazyGamesUser, getCrazyGamesData, setCrazyGamesData, getCrazyGamesInviteLink } from "./services/CrazyGamesSDK";
 import { getToken, onMessage } from "firebase/messaging";
 import { messaging } from "./firebase";
 
@@ -5187,6 +5187,56 @@ export default function App() {
                   });
                 }
               }
+
+              // Restore CrazyGames persistent player stats if available
+              const savedStatsJson = await getCrazyGamesData("playerStats");
+              if (savedStatsJson) {
+                try {
+                  const parsed = JSON.parse(savedStatsJson);
+                  if (parsed && typeof parsed === "object") {
+                    updateVault((v) => {
+                      const cur = v.stats || { totalGamesPlayed: 0, totalWinsCount: 0, winStreak: 0 };
+                      const rest = parsed.stats || {};
+                      const mergedStats = {
+                        ...cur,
+                        totalGamesPlayed: Math.max(cur.totalGamesPlayed || 0, rest.totalGamesPlayed || 0),
+                        totalWinsCount: Math.max(cur.totalWinsCount || 0, rest.totalWinsCount || 0),
+                        winStreak: Math.max(cur.winStreak || 0, rest.winStreak || 0)
+                      };
+                      const mergedBestTimes: UserVaultBestTimes = {
+                        EASY: v.bestTimes?.EASY ?? null,
+                        MEDIUM: v.bestTimes?.MEDIUM ?? null,
+                        HARD: v.bestTimes?.HARD ?? null,
+                        EXPERT: v.bestTimes?.EXPERT ?? null,
+                        MASTER: v.bestTimes?.MASTER ?? null,
+                      };
+                      if (parsed.bestTimes && typeof parsed.bestTimes === "object") {
+                        for (const diff of ["EASY", "MEDIUM", "HARD", "EXPERT", "MASTER"] as (keyof UserVaultBestTimes)[]) {
+                          const curTime = mergedBestTimes[diff];
+                          const restoredTime = parsed.bestTimes[diff];
+                          if (typeof restoredTime === "number") {
+                            if (curTime === null || curTime === undefined || restoredTime < curTime) {
+                              mergedBestTimes[diff] = restoredTime;
+                            }
+                          }
+                        }
+                      }
+                      setTotalGamesPlayed(mergedStats.totalGamesPlayed);
+                      setTotalWinsCount(mergedStats.totalWinsCount);
+                      setWinStreak(mergedStats.winStreak);
+                      setPersonalBestTimes(mergedBestTimes);
+                      personalBestTimesRef.current = mergedBestTimes;
+                      return {
+                        ...v,
+                        stats: mergedStats,
+                        bestTimes: mergedBestTimes
+                      };
+                    }, "guest");
+                  }
+                } catch (parseErr) {
+                  console.warn("[CrazyGames] Failed to parse saved playerStats:", parseErr);
+                }
+              }
             } catch (err) {
               console.warn("[CrazyGames] Background user hydration notice:", err);
             }
@@ -9863,7 +9913,11 @@ export default function App() {
     }
     const activeRoomCode = String(targetSeed).padStart(6, '0').slice(-6);
     const currentProfileName = getActiveDisplayName();
-    const chalUrl = `${getChallengeBaseUrl()}?room=${activeRoomCode}&sender=${encodeURIComponent(currentProfileName)}`;
+    let chalUrl = `${getChallengeBaseUrl()}?room=${activeRoomCode}&sender=${encodeURIComponent(currentProfileName)}`;
+    const cgInvite = await getCrazyGamesInviteLink({ roomId: activeRoomCode, sender: currentProfileName });
+    if (cgInvite) {
+      chalUrl = cgInvite;
+    }
     const shareText = t("shareInviteMessage");
 
     await shareOrCopyContent("SudokuSync", shareText, chalUrl, showCopiedToast, showCopiedToast);
@@ -9915,7 +9969,11 @@ export default function App() {
       return updated;
     });
 
-    const challengeLink = `${getChallengeBaseUrl()}?challenge=${finalGameId}&sender=${encodeURIComponent(currentProfileName)}`;
+    let challengeLink = `${getChallengeBaseUrl()}?challenge=${finalGameId}&sender=${encodeURIComponent(currentProfileName)}`;
+    const cgInvite = await getCrazyGamesInviteLink({ challenge: finalGameId, sender: currentProfileName });
+    if (cgInvite) {
+      challengeLink = cgInvite;
+    }
     const shareText = `${currentProfileName} solved a Sudoku puzzle in ${formattedTime} on ${difficulty}! Think you can beat this? Try here:`;
 
     await shareAppContent("SudokuSync", shareText, challengeLink);
@@ -9964,7 +10022,11 @@ export default function App() {
       return updated;
     });
 
-    const challengeLink = `${getChallengeBaseUrl()}?challenge=${finalId}&sender=${encodeURIComponent(currentProfileName)}`;
+    let challengeLink = `${getChallengeBaseUrl()}?challenge=${finalId}&sender=${encodeURIComponent(currentProfileName)}`;
+    const cgInvite = await getCrazyGamesInviteLink({ challenge: finalId, sender: currentProfileName });
+    if (cgInvite) {
+      challengeLink = cgInvite;
+    }
     const formattedTime = formatTimer(historyChallengeGame.timeSec);
     const shareText = `${currentProfileName} completed a SudokuSync match in ${formattedTime} on ${historyChallengeGame.difficulty} level! Think you can beat this? Try here:`;
 
@@ -9988,7 +10050,11 @@ export default function App() {
       roomCode = match ? match[1] : (challengeSeed ? String(challengeSeed).slice(-6) : "849201");
     }
 
-    const chalUrl = `${getChallengeBaseUrl()}?room=${roomCode}&sender=${encodeURIComponent(currentProfileName)}`;
+    let chalUrl = `${getChallengeBaseUrl()}?room=${roomCode}&sender=${encodeURIComponent(currentProfileName)}`;
+    const cgInvite = await getCrazyGamesInviteLink({ roomId: roomCode, sender: currentProfileName });
+    if (cgInvite) {
+      chalUrl = cgInvite;
+    }
     const shareText = customText || t("shareInviteMessage");
 
     await shareAppContent("SudokuSync", shareText, chalUrl);
@@ -10001,7 +10067,11 @@ export default function App() {
     const baseId = finalCard.id.split("-P")[0];
     const currentProfileName = getActiveDisplayName();
 
-    const chalUrl = `${getChallengeBaseUrl()}?challenge=${baseId}${finalCard.password ? `&pw=${encodePass(finalCard.password)}` : ""}&sender=${encodeURIComponent(currentProfileName)}`;
+    let chalUrl = `${getChallengeBaseUrl()}?challenge=${baseId}${finalCard.password ? `&pw=${encodePass(finalCard.password)}` : ""}&sender=${encodeURIComponent(currentProfileName)}`;
+    const cgInvite = await getCrazyGamesInviteLink({ challenge: baseId, sender: currentProfileName });
+    if (cgInvite) {
+      chalUrl = cgInvite;
+    }
     const shareText = t("shareInviteMessage");
 
     await shareAppContent("SudokuSync", shareText, chalUrl);
@@ -10761,6 +10831,16 @@ export default function App() {
         totalWinsCount: updatedVault.stats.totalWinsCount,
         winStreak: updatedVault.stats.winStreak
       });
+    }
+
+    // CrazyGames Cloud Save Sync: Persist stats and best times
+    try {
+      setCrazyGamesData("playerStats", JSON.stringify({
+        stats: updatedVault.stats,
+        bestTimes: updatedVault.bestTimes
+      }));
+    } catch (cgErr) {
+      console.warn("[CrazyGames] Failed to sync data after game:", cgErr);
     }
 
     recordGamePlayedAndReschedule(language);

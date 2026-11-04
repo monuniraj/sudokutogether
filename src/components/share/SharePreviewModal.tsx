@@ -15,6 +15,7 @@ import {
   SHARE_I18N,
   getShareI18n,
 } from "../../utils/canvasShare";
+import { getCrazyGamesInviteLink } from "../../services/CrazyGamesSDK";
 
 export interface SharePreviewModalProps {
   isOpen: boolean;
@@ -157,8 +158,12 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     if (playClickSound) playClickSound();
     if (isGenerating || !generatedImage) return;
 
-    const challengeUrl =
+    let challengeUrl =
       buildFreshChallengeUrl(challengeId, playerName) || window.location.href;
+    const cgInvite = await getCrazyGamesInviteLink({ challenge: challengeId, sender: playerName });
+    if (cgInvite) {
+      challengeUrl = cgInvite;
+    }
     const shareText = i18n.modal.share_msg(challengeUrl);
     const base64Data = generatedImage.replace(/^data:image\/png;base64,/, "");
 

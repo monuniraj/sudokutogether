@@ -1090,7 +1090,7 @@ export function buildFreshChallengeUrl(
 
   return {
     fullUrl: `${origin}/?challenge=${challengeId}${senderQuery}`,
-    displayUrl: `sudokusync.com | Room Code: ${seed}`,
+    displayUrl: `${typeof window !== "undefined" && Boolean(window.CrazyGames) ? "Play on CrazyGames.com" : "sudokusync.com"} | Room Code: ${seed}`,
     extractedRoomCode: seed,
     challengeId,
   };
@@ -2177,7 +2177,8 @@ function getUnifiedStickerPalette(
   ctx.fill();
   ctx.restore();
 
-  const domainText = "sudokusync.com";
+  const isCrazyGames = typeof window !== "undefined" && Boolean(window.CrazyGames);
+  const domainText = isCrazyGames ? "Play on CrazyGames.com" : "sudokusync.com";
   const dividerText = "  |  ";
   const cleanFooterPrefix = i18n.footer.room_code.trim();
   const roomLabelText = cleanFooterPrefix.startsWith("#") ? `${cleanFooterPrefix} ` : `# ${cleanFooterPrefix} `;
