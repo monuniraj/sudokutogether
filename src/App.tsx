@@ -1702,6 +1702,15 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Immediate CrazyGames SDK initialization handshake on container boot
+  useEffect(() => {
+    if (isCrazyGamesActive()) {
+      initCrazyGames().catch((err) => {
+        console.warn("[CrazyGamesSDK] Early initialization handshake failed:", err);
+      });
+    }
+  }, []);
+
   const [activeTab, setActiveTab] = useState<"sudoku" | "sandbox" | "kotlin-code" | "spec-docs">("sudoku");
   const [currentScreen, setCurrentScreen] = useState<"home" | "status" | "settings" | "game" | "login" | "together">("home");
   const currentScreenRef = useRef(currentScreen);
