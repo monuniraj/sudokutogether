@@ -66,6 +66,11 @@ export interface GameOverModalProps {
   isInvitingAll: boolean;
   shareChallengeLink: (roomCode: string, msg: string) => Promise<void>;
   onStartRematchGame: () => void;
+
+  // Standings Pagination (Optional)
+  onLoadMoreStandings?: () => void;
+  hasMoreStandings?: boolean;
+  isLoadingMoreStandings?: boolean;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -105,7 +110,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   shareChallengeLink,
   onStartRematchGame,
   isMultiplayer,
-  completedGames
+  completedGames,
+  onLoadMoreStandings,
+  hasMoreStandings = false,
+  isLoadingMoreStandings = false
 }) => {
   const { t } = useTranslation();
   const [activeListTab, setActiveListTab] = useState<'recent' | 'friends'>('recent');
@@ -162,10 +170,14 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         (myAuthUid && uId === myAuthUid) ||
         (userProfile?.id && uId === userProfile.id) ||
         (effectiveUserId && uId === effectiveUserId) ||
+        (r.authUid && (r.authUid === myAuthUid || r.authUid === effectiveUserId)) ||
+        (r.guestId && userProfile?.id && r.guestId === userProfile.id) ||
         uId === localMe.id
       );
-      if (isCurrentUser && localMe.id !== uId) {
-        resultsMap.delete(localMe.id);
+      if (isCurrentUser) {
+        if (localMe.id !== uId) resultsMap.delete(localMe.id);
+        if (myAuthUid && myAuthUid !== uId) resultsMap.delete(myAuthUid);
+        if (userProfile?.id && userProfile.id !== uId) resultsMap.delete(userProfile.id);
       }
       const playerMistakes = r.mistakes !== undefined
         ? Number(r.mistakes)
@@ -229,6 +241,158 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
   const isMultiplayerCompetitive = isMultiplayer ?? (challengeSeed !== undefined || results.length >= 2);
   const localLowerRankRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const myCardRef = useRef<HTMLDivElement | null>(null);
+  const [stickyAnchor, setStickyAnchor] = useState<'none' | 'top' | 'bottom'>('none');
+
+  const myPlayerIndex = useMemo(() => results.findIndex(p => p.isMe), [results]);
+  const myPlayer = useMemo(() => (myPlayerIndex >= 0 ? results[myPlayerIndex] : null), [results, myPlayerIndex]);
+  const myRankNum = myPlayerIndex >= 0 ? myPlayerIndex + 1 : null;
+
+  const checkStickyAnchor = () => {
+    const container = scrollContainerRef.current;
+    if (!container || !isMultiplayerCompetitive) {
+      setStickyAnchor('none');
+      return;
+    }
+
+    // Small-match invariance: when scrollHeight <= clientHeight + 4, keep sticky anchors completely hidden
+    if (container.scrollHeight <= container.clientHeight + 4) {
+      setStickyAnchor('none');
+      return;
+    }
+
+    const myCard = myCardRef.current;
+    if (!myCard) {
+      // If user card is not in current DOM (e.g. beyond current loaded batch), pin as footer
+      setStickyAnchor('bottom');
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const cardRect = myCard.getBoundingClientRect();
+
+    // 8px tolerance buffer
+    if (cardRect.bottom < containerRect.top + 8) {
+      // Case C: User has scrolled past their rank towards lower ranks -> Sticky header at top
+      setStickyAnchor('top');
+    } else if (cardRect.top > containerRect.bottom - 8) {
+      // Case A: User rank is below current scroll viewport -> Sticky footer at bottom
+      setStickyAnchor('bottom');
+    } else {
+      // Case B: User card is within visible viewport -> In-flow inline render (hide floating overlay)
+      setStickyAnchor('none');
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen || endGameStep !== 1) return;
+    checkStickyAnchor();
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      checkStickyAnchor();
+    });
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, [isOpen, endGameStep, results.length]);
+
+  const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    checkStickyAnchor();
+
+    if (onLoadMoreStandings && hasMoreStandings && !isLoadingMoreStandings) {
+      const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+      if (scrollHeight - scrollTop - clientHeight < 120) {
+        onLoadMoreStandings();
+      }
+    }
+  };
+
+  const renderStickySelfAnchor = (position: 'top' | 'bottom') => {
+    if (!myPlayer) return null;
+    const isPending = !!myPlayer.isPending;
+    const rankStr = myRankNum
+      ? myRankNum === 1
+        ? t("podium1st")
+        : myRankNum === 2
+        ? t("podium2nd")
+        : myRankNum === 3
+        ? t("podium3rd")
+        : `${myRankNum}th`
+      : "—";
+
+    return (
+      <div
+        className={`p-2.5 sm:p-3 rounded-2xl flex items-center justify-between gap-2.5 sm:gap-3 shadow-[0_10px_25px_rgba(0,0,0,0.12)] border-none select-none transition-all ${
+          darkMode
+            ? "bg-zinc-800/95 backdrop-blur-md text-stone-100 shadow-purple-950/30"
+            : "bg-[#FFFBF5]/95 backdrop-blur-md text-stone-900 shadow-amber-900/15"
+        }`}
+      >
+        {/* Left: Pin + Rank + Name + You Badge */}
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span
+            className={`font-mono text-xs font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shrink-0 ${
+              myRankNum === 1
+                ? darkMode ? "bg-amber-400/20 text-amber-300" : "bg-amber-100 text-amber-700"
+                : myRankNum === 2
+                ? darkMode ? "bg-sky-400/20 text-sky-300" : "bg-sky-100 text-sky-700"
+                : myRankNum === 3
+                ? darkMode ? "bg-orange-400/20 text-orange-300" : "bg-orange-100 text-orange-700"
+                : darkMode ? "bg-zinc-700/60 text-zinc-300" : "bg-stone-200/80 text-stone-700"
+            }`}
+          >
+            {myRankNum === 1 ? (
+              <Trophy className="w-3.5 h-3.5 stroke-[2.5]" />
+            ) : (
+              <span>📌</span>
+            )}
+            <span>{rankStr}</span>
+          </span>
+
+          <span className="font-sans font-bold text-sm truncate">
+            {myPlayer.name}
+          </span>
+
+          <span className="text-[9px] px-1.5 py-0.5 rounded font-sans font-bold uppercase tracking-wider shrink-0 bg-purple-500/15 text-purple-700 dark:text-purple-300">
+            {t("youBadge")}
+          </span>
+
+          {/* Direction Indicator Hint */}
+          <span className="text-[9px] font-mono text-stone-400 dark:text-zinc-500 hidden sm:inline-block">
+            {position === 'top' ? "▲ above" : "▼ below"}
+          </span>
+        </div>
+
+        {/* Right: Time / Status + Mistakes */}
+        <div className="flex flex-col items-end shrink-0 text-right">
+          {myPlayer.isAbandoned ? (
+            <span className="font-mono text-xs font-semibold text-rose-500">{t("statusLeft")}</span>
+          ) : isPending ? (
+            <span className="font-mono text-xs text-amber-500 dark:text-amber-400 flex items-center gap-1 font-bold">
+              <span>{t("statusSolving")}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-pulse" />
+            </span>
+          ) : myPlayer.failed ? (
+            <span className="font-mono font-semibold text-xs text-rose-500">{t("statusFailed")}</span>
+          ) : (
+            <span className="font-mono font-bold text-sm sm:text-base text-purple-700 dark:text-purple-300">
+              {formatTimer(myPlayer.time < 9999 ? myPlayer.time : myPlayer.elapsedTime || 0)}
+            </span>
+          )}
+
+          <span className="font-sans text-[9px] text-stone-400 dark:text-zinc-500">
+            {myPlayer.mistakes === 0
+              ? t("zeroErrorsCount")
+              : myPlayer.mistakes === 1
+              ? t("singleErrorCount")
+              : t("multiErrorsCount", { count: myPlayer.mistakes })}
+          </span>
+        </div>
+      </div>
+    );
+  };
 
   useEffect(() => {
     if (isOpen && endGameStep === 1 && localLowerRankRef.current) {
@@ -327,8 +491,29 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
             <div className={`w-full h-px shrink-0 ${darkMode ? "bg-zinc-800" : "bg-stone-200"}`} />
 
-            {/* SCREEN 1: Middle Leaderboard Player List cleanly spaced */}
-            <div className="max-h-[48vh] sm:max-h-[52vh] overflow-y-auto overscroll-contain px-1 py-1 custom-scrollbar flex flex-col gap-2.5">
+            {/* SCREEN 1: Middle Leaderboard Player List with Bi-Directional Sticky Self-Anchor */}
+            <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
+              {/* Sticky Header Anchor (Case C: User scrolled past their rank towards lower ranks) */}
+              <AnimatePresence>
+                {stickyAnchor === 'top' && myPlayer && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="pointer-events-none absolute top-1 left-1.5 right-1.5 z-20"
+                  >
+                    {renderStickySelfAnchor('top')}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Scrollable list container */}
+              <div
+                ref={scrollContainerRef}
+                onScroll={handleListScroll}
+                className="max-h-[48vh] sm:max-h-[52vh] overflow-y-auto overscroll-contain px-1 py-1 custom-scrollbar flex flex-col gap-2.5"
+              >
               {results.map((player, idx) => {
                 const isPending = !!player.isPending;
                 const isPodium1 = isMultiplayerCompetitive && idx === 0 && !player.failed && !player.isAbandoned && !isPending;
@@ -421,7 +606,14 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 return (
                   <div
                     key={player.id}
-                    ref={isLowerRank && player.isMe ? localLowerRankRef : undefined}
+                    ref={(el) => {
+                      if (player.isMe) {
+                        myCardRef.current = el;
+                        if (isLowerRank) {
+                          localLowerRankRef.current = el;
+                        }
+                      }
+                    }}
                     style={containerStyle}
                     className={containerClass}
                   >
@@ -645,7 +837,32 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   </div>
                 );
               })}
+
+              {/* Loading indicator for on-demand pagination */}
+              {isLoadingMoreStandings && (
+                <div className="flex items-center justify-center py-2 text-xs text-stone-400 dark:text-zinc-500 gap-1.5 select-none shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" style={{ animationDelay: "0.2s" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" style={{ animationDelay: "0.4s" }} />
+                </div>
+              )}
             </div>
+
+            {/* Sticky Footer Anchor (Case A: User rank is below current scroll viewport) */}
+            <AnimatePresence>
+              {stickyAnchor === 'bottom' && myPlayer && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.2 }}
+                  className="pointer-events-none absolute bottom-1 left-1.5 right-1.5 z-20"
+                >
+                  {renderStickySelfAnchor('bottom')}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
             {/* SCREEN 1: Action buttons — SAME GAME | NEW GAME — Evenly Sharing Footer */}
             <div className="flex gap-2.5 w-full pt-3 border-t border-stone-200/50 dark:border-zinc-800/50 shrink-0">

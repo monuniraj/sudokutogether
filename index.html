@@ -1,133 +1,147 @@
 <!doctype html>
 <html lang="en" style="background-color: #000000;">
-  <head>
-    <script>
-      if (window.location.hostname.includes('web.app') || window.location.hostname.includes('firebaseapp.com')) {
-        window.location.replace('https://sudokusync.com' + window.location.pathname + window.location.search + (window.location.hash || ''));
-      }
-    </script>
-    <link rel="canonical" href="https://sudokusync.com/" />
 
-    <!-- INVITE PARAM RESCUE: Captures challenge URL params synchronously before React/SW
+<head>
+  <script>
+    if (window.location.hostname.includes('web.app') || window.location.hostname.includes('firebaseapp.com')) {
+      window.location.replace('https://sudokusync.com' + window.location.pathname + window.location.search + (window.location.hash || ''));
+    }
+  </script>
+  <link rel="canonical" href="https://sudokusync.com/" />
+
+  <!-- INVITE PARAM RESCUE: Captures challenge URL params synchronously before React/SW
          swallows them. Runs before any framework code, persists into sessionStorage.
          This is the canonical PWA deep-link fix pattern. -->
-    <script>
-      (function() {
-        try {
-          var p = new URLSearchParams(window.location.search);
-          var c = p.get('challenge') || p.get('gameId') || p.get('c') || p.get('room') || p.get('roomId');
-          if (c) {
-            sessionStorage.setItem('sudoku_invite_challenge', c);
-            sessionStorage.setItem('sudoku_invite_pw', p.get('pw') || p.get('password') || '');
-            sessionStorage.setItem('sudoku_invite_sender', p.get('sender') || p.get('senderName') || p.get('invitedBy') || '');
-            sessionStorage.setItem('sudoku_invite_view', p.get('view') || '');
-          }
-          // Also rescue hash-embedded params (e.g. /#?challenge=...)
-          if (!c && window.location.hash) {
-            var hi = window.location.hash.indexOf('?');
-            if (hi !== -1) {
-              var hp = new URLSearchParams(window.location.hash.substring(hi + 1));
-              var hc = hp.get('challenge') || hp.get('gameId') || hp.get('c') || hp.get('room') || hp.get('roomId');
-              if (hc) {
-                sessionStorage.setItem('sudoku_invite_challenge', hc);
-                sessionStorage.setItem('sudoku_invite_pw', hp.get('pw') || hp.get('password') || '');
-                sessionStorage.setItem('sudoku_invite_sender', hp.get('sender') || hp.get('senderName') || '');
-                sessionStorage.setItem('sudoku_invite_view', hp.get('view') || '');
-              }
-            } else {
-              var cleanHash = window.location.hash.replace(/^[#\/]+/, '');
-              if (cleanHash.startsWith('SUDOKU-')) {
-                sessionStorage.setItem('sudoku_invite_challenge', cleanHash);
-              }
+  <script>
+    (function () {
+      try {
+        var p = new URLSearchParams(window.location.search);
+        var c = p.get('challenge') || p.get('gameId') || p.get('c') || p.get('room') || p.get('roomId');
+        if (c) {
+          sessionStorage.setItem('sudoku_invite_challenge', c);
+          sessionStorage.setItem('sudoku_invite_pw', p.get('pw') || p.get('password') || '');
+          sessionStorage.setItem('sudoku_invite_sender', p.get('sender') || p.get('senderName') || p.get('invitedBy') || '');
+          sessionStorage.setItem('sudoku_invite_view', p.get('view') || '');
+        }
+        // Also rescue hash-embedded params (e.g. /#?challenge=...)
+        if (!c && window.location.hash) {
+          var hi = window.location.hash.indexOf('?');
+          if (hi !== -1) {
+            var hp = new URLSearchParams(window.location.hash.substring(hi + 1));
+            var hc = hp.get('challenge') || hp.get('gameId') || hp.get('c') || hp.get('room') || hp.get('roomId');
+            if (hc) {
+              sessionStorage.setItem('sudoku_invite_challenge', hc);
+              sessionStorage.setItem('sudoku_invite_pw', hp.get('pw') || hp.get('password') || '');
+              sessionStorage.setItem('sudoku_invite_sender', hp.get('sender') || hp.get('senderName') || '');
+              sessionStorage.setItem('sudoku_invite_view', hp.get('view') || '');
+            }
+          } else {
+            var cleanHash = window.location.hash.replace(/^[#\/]+/, '');
+            if (cleanHash.startsWith('SUDOKU-')) {
+              sessionStorage.setItem('sudoku_invite_challenge', cleanHash);
             }
           }
-        } catch(e) {}
-      })();
-    </script>
+        }
+      } catch (e) { }
+    })();
+  </script>
 
-    <script>
-      (function() {
-        try {
-          var d = localStorage.getItem('sudoku_darkMode');
-          if (d === 'true' || (d === null && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
-        } catch(e) {}
-      })();
-    </script>
+  <script>
+    (function () {
+      try {
+        var d = localStorage.getItem('sudoku_darkMode');
+        if (d === 'true' || (d === null && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (e) { }
+    })();
+  </script>
 
-    <meta charset="UTF-8" />
-    <meta name="robots" content="index, follow">
-    <title>SudokuSync - Real-Time Multiplayer Sudoku</title>
+  <meta charset="UTF-8" />
+  <meta name="robots" content="index, follow">
+  <title>SudokuSync - Real-Time Multiplayer Sudoku</title>
 
-    <!-- Google Search & Browser Favicons (Google Search requires square 1:1, multiple of 48px: 48x48, 96x96, 192x192) -->
-    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
-    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/logo192.png" />
-    <link rel="shortcut icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.json" />
-    <!-- CrazyGames SDK v3 -->
-    <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+  <!-- Google Search & Browser Favicons (Google Search requires square 1:1, multiple of 48px: 48x48, 96x96, 192x192) -->
+  <link rel="icon" type="image/png" sizes="48x48" href="./favicon-48x48.png" />
+  <link rel="icon" type="image/png" sizes="96x96" href="./favicon-96x96.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./logo192.png" />
+  <link rel="icon" type="image/png" href="./logo.png" />
+  <link rel="shortcut icon" href="./favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+  <link rel="manifest" href="./manifest.json" />
+  <!-- CrazyGames SDK v3 -->
+  <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
 
-    <meta name="google-adsense-account" content="ca-pub-2107539674074275">
-    <meta name="google-site-verification" content="sqIwQ2v9K8H79kxv0pC-x3PH3lN1bNACTXQmO-Tvje0" />
+  <meta name="google-adsense-account" content="ca-pub-2107539674074275">
+  <meta name="google-site-verification" content="sqIwQ2v9K8H79kxv0pC-x3PH3lN1bNACTXQmO-Tvje0" />
 
-    <meta name="description" content="Play classic Sudoku with friends in real-time multiplayer mode on SudokuSync. Challenge friends on identical boards, track stats, and improve logical reasoning.">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="description"
+    content="Play classic Sudoku with friends in real-time multiplayer mode on SudokuSync. Challenge friends on identical boards, track stats, and improve logical reasoning.">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 
-    <!-- Open Graph Metadata -->
-    <meta property="og:title" content="SudokuSync - Real-Time Multiplayer Sudoku" />
-    <meta property="og:description" content="Play classic Sudoku with friends in real-time multiplayer mode on SudokuSync. Challenge friends on identical boards, track stats, and improve logical reasoning." />
-    <meta property="og:url" content="https://sudokusync.com/" />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://sudokusync.com/logo.png" />
+  <!-- Open Graph Metadata -->
+  <meta property="og:title" content="SudokuSync - Real-Time Multiplayer Sudoku" />
+  <meta property="og:description"
+    content="Play classic Sudoku with friends in real-time multiplayer mode on SudokuSync. Challenge friends on identical boards, track stats, and improve logical reasoning." />
+  <meta property="og:url" content="https://sudokusync.com/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="./logo.png" />
 
-    <!-- Twitter Card Metadata -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="SudokuSync - Real-Time Multiplayer Sudoku" />
-    <meta name="twitter:description" content="Play classic Sudoku with friends in real-time multiplayer mode on SudokuSync. Challenge friends on identical boards, track stats, and improve logical reasoning." />
-    <meta name="twitter:image" content="https://sudokusync.com/logo.png" />
+  <!-- Twitter Card Metadata -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SudokuSync - Real-Time Multiplayer Sudoku" />
+  <meta name="twitter:description"
+    content="Play classic Sudoku with friends in real-time multiplayer mode on SudokuSync. Challenge friends on identical boards, track stats, and improve logical reasoning." />
 
-    <style>
-      html, body {
-        overscroll-behavior-y: none;
-        overscroll-behavior: none;
-        user-select: none;
-        -webkit-user-select: none;
-        background-color: #000000;
-      }
-    </style>
-  </head>
-  <body style="background-color: #000000;">
-    <noscript>
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 2rem; max-width: 800px; margin: 0 auto; line-height: 1.6; color: #1e1e1e; background-color: #fdfbf7;">
-        <h1>SudokuSync - Free Real-Time Multiplayer Sudoku</h1>
-        <p>
-          SudokuSync is a modern logic puzzle platform featuring classic 9x9 Sudoku challenges, real-time multiplayer co-op and vs rooms, and cognitive training tools. Play instant solo games across Easy, Medium, Hard, and Expert difficulty levels, or invite friends to solve identical boards simultaneously.
-        </p>
-        <h2>How to Play Sudoku</h2>
-        <p>
-          Fill the 9x9 grid such that each row, column, and 3x3 region contains all digits from 1 to 9 without duplication or repetition. No arithmetic calculations are needed—only pure deductive reasoning.
-        </p>
-        <h2>Key Features</h2>
-        <ul>
-          <li>Deterministic seeded puzzles for fair competition</li>
-          <li>Smart assistants including candidate notes and auto-remove options</li>
-          <li>Complete privacy protection with zero intrusive tracking</li>
-        </ul>
-        <footer style="margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;">
-          <a href="/about.html" style="color: #0369a1; text-decoration: underline;">About Us</a> |
-          <a href="/contact.html" style="color: #0369a1; text-decoration: underline;">Contact Us</a> |
-          <a href="/privacy.html" style="color: #0369a1; text-decoration: underline;">Privacy Policy</a> |
-          <a href="/terms.html" style="color: #0369a1; text-decoration: underline;">Terms of Service</a>
-          <span style="opacity: 0.8; font-family: monospace; font-size: 11px; margin-left: 0.5rem;">© 2026 SudokuSync. All rights reserved.</span>
-        </footer>
-      </div>
-    </noscript>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+
+  <style>
+    html,
+    body {
+      overscroll-behavior-y: none;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      background-color: #000000;
+    }
+  </style>
+</head>
+
+<body style="background-color: #000000;">
+  <noscript>
+    <div
+      style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 2rem; max-width: 800px; margin: 0 auto; line-height: 1.6; color: #1e1e1e; background-color: #fdfbf7;">
+      <h1>SudokuSync - Free Real-Time Multiplayer Sudoku</h1>
+      <p>
+        SudokuSync is a modern logic puzzle platform featuring classic 9x9 Sudoku challenges, real-time multiplayer
+        co-op and vs rooms, and cognitive training tools. Play instant solo games across Easy, Medium, Hard, and Expert
+        difficulty levels, or invite friends to solve identical boards simultaneously.
+      </p>
+      <h2>How to Play Sudoku</h2>
+      <p>
+        Fill the 9x9 grid such that each row, column, and 3x3 region contains all digits from 1 to 9 without duplication
+        or repetition. No arithmetic calculations are needed—only pure deductive reasoning.
+      </p>
+      <h2>Key Features</h2>
+      <ul>
+        <li>Deterministic seeded puzzles for fair competition</li>
+        <li>Smart assistants including candidate notes and auto-remove options</li>
+        <li>Complete privacy protection with zero intrusive tracking</li>
+      </ul>
+      <footer style="margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;">
+        <a href="/about.html" style="color: #0369a1; text-decoration: underline;">About Us</a> |
+        <a href="/contact.html" style="color: #0369a1; text-decoration: underline;">Contact Us</a> |
+        <a href="/privacy.html" style="color: #0369a1; text-decoration: underline;">Privacy Policy</a> |
+        <a href="/terms.html" style="color: #0369a1; text-decoration: underline;">Terms of Service</a>
+        <span style="opacity: 0.8; font-family: monospace; font-size: 11px; margin-left: 0.5rem;">© 2026 SudokuSync. All
+          rights reserved.</span>
+      </footer>
+    </div>
+  </noscript>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>

@@ -63,6 +63,10 @@ import {
   getDocs,
   query,
   where,
+  orderBy,
+  limit,
+  startAfter,
+  type QueryDocumentSnapshot,
   updateDoc,
   deleteDoc,
   writeBatch,
@@ -2162,6 +2166,9 @@ export default function App() {
     syncedLeaderboardRef.current = syncedLeaderboard;
   }, [syncedLeaderboard]);
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState<boolean>(false);
+  const [leaderboardLastVisibleDoc, setLeaderboardLastVisibleDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [leaderboardHasMore, setLeaderboardHasMore] = useState<boolean>(true);
+  const [isLoadingMoreLeaderboard, setIsLoadingMoreLeaderboard] = useState<boolean>(false);
   const [challengeMode, setChallengeMode] = useState<boolean>(false);
   const [challengeSeed, setChallengeSeed] = useState<number | null>(null);
   const [challengeMistakeLimit, setChallengeMistakeLimit] = useState<number>(3);
@@ -2504,6 +2511,9 @@ export default function App() {
     hintsLimit: number;
     timerEnabled: boolean;
     endGameStep?: 1 | 2;
+    lastVisibleDoc?: QueryDocumentSnapshot | null;
+    hasMore?: boolean;
+    isLoadingMore?: boolean;
   } | null>(null);
   const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
   const [incomingChallengeId, setIncomingChallengeId] = useState<string | null>(null);
@@ -6266,7 +6276,7 @@ export default function App() {
   // Forfeit / leave active multiplayer match when player explicitly starts a new game, joins another match, or terminates session
   const markCurrentMultiplayerForfeit = async (roomCodeToForfeit?: string | null) => {
     const targetRoom = roomCodeToForfeit || activeGameId;
-    const uid = userProfile?.id || "GUEST_ANON";
+    const uid = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id || "GUEST_ANON";
     if (!targetRoom || !uid) return;
 
     // TERMINAL STATE LOCK: If current local game is already terminal, DO NOT overwrite with left/forfeit
@@ -7535,8 +7545,8 @@ export default function App() {
         return updated;
       });
 
-      // Register participant in challenge results
-      registerChallengeJoin(roomCode);
+      // Register participant in challenge results (forceJoin bypasses stale closure guards)
+      registerChallengeJoin(roomCode, true);
 
       // Navigate to game view immediately
       navigateToScreen("game");
@@ -7748,13 +7758,39 @@ export default function App() {
     (async () => {
       try {
         const docId = getSeedDocId(cleanRoomCode);
-        const [roomSnap, playersSnap, resultsSnap, invitesSnap] = await Promise.all([
+        const participantsCol = collection(db, "challenge_results", docId, "participants");
+
+        // 20-Player Batching with Composite Index Guard
+        let resultsSnap: any = { docs: [] };
+        try {
+          const q = query(
+            participantsCol,
+            orderBy("isWon", "desc"),
+            orderBy("timeSec", "asc"),
+            orderBy("mistakes", "asc"),
+            limit(20)
+          );
+          resultsSnap = await getDocs(q);
+        } catch (idxErr: any) {
+          console.warn("[Results] Composite query index guard fallback for challenge_results:", idxErr?.code || idxErr);
+          try {
+            resultsSnap = await getDocs(query(participantsCol, limit(20)));
+          } catch (fbErr) {
+            console.warn("[Results] Fallback participants query notice:", fbErr);
+            resultsSnap = { docs: [] };
+          }
+        }
+
+        const [roomSnap, playersSnap] = await Promise.all([
           getDoc(doc(db, "rooms", cleanRoomCode)),
-          getDocs(collection(db, "rooms", cleanRoomCode, "players")),
-          getDocs(collection(db, "challenge_results", docId, "participants")).catch(() => ({ docs: [] } as any)),
-          getDocs(query(collection(db, "invites"), where("roomCode", "==", cleanRoomCode))).catch(() => ({ docs: [] } as any))
+          getDocs(collection(db, "rooms", cleanRoomCode, "players"))
         ]);
         const roomData = roomSnap.exists() ? roomSnap.data() : null;
+
+        const lastDoc = resultsSnap.docs && resultsSnap.docs.length > 0
+          ? resultsSnap.docs[resultsSnap.docs.length - 1]
+          : null;
+        const hasMore = Boolean(resultsSnap.docs && resultsSnap.docs.length === 20);
 
         const mergedMap = new Map<string, any>();
 
@@ -7766,6 +7802,7 @@ export default function App() {
           const isWon = pData.status === "won" || pData.status === "completed" || pData.status === "victory" || Boolean(pData.isWon);
           mergedMap.set(pId, {
             userId: pId,
+            authUid: pData.authUid || (!pId.startsWith("GUEST_") ? pId : undefined),
             playerName: pData.name || pData.playerName || "Player",
             timeSec: pData.timeSec !== undefined ? Number(pData.timeSec) : (pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : 0),
             elapsedTime: pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : (pData.timeSec !== undefined ? Number(pData.timeSec) : 0),
@@ -7777,32 +7814,11 @@ export default function App() {
           });
         });
 
-        // Surface invited opponents who haven't completed yet as pending
-        if (invitesSnap && invitesSnap.docs) {
-          invitesSnap.docs.forEach((d: any) => {
-            const inv = d.data();
-            const invToId = inv.toUserId || inv.recipientId;
-            if (invToId && !mergedMap.has(invToId)) {
-              mergedMap.set(invToId, {
-                userId: invToId,
-                playerName: inv.toUserName || inv.fromName || "Invited Friend",
-                timeSec: 0,
-                elapsedTime: 0,
-                mistakes: 0,
-                hints: 0,
-                isWon: false,
-                status: "pending",
-                isPending: true
-              });
-            }
-          });
-        }
-
         // Also query /challenge_results/{docId}/participants for full parity
         if (resultsSnap && resultsSnap.docs) {
           resultsSnap.docs.forEach((d: any) => {
             const rData = d.data();
-            const rId = rData.userId || d.id;
+            const rId = rData.userId || rData.authUid || d.id;
             if (rId) {
               const existing = mergedMap.get(rId);
               const rFinished = rData.status === "completed" || rData.status === "won" || rData.status === "victory" || rData.status === "mistake_game_over" || rData.status === "failed" || (!rData.isPending && (rData.isWon !== undefined || rData.timeSec !== undefined));
@@ -7811,6 +7827,7 @@ export default function App() {
                 ...existing,
                 ...rData,
                 userId: rId,
+                authUid: rData.authUid || existing?.authUid || (!rId.startsWith("GUEST_") ? rId : undefined),
                 playerName: rData.playerName || existing?.playerName || "Player",
                 timeSec: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.timeSec || 0),
                 elapsedTime: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.elapsedTime || 0),
@@ -7818,7 +7835,7 @@ export default function App() {
                 hints: rData.hints !== undefined ? Number(rData.hints) : (existing?.hints || 0),
                 isWon: rWon,
                 status: rData.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
-                isPending: rFinished ? false : (rData.isPending !== undefined ? Boolean(rData.isPending) : (existing ? existing.isPending : true))
+                isPending: rFinished ? false : (rData.isPending !== undefined ? Boolean(rData.isPending) : (existing ? existing.isPending : false))
               });
             }
           });
@@ -7835,12 +7852,217 @@ export default function App() {
             mistakesLimit: roomData?.mistakesLimit !== undefined ? roomData.mistakesLimit : prev.mistakesLimit,
             hintsLimit: roomData?.hintsLimit !== undefined ? roomData.hintsLimit : prev.hintsLimit,
             timerEnabled: roomData?.timerEnabled !== undefined ? roomData.timerEnabled : prev.timerEnabled,
+            lastVisibleDoc: lastDoc,
+            hasMore,
+            isLoadingMore: false
           };
         });
       } catch (err) {
         console.error("[Results] Background standings sync error:", err);
       }
     })();
+  };
+
+  // Scoped real-time listener for notificationResultModal: keeps standings dynamically synchronized while modal is open
+  useEffect(() => {
+    const roomCode = notificationResultModal?.roomCode;
+    if (!roomCode) return;
+
+    const docId = getSeedDocId(roomCode);
+    const roomPlayersCol = collection(db, "rooms", roomCode, "players");
+    const participantsCol = collection(db, "challenge_results", docId, "participants");
+
+    let latestRoomPlayers: any[] = [];
+    let latestResults: any[] = [];
+
+    const reconcileStandings = () => {
+      const mergedMap = new Map<string, any>();
+
+      latestRoomPlayers.forEach(p => {
+        const pId = p.id || p.userId;
+        if (!pId) return;
+        const isLeft = p.status === "left" || p.status === "abandoned" || p.status === "disconnected" || p.status === "forfeited";
+        const isFinished = p.status === "completed" || p.status === "won" || p.status === "victory" || p.status === "mistake_game_over" || p.status === "failed";
+        const isWon = p.status === "won" || p.status === "completed" || p.status === "victory" || Boolean(p.isWon);
+        mergedMap.set(pId, {
+          userId: pId,
+          authUid: p.authUid || (!pId.startsWith("GUEST_") ? pId : undefined),
+          playerName: p.name || p.playerName || "Player",
+          timeSec: p.timeSec !== undefined ? Number(p.timeSec) : (p.elapsedTime !== undefined ? Number(p.elapsedTime) : 0),
+          elapsedTime: p.elapsedTime !== undefined ? Number(p.elapsedTime) : (p.timeSec !== undefined ? Number(p.timeSec) : 0),
+          mistakes: p.mistakes !== undefined ? Number(p.mistakes) : 0,
+          hints: p.hints !== undefined ? Number(p.hints) : 0,
+          isWon: isWon,
+          status: p.status || (isWon ? "completed" : "active"),
+          isPending: !isLeft && !isFinished
+        });
+      });
+
+      latestResults.forEach(r => {
+        const rId = r.userId || r.authUid || r.id;
+        if (!rId) return;
+        const existing = mergedMap.get(rId);
+        const rFinished = r.status === "completed" || r.status === "won" || r.status === "victory" || r.status === "mistake_game_over" || r.status === "failed" || (!r.isPending && (r.isWon !== undefined || r.timeSec !== undefined));
+        const rWon = r.status === "won" || r.status === "completed" || r.status === "victory" || Boolean(r.isWon) || Boolean(existing?.isWon);
+        mergedMap.set(rId, {
+          ...existing,
+          ...r,
+          userId: rId,
+          authUid: r.authUid || existing?.authUid || (!rId.startsWith("GUEST_") ? rId : undefined),
+          playerName: r.playerName || existing?.playerName || "Player",
+          timeSec: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.timeSec || 0),
+          elapsedTime: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.elapsedTime || 0),
+          mistakes: r.mistakes !== undefined ? Number(r.mistakes) : (existing?.mistakes || 0),
+          hints: r.hints !== undefined ? Number(r.hints) : (existing?.hints || 0),
+          isWon: rWon,
+          status: r.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
+          isPending: rFinished ? false : (r.isPending !== undefined ? Boolean(r.isPending) : (existing ? existing.isPending : false))
+        });
+      });
+
+      const resultsList = Array.from(mergedMap.values());
+      if (resultsList.length > 0) {
+        setNotificationResultModal(prev => {
+          if (!prev || prev.roomCode !== roomCode) return prev;
+          return {
+            ...prev,
+            participants: resultsList
+          };
+        });
+      }
+    };
+
+    const unsubPlayers = onSnapshot(roomPlayersCol, (snapshot) => {
+      latestRoomPlayers = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
+      reconcileStandings();
+    }, (err) => {
+      console.warn("[Results Realtime] Room players listener notice:", err);
+    });
+
+    let participantsQuery: any = participantsCol;
+    try {
+      participantsQuery = query(
+        participantsCol,
+        orderBy("isWon", "desc"),
+        orderBy("timeSec", "asc"),
+        orderBy("mistakes", "asc"),
+        limit(20)
+      );
+    } catch {
+      participantsQuery = query(participantsCol, limit(20));
+    }
+
+    let unsubParticipants: () => void = () => {};
+    try {
+      unsubParticipants = onSnapshot(participantsQuery, (snapshot) => {
+        latestResults = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
+        if (snapshot.docs.length > 0) {
+          const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+          setNotificationResultModal(prev => prev && prev.roomCode === roomCode ? { ...prev, lastVisibleDoc: lastDoc, hasMore: snapshot.docs.length === 20 } : prev);
+        }
+        reconcileStandings();
+      }, (err) => {
+        console.warn("[Results Realtime] Composite participants query fallback:", err);
+        try {
+          unsubParticipants = onSnapshot(query(participantsCol, limit(20)), (fallbackSnap) => {
+            latestResults = fallbackSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+            if (fallbackSnap.docs.length > 0) {
+              const lastDoc = fallbackSnap.docs[fallbackSnap.docs.length - 1];
+              setNotificationResultModal(prev => prev && prev.roomCode === roomCode ? { ...prev, lastVisibleDoc: lastDoc, hasMore: fallbackSnap.docs.length === 20 } : prev);
+            }
+            reconcileStandings();
+          });
+        } catch (fbErr) {
+          console.warn("[Results Realtime] Fallback listener error:", fbErr);
+        }
+      });
+    } catch (e) {
+      console.warn("[Results Realtime] Participant attach notice:", e);
+    }
+
+    return () => {
+      unsubPlayers();
+      unsubParticipants();
+    };
+  }, [notificationResultModal?.roomCode]);
+
+  const handleLoadMoreNotificationStandings = async () => {
+    if (!notificationResultModal || !notificationResultModal.hasMore || notificationResultModal.isLoadingMore || !notificationResultModal.lastVisibleDoc) {
+      return;
+    }
+
+    const { roomCode, lastVisibleDoc } = notificationResultModal;
+    const docId = getSeedDocId(roomCode);
+    const participantsCol = collection(db, "challenge_results", docId, "participants");
+
+    setNotificationResultModal(prev => prev ? { ...prev, isLoadingMore: true } : null);
+
+    try {
+      let nextSnap: any;
+      try {
+        const nextQ = query(
+          participantsCol,
+          orderBy("isWon", "desc"),
+          orderBy("timeSec", "asc"),
+          orderBy("mistakes", "asc"),
+          startAfter(lastVisibleDoc),
+          limit(20)
+        );
+        nextSnap = await getDocs(nextQ);
+      } catch (idxErr: any) {
+        console.warn("[Results] Fallback for paginated participants:", idxErr?.code || idxErr);
+        nextSnap = await getDocs(query(participantsCol, startAfter(lastVisibleDoc), limit(20)));
+      }
+
+      if (nextSnap && nextSnap.docs && nextSnap.docs.length > 0) {
+        const newBatch = nextSnap.docs.map((d: any) => {
+          const rData = d.data();
+          const rId = rData.userId || rData.authUid || d.id;
+          const rFinished = rData.status === "completed" || rData.status === "won" || rData.status === "victory" || rData.status === "mistake_game_over" || rData.status === "failed" || (!rData.isPending && (rData.isWon !== undefined || rData.timeSec !== undefined));
+          const rWon = rData.status === "won" || rData.status === "completed" || rData.status === "victory" || Boolean(rData.isWon);
+          return {
+            ...rData,
+            userId: rId,
+            authUid: rData.authUid || (!rId.startsWith("GUEST_") ? rId : undefined),
+            playerName: rData.playerName || "Player",
+            timeSec: rData.timeSec !== undefined ? Number(rData.timeSec) : 0,
+            elapsedTime: rData.timeSec !== undefined ? Number(rData.timeSec) : 0,
+            mistakes: rData.mistakes !== undefined ? Number(rData.mistakes) : 0,
+            hints: rData.hints !== undefined ? Number(rData.hints) : 0,
+            isWon: rWon,
+            status: rData.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
+            isPending: rFinished ? false : (rData.isPending !== undefined ? Boolean(rData.isPending) : false)
+          };
+        });
+
+        const newLastDoc = nextSnap.docs[nextSnap.docs.length - 1];
+        const hasMore = nextSnap.docs.length === 20;
+
+        setNotificationResultModal(prev => {
+          if (!prev || prev.roomCode !== roomCode) return prev;
+          const existingIds = new Set(prev.participants.map((p: any) => p.userId || p.id));
+          const merged = [...prev.participants];
+          newBatch.forEach((item: any) => {
+            if (!existingIds.has(item.userId)) {
+              merged.push(item);
+              existingIds.add(item.userId);
+            }
+          });
+          return {
+            ...prev,
+            participants: merged,
+            lastVisibleDoc: newLastDoc,
+            hasMore,
+            isLoadingMore: false
+          };
+        });
+      } else {
+        setNotificationResultModal(prev => prev ? { ...prev, hasMore: false, isLoadingMore: false } : null);
+      }
+    } catch (err) {
+      console.error("[Results] Error loading next standings batch:", err);
+      setNotificationResultModal(prev => prev ? { ...prev, isLoadingMore: false } : null);
+    }
   };
 
   const registerPushNotifications = async (isUserGesture = false) => {
@@ -9601,11 +9823,14 @@ export default function App() {
         }
 
         // Sync player status and progress in room
-        const userId = userProfile?.id || "GUEST_ANON";
+        const userId = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id || "GUEST_ANON";
         const docId = getSeedDocId(loaded.roomCode);
         const playerTerminalStatus = loaded.state.currentMistakesCount >= loaded.state.maxMistakesLimit ? "mistake_game_over" : "completed";
         try {
           setDoc(doc(db, "rooms", loaded.roomCode, "players", userId), {
+            id: userId,
+            authUid: auth.currentUser?.uid || authUser?.uid,
+            guestId: userProfile?.id,
             name: getActiveDisplayName(),
             status: loaded.state.isGameOver ? playerTerminalStatus : "active",
             mistakes: loaded.state.currentMistakesCount,
@@ -9614,6 +9839,11 @@ export default function App() {
 
           if (!loaded.state.isGameOver) {
             setDoc(doc(db, "challenge_results", docId, "participants", userId), {
+              challengeId: loaded.roomCode,
+              userId,
+              authUid: auth.currentUser?.uid || authUser?.uid,
+              guestId: userProfile?.id,
+              playerName: getActiveDisplayName(),
               status: "solving",
               isPending: true,
               mistakes: loaded.state.currentMistakesCount,
@@ -10301,7 +10531,7 @@ export default function App() {
 
     const isFailed = Boolean(mistakeLimitEnabled && boardState && boardState.currentMistakesCount >= boardState.maxMistakesLimit);
     const pName = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 15 && !userProfile.name.includes("Voyager")) ? userProfile.name.trim() : getActiveDisplayName();
-    const uId = userProfile?.id || "GUEST_ANON";
+    const uId = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id || "GUEST_ANON";
     const userTime = isFailed ? 9999 : sessionSeconds;
 
     setRematchMatchMode("replay");
@@ -10380,6 +10610,8 @@ export default function App() {
 
           await setDoc(doc(db, "rooms", roomCode, "players", uId), {
             id: uId,
+            authUid: auth.currentUser?.uid || authUser?.uid,
+            guestId: userProfile?.id,
             name: pName,
             status: isFailed ? "mistake_game_over" : "completed",
             isWon: !isFailed,
@@ -11328,9 +11560,50 @@ export default function App() {
       const docId = getSeedDocId(rBody.challengeId);
       const participantRef = doc(db, "challenge_results", docId, "participants", effectiveUserId);
 
+      // Personal Best Score Retention: check if a previous finished record exists
+      let shouldOverwriteScore = true;
+      try {
+        const existingSnap = await getDoc(participantRef);
+        if (existingSnap.exists()) {
+          const oldData = existingSnap.data();
+          const oldIsTerminal = oldData.status === "completed" || oldData.status === "victory" || oldData.status === "mistake_game_over" || (!oldData.isPending && oldData.timeSec !== undefined && Number(oldData.timeSec) > 0);
+          if (oldIsTerminal) {
+            const oldWon = Boolean(oldData.isWon);
+            // 1. Previous run was a win, new run is a loss -> Keep previous best win
+            if (oldWon && !effIsWon) {
+              shouldOverwriteScore = false;
+            }
+            // 2. Both runs were wins -> Compare mistakes first, then time
+            else if (oldWon && effIsWon) {
+              const oldMistakes = oldData.mistakes !== undefined ? Number(oldData.mistakes) : 0;
+              const newMistakes = effMistakes;
+              const oldTime = Number(oldData.timeSec || oldData.elapsedTime || 9999);
+              const newTime = effTimeSec;
+              if (newMistakes > oldMistakes) {
+                shouldOverwriteScore = false;
+              } else if (newMistakes === oldMistakes && newTime >= oldTime) {
+                shouldOverwriteScore = false;
+              }
+            }
+            // 3. Both runs were losses -> Compare mistakes
+            else if (!oldWon && !effIsWon) {
+              const oldMistakes = oldData.mistakes !== undefined ? Number(oldData.mistakes) : 3;
+              const newMistakes = effMistakes;
+              if (newMistakes >= oldMistakes) {
+                shouldOverwriteScore = false;
+              }
+            }
+          }
+        }
+      } catch (checkErr) {
+        console.warn("[Firestore] PB score check notice:", checkErr);
+      }
+
       const newRecord = {
         challengeId: rBody.challengeId,
         userId: effectiveUserId,
+        authUid: activeAuth?.uid || auth.currentUser?.uid || authUser?.uid,
+        guestId: userProfile?.id,
         playerName: effectivePlayerName,
         timeSec: effTimeSec,
         mistakes: effMistakes,
@@ -11341,18 +11614,28 @@ export default function App() {
         timestamp: serverTimestamp()
       };
 
-      await setDoc(participantRef, newRecord);
+      if (shouldOverwriteScore) {
+        await setDoc(participantRef, newRecord);
+      } else {
+        console.log(`[Firestore] Preserved existing Personal Best for user ${effectiveUserId} on room ${rBody.challengeId}`);
+      }
+
       try {
         const roomPlayerRef = doc(db, "rooms", rBody.challengeId, "players", effectiveUserId);
-        await setDoc(roomPlayerRef, {
+        const roomPlayerPayload: any = {
           id: effectiveUserId,
+          authUid: activeAuth?.uid || auth.currentUser?.uid || authUser?.uid,
+          guestId: userProfile?.id,
           name: effectivePlayerName,
           status: effStatus,
-          timeSec: effTimeSec,
-          mistakes: effMistakes,
           isWon: effIsWon,
           updatedAt: serverTimestamp()
-        }, { merge: true });
+        };
+        if (shouldOverwriteScore) {
+          roomPlayerPayload.timeSec = effTimeSec;
+          roomPlayerPayload.mistakes = effMistakes;
+        }
+        await setDoc(roomPlayerRef, roomPlayerPayload, { merge: true });
 
         // Synchronize canonical room document so room listeners receive instant real-time completion signal while keeping challenge room active for 7-day lifespan
         const roomDocRef = doc(db, "rooms", rBody.challengeId);
@@ -11479,16 +11762,12 @@ export default function App() {
     }
   };
 
-  const registerChallengeJoin = async (challengeId: string) => {
+  const registerChallengeJoin = async (challengeId: string, forceJoin: boolean = false) => {
     if (!challengeId) return;
 
-    // TARGET ROSTER GUARD: Never register participant if viewing results or board is game over
-    if (isViewingResultsRef.current || showGameOverModal || Boolean(viewingRankingsGame)) {
+    // TARGET ROSTER GUARD: Skip only when passively triggered while viewing results, but allow explicit join
+    if (!forceJoin && (isViewingResultsRef.current || showGameOverModal || Boolean(viewingRankingsGame))) {
       console.log(`[RosterGuard] Skipped registerChallengeJoin for ${challengeId}: currently viewing results.`);
-      return;
-    }
-    if (boardState?.isGameOver) {
-      console.log(`[RosterGuard] Skipped registerChallengeJoin for ${challengeId}: boardState is game-over.`);
       return;
     }
 
@@ -11525,13 +11804,15 @@ export default function App() {
       }
 
       // Also register active presence in room players collection
+      const isAlreadyCompleted = existing.exists() && (existing.data()?.status === "completed" || existing.data()?.status === "victory");
       const playerRef = doc(db, "rooms", challengeId, "players", authUid);
       await setDoc(playerRef, {
         id: authUid,
         authUid,
         guestId,
         name: pName,
-        status: "active",
+        status: isAlreadyCompleted ? "completed" : "active",
+        ...(isAlreadyCompleted && existing.data()?.timeSec !== undefined ? { timeSec: existing.data().timeSec } : {}),
         updatedAt: serverTimestamp()
       }, { merge: true });
     } catch (err) {
@@ -11549,6 +11830,10 @@ export default function App() {
   // Real-time Firestore listener: auto-updates syncedLeaderboard whenever any player submits/joins
   useEffect(() => {
     if (!challengeMode || !activeGameId) return;
+
+    setLeaderboardLastVisibleDoc(null);
+    setLeaderboardHasMore(true);
+    setIsLoadingMoreLeaderboard(false);
 
     const docId = getSeedDocId(activeGameId);
     const participantsCol = collection(db, "challenge_results", docId, "participants");
@@ -11648,17 +11933,61 @@ export default function App() {
       }
     };
 
-    const unsubParticipants = onSnapshot(
-      participantsCol,
-      (snapshot) => {
-        latestResults = snapshot.docs.map(d => d.data());
-        syncCombinedLeaderboard();
-      },
-      (err) => {
-        console.error(`[Firestore] Participants listener error for ${activeGameId}:`, err);
-        setIsLoadingLeaderboard(false);
-      }
-    );
+    let initialParticipantsQuery: any = participantsCol;
+    try {
+      initialParticipantsQuery = query(
+        participantsCol,
+        orderBy("isWon", "desc"),
+        orderBy("timeSec", "asc"),
+        orderBy("mistakes", "asc"),
+        limit(20)
+      );
+    } catch {
+      initialParticipantsQuery = query(participantsCol, limit(20));
+    }
+
+    let unsubParticipants: () => void = () => {};
+    try {
+      unsubParticipants = onSnapshot(
+        initialParticipantsQuery,
+        (snapshot) => {
+          latestResults = snapshot.docs.map(d => ({ ...d.data(), id: d.id, userId: d.data().userId || d.id }));
+          if (snapshot.docs.length > 0) {
+            setLeaderboardLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
+            setLeaderboardHasMore(snapshot.docs.length === 20);
+          } else {
+            setLeaderboardHasMore(false);
+          }
+          syncCombinedLeaderboard();
+        },
+        (err) => {
+          console.warn(`[Firestore] Composite participants query fallback for ${activeGameId}:`, err);
+          try {
+            unsubParticipants = onSnapshot(
+              query(participantsCol, limit(20)),
+              (fbSnap) => {
+                latestResults = fbSnap.docs.map(d => ({ ...d.data(), id: d.id, userId: d.data().userId || d.id }));
+                if (fbSnap.docs.length > 0) {
+                  setLeaderboardLastVisibleDoc(fbSnap.docs[fbSnap.docs.length - 1]);
+                  setLeaderboardHasMore(fbSnap.docs.length === 20);
+                } else {
+                  setLeaderboardHasMore(false);
+                }
+                syncCombinedLeaderboard();
+              },
+              (fbErr) => {
+                console.error(`[Firestore] Participants fallback listener error for ${activeGameId}:`, fbErr);
+                setIsLoadingLeaderboard(false);
+              }
+            );
+          } catch (e) {
+            setIsLoadingLeaderboard(false);
+          }
+        }
+      );
+    } catch (e) {
+      console.warn("[Firestore] Error setting up participants listener:", e);
+    }
 
     const unsubRoomPlayers = onSnapshot(
       roomPlayersCol,
@@ -11678,6 +12007,57 @@ export default function App() {
       unsubRoomPlayers();
     };
   }, [challengeMode, activeGameId, multiplayerSyncTrigger]);
+
+  const handleLoadMoreInGameStandings = async () => {
+    if (!activeGameId || !leaderboardHasMore || isLoadingMoreLeaderboard || !leaderboardLastVisibleDoc) {
+      return;
+    }
+
+    const docId = getSeedDocId(activeGameId);
+    const participantsCol = collection(db, "challenge_results", docId, "participants");
+    setIsLoadingMoreLeaderboard(true);
+
+    try {
+      let nextSnap: any;
+      try {
+        const nextQ = query(
+          participantsCol,
+          orderBy("isWon", "desc"),
+          orderBy("timeSec", "asc"),
+          orderBy("mistakes", "asc"),
+          startAfter(leaderboardLastVisibleDoc),
+          limit(20)
+        );
+        nextSnap = await getDocs(nextQ);
+      } catch (idxErr: any) {
+        console.warn("[Leaderboard] Fallback for paginated participants:", idxErr?.code || idxErr);
+        nextSnap = await getDocs(query(participantsCol, startAfter(leaderboardLastVisibleDoc), limit(20)));
+      }
+
+      if (nextSnap && nextSnap.docs && nextSnap.docs.length > 0) {
+        const newBatch = nextSnap.docs.map((d: any) => ({ ...d.data(), id: d.id, userId: d.data().userId || d.id }));
+        setLeaderboardLastVisibleDoc(nextSnap.docs[nextSnap.docs.length - 1]);
+        setLeaderboardHasMore(nextSnap.docs.length === 20);
+        setSyncedLeaderboard(prev => {
+          const map = new Map<string, any>();
+          prev.forEach(p => map.set(p.userId || p.id, p));
+          newBatch.forEach((item: any) => {
+            const id = item.userId || item.id;
+            if (!map.has(id)) {
+              map.set(id, item);
+            }
+          });
+          return Array.from(map.values());
+        });
+      } else {
+        setLeaderboardHasMore(false);
+      }
+    } catch (err) {
+      console.warn("[Leaderboard] Load more error:", err);
+    } finally {
+      setIsLoadingMoreLeaderboard(false);
+    }
+  };
 
   // Real-time Firestore duel completion listener: detects opponent completion instantly during active matches
   useEffect(() => {
@@ -12798,9 +13178,13 @@ export default function App() {
     if (challengeMode && isOnline) {
       const liveSeed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
       const liveRoomCode = String(liveSeed).padStart(6, '0').slice(-6);
-      if (userProfile?.id && liveRoomCode) {
+      const targetUid = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id;
+      if (targetUid && liveRoomCode) {
         try {
-          await setDoc(doc(db, "rooms", liveRoomCode, "players", userProfile.id), {
+          await setDoc(doc(db, "rooms", liveRoomCode, "players", targetUid), {
+            id: targetUid,
+            authUid: auth.currentUser?.uid || authUser?.uid,
+            guestId: userProfile?.id,
             progress: 0,
             mistakes: 0,
             status: "active",
@@ -13328,11 +13712,13 @@ export default function App() {
 
           // Immediate terminal write on 3 mistakes to room players (zero secondary dependency)
           const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
-          const currentUid = userProfile?.id || auth.currentUser?.uid;
+          const currentUid = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id;
           if (liveRoomId && currentUid) {
             try {
               setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
                 id: currentUid,
+                authUid: auth.currentUser?.uid || authUser?.uid,
+                guestId: userProfile?.id,
                 name: getActiveDisplayName(),
                 status: "mistake_game_over",
                 failed: true,
@@ -13350,6 +13736,8 @@ export default function App() {
                 setDoc(doc(db, "challenge_results", docId, "participants", currentUid), {
                   challengeId: liveRoomId,
                   userId: currentUid,
+                  authUid: auth.currentUser?.uid || authUser?.uid,
+                  guestId: userProfile?.id,
                   playerName: getActiveDisplayName(),
                   status: "mistake_game_over",
                   failed: true,
@@ -13370,10 +13758,14 @@ export default function App() {
         } else {
           // Synchronous live mistake updates to /rooms/{roomId}/players/{uid}
           const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
-          const currentUid = userProfile?.id || auth.currentUser?.uid;
+          const currentUid = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id;
           if (liveRoomId && currentUid) {
             try {
               setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
+                id: currentUid,
+                authUid: auth.currentUser?.uid || authUser?.uid,
+                guestId: userProfile?.id,
+                name: getActiveDisplayName(),
                 mistakes: newMistakes,
                 status: "active",
                 updatedAt: serverTimestamp()
@@ -13487,7 +13879,7 @@ export default function App() {
 
           // Immediate terminal write on completion/victory to room players (zero secondary dependency)
           const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
-          const currentUid = userProfile?.id || auth.currentUser?.uid;
+          const currentUid = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id;
           if (liveRoomId && currentUid) {
             // Plausible speed barrier: a solve under 15s is physically implausible.
             // Convert to a forfeit so opponents' result screens resolve properly without a false win flash.
@@ -13505,6 +13897,10 @@ export default function App() {
 
             try {
               setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
+                id: currentUid,
+                authUid: auth.currentUser?.uid || authUser?.uid,
+                guestId: userProfile?.id,
+                name: getActiveDisplayName(),
                 status: directStatus,
                 isWon: directIsWon,
                 failed: false,
@@ -13525,7 +13921,7 @@ export default function App() {
         } else {
           // Live progression update for ongoing multiplayer game
           const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
-          const currentUid = userProfile?.id || auth.currentUser?.uid;
+          const currentUid = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id;
           if (liveRoomId && currentUid && !isOver) {
             try {
               let filledCount = 0;
@@ -13536,6 +13932,10 @@ export default function App() {
               }
               const progressPct = Math.round((filledCount / 81) * 100);
               setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
+                id: currentUid,
+                authUid: auth.currentUser?.uid || authUser?.uid,
+                guestId: userProfile?.id,
+                name: getActiveDisplayName(),
                 progress: progressPct,
                 mistakes: newMistakes,
                 status: "active",
@@ -15372,6 +15772,9 @@ export default function App() {
                 mistakeLimitEnabled={mistakeLimitEnabled}
                 sessionSeconds={sessionSeconds}
                 syncedLeaderboard={syncedLeaderboard}
+                onLoadMoreStandings={handleLoadMoreInGameStandings}
+                hasMoreStandings={leaderboardHasMore}
+                isLoadingMoreStandings={isLoadingMoreLeaderboard}
                 userProfile={userProfile}
                 checkIsDisplayNameConfigured={checkIsDisplayNameConfigured}
                 getActiveDisplayName={getActiveDisplayName}
@@ -17544,6 +17947,9 @@ export default function App() {
             return myResult ? Number(myResult.timeSec || myResult.elapsedTime || 0) : 0;
           })()}
           syncedLeaderboard={notificationResultModal?.participants || []}
+          onLoadMoreStandings={handleLoadMoreNotificationStandings}
+          hasMoreStandings={notificationResultModal?.hasMore ?? false}
+          isLoadingMoreStandings={notificationResultModal?.isLoadingMore ?? false}
           userProfile={userProfile}
           checkIsDisplayNameConfigured={checkIsDisplayNameConfigured}
           getActiveDisplayName={getActiveDisplayName}
