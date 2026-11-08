@@ -125,10 +125,10 @@
 ### C. Multiplayer Room, Invite & Result Pipeline
 * **Room Creation (`openCreateRoomModal` & `updateRoomSettingsInFirestore`)**
   * `⬅️ Receives From:` Host UI actions in `CreateChallengeModal`.
-  * `➡️ Sends To:` `generateFlatBoardForSeed()` -> writes `/rooms/{roomCode}` with `puzzleFlat` (81 numbers), `solutionFlat` (81 numbers), `difficulty`, `mistakesLimit`, `hintsLimit`, `timerEnabled`, `status: "active"`, and canonical 7-day `expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)`.
+  * `➡️ Sends To:` `generateFlatBoardForSeed()` -> writes `/rooms/{roomCode}` with `puzzleFlat` (81 numbers), `solutionFlat` (81 numbers), `difficulty`, `mistakesLimit`, `hintsLimit`, `timerEnabled`, `status: "active"`, and canonical evergreen `expiresAt: 0` (100% Permanent Challenge Room Architecture).
 * **Invite Dispatch (`handleInviteFriend` at `src/App.tsx:9920`)**
   * `⬅️ Receives From:` Host clicking "Invite" in `CreateChallengeModal` or Rematch Lobby.
-  * `➡️ Sends To:` Firestore `/invites/{id}` (`toUserId`, `fromUserId`, `fromName`, `roomCode`, `gameId`, `difficulty: challengeDifficulty`, `seed`, `maxMistakes: challengeMistakeLimit`, `hintLimit: challengeHintLimit`, `timerEnabled: challengeTimerEnabled`, `status: "pending"`, and canonical 7-day `expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)`).
+  * `➡️ Sends To:` Firestore `/invites/{id}` (`toUserId`, `fromUserId`, `fromName`, `roomCode`, `gameId`, `difficulty: challengeDifficulty`, `seed`, `maxMistakes: challengeMistakeLimit`, `hintLimit: challengeHintLimit`, `timerEnabled: challengeTimerEnabled`, `status: "pending"`, and canonical evergreen `expiresAt: 0`).
 * **Cloud Function Notification (`onInviteCreated` in `functions/index.js:180`)**
   * `⬅️ Receives From:` Firestore `/invites/{inviteId}` onCreate trigger.
   * `➡️ Sends To:` FCM multicast payload containing `difficulty: String(invite.difficulty || "MEDIUM")`, `seed: String(invite.seed || "")`, `maxMistakes`, `hintLimit`, `timerEnabled`, localized notification titles, and click action links.
@@ -136,8 +136,8 @@
   * `⬅️ Receives From:` Firestore `/invites` query `where("toUserId", "==", activeId), where("status", "==", "pending")`, Capacitor Native Push (`pushNotificationReceived`), Service Worker `message` event, Web FCM `onMessage`, or local game completion.
   * `➡️ Sends To:`
     * **`normalizeDifficulty(raw)`:** Canonical sanitizer normalizing any input (`"easy"`, `"EASY"`, `"Medium"`, etc.) strictly to `"EASY" | "MEDIUM" | "HARD" | "EXPERT"`.
-    * **`upsertBellChallenge(payload)` (SSOT):** Immediately upserts invite or race result into `pendingChallenges` state and persists to both `getScopedKey("pending_challenges")` and `sudoku_pending_challenges` (deduplicated by `invite_${roomCode}` or `puzzle_race_${roomCode}`, protecting real sender names from generic downgrades, with 7-day `expiresAt`).
-    * **`sortedBellInvites`:** 7-Day Universal Lifespan filter (`now > expiresAt`) and Receiver Completion Filter (`completedRoomCodes.has(room)`). Bell drawer keeps invites accessible for 7 days even after the host/sender completes their game.
+    * **`upsertBellChallenge(payload)` (SSOT):** Immediately upserts invite or race result into `pendingChallenges` state and persists to both `getScopedKey("pending_challenges")` and `sudoku_pending_challenges` (deduplicated by `invite_${roomCode}` or `puzzle_race_${roomCode}`, protecting real sender names from generic downgrades, with permanent evergreen `expiresAt: 0`).
+    * **`sortedBellInvites`:** Evergreen Invite Display and Receiver Completion Filter (`completedRoomCodes.has(room)`). Bell drawer keeps invites accessible permanently until completed by the receiver.
     * If actively in-game (`isActivelyInGame()` or `currentScreen === "game"`): suppresses banner/audio and routes quietly to Bell drawer (`triggerBellWiggle(true)`).
     * If not in-game & foreground: sets `activeInviteNotification` (5s countdown toast) with protected sender name.
 * **Invite UI Presentation & Pastel Theming**
@@ -146,7 +146,7 @@
   * **Incoming Invite Modal (`IncomingInviteModal.tsx`):** Renders dynamic difficulty pastel badge and theme-matched accept button for direct PIN / join prompt.
 * **Room Join (`executeJoinRoom` at `line 6701`)**
   * `⬅️ Receives From:` Join Room modal, Bell Invite accept (`handleAcceptAndPlayBellInvite`), Deep-link URL, or Push notification tap.
-  * `➡️ Sends To:` Validates 7-day lifespan (`rData.expiresAt`), reads `/rooms/{roomCode}` -> populates `boardState` & `solutionGrid` -> calls `registerChallengeJoin(roomCode)` -> navigates to `"game"`.
+  * `➡️ Sends To:` Evergreen Room Access (zero expiration restrictions), reads `/rooms/{roomCode}` -> populates `boardState` & `solutionGrid` -> calls `registerChallengeJoin(roomCode)` -> navigates to `"game"`.
 * **Match Result Submission (`submitGameResult` at `line 10580` & `handleViewChallengeResults`)**
   * `⬅️ Receives From:` Match completion or "View Results" button.
   * `➡️ Sends To:`
@@ -176,10 +176,10 @@
 ### Firestore Collections
 * **`/users/{uid}`**: `authUid`, `email`, `displayName`, `name`, `avatarColor`, `status`, `language`, `totalGamesPlayed`, `totalWinsCount`, `winStreak`, `wins`, `stats` (`{ totalGamesPlayed, totalWinsCount, winStreak }`), `bestTimes` (`{ EASY, MEDIUM, HARD, EXPERT, MASTER }`), `completedGames` (Array of up to 50 objects), `savedGames`, `settings`, `theme`, `fcmToken`, `fcmTokens`, `fcmToken_native`, `fcmToken_web`.
 * **`/users/{uid}/past_players/{opponentId}`**: `id`, `name`, `isFriend`, `timestamp`.
-* **`/rooms/{roomCode}`**: `roomCode` (6 digits), `seed`, `difficulty`, `puzzleFlat` (81 ints), `solutionFlat` (81 ints), `mistakesLimit`, `hintsLimit`, `timerEnabled`, `isLocked`, `pin`, `status` (`"active"`), `expiresAt` (7 days), `lastCompletedUid`, `lastCompletedBy`, `lastCompletedTime`, `lastCompletedAt`.
+* **`/rooms/{roomCode}`**: `roomCode` (6 digits), `seed`, `difficulty`, `puzzleFlat` (81 ints), `solutionFlat` (81 ints), `mistakesLimit`, `hintsLimit`, `timerEnabled`, `isLocked`, `pin`, `status` (`"active"`), `expiresAt` (`0` / evergreen), `lastCompletedUid`, `lastCompletedBy`, `lastCompletedTime`, `lastCompletedAt`.
 * **`/rooms/{roomCode}/players/{userId}`**: `id`, `name`, `status` (`"active"` | `"completed"` | `"mistake_game_over"` | `"left"`), `isWon`, `timeSec`, `elapsedTime`, `mistakes`, `updatedAt`.
 * **`/challenge_results/{docId}/participants/{userId}`**: `challengeId`, `userId`, `playerName`, `timeSec`, `mistakes`, `hints`, `isWon`, `isPending`, `status`, `date`.
-* **`/invites/{inviteId}`**: `id`, `toUserId`, `fromUserId`, `fromName`, `roomCode`, `gameId`, `seed`, `difficulty`, `maxMistakes`, `hintLimit`, `timerEnabled`, `password`, `status` (`"pending"` | `"accepted"` | `"declined"`), `timestamp`, `expiresAt` (7 days).
+* **`/invites/{inviteId}`**: `id`, `toUserId`, `fromUserId`, `fromName`, `roomCode`, `gameId`, `seed`, `difficulty`, `maxMistakes`, `hintLimit`, `timerEnabled`, `password`, `status` (`"pending"` | `"accepted"` | `"declined"`), `timestamp`, `expiresAt` (`0` / evergreen).
 * **`/presence/{userId}`**: `status` (`"online"` | `"offline"`), `lastActive`.
 
 ### LocalStorage Canonical Keys (`src/utils/storageEngine.ts`)
@@ -206,10 +206,10 @@
 4. **Legacy Scalar Fields Synchronization:** Resolved in `saveGameToHistory` by synchronizing `wins: updatedVault.stats.totalWinsCount` alongside nested `stats` object on `/users/{uid}`.
 5. **Guest Vault Protection:** Removed `"sudoku_guest_vault"` from `purgeLegacyKeys()`, ensuring guest play history and settings are never purged.
 
-### ✅ Group 3: 7-Day Async Invite Persistence (RESOLVED)
-1. **7-Day Universal Lifespan Alignment:** Resolved TTL mismatch across client and backend. `handleInviteFriend` (`line 9777`), room creation, and Cloud Functions FCM dispatch (`functions/index.js:199, 315`) are unified to 7 days (`604800 * 1000` / `7 * 24 * 60 * 60 * 1000`). Rooms enforce 7-day expiration checks upon join (`executeJoinRoom:6718`).
+### ✅ Group 3: 100% Permanent Challenge & Evergreen Invite Architecture (RESOLVED)
+1. **Evergreen Room & Invite Architecture:** Eliminated all artificial expiration gates. Challenge rooms, share links, and in-game invites never expire. Any player can enter, solve, and replay any challenge room seed at any time in the future (`executeJoinRoom`).
 2. **Decoupled Player States:** In `submitGameResult` (`line 10452`), when a player finishes a game, they only write their personal score to `/rooms/{roomCode}/players/{userId}` and `/challenge_results/{docId}/participants/{userId}`. The `/rooms/{roomCode}` document strictly maintains `status: "active"`.
-3. **Persistent Bell Drawer Invites:** In `sortedBellInvites` (`line 2663`), invites are kept visible and playable for 7 days regardless of host match completion. An invite is only hidden if `now > expiresAt` or the current player already completed the room (`completedRoomCodes.has(room)`).
+3. **Persistent Bell Drawer Invites:** In `sortedBellInvites`, invites remain permanently playable in the notification drawer until completed by the receiver. Invites are never pruned by timestamps.
 4. **Receiver Completion Cleanup:** In `saveGameToHistory` (`line 10074`), when the receiver finishes a game, `invite_${cleanRoomCode}` is cleanly removed from `pendingChallenges` and dual-written to scoped storage while preserving `challenge_completed` race standings.
 5. **Graceful Partial Standings Display:** In `handleViewChallengeResults` (`line 7095`) and `GameOverModal.tsx`, partial standings (e.g., Host completed, Invited Friend pending) render smoothly with animated pulsing status indicators without crashes or blank states.
 6. **Android Assets Synchronization:** Production bundle built and synchronized to `android/app/src/main/assets/public/` via `npx cap sync android`.
@@ -733,6 +733,11 @@
       - **Case B (User card inside visible viewport):** Renders inline naturally; floating overlay smoothly hides with zero visual duplication.
       - **Case C (User scrolled past their rank towards lower ranks):** Pins a non-clickable, display-only sticky header maintaining position reference.
     * **Strict Display-Only Constraint:** Sticky card possesses `pointer-events-none` with zero click-to-jump or programmatic scroll triggers, strictly preventing bulk Firestore reads while browsing.
+
+44. **100% Permanent Challenge Room & Evergreen Invites Architecture (`src/App.tsx:2995, 7378, 10423, 10600, 10812, 13276, 15823`):**
+    * **Removed Artificial Room Expiration Gate (`src/App.tsx:7378`):** Completely removed `rData.expiresAt` blocking condition from `executeJoinRoom`. All valid room codes and share links are playable indefinitely, regardless of creation age.
+    * **Evergreen Notification Drawer (`src/App.tsx:2995`):** Removed timestamp-based pruning (`now > expiresAt`) from `sortedBellInvites`. Received challenge invites remain playable in the notification drawer permanently until solved.
+    * **Sentinel Neutrality (`expiresAt: 0`):** Set payload writes across canonical room creation, mid-game invite generation, friend dispatch, and rematch replay to `expiresAt: 0`, ensuring backwards and forwards payload compatibility across all web and mobile clients.
 
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**

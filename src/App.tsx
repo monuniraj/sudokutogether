@@ -2990,12 +2990,7 @@ export default function App() {
       const hasSender = Boolean(invite.senderName || invite.fromName || invite.hostName);
       if (!hasId && !hasSender) return false;
 
-      // 1. Expiration Filter: discard if 7-day lifespan passed
-      const itemSentAt = typeof invite.sentAt === "number" ? invite.sentAt : getInviteTimestampMs(invite);
-      const expiresAt = typeof invite.expiresAt === "number" ? invite.expiresAt : (itemSentAt ? itemSentAt + (7 * 24 * 60 * 60 * 1000) : 0);
-      if (expiresAt && now > expiresAt) {
-        return false;
-      }
+      // 1. Evergreen Model: Challenges never expire. Received invites stay permanently playable in Bell.
 
       // 2. Receiver Completion Filter: If current user already completed this room, do not show 'invite' card (they can only view results)
       if (invite.type !== "challenge_completed") {
@@ -3627,7 +3622,7 @@ export default function App() {
         hintLimit: payload.hintLimit ?? 3,
         timerEnabled: payload.timerEnabled ?? true,
         sentAt: typeof payload.sentAt === "number" ? payload.sentAt : (Date.now()),
-        expiresAt: typeof payload.expiresAt === "number" ? payload.expiresAt : (Date.now() + (7 * 24 * 60 * 60 * 1000))
+        expiresAt: 0
       };
 
       // Filter out previous entry for same canonicalId, cleanRoomCode (for same type), or rawInviteId
@@ -7380,10 +7375,7 @@ export default function App() {
         return { success: false, error: t("roomSessionClosedToast") };
       }
 
-      // Validate 7-day room lifespan: reject if expired
-      if (rData.expiresAt && typeof rData.expiresAt === "number" && Date.now() > rData.expiresAt) {
-        return { success: false, error: "This challenge has expired (7-day limit passed)." };
-      }
+      // 100% Evergreen Room Model: Rooms never expire. Players can join & solve any challenge anytime.
 
       // 4. Security check for locked rooms if PIN is set (Bypassed if direct in-game invite)
       if (!options?.isDirectInvite && rData.isLocked) {
@@ -10428,7 +10420,7 @@ export default function App() {
         status: "active",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
+        expiresAt: 0
       }).then(() => {
         console.log(`[Firestore] Initialized canonical room /rooms/${roomCode} with flat puzzle arrays`);
       }).catch(err => {
@@ -10605,7 +10597,7 @@ export default function App() {
             status: "active",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-            expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
+            expiresAt: 0
           }, { merge: true });
 
           await setDoc(doc(db, "rooms", roomCode, "players", uId), {
@@ -10817,7 +10809,7 @@ export default function App() {
         timerEnabled: challengeTimerEnabled,
         status: "pending",
         timestamp: Date.now(),
-        expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
+        expiresAt: 0
       });
       console.log(`[Firestore] Dispatched real-time invite to player ${targetPlayerId} (orig: ${playerId}) for canonical room ${activeRoomCode}`);
     } catch (err) {
@@ -13281,7 +13273,7 @@ export default function App() {
       status: "active",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
+      expiresAt: 0
     }, { merge: true }).catch(err => {
       console.error("[Firestore] Failed to write mid-game room document:", err);
     });
@@ -15828,7 +15820,7 @@ export default function App() {
                         status: "active",
                         createdAt: serverTimestamp(),
                         updatedAt: serverTimestamp(),
-                        expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000)
+                        expiresAt: 0
                       }, { merge: true });
                     } catch (err) {
                       console.error("[Firestore] Failed to update room for SAME GAME:", err);
