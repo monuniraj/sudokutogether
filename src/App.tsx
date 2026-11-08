@@ -12,6 +12,8 @@ import { MultiplayerForkModal } from "./components/modals/MultiplayerForkModal";
 import { CreateChallengeModal } from "./components/modals/CreateChallengeModal";
 import { GameOverModal } from "./components/modals/GameOverModal";
 import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
+import { HintRewardModal } from "./components/modals/HintRewardModal";
+import { initAdMob, showInterstitialBetweenMatches, showRewardedHintAd } from "./services/adMobService";
 import { ShareActionWrapper } from "./components/share/ShareActionWrapper";
 import { GuestBannerPill } from "./components/auth/GuestBannerPill";
 import { incrementGuestGameCount } from "./utils/guestTracking";
@@ -1717,6 +1719,13 @@ export default function App() {
     }
   }, []);
 
+  // Initialize native AdMob SDK on boot (bypasses cleanly on web/desktop)
+  useEffect(() => {
+    initAdMob().catch((err) => {
+      console.warn("[AdMob] Early initialization failed:", err);
+    });
+  }, []);
+
   const [activeTab, setActiveTab] = useState<"sudoku" | "sandbox" | "kotlin-code" | "spec-docs">("sudoku");
   const [currentScreen, setCurrentScreen] = useState<"home" | "status" | "settings" | "game" | "login" | "together">("home");
   const currentScreenRef = useRef(currentScreen);
@@ -2234,6 +2243,7 @@ export default function App() {
 
   // Hub Navigation (Create vs Join Room modal)
   const [showMultiplayerForkModal, setShowMultiplayerForkModal] = useState<boolean>(false);
+  const [showHintRewardModal, setShowHintRewardModal] = useState<boolean>(false);
   const [showJoinRoomModal, setShowJoinRoomModal] = useState<boolean>(false);
   const [joinRoomCodeInput, setJoinRoomCodeInput] = useState<string>("");
   const [joinRoomPinInput, setJoinRoomPinInput] = useState<string>("");
@@ -6850,6 +6860,13 @@ export default function App() {
     if (showCreateChallengeModal) { setShowCreateChallengeModal(false); return true; }
     if (showJoinRoomModal) { setShowJoinRoomModal(false); return true; }
     if (showMultiplayerForkModal) { setShowMultiplayerForkModal(false); return true; }
+    if (showHintRewardModal) {
+      setShowHintRewardModal(false);
+      if (currentScreen === "game" && !boardState?.isGameOver) {
+        setIsTimerPaused(false);
+      }
+      return true;
+    }
     if (showHowToPlayModal) { setShowHowToPlayModal(false); return true; }
     return false;
   };
@@ -6877,6 +6894,7 @@ export default function App() {
     if (showCreateChallengeModal) count++;
     if (showJoinRoomModal) count++;
     if (showMultiplayerForkModal) count++;
+    if (showHintRewardModal) count++;
     if (showHowToPlayModal) count++;
     return count;
   };
@@ -11317,6 +11335,11 @@ export default function App() {
         console.warn("[Firestore] Failed to persist game completion to Firestore:", syncErr);
       }
     }
+
+    // AdMob Interstitial: Paced at 1 ad every 3 matches (capped at 10/day, native mobile only)
+    showInterstitialBetweenMatches().catch(err => {
+      console.warn("[AdMob] Interstitial trigger error:", err);
+    });
   };
 
   const handleReplayGame = (game: CompletedGame) => {
@@ -14135,6 +14158,35 @@ export default function App() {
     setBoardState(prev => prev ? { ...prev, grid: newGrid } : null);
   };
 
+  const handleCloseHintRewardModal = () => {
+    playClickSound();
+    setShowHintRewardModal(false);
+    if (currentScreen === "game" && !boardState?.isGameOver) {
+      setIsTimerPaused(false);
+    }
+  };
+
+  const handleWatchRewardAd = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      showToast("Rewarded videos are only supported in mobile app.");
+      return;
+    }
+    const rewarded = await showRewardedHintAd();
+    if (rewarded) {
+      setShowHintRewardModal(false);
+      setHintInventory(prev => prev + 1);
+      showToast("+1 Hint Unlocked!");
+      if (currentScreen === "game" && !boardState?.isGameOver) {
+        setIsTimerPaused(false);
+      }
+      setTimeout(() => {
+        triggerSmartHint();
+      }, 120);
+    } else {
+      showToast("Video not completed. Hint not unlocked.");
+    }
+  };
+
   const triggerSmartHint = () => {
     if (!boardState || boardState.isGameOver) return;
     const { selectedRow, selectedCol } = boardState;
@@ -14159,6 +14211,9 @@ export default function App() {
     if (hintsLeft <= 0) {
       if (isChallengeGame) {
         showToast(t("hintLimitReachedToast"));
+      } else {
+        setIsTimerPaused(true);
+        setShowHintRewardModal(true);
       }
       return;
     }
@@ -20843,6 +20898,16 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 💡 REWARDED AD HINT MODAL */}
+      <HintRewardModal
+        isOpen={showHintRewardModal}
+        onClose={handleCloseHintRewardModal}
+        onWatchAd={handleWatchRewardAd}
+        isOnline={isOnline}
+        darkMode={darkMode}
+        playClickSound={playClickSound}
+      />
     </div>
   );
 }
