@@ -10209,20 +10209,26 @@ export default function App() {
     targetBoard?: SudokuBoardState | null,
     targetSolution?: number[][] | null
   ): Promise<string | null> => {
-    if (!isOnline) {
-      console.warn("[JIT Room] Offline - room provisioning skipped.");
-      return null;
-    }
-
     const currentBoard = targetBoard || boardState;
     const seed = targetSeed || currentBoard?.seed || challengeSeed || (Math.floor(Math.random() * 900000) + 100000);
     const roomCode = String(seed).padStart(6, '0').slice(-6);
     const diff = targetDiff || currentBoard?.difficulty || difficulty || "EASY";
 
-    // 1. Check local cache (Verified-Once, Cached-Forever)
-    const existingCached = completedGamesRef.current.find(g => (g.seed === seed || g.id.includes(`-${seed}-`)) && g.isRoomCreated && g.roomCode === roomCode);
-    if (existingCached) {
-      return existingCached.roomCode || roomCode;
+    // 1. FAST CACHE RETRIEVAL (Must run even when offline!)
+    const existingRecord = completedGamesRef.current.find(
+      g => (targetSeed && g.seed === targetSeed) || (g.seed === seed) || (g.id && g.id.includes(`-${seed}-`))
+    );
+    if (existingRecord?.isRoomCreated && existingRecord?.roomCode) {
+      return existingRecord.roomCode;
+    }
+    if (activeGameId && activeGameId.length === 6) {
+      return activeGameId;
+    }
+
+    // 2. OFFLINE SHIELD (Only block if creating for the first time)
+    if (!isOnline || (typeof navigator !== "undefined" && !navigator.onLine)) {
+      console.warn("[JIT Room] Offline - room provisioning skipped.");
+      return null;
     }
 
     const pName = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 15 && !userProfile.name.includes("Voyager"))
@@ -16006,7 +16012,7 @@ export default function App() {
                       isNewRecord={isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit)}
                       isWon={!(mistakeLimitEnabled && (boardState.maxMistakesLimit === 0 ? boardState.currentMistakesCount > 0 : boardState.currentMistakesCount >= boardState.maxMistakesLimit))}
                       darkMode={darkMode}
-                      roomCode={isOnline ? activeGameId || undefined : undefined}
+                      roomCode={(activeGameId && activeGameId.length === 6) ? activeGameId : undefined}
                       onEnsureRoomCreated={async () => {
                         return ensureCanonicalRoomProvisioned(
                           boardState?.seed,

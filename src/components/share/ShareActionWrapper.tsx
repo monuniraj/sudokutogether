@@ -43,7 +43,7 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
   const [verifiedRoomCode, setVerifiedRoomCode] = useState<string | undefined>(roomCode);
 
   React.useEffect(() => {
-    if (roomCode) {
+    if (roomCode && roomCode.trim().length > 0 && roomCode !== "OFFLINE") {
       setVerifiedRoomCode(roomCode);
     }
   }, [roomCode]);
