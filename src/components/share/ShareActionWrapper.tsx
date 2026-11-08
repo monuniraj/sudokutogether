@@ -19,6 +19,7 @@ export interface ShareActionWrapperProps {
   roomCode?: string;
   playClickSound?: () => void;
   className?: string;
+  onEnsureRoomCreated?: () => Promise<string | null>;
 }
 
 export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
@@ -36,14 +37,33 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
   roomCode,
   playClickSound,
   className = "",
+  onEnsureRoomCreated,
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [verifiedRoomCode, setVerifiedRoomCode] = useState<string | undefined>(roomCode);
 
-  const handleOpenPreview = () => {
+  React.useEffect(() => {
+    if (roomCode) {
+      setVerifiedRoomCode(roomCode);
+    }
+  }, [roomCode]);
+
+  const handleOpenPreview = async () => {
     if (playClickSound) {
       playClickSound();
     }
     setIsOpen(true);
+
+    if (!verifiedRoomCode && onEnsureRoomCreated) {
+      try {
+        const provisioned = await onEnsureRoomCreated();
+        if (provisioned) {
+          setVerifiedRoomCode(provisioned);
+        }
+      } catch (err) {
+        console.warn("[ShareActionWrapper] JIT room provisioning failed:", err);
+      }
+    }
   };
 
   return (
@@ -68,7 +88,7 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
         isNewRecord={isNewRecord}
         isWon={isWon}
         darkMode={darkMode}
-        roomCode={roomCode}
+        roomCode={verifiedRoomCode}
         playClickSound={playClickSound}
       />
     </>

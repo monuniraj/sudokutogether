@@ -739,6 +739,13 @@
     * **Evergreen Notification Drawer (`src/App.tsx:2995`):** Removed timestamp-based pruning (`now > expiresAt`) from `sortedBellInvites`. Received challenge invites remain playable in the notification drawer permanently until solved.
     * **Sentinel Neutrality (`expiresAt: 0`):** Set payload writes across canonical room creation, mid-game invite generation, friend dispatch, and rematch replay to `expiresAt: 0`, ensuring backwards and forwards payload compatibility across all web and mobile clients.
 
+45. **Zero Ghost Room Code & JIT Room Provisioning Architecture (`src/App.tsx`, `GameOverModal.tsx`, `canvasShare.ts`, `ShareActionWrapper.tsx`, `SharePreviewModal.tsx`, `StatsModal.tsx`):**
+    * **Verified-Once, Cached-Forever Schema:** Extended `CompletedGame` with `roomCode?: string` and `isRoomCreated?: boolean`. When a game finishes, it is stored cleanly. Upon any share or challenge action, `ensureCanonicalRoomProvisioned` provisions `/rooms/{code}` in Firestore with flat puzzle arrays, `status: "active"`, and `expiresAt: 0`. It updates `completedGames` and the active vault (`updateVault`), caching the verified room code permanently to guarantee 0 additional Firestore writes on repeated shares.
+    * **Purged Phantom Seed Fallback in Canvas:** In `src/utils/canvasShare.ts`, removed optimistic fallback from `boardState.seed` to room code. If unprovisioned or offline, `extractRoomCodeFromChallenge` returns `""`. The canvas tape chip (`# Room Code`) is omitted, and the footer bar dynamically centers `sudokusync.com` without any ghost room badge.
+    * **Share Action JIT Hook (`ShareActionWrapper.tsx` & `SharePreviewModal.tsx`):** Passing `onEnsureRoomCreated` provisions the room immediately in the background when the user opens the screenshot preview modal. Cache key in `SharePreviewModal` incorporates `roomCode || "noroom"` to re-render cleanly when verified.
+    * **Offline Badge Guard (`GameOverModal.tsx:424, 913, 1251`):** Prevents string `.slice(-6)` truncation on `"OFFLINE"` (which previously rendered `"FFLINE"`). When offline, renders a soft pastel offline status badge and disables copying broken strings.
+    * **History Share Provisioning:** `executeHistoryShareAction` and `handleInviteFriend` physically provision `/rooms/{targetSeed}` prior to sharing or dispatching invites, completely eradicating the `"Room not found. Please check the 6-digit code."` rejection.
+
 ### ⚠️ Remaining Active Bug Hotspots (For Forensic Review)
 1. **Same-Account Multi-Device Collision:**
    * **Root Cause:** When testing on Laptop and Phone logged into the same Google account (`uid`), self-exclusion filters hide the other device.

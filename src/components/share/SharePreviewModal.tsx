@@ -103,7 +103,8 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
       darkMode ? "dark" : "light",
       didWin ? "win" : "loss",
       sessionSeconds || time,
-      boardState?.currentMistakesCount ?? 0
+      boardState?.currentMistakesCount ?? 0,
+      roomCode || "noroom"
     ].join("::");
 
     const cached = canvasShareCache.get(cacheKey);

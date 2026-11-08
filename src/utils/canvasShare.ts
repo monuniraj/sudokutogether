@@ -961,32 +961,25 @@ export const extractRoomCodeFromChallenge = (
   roomCode?: string,
   boardState?: SudokuBoardState | null
 ): string => {
-  if (roomCode && String(roomCode).trim().length > 0) {
+  if (roomCode && String(roomCode).trim().length > 0 && String(roomCode).trim() !== "OFFLINE") {
     const cleanRoom = String(roomCode).trim();
     const matchSudoku = cleanRoom.match(/SUDOKU-([A-Z0-9]+)-/i);
     if (matchSudoku && matchSudoku[1]) return matchSudoku[1].toUpperCase();
     return cleanRoom.toUpperCase();
   }
 
+  // Only if challengeInput explicitly contains a full challenge query URL or room query param
   if (challengeInput) {
-    const matchSudoku = challengeInput.match(/SUDOKU-([A-Z0-9]+)-/i);
-    if (matchSudoku && matchSudoku[1]) {
-      return matchSudoku[1].toUpperCase();
-    }
-    const matchQuery = challengeInput.match(/[?&]challenge=([^&#]+)/i);
+    const matchQuery = challengeInput.match(/[?&](?:challenge|room)=([^&#]+)/i);
     if (matchQuery && matchQuery[1]) {
       const token = decodeURIComponent(matchQuery[1]);
       const innerMatch = token.match(/SUDOKU-([A-Z0-9]+)-/i);
       if (innerMatch && innerMatch[1]) return innerMatch[1].toUpperCase();
-      return token;
+      if (/^[A-Z0-9]{6}$/i.test(token)) return token.toUpperCase();
     }
   }
 
-  if (boardState?.seed) {
-    return String(boardState.seed).padStart(6, "0").slice(-6).toUpperCase();
-  }
-
-  return "849201";
+  return "";
 };
 
 /**
@@ -1084,15 +1077,22 @@ export function buildFreshChallengeUrl(
   const diff = String(
     difficultyOrPlayerName || boardState?.difficulty || "EASY"
   ).toUpperCase();
-  const seed = extractRoomCodeFromChallenge(undefined, roomCode, boardState);
+  const verifiedRoomCode = roomCode && roomCode.trim().length > 0 && roomCode.trim() !== "OFFLINE"
+    ? extractRoomCodeFromChallenge(undefined, roomCode, boardState)
+    : "";
   const maxMistakes = boardState?.maxMistakesLimit ?? 3;
   const hintLimit = (boardState as any)?.hintLimit ?? 3;
-  const challengeId = `SUDOKU-${seed}-${diff}-M${maxMistakes}-H${hintLimit}-T1`;
+  const seedForToken = verifiedRoomCode || (boardState?.seed ? String(boardState.seed).padStart(6, '0').slice(-6) : "849201");
+  const challengeId = `SUDOKU-${seedForToken}-${diff}-M${maxMistakes}-H${hintLimit}-T1`;
+
+  const hasVerifiedRoom = Boolean(verifiedRoomCode && verifiedRoomCode.length > 0);
+  const domainText = isCrazyGamesActive() ? "Play on CrazyGames.com" : "sudokusync.com";
+  const displayUrl = hasVerifiedRoom ? `${domainText} | Room Code: ${verifiedRoomCode}` : domainText;
 
   return {
     fullUrl: `${origin}/?challenge=${challengeId}${senderQuery}`,
-    displayUrl: `${isCrazyGamesActive() ? "Play on CrazyGames.com" : "sudokusync.com"} | Room Code: ${seed}`,
-    extractedRoomCode: seed,
+    displayUrl,
+    extractedRoomCode: verifiedRoomCode,
     challengeId,
   };
 }
@@ -1429,11 +1429,9 @@ export async function generateShareCanvas(
     activeLang
   );
 
-  const extractedRoomCode = extractRoomCodeFromChallenge(
-    challengeId,
-    rawState.roomCode,
-    resolvedBoard
-  );
+  const extractedRoomCode = rawState.roomCode && rawState.roomCode.trim().length > 0 && rawState.roomCode.trim() !== "OFFLINE"
+    ? extractRoomCodeFromChallenge(undefined, rawState.roomCode, resolvedBoard)
+    : "";
 
   const ctaCopy = didWin
     ? (isRecordWin ? i18n.hook.win_record(timeStr) : i18n.hook.win_normal(timeStr))
@@ -2054,31 +2052,33 @@ function getUnifiedStickerPalette(
   ctx.fillStyle = diagTapeTextColor;
   drawCenteredText(ctx, tapeStrings.line2, 0, 2);
 
-  // Line 3 (Dedicated Room Pill): Contrasting pill reading "# Room Code: {code}" in 12px bold monospace
-  const cleanRoomPrefix = i18n.footer.room_code.trim();
-  const chipRoomLabel = cleanRoomPrefix.startsWith("#") ? cleanRoomPrefix : `# ${cleanRoomPrefix}`;
-  const chipText = `${chipRoomLabel} ${extractedRoomCode}`;
+  // Line 3 (Dedicated Room Pill): Contrasting pill reading "# Room Code: {code}" in 12px bold monospace (only rendered if verified)
+  if (extractedRoomCode && extractedRoomCode.trim().length > 0 && extractedRoomCode !== "OFFLINE") {
+    const cleanRoomPrefix = i18n.footer.room_code.trim();
+    const chipRoomLabel = cleanRoomPrefix.startsWith("#") ? cleanRoomPrefix : `# ${cleanRoomPrefix}`;
+    const chipText = `${chipRoomLabel} ${extractedRoomCode}`;
 
-  ctx.font = `700 12px ${appMonoFont}`;
-  const chipTextW = ctx.measureText(chipText).width;
-  const chipW = Math.min(diagTapeW - 32, chipTextW + 20);
-  const chipH = 20;
-  const chipY = 25;
+    ctx.font = `700 12px ${appMonoFont}`;
+    const chipTextW = ctx.measureText(chipText).width;
+    const chipW = Math.min(diagTapeW - 32, chipTextW + 20);
+    const chipH = 20;
+    const chipY = 25;
 
-  drawRoundedRect(
-    ctx,
-    -chipW / 2,
-    chipY - chipH / 2,
-    chipW,
-    chipH,
-    10
-  );
-  ctx.fillStyle = diagChipBg;
-  ctx.fill();
+    drawRoundedRect(
+      ctx,
+      -chipW / 2,
+      chipY - chipH / 2,
+      chipW,
+      chipH,
+      10
+    );
+    ctx.fillStyle = diagChipBg;
+    ctx.fill();
 
-  ctx.fillStyle = diagChipTextColor;
-  ctx.font = `700 12px ${appMonoFont}`;
-  drawCenteredText(ctx, chipText, 0, chipY);
+    ctx.fillStyle = diagChipTextColor;
+    ctx.font = `700 12px ${appMonoFont}`;
+    drawCenteredText(ctx, chipText, 0, chipY);
+  }
 
   ctx.restore();
 
@@ -2188,6 +2188,11 @@ function getUnifiedStickerPalette(
 
   const isCrazyGames = isCrazyGamesActive();
   const domainText = isCrazyGames ? "Play on CrazyGames.com" : "sudokusync.com";
+  const hasVerifiedRoom = Boolean(
+    extractedRoomCode &&
+    extractedRoomCode.trim().length > 0 &&
+    extractedRoomCode !== "OFFLINE"
+  );
   const dividerText = "  |  ";
   const cleanFooterPrefix = i18n.footer.room_code.trim();
   const roomLabelText = cleanFooterPrefix.startsWith("#") ? `${cleanFooterPrefix} ` : `# ${cleanFooterPrefix} `;
@@ -2197,19 +2202,17 @@ function getUnifiedStickerPalette(
 
   ctx.font = `700 12.5px ${appSansFont}`;
   const domainW = ctx.measureText(domainText).width;
-  const dividerW = ctx.measureText(dividerText).width;
-  const roomLabelW = ctx.measureText(roomLabelText).width;
+  const dividerW = hasVerifiedRoom ? ctx.measureText(dividerText).width : 0;
+  const roomLabelW = hasVerifiedRoom ? ctx.measureText(roomLabelText).width : 0;
 
   ctx.font = `700 13px ${appMonoFont}`;
-  const roomCodeW = ctx.measureText(roomCodeValue).width;
+  const roomCodeW = hasVerifiedRoom ? ctx.measureText(roomCodeValue).width : 0;
 
   const totalFooterContentW =
     footerIconSize +
     footerGap +
     domainW +
-    dividerW +
-    roomLabelW +
-    roomCodeW;
+    (hasVerifiedRoom ? dividerW + roomLabelW + roomCodeW : 0);
 
   let cursorX = footerX + (footerW - totalFooterContentW) / 2;
   const footerCenterY = footerY + footerH / 2;
@@ -2228,21 +2231,23 @@ function getUnifiedStickerPalette(
   drawLeftMiddleText(ctx, domainText, cursorX, footerCenterY);
   cursorX += domainW;
 
-  ctx.save();
-  ctx.fillStyle = footerLabelColor;
-  ctx.globalAlpha = 0.45;
-  drawLeftMiddleText(ctx, dividerText, cursorX, footerCenterY);
-  ctx.restore();
-  cursorX += dividerW;
+  if (hasVerifiedRoom) {
+    ctx.save();
+    ctx.fillStyle = footerLabelColor;
+    ctx.globalAlpha = 0.45;
+    drawLeftMiddleText(ctx, dividerText, cursorX, footerCenterY);
+    ctx.restore();
+    cursorX += dividerW;
 
-  ctx.fillStyle = footerLabelColor;
-  ctx.font = `600 12px ${appSansFont}`;
-  drawLeftMiddleText(ctx, roomLabelText, cursorX, footerCenterY);
-  cursorX += roomLabelW;
+    ctx.fillStyle = footerLabelColor;
+    ctx.font = `600 12px ${appSansFont}`;
+    drawLeftMiddleText(ctx, roomLabelText, cursorX, footerCenterY);
+    cursorX += roomLabelW;
 
-  ctx.fillStyle = footerRoomCodeColor;
-  ctx.font = `700 13px ${appMonoFont}`;
-  drawLeftMiddleText(ctx, roomCodeValue, cursorX, footerCenterY);
+    ctx.fillStyle = footerRoomCodeColor;
+    ctx.font = `700 13px ${appMonoFont}`;
+    drawLeftMiddleText(ctx, roomCodeValue, cursorX, footerCenterY);
+  }
 
   return canvas.toDataURL("image/png");
 }

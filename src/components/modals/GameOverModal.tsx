@@ -421,11 +421,13 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 
   if (!isOpen || !boardState) return null;
 
-  const activeRematchRoomCode = String(
-    rematchGameId || challengeSeed || (boardState?.seed ? String(boardState.seed).slice(-6) : "849201")
-  )
-    .padStart(6, "0")
-    .slice(-6);
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+  const rawCodeSource = rematchGameId || challengeSeed || (boardState?.seed ? String(boardState.seed) : null);
+  const activeRematchRoomCode = !isOnline
+    ? "OFFLINE"
+    : rawCodeSource
+    ? String(rawCodeSource).replace(/\D/g, "").padStart(6, "0").slice(-6)
+    : "849201";
 
   return (
     <motion.div
@@ -910,19 +912,27 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs sm:text-sm font-sans font-black tracking-wider text-stone-850 dark:text-stone-100 flex items-center gap-1.5">
                       <span className="text-stone-400 dark:text-stone-500 text-2xs uppercase font-bold">{t("codeLabel")}</span>
-                      <span className="font-mono tracking-widest text-sm sm:text-base select-all">{activeRematchRoomCode}</span>
+                      {activeRematchRoomCode === "OFFLINE" ? (
+                        <span className="px-2 py-0.5 rounded-full text-2xs font-sans font-bold uppercase tracking-wider bg-stone-200 dark:bg-zinc-800 text-stone-500">
+                          {t("offline")}
+                        </span>
+                      ) : (
+                        <span className="font-mono tracking-widest text-sm sm:text-base select-all">{activeRematchRoomCode}</span>
+                      )}
                     </span>
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        copyToClipboard(activeRematchRoomCode);
-                        showCopiedToast(t("roomCodeCopied"));
-                      }}
-                      title={t("copyRoomCode")}
-                      className="p-1 rounded-lg text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
+                    {activeRematchRoomCode !== "OFFLINE" && (
+                      <button
+                        onClick={() => {
+                          playClickSound();
+                          copyToClipboard(activeRematchRoomCode);
+                          showCopiedToast(t("roomCodeCopied"));
+                        }}
+                        title={t("copyRoomCode")}
+                        className="p-1 rounded-lg text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Right: Lock toggle & Close button securely pinned */}
@@ -1248,6 +1258,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 <button
                   onClick={async () => {
                     playClickSound();
+                    if (activeRematchRoomCode === "OFFLINE") {
+                      showCopiedToast(t("noInternetConnection") || "Offline");
+                      return;
+                    }
                     await shareChallengeLink(activeRematchRoomCode, t("shareInviteMessage"));
                   }}
                   style={{ animationDelay: "0.4s" }}

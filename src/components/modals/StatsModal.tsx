@@ -16,6 +16,8 @@ export interface CompletedGameRecord {
   maxMistakes: number;
   isChallenge?: boolean;
   strictMistakeLimit?: boolean;
+  roomCode?: string;
+  isRoomCreated?: boolean;
 }
 
 export interface MultiplayerPlayerRecord {

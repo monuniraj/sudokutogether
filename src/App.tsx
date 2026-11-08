@@ -364,6 +364,8 @@ interface CompletedGame {
   userId?: string;
   playerName?: string;
   strictMistakeLimit?: boolean;
+  roomCode?: string;
+  isRoomCreated?: boolean;
 }
 
 interface PendingChallenge {
@@ -10200,12 +10202,111 @@ export default function App() {
     await shareOrCopyContent("SudokuSync", shareText, chalUrl, showCopiedToast, showCopiedToast);
   };
 
+  // JIT Canonical Room Provisioner: Verified-Once, Cached-Forever Architecture
+  const ensureCanonicalRoomProvisioned = async (
+    targetSeed?: number,
+    targetDiff?: Difficulty,
+    targetBoard?: SudokuBoardState | null,
+    targetSolution?: number[][] | null
+  ): Promise<string | null> => {
+    if (!isOnline) {
+      console.warn("[JIT Room] Offline - room provisioning skipped.");
+      return null;
+    }
+
+    const currentBoard = targetBoard || boardState;
+    const seed = targetSeed || currentBoard?.seed || challengeSeed || (Math.floor(Math.random() * 900000) + 100000);
+    const roomCode = String(seed).padStart(6, '0').slice(-6);
+    const diff = targetDiff || currentBoard?.difficulty || difficulty || "EASY";
+
+    // 1. Check local cache (Verified-Once, Cached-Forever)
+    const existingCached = completedGamesRef.current.find(g => (g.seed === seed || g.id.includes(`-${seed}-`)) && g.isRoomCreated && g.roomCode === roomCode);
+    if (existingCached) {
+      return existingCached.roomCode || roomCode;
+    }
+
+    const pName = (userProfile?.name && userProfile.name.trim() && userProfile.name.length <= 15 && !userProfile.name.includes("Voyager"))
+      ? userProfile.name.trim()
+      : getActiveDisplayName();
+    const uId = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id || "GUEST_ANON";
+
+    try {
+      let puzzleFlat: number[] | null = null;
+      if ((currentBoard as any)?.initialGrid) {
+        puzzleFlat = (currentBoard as any).initialGrid.flat();
+      } else if (currentBoard?.grid) {
+        puzzleFlat = currentBoard.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)).flat();
+      } else {
+        const generated = generateFlatBoardForSeed(diff, seed);
+        puzzleFlat = generated.puzzleFlat;
+      }
+
+      const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, roomCode) : "";
+      const mistakesLimit = currentBoard?.maxMistakesLimit !== undefined ? currentBoard.maxMistakesLimit : (challengeMistakeLimit || 3);
+      const hintsLimit = currentBoard?.hintsRemaining !== undefined ? currentBoard.hintsRemaining : (challengeHintLimit || 3);
+
+      await setDoc(doc(db, "rooms", roomCode), {
+        roomCode: roomCode,
+        seed: seed,
+        difficulty: diff,
+        hostId: uId,
+        hostName: pName,
+        createdById: uId,
+        createdByName: pName,
+        ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
+        mistakesLimit: mistakesLimit,
+        hintsLimit: hintsLimit,
+        timerEnabled: timerEnabled,
+        isLocked: isRoomLocked,
+        pinHash: hashedPin,
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        expiresAt: 0
+      }, { merge: true });
+
+      // Cache locally in completedGames and update vault
+      const activeUid = getActiveAuthUid() || "guest";
+      setCompletedGames(prev => {
+        const updated = prev.map(g => {
+          if (g.seed === seed || g.id.includes(`-${seed}-`)) {
+            return { ...g, isRoomCreated: true, roomCode };
+          }
+          return g;
+        });
+        completedGamesRef.current = updated;
+        return updated;
+      });
+
+      updateVault(prevVault => ({
+        ...prevVault,
+        completedGames: (prevVault.completedGames || []).map(g => {
+          if (g.seed === seed || g.id?.includes(`-${seed}-`)) {
+            return { ...g, isRoomCreated: true, roomCode };
+          }
+          return g;
+        })
+      }), activeUid);
+
+      console.log(`[JIT Room] Canonical room /rooms/${roomCode} physically provisioned and cached.`);
+      return roomCode;
+    } catch (err) {
+      console.error("[JIT Room] Failed to provision canonical room:", err);
+      return null;
+    }
+  };
+
   const executeEndGameShareAction = async () => {
     const timeToShare = (bestTime && bestTime > 0) ? bestTime : sessionSeconds;
     const formattedTime = formatTimer(timeToShare);
     const targetSeed = boardState?.seed || Math.floor(Math.random() * 900000) + 100000;
     const finalGameId = activeGameId || `SUDOKU-${targetSeed}-${difficulty}-M${mistakeLimitEnabled ? 3 : 999}-H${challengeHintLimit}-T${timerEnabled ? 1 : 0}`;
     const currentProfileName = getActiveDisplayName();
+
+    // Ensure the canonical room document is physically provisioned in Firestore before sharing
+    if (isOnline) {
+      await ensureCanonicalRoomProvisioned(targetSeed, difficulty, boardState, solutionGrid);
+    }
 
     // Ensure the game result is submitted/synced to Firestore for this challenge ID
     const isWon = boardState
@@ -10264,6 +10365,11 @@ export default function App() {
     const finalId = `SUDOKU-${targetSeed}-${historyChallengeGame.difficulty}-M${historyChallengeGame.maxMistakes || 3}-H${hintLimitVal}-T${1}`;
 
     const currentProfileName = getActiveDisplayName();
+
+    // Ensure the canonical room document is physically provisioned in Firestore before sharing
+    if (isOnline) {
+      await ensureCanonicalRoomProvisioned(targetSeed, historyChallengeGame.difficulty as Difficulty);
+    }
 
     // Ensure the game result is submitted/synced to Firestore for this challenge ID
     const rBody = {
@@ -10575,30 +10681,7 @@ export default function App() {
 
       (async () => {
         try {
-          const puzzleFlat = (boardState as any)?.initialGrid
-            ? (boardState as any).initialGrid.flat()
-            : (boardState.grid ? boardState.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)).flat() : null);
-          const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, roomCode) : "";
-
-          await setDoc(doc(db, "rooms", roomCode), {
-            roomCode: roomCode,
-            seed: seed,
-            difficulty: difficulty,
-            hostId: uId,
-            hostName: pName,
-            createdById: uId,
-            createdByName: pName,
-            ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
-            mistakesLimit: mistakeLimitEnabled ? (boardState.maxMistakesLimit || 3) : 999,
-            hintsLimit: boardState.hintsRemaining !== undefined ? boardState.hintsRemaining : 3,
-            timerEnabled: timerEnabled,
-            isLocked: isRoomLocked,
-            pinHash: hashedPin,
-            status: "active",
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            expiresAt: 0
-          }, { merge: true });
+          await ensureCanonicalRoomProvisioned(seed, difficulty, boardState, solutionGrid);
 
           await setDoc(doc(db, "rooms", roomCode, "players", uId), {
             id: uId,
@@ -10768,7 +10851,7 @@ export default function App() {
     addLog(`📤 Custom challenge invite dispatched to player.`);
 
     const activeAuth = await ensureActiveAuthUser();
-    const seed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
+    const seed = historyChallengeGame?.seed || challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
     const activeRoomCode = String(seed).padStart(6, '0').slice(-6);
     const currentUserId = activeAuth?.uid || userProfile?.id;
     const currentUserName = getActiveDisplayName() || userProfileRef.current?.displayName || userProfileRef.current?.name || getOrCreateGuestIdentity().displayName;
@@ -15923,6 +16006,15 @@ export default function App() {
                       isNewRecord={isNewRecordAchieved && !(mistakeLimitEnabled && boardState.currentMistakesCount >= boardState.maxMistakesLimit)}
                       isWon={!(mistakeLimitEnabled && (boardState.maxMistakesLimit === 0 ? boardState.currentMistakesCount > 0 : boardState.currentMistakesCount >= boardState.maxMistakesLimit))}
                       darkMode={darkMode}
+                      roomCode={isOnline ? activeGameId || undefined : undefined}
+                      onEnsureRoomCreated={async () => {
+                        return ensureCanonicalRoomProvisioned(
+                          boardState?.seed,
+                          (boardState?.difficulty || difficulty) as Difficulty,
+                          boardState,
+                          solutionGrid
+                        );
+                      }}
                       playClickSound={playClickSound}
                     />
                     <button
@@ -18091,7 +18183,12 @@ export default function App() {
               {/* Single Compact Info Banner */}
               <div className={`px-3.5 py-2 rounded-xl flex items-center justify-center font-sans text-[11px] sm:text-xs font-bold uppercase tracking-wider mb-3 select-none flex-wrap gap-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300 border border-zinc-800/60" : "bg-stone-100/70 text-stone-700 border border-stone-200/50"
                 }`}>
-                <span>ROOM: #{String(viewingRankingsGame.seed || viewingRankingsGame.id.slice(0, 6)).padStart(6, '0').slice(-6)}</span>
+                {(() => {
+                  const verifiedCode = viewingRankingsGame.roomCode || (viewingRankingsGame.isChallenge ? String(viewingRankingsGame.seed || viewingRankingsGame.id).replace(/\D/g, '').slice(-6) : null);
+                  return (
+                    <span>{isOnline && verifiedCode ? `ROOM: #${verifiedCode}` : `MATCH #${String(viewingRankingsGame.seed || viewingRankingsGame.id).replace(/\D/g, '').slice(-6)}`}</span>
+                  );
+                })()}
                 <span className="mx-1.5 opacity-40">•</span>
                 <span className="text-[#9D174D] dark:text-pink-300 font-black">{t(viewingRankingsGame.difficulty?.toLowerCase() as any) || viewingRankingsGame.difficulty}</span>
                 <span className="mx-1.5 opacity-40">•</span>
