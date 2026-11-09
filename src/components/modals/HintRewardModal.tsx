@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Lightbulb, Play, WifiOff, Loader2 } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -22,6 +22,12 @@ export const HintRewardModal: React.FC<HintRewardModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const [isAdLoading, setIsAdLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsAdLoading(false);
+    }
+  }, [isOpen]);
 
   const handleClose = () => {
     if (isAdLoading) return;

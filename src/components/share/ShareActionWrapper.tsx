@@ -40,29 +40,60 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
   onEnsureRoomCreated,
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [verifiedRoomCode, setVerifiedRoomCode] = useState<string | undefined>(roomCode);
+  const [isProvisioning, setIsProvisioning] = useState<boolean>(false);
+  const [verifiedRoomCode, setVerifiedRoomCode] = useState<string | undefined>(() =>
+    roomCode && roomCode.trim().length > 0 && roomCode !== "OFFLINE" ? roomCode : undefined
+  );
+
+  const isMountedRef = React.useRef<boolean>(true);
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   React.useEffect(() => {
     if (roomCode && roomCode.trim().length > 0 && roomCode !== "OFFLINE") {
       setVerifiedRoomCode(roomCode);
+    } else {
+      setVerifiedRoomCode(undefined);
     }
-  }, [roomCode]);
+  }, [roomCode, boardState?.seed]);
 
   const handleOpenPreview = async () => {
+    if (isProvisioning) return;
     if (playClickSound) {
       playClickSound();
     }
-    setIsOpen(true);
 
     if (!verifiedRoomCode && onEnsureRoomCreated) {
+      setIsProvisioning(true);
+      let failSafeTimer: ReturnType<typeof setTimeout> | null = null;
       try {
-        const provisioned = await onEnsureRoomCreated();
-        if (provisioned) {
-          setVerifiedRoomCode(provisioned);
+        const provisioned = await Promise.race<string | null>([
+          onEnsureRoomCreated(),
+          new Promise<null>((resolve) => {
+            failSafeTimer = setTimeout(() => resolve(null), 5000);
+          }),
+        ]);
+        if (provisioned && provisioned.trim().length > 0 && provisioned !== "OFFLINE") {
+          if (isMountedRef.current) {
+            setVerifiedRoomCode(provisioned);
+          }
         }
       } catch (err) {
         console.warn("[ShareActionWrapper] JIT room provisioning failed:", err);
+      } finally {
+        if (failSafeTimer) clearTimeout(failSafeTimer);
+        if (isMountedRef.current) {
+          setIsProvisioning(false);
+        }
       }
+    }
+
+    if (isMountedRef.current) {
+      setIsOpen(true);
     }
   };
 
@@ -72,6 +103,7 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
         onClick={handleOpenPreview}
         darkMode={darkMode}
         className={className}
+        isLoading={isProvisioning}
       />
 
       <SharePreviewModal

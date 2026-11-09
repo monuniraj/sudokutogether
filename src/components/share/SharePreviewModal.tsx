@@ -164,6 +164,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     boardState,
     solutionGrid,
     normalizedDiff,
+    activeLang,
     time,
     sessionSeconds,
     playerName,

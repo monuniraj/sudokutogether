@@ -10254,7 +10254,9 @@ export default function App() {
 
     // 1. FAST CACHE RETRIEVAL (Must run even when offline!)
     const existingRecord = completedGamesRef.current.find(
-      g => (targetSeed && g.seed === targetSeed) || (g.seed === seed) || (g.id && g.id.includes(`-${seed}-`))
+      g =>
+        Boolean(g.isRoomCreated && g.roomCode) &&
+        ((targetSeed && g.seed === targetSeed) || (g.seed === seed) || (g.id && g.id.includes(`-${seed}-`)))
     );
     if (existingRecord?.isRoomCreated && existingRecord?.roomCode) {
       return existingRecord.roomCode;
@@ -14197,8 +14199,8 @@ export default function App() {
       showToast("Daily limit of 10 rewarded ads reached.");
       return;
     }
-    const rewarded = await showRewardedHintAd();
-    if (rewarded) {
+    const result = await showRewardedHintAd();
+    if (result.success) {
       setShowHintRewardModal(false);
       updateHintInventory(prev => prev + 1);
       showToast("+1 Hint Unlocked!");
@@ -14208,8 +14210,12 @@ export default function App() {
       setTimeout(() => {
         triggerSmartHintRef.current();
       }, 120);
-    } else {
+    } else if (result.reason === "DISMISSED") {
       showToast("Video not completed. Hint not unlocked.");
+    } else if (result.reason === "DAILY_CAP_REACHED") {
+      showToast("Daily limit of 10 rewarded ads reached.");
+    } else if (result.reason === "LOAD_FAILED" || result.reason === "SHOW_FAILED") {
+      showToast("Ad unavailable. Please check your connection.", isOnline ? "info" : "offline");
     }
   };
 
