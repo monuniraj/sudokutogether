@@ -110,7 +110,6 @@ export async function initAdMob(): Promise<void> {
 
   try {
     await AdMob.initialize({
-      requestTrackingAuthorization: true,
       initializeForTesting: true,
     });
     isInitialized = true;
@@ -221,3 +220,4 @@ export async function showRewardedHintAd(): Promise<boolean> {
     }
   });
 }
+

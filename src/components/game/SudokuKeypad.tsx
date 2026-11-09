@@ -1,5 +1,5 @@
 import React from "react";
-import { RotateCcw, Trash2, Pencil, Lightbulb, Check, Zap } from "lucide-react";
+import { RotateCcw, Trash2, Pencil, Lightbulb, Check, Zap, Play } from "lucide-react";
 import { triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
 
@@ -20,6 +20,7 @@ export interface SudokuKeypadProps {
   onErase: () => void;
   onHint: () => void;
   hintInventory: number;
+  isChallengeMode?: boolean;
   onNumberSelect: (num: number) => void;
   lockedNum: number | null;
   activeKeypadNum?: number | null;
@@ -44,6 +45,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   onErase,
   onHint,
   hintInventory,
+  isChallengeMode = false,
   onNumberSelect,
   lockedNum,
   activeKeypadNum,
@@ -89,7 +91,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
     remainingCounts[num] = 9 - count;
   }
 
-  const effectiveHintCount = boardState && boardState.maxHintsLimit !== undefined
+  const effectiveHintCount = (isChallengeMode && boardState && boardState.maxHintsLimit !== undefined)
     ? Math.max(0, boardState.maxHintsLimit - boardState.hintsCount)
     : hintInventory;
 
@@ -225,7 +227,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
               triggerHapticTap(vibrations);
               onHint();
             }}
-            disabled={!boardState || isGameOver || effectiveHintCount <= 0}
+            disabled={!boardState || isGameOver || (isChallengeMode && effectiveHintCount <= 0)}
             className={`aspect-[1.12/1] lg:aspect-auto lg:h-[52px] w-full relative transition-all cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed select-none rounded-[16px] lg:rounded-2xl active:scale-95 active:shadow-none border-none shadow-md ${
               darkMode 
                 ? "bg-zinc-900 border border-emerald-950 hover:bg-zinc-850 text-[#34D399] active:bg-[#135236]" 
@@ -241,11 +243,26 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                 <div className="h-[58%] w-full flex items-center justify-center overflow-visible shrink-0">
                   <div className="relative flex items-center justify-center h-full aspect-square max-h-[34cqmin] max-w-[34cqmin] shrink-0">
                     <Lightbulb className="h-full w-auto aspect-square stroke-[2] select-none text-inherit shrink-0" />
-                    <span className={`absolute -top-1 -right-1.5 text-[8px] sm:text-[9px] font-mono font-black rounded-full h-3.5 w-3.5 sm:h-4 sm:w-4 border flex items-center justify-center shadow-sm select-none ${
-                      darkMode ? "bg-[#FBCFE8] text-[#831843] border-[#FBCFE8]" : "bg-[#FCE7F3] text-[#9D174D] border-white"
-                    }`}>
-                      {effectiveHintCount}
-                    </span>
+                    {effectiveHintCount > 0 ? (
+                      <span className={`absolute -top-1 -right-1.5 text-[8px] sm:text-[9px] font-mono font-black rounded-full h-3.5 w-3.5 sm:h-4 sm:w-4 border flex items-center justify-center shadow-sm select-none ${
+                        darkMode ? "bg-[#FBCFE8] text-[#831843] border-[#FBCFE8]" : "bg-[#FCE7F3] text-[#9D174D] border-white"
+                      }`}>
+                        {effectiveHintCount}
+                      </span>
+                    ) : !isChallengeMode ? (
+                      <span className={`absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/20 flex items-center gap-0.5 border-0 shadow-none select-none leading-none ${
+                        darkMode ? "text-amber-300" : "text-amber-700"
+                      }`}>
+                        <Play className="w-2 h-2 fill-current" />
+                        AD
+                      </span>
+                    ) : (
+                      <span className={`absolute -top-1 -right-1.5 text-[8px] sm:text-[9px] font-mono font-black rounded-full h-3.5 w-3.5 sm:h-4 sm:w-4 border flex items-center justify-center shadow-sm select-none ${
+                        darkMode ? "bg-[#FBCFE8] text-[#831843] border-[#FBCFE8]" : "bg-[#FCE7F3] text-[#9D174D] border-white"
+                      }`}>
+                        0
+                      </span>
+                    )}
                   </div>
                 </div>
 

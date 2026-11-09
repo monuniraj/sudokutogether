@@ -13,7 +13,7 @@ import { CreateChallengeModal } from "./components/modals/CreateChallengeModal";
 import { GameOverModal } from "./components/modals/GameOverModal";
 import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
 import { HintRewardModal } from "./components/modals/HintRewardModal";
-import { initAdMob, showInterstitialBetweenMatches, showRewardedHintAd } from "./services/adMobService";
+import { initAdMob, showInterstitialBetweenMatches, showRewardedHintAd, isDailyAdCapReached } from "./services/adMobService";
 import { ShareActionWrapper } from "./components/share/ShareActionWrapper";
 import { GuestBannerPill } from "./components/auth/GuestBannerPill";
 import { incrementGuestGameCount } from "./utils/guestTracking";
@@ -2823,6 +2823,8 @@ export default function App() {
         currentMistakesCount: state.currentMistakesCount,
         maxMistakesLimit: state.maxMistakesLimit,
         hintsCount: state.hintsCount,
+        maxHintsLimit: state.maxHintsLimit,
+        hintInventory: hintInventoryRef.current,
         isGameOver: Boolean(state.isGameOver),
         sessionSeconds: seconds,
         difficulty: diff,
@@ -2875,6 +2877,7 @@ export default function App() {
         currentMistakesCount: sessionData.currentMistakesCount,
         maxMistakesLimit: sessionData.maxMistakesLimit,
         hintsCount: sessionData.hintsCount,
+        maxHintsLimit: sessionData.maxHintsLimit ?? sessionData.challengeHintLimit ?? 3,
         isGameOver: Boolean(sessionData.isGameOver),
         difficulty: sessionData.difficulty as Difficulty,
         seed: sessionData.seed || (Math.floor(Math.random() * 900000) + 100000)
@@ -2904,6 +2907,7 @@ export default function App() {
         isHost: sessionData.isHost !== undefined ? sessionData.isHost : true,
         challengeMistakeLimit: sessionData.challengeMistakeLimit ?? 3,
         challengeHintLimit: sessionData.challengeHintLimit ?? 3,
+        hintInventory: typeof sessionData.hintInventory === "number" ? Math.max(0, sessionData.hintInventory) : undefined,
         challengeTimerEnabled: sessionData.challengeTimerEnabled ?? true,
         challengeDifficulty: (sessionData.challengeDifficulty as Difficulty) || (sessionData.difficulty as Difficulty),
         rematchGameId: sessionData.rematchGameId || null,
@@ -3223,11 +3227,22 @@ export default function App() {
   const [hintInventory, setHintInventory] = useState<number>(() => {
     try {
       const saved = localStorage.getItem("sudoku_hintInventory");
-      return saved !== null ? parseInt(saved, 10) : 3;
+      const parsed = saved !== null ? parseInt(saved, 10) : 3;
+      return Number.isFinite(parsed) ? Math.max(0, parsed) : 3;
     } catch {
       return 3;
     }
   });
+  const hintInventoryRef = useRef<number>(hintInventory);
+  hintInventoryRef.current = hintInventory;
+
+  const updateHintInventory = useCallback((valueOrUpdater: number | ((prev: number) => number)) => {
+    const next = typeof valueOrUpdater === "function"
+      ? Math.max(0, valueOrUpdater(hintInventoryRef.current))
+      : Math.max(0, valueOrUpdater);
+    hintInventoryRef.current = next;
+    setHintInventory(next);
+  }, []);
 
   useEffect(() => {
     try {
@@ -7538,7 +7553,7 @@ export default function App() {
       setRoomPin(pin);
       setHistory([]);
       setLockedNum(null);
-      setHintInventory(hintsLimit);
+      updateHintInventory(hintsLimit);
       setSessionSeconds(0);
       setIsTimerPaused(false);
 
@@ -9871,6 +9886,11 @@ export default function App() {
       } else {
         setChallengeMode(false);
         setActiveGameId(null);
+        if (loaded.hintInventory !== undefined) {
+          updateHintInventory(loaded.hintInventory);
+        } else {
+          updateHintInventory(Math.max(0, 3 - (loaded.state.hintsCount || 0)));
+        }
       }
 
       return loaded;
@@ -13220,7 +13240,7 @@ export default function App() {
     setHistory([]);
     setLockedNum(null);
     setActiveKeypadNum(null);
-    setHintInventory(3);
+    updateHintInventory(customHintLimit);
     setSessionSeconds(0);
     setShowGameOverModal(false);
     setIsVictoryActive(false);
@@ -13272,7 +13292,7 @@ export default function App() {
     setHistory([]);
     setLockedNum(null);
     setActiveKeypadNum(null);
-    setHintInventory(boardState.maxHintsLimit !== undefined ? boardState.maxHintsLimit : 3);
+    updateHintInventory(boardState.maxHintsLimit !== undefined ? boardState.maxHintsLimit : 3);
     setSessionSeconds(0);
     setIsTimerPaused(false);
     setShowGameOverModal(false);
@@ -14166,21 +14186,27 @@ export default function App() {
     }
   };
 
+  const triggerSmartHintRef = useRef<() => void>(() => {});
+
   const handleWatchRewardAd = async () => {
     if (!Capacitor.isNativePlatform()) {
       showToast("Rewarded videos are only supported in mobile app.");
       return;
     }
+    if (isDailyAdCapReached()) {
+      showToast("Daily limit of 10 rewarded ads reached.");
+      return;
+    }
     const rewarded = await showRewardedHintAd();
     if (rewarded) {
       setShowHintRewardModal(false);
-      setHintInventory(prev => prev + 1);
+      updateHintInventory(prev => prev + 1);
       showToast("+1 Hint Unlocked!");
       if (currentScreen === "game" && !boardState?.isGameOver) {
         setIsTimerPaused(false);
       }
       setTimeout(() => {
-        triggerSmartHint();
+        triggerSmartHintRef.current();
       }, 120);
     } else {
       showToast("Video not completed. Hint not unlocked.");
@@ -14189,6 +14215,22 @@ export default function App() {
 
   const triggerSmartHint = () => {
     if (!boardState || boardState.isGameOver) return;
+
+    const isChallengeGame = Boolean(challengeMode);
+    const hintsLeft = isChallengeGame
+      ? Math.max(0, (boardState.maxHintsLimit ?? challengeHintLimit ?? 3) - boardState.hintsCount)
+      : hintInventoryRef.current;
+
+    if (hintsLeft <= 0) {
+      if (isChallengeGame) {
+        showToast(t("hintLimitReachedToast"));
+      } else {
+        setIsTimerPaused(true);
+        setShowHintRewardModal(true);
+      }
+      return;
+    }
+
     const { selectedRow, selectedCol } = boardState;
     if (selectedRow === null || selectedCol === null) {
       addLog(t("tipSelectCellHintToast"));
@@ -14202,19 +14244,6 @@ export default function App() {
     if (cell.isOriginalClue) {
       addLog(t("systemNumberCorrectToast"));
       showToast(t("systemNumberCorrectToast"));
-      return;
-    }
-
-    const isChallengeGame = boardState.maxHintsLimit !== undefined;
-    const hintsLeft = isChallengeGame ? (boardState.maxHintsLimit - boardState.hintsCount) : hintInventory;
-
-    if (hintsLeft <= 0) {
-      if (isChallengeGame) {
-        showToast(t("hintLimitReachedToast"));
-      } else {
-        setIsTimerPaused(true);
-        setShowHintRewardModal(true);
-      }
       return;
     }
 
@@ -14260,7 +14289,7 @@ export default function App() {
     } : null);
 
     if (!isChallengeGame) {
-      setHintInventory(prev => prev - 1);
+      updateHintInventory(prev => Math.max(0, prev - 1));
     }
 
     addLog(`💡 Smart hint injected for Cell (Row ${selectedRow + 1}, Col ${selectedCol + 1}) → ${solvedNum}`);
@@ -14285,6 +14314,7 @@ export default function App() {
       saveGameToHistory(true, terminalHintWinState.currentMistakesCount, terminalHintWinState);
     }
   };
+  triggerSmartHintRef.current = triggerSmartHint;
 
   // Run Real-Time step-by-step Visual Backtracking solver
   const handleVisualBacktrackingSimulation = async () => {
@@ -15717,6 +15747,7 @@ export default function App() {
                   onErase={handleClearCell}
                   onHint={triggerSmartHint}
                   hintInventory={hintInventory}
+                  isChallengeMode={Boolean(challengeMode)}
                   onNumberSelect={(num) => {
                     if (boardState?.isGameOver) {
                       playClickSound();
