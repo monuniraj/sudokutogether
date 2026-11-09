@@ -447,7 +447,10 @@ export type TranslationKey =
   | "hintsShortLabel"
   | "zeroHintsCount"
   | "singleHintCount"
-  | "multiHintsCount";
+  | "multiHintsCount"
+  | "zeroFreeHintsLabel"
+  | "singleFreeHintLabel"
+  | "multiFreeHintsLabel";
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -827,6 +830,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     zeroHintsCount: "0 hints",
     singleHintCount: "1 hint",
     multiHintsCount: "{count} hints",
+    zeroFreeHintsLabel: "0 Free Hints",
+    singleFreeHintLabel: "1 Free Hint",
+    multiFreeHintsLabel: "{count} Free Hints",
     backHomeTooltip: "Back to Home",
     replayBoardTooltip: "Replay Same Board",
     newPuzzleTooltip: "Start New Puzzle",
@@ -1257,6 +1263,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     zeroHintsCount: "0 संकेत",
     singleHintCount: "1 संकेत",
     multiHintsCount: "{count} संकेत",
+    zeroFreeHintsLabel: "0 फ़्री हिंट्स",
+    singleFreeHintLabel: "1 फ़्री हिंट",
+    multiFreeHintsLabel: "{count} फ़्री हिंट्स",
     backHomeTooltip: "होम पर वापस जाएँ",
     replayBoardTooltip: "वही बोर्ड दोबारा खेलें",
     newPuzzleTooltip: "नई पहेली शुरू करें",
@@ -1687,6 +1696,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     zeroHintsCount: "0 Tipps",
     singleHintCount: "1 Tipp",
     multiHintsCount: "{count} Tipps",
+    zeroFreeHintsLabel: "0 kostenlose Tipps",
+    singleFreeHintLabel: "1 kostenloser Tipp",
+    multiFreeHintsLabel: "{count} kostenlose Tipps",
     backHomeTooltip: "Zurück zur Startseite",
     replayBoardTooltip: "Gleiches Spielfeld wiederholen",
     newPuzzleTooltip: "Neues Rätsel starten",
@@ -2117,6 +2129,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     zeroHintsCount: "ヒント 0回",
     singleHintCount: "ヒント 1回",
     multiHintsCount: "ヒント {count}回",
+    zeroFreeHintsLabel: "無料ヒント 0回",
+    singleFreeHintLabel: "無料ヒント 1回",
+    multiFreeHintsLabel: "無料ヒント {count}回",
     backHomeTooltip: "ホームに戻る",
     replayBoardTooltip: "同じ盤面を再挑戦",
     newPuzzleTooltip: "新しいパズルを開始",
@@ -2547,6 +2562,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     zeroHintsCount: "힌트 0개",
     singleHintCount: "힌트 1개",
     multiHintsCount: "힌트 {count}개",
+    zeroFreeHintsLabel: "무료 힌트 0개",
+    singleFreeHintLabel: "무료 힌트 1개",
+    multiFreeHintsLabel: "무료 힌트 {count}개",
     backHomeTooltip: "홈으로 돌아가기",
     replayBoardTooltip: "동일한 보드 다시하기",
     newPuzzleTooltip: "새 퍼즐 시작",
@@ -2977,6 +2995,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     zeroHintsCount: "0 pistas",
     singleHintCount: "1 pista",
     multiHintsCount: "{count} pistas",
+    zeroFreeHintsLabel: "0 pistas gratis",
+    singleFreeHintLabel: "1 pista gratis",
+    multiFreeHintsLabel: "{count} pistas gratis",
     backHomeTooltip: "Volver al inicio",
     replayBoardTooltip: "Repetir el mismo tablero",
     newPuzzleTooltip: "Iniciar nuevo puzle",
@@ -3407,6 +3428,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     zeroHintsCount: "0 indice",
     singleHintCount: "1 indice",
     multiHintsCount: "{count} indices",
+    zeroFreeHintsLabel: "0 indice gratuit",
+    singleFreeHintLabel: "1 indice gratuit",
+    multiFreeHintsLabel: "{count} indices gratuits",
     backHomeTooltip: "Retour à l'accueil",
     replayBoardTooltip: "Rejouer la même grille",
     newPuzzleTooltip: "Nouvelle grille",
@@ -3837,6 +3861,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     zeroHintsCount: "0 indizi",
     singleHintCount: "1 indizio",
     multiHintsCount: "{count} indizi",
+    zeroFreeHintsLabel: "0 indizi gratuiti",
+    singleFreeHintLabel: "1 indizio gratuito",
+    multiFreeHintsLabel: "{count} indizi gratuiti",
     backHomeTooltip: "Torna alla home",
     replayBoardTooltip: "Rigioca lo stesso schema",
     newPuzzleTooltip: "Inizia nuovo schema",
@@ -4267,6 +4294,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     zeroHintsCount: "0 dicas",
     singleHintCount: "1 dica",
     multiHintsCount: "{count} dicas",
+    zeroFreeHintsLabel: "0 dicas gratuitas",
+    singleFreeHintLabel: "1 dica gratuita",
+    multiFreeHintsLabel: "{count} dicas gratuitas",
     backHomeTooltip: "Voltar ao início",
     replayBoardTooltip: "Jogar o mesmo tabuleiro",
     newPuzzleTooltip: "Iniciar novo puzzle",

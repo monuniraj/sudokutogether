@@ -18460,9 +18460,11 @@ export default function App() {
                   : resolvedMaxMistakes >= 999
                     ? "UNLIMITED MISTAKES"
                     : `${resolvedMaxMistakes} MAX MISTAKES`;
-                const hintsLimitLabel = resolvedMaxHints === 1
-                  ? "1 MAX HINT"
-                  : `${resolvedMaxHints} MAX HINTS`;
+                const hintsLimitLabel = resolvedMaxHints === 0
+                  ? t("zeroFreeHintsLabel")
+                  : resolvedMaxHints === 1
+                    ? t("singleFreeHintLabel")
+                    : t("multiFreeHintsLabel", { count: resolvedMaxHints });
                 return (
                   <div className={`px-3.5 py-2 rounded-xl flex items-center justify-center font-sans text-[11px] sm:text-xs font-bold uppercase tracking-wider mb-3 select-none flex-wrap gap-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300 border border-zinc-800/60" : "bg-stone-100/70 text-stone-700 border border-stone-200/50"
                     }`}>
