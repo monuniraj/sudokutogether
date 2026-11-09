@@ -1,5 +1,5 @@
 import React from "react";
-import { RotateCcw, Trash2, Pencil, Lightbulb, Check, Zap, Play } from "lucide-react";
+import { RotateCcw, Trash2, Pencil, Lightbulb, Check, Zap } from "lucide-react";
 import { triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
 
@@ -239,30 +239,10 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
             <div className="absolute inset-0 p-[10%] flex flex-col items-center justify-between select-none pointer-events-none">
               {/* Core 80% Area */}
               <div className="w-full h-full flex flex-col items-center justify-between overflow-visible leading-none">
-                {/* Icon Track: ~58% of Core Height with Hint Badge */}
+                {/* Icon Track: ~58% of Core Height */}
                 <div className="h-[58%] w-full flex items-center justify-center overflow-visible shrink-0">
                   <div className="relative flex items-center justify-center h-full aspect-square max-h-[34cqmin] max-w-[34cqmin] shrink-0">
                     <Lightbulb className="h-full w-auto aspect-square stroke-[2] select-none text-inherit shrink-0" />
-                    {effectiveHintCount > 0 ? (
-                      <span className={`absolute -top-1 -right-1.5 text-[8px] sm:text-[9px] font-mono font-black rounded-full h-3.5 w-3.5 sm:h-4 sm:w-4 border flex items-center justify-center shadow-sm select-none ${
-                        darkMode ? "bg-[#FBCFE8] text-[#831843] border-[#FBCFE8]" : "bg-[#FCE7F3] text-[#9D174D] border-white"
-                      }`}>
-                        {effectiveHintCount}
-                      </span>
-                    ) : !isChallengeMode ? (
-                      <span className={`absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/20 flex items-center gap-0.5 border-0 shadow-none select-none leading-none ${
-                        darkMode ? "text-amber-300" : "text-amber-700"
-                      }`}>
-                        <Play className="w-2 h-2 fill-current" />
-                        AD
-                      </span>
-                    ) : (
-                      <span className={`absolute -top-1 -right-1.5 text-[8px] sm:text-[9px] font-mono font-black rounded-full h-3.5 w-3.5 sm:h-4 sm:w-4 border flex items-center justify-center shadow-sm select-none ${
-                        darkMode ? "bg-[#FBCFE8] text-[#831843] border-[#FBCFE8]" : "bg-[#FCE7F3] text-[#9D174D] border-white"
-                      }`}>
-                        0
-                      </span>
-                    )}
                   </div>
                 </div>
 
@@ -277,6 +257,20 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                 </div>
               </div>
             </div>
+
+            {effectiveHintCount > 0 ? (
+              <span className="absolute -top-1 -right-1 z-10 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center border-0 shadow-none pointer-events-none select-none">
+                {effectiveHintCount}
+              </span>
+            ) : !isChallengeMode ? (
+              <span className="absolute -top-1 -right-1 z-10 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wider bg-amber-400 dark:bg-amber-400 text-slate-950 ring-2 ring-white dark:ring-slate-900 border-0 shadow-sm flex items-center justify-center select-none pointer-events-none">
+                AD
+              </span>
+            ) : (
+              <span className="absolute -top-1 -right-1 z-10 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-400 flex items-center justify-center border-0 shadow-none pointer-events-none select-none">
+                0
+              </span>
+            )}
           </button>
         </div>
       </div>

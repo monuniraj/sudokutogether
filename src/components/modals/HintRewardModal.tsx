@@ -93,15 +93,15 @@ export const HintRewardModal: React.FC<HintRewardModalProps> = ({
                     darkMode ? "text-rose-400" : "text-rose-600"
                   }`}
                 >
-                  Offline Notice
+                  {t("hintOfflineNotice")}
                 </span>
 
                 <h3 className="text-xl font-sans font-black tracking-tight leading-snug text-stone-900 dark:text-stone-100 mb-2">
-                  Connection Required
+                  {t("hintConnectionRequired")}
                 </h3>
 
                 <p className="text-xs sm:text-sm font-sans font-medium text-stone-500 dark:text-stone-400 max-w-[260px] leading-relaxed mb-6">
-                  An active internet connection is required to load rewarded hint videos.
+                  {t("hintNoInternetDesc")}
                 </p>
 
                 <button
@@ -133,15 +133,15 @@ export const HintRewardModal: React.FC<HintRewardModalProps> = ({
                     darkMode ? "text-amber-400" : "text-amber-600"
                   }`}
                 >
-                  Hint Assistance
+                  {t("hintAssistance")}
                 </span>
 
                 <h3 className="text-xl font-sans font-black tracking-tight leading-snug text-stone-900 dark:text-stone-100 mb-2">
-                  Out of Free Hints
+                  {t("outOfHintsTitle")}
                 </h3>
 
                 <p className="text-xs sm:text-sm font-sans font-medium text-stone-500 dark:text-stone-400 max-w-[260px] leading-relaxed mb-6">
-                  Watch a short video to unlock +1 free hint for this puzzle.
+                  {t("outOfHintsDesc")}
                 </p>
 
                 <div className="flex flex-col gap-2.5 w-full">
@@ -157,12 +157,12 @@ export const HintRewardModal: React.FC<HintRewardModalProps> = ({
                     {isAdLoading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Loading Ad...</span>
+                        <span>{t("loadingAdText")}</span>
                       </>
                     ) : (
                       <>
                         <Play className="w-4 h-4 fill-current" />
-                        <span>Watch Video (+1 Hint)</span>
+                        <span>{t("watchAdAction")}</span>
                       </>
                     )}
                   </button>
@@ -176,7 +176,7 @@ export const HintRewardModal: React.FC<HintRewardModalProps> = ({
                         : "text-stone-500 hover:text-stone-800 hover:bg-stone-200/60"
                     } disabled:opacity-40`}
                   >
-                    Maybe Later
+                    {t("maybeLaterAction")}
                   </button>
                 </div>
               </div>
