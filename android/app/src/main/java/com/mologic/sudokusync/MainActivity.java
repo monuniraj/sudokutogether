@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NativeTTSPlugin.class);
+        registerPlugin(AppBuildInfoPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Completely eliminate Android 12+ native splash exit wipe / slide-down animation

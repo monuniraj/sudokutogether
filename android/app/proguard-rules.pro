@@ -38,6 +38,9 @@
 -keep class com.capacitorjs.plugins.pushnotifications.** { *; }
 # Browser Plugin
 -keep class com.capacitorjs.plugins.browser.** { *; }
+# AdMob Community Plugin & App Build Info Plugin
+-keep class com.getcapacitor.community.admob.** { *; }
+-keep class com.mologic.sudokusync.AppBuildInfoPlugin { *; }
 # Google Auth Plugin
 -keep class com.codetrixstudio.capacitor.GoogleAuth.** { *; }
 

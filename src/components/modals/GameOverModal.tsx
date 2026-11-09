@@ -153,6 +153,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       time: didCurrentPlayerFail ? 9999 : (isCurrentPlayerPending ? 9999 : sessionSeconds),
       elapsedTime: sessionSeconds,
       mistakes: boardState?.currentMistakesCount || 0,
+      hints: boardState?.hintsCount || 0,
       failed: didCurrentPlayerFail,
       isAbandoned: false,
       status: didCurrentPlayerFail ? "mistake_game_over" : (isCurrentPlayerWon ? "completed" : "solving"),
@@ -174,14 +175,33 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         (r.guestId && userProfile?.id && r.guestId === userProfile.id) ||
         uId === localMe.id
       );
+      let aliasHintsFallback: number | undefined;
       if (isCurrentUser) {
-        if (localMe.id !== uId) resultsMap.delete(localMe.id);
-        if (myAuthUid && myAuthUid !== uId) resultsMap.delete(myAuthUid);
-        if (userProfile?.id && userProfile.id !== uId) resultsMap.delete(userProfile.id);
+        if (localMe.id !== uId) {
+          const prev = resultsMap.get(localMe.id);
+          if (prev?.hints !== undefined) aliasHintsFallback = Number(prev.hints);
+          resultsMap.delete(localMe.id);
+        }
+        if (myAuthUid && myAuthUid !== uId) {
+          const prev = resultsMap.get(myAuthUid);
+          if (prev?.hints !== undefined && aliasHintsFallback === undefined) aliasHintsFallback = Number(prev.hints);
+          resultsMap.delete(myAuthUid);
+        }
+        if (userProfile?.id && userProfile.id !== uId) {
+          const prev = resultsMap.get(userProfile.id);
+          if (prev?.hints !== undefined && aliasHintsFallback === undefined) aliasHintsFallback = Number(prev.hints);
+          resultsMap.delete(userProfile.id);
+        }
       }
+      const existingEntry = resultsMap.get(uId);
       const playerMistakes = r.mistakes !== undefined
         ? Number(r.mistakes)
-        : (isCurrentUser ? (boardState?.currentMistakesCount ?? 0) : 0);
+        : (existingEntry?.mistakes ?? (isCurrentUser ? (boardState?.currentMistakesCount ?? 0) : 0));
+      const playerHints = r.hints !== undefined
+        ? Number(r.hints)
+        : (r.hintsUsed !== undefined
+          ? Number(r.hintsUsed)
+          : (existingEntry?.hints ?? (isCurrentUser ? (boardState?.hintsCount ?? aliasHintsFallback ?? 0) : 0)));
 
       const isExceededMistakes = Boolean(
         mistakeLimitEnabled && (
@@ -208,6 +228,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             ? Number(r.timeSec)
             : Number(r.elapsedTime) || 0,
         mistakes: playerMistakes,
+        hints: playerHints,
         failed: isFailed,
         isAbandoned: isAbandoned,
         status: r.status || (isAbandoned ? "left" : isWon ? "completed" : isPending ? "solving" : "failed"),
@@ -382,12 +403,22 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             </span>
           )}
 
-          <span className="font-sans text-[9px] text-stone-400 dark:text-zinc-500">
-            {myPlayer.mistakes === 0
-              ? t("zeroErrorsCount")
-              : myPlayer.mistakes === 1
-              ? t("singleErrorCount")
-              : t("multiErrorsCount", { count: myPlayer.mistakes })}
+          <span className="font-sans text-[9px] text-stone-400 dark:text-zinc-500 inline-flex items-center justify-end gap-1">
+            <span>
+              {myPlayer.mistakes === 0
+                ? t("zeroErrorsCount")
+                : myPlayer.mistakes === 1
+                ? t("singleErrorCount")
+                : t("multiErrorsCount", { count: myPlayer.mistakes })}
+            </span>
+            <span className="opacity-45">•</span>
+            <span className="text-amber-600/85 dark:text-amber-400/85">
+              {(myPlayer.hints ?? 0) === 0
+                ? t("zeroHintsCount")
+                : myPlayer.hints === 1
+                ? t("singleHintCount")
+                : t("multiHintsCount", { count: myPlayer.hints ?? 0 })}
+            </span>
           </span>
         </div>
       </div>
@@ -726,9 +757,21 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                           <span className="font-mono text-xs font-semibold text-rose-500">
                             {t("statusLeft")}
                           </span>
-                          {player.mistakes > 0 && (
-                            <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400">
-                              {player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
+                          {(player.mistakes > 0 || (player.hints ?? 0) > 0) && (
+                            <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400 inline-flex items-center justify-end gap-1">
+                              {player.mistakes > 0 && (
+                                <span>
+                                  {player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
+                                </span>
+                              )}
+                              {player.mistakes > 0 && (player.hints ?? 0) > 0 && (
+                                <span className="opacity-45">•</span>
+                              )}
+                              {(player.hints ?? 0) > 0 && (
+                                <span className="text-amber-600/85 dark:text-amber-400/85">
+                                  {player.hints === 1 ? t("singleHintCount") : t("multiHintsCount", { count: player.hints })}
+                                </span>
+                              )}
                             </span>
                           )}
                         </div>
@@ -751,17 +794,39 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                               />
                             </span>
                           </span>
-                          {player.mistakes > 0 && (
-                            <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400">
-                              {player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
+                          {(player.mistakes > 0 || (player.hints ?? 0) > 0) && (
+                            <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400 inline-flex items-center justify-end gap-1">
+                              {player.mistakes > 0 && (
+                                <span>
+                                  {player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
+                                </span>
+                              )}
+                              {player.mistakes > 0 && (player.hints ?? 0) > 0 && (
+                                <span className="opacity-45">•</span>
+                              )}
+                              {(player.hints ?? 0) > 0 && (
+                                <span className="text-amber-600/85 dark:text-amber-400/85">
+                                  {player.hints === 1 ? t("singleHintCount") : t("multiHintsCount", { count: player.hints })}
+                                </span>
+                              )}
                             </span>
                           )}
                         </div>
                       ) : player.failed ? (
                         <>
                           <span className="font-mono font-semibold text-xs sm:text-sm text-rose-500">{t("statusFailed")}</span>
-                          <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400">
-                            {player.mistakes === 0 ? t("zeroErrorsCount") : player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
+                          <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400 inline-flex items-center justify-end gap-1">
+                            <span>
+                              {player.mistakes === 0 ? t("zeroErrorsCount") : player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
+                            </span>
+                            <span className="opacity-45">•</span>
+                            <span className="text-amber-600/85 dark:text-amber-400/85">
+                              {(player.hints ?? 0) === 0
+                                ? t("zeroHintsCount")
+                                : player.hints === 1
+                                ? t("singleHintCount")
+                                : t("multiHintsCount", { count: player.hints ?? 0 })}
+                            </span>
                           </span>
                         </>
                       ) : (
@@ -809,7 +874,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                             </span>
                           </div>
                           <span
-                            className={`font-sans text-[9px] ${
+                            className={`font-sans text-[9px] inline-flex items-center justify-end gap-1 ${
                               isPodium1
                                 ? darkMode
                                   ? "text-amber-300/70"
@@ -827,11 +892,29 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                                 : "text-stone-500"
                             }`}
                           >
-                            {player.mistakes === 0
-                              ? t("zeroErrorsCount")
-                              : player.mistakes === 1
-                              ? t("singleErrorCount")
-                              : t("multiErrorsCount", { count: player.mistakes })}
+                            <span>
+                              {player.mistakes === 0
+                                ? t("zeroErrorsCount")
+                                : player.mistakes === 1
+                                ? t("singleErrorCount")
+                                : t("multiErrorsCount", { count: player.mistakes })}
+                            </span>
+                            <span className="opacity-45">•</span>
+                            <span
+                              className={
+                                isPodium1
+                                  ? darkMode
+                                    ? "text-amber-200/85"
+                                    : "text-amber-900/85"
+                                  : "text-amber-600/85 dark:text-amber-400/85"
+                              }
+                            >
+                              {(player.hints ?? 0) === 0
+                                ? t("zeroHintsCount")
+                                : player.hints === 1
+                                ? t("singleHintCount")
+                                : t("multiHintsCount", { count: player.hints ?? 0 })}
+                            </span>
                           </span>
                         </>
                       )}

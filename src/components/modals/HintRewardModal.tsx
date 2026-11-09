@@ -146,9 +146,13 @@ export const HintRewardModal: React.FC<HintRewardModalProps> = ({
                   {t("outOfHintsTitle")}
                 </h3>
 
-                <p className="text-xs sm:text-sm font-sans font-medium text-stone-500 dark:text-stone-400 max-w-[260px] leading-relaxed mb-6">
+                <p className="text-xs sm:text-sm font-sans font-medium text-stone-500 dark:text-stone-400 max-w-[260px] leading-relaxed mb-3.5">
                   {t("outOfHintsDesc")}
                 </p>
+
+                <div className="w-full rounded-2xl border-0 bg-amber-500/10 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200 text-xs font-sans font-medium leading-relaxed text-center py-2 px-3 mb-4 shadow-[0_2px_10px_rgba(217,119,6,0.05)] dark:shadow-[0_2px_10px_rgba(0,0,0,0.2)]">
+                  {t("hintRewardPbDisclaimer")}
+                </div>
 
                 <div className="flex flex-col gap-2.5 w-full">
                   <button

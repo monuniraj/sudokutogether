@@ -4414,8 +4414,14 @@ export default function App() {
                 hasLocalUnsynced = true;
               } else {
                 const existing = gamesMap.get(gameKey)!;
-                if ((localGame.participants?.length || 0) > (existing.participants?.length || 0)) {
-                  gamesMap.set(gameKey, { ...existing, participants: localGame.participants });
+                const shouldTakeLocalParts = (localGame.participants?.length || 0) > (existing.participants?.length || 0);
+                const shouldBackfillHints = existing.hints === undefined && localGame.hints !== undefined;
+                if (shouldTakeLocalParts || shouldBackfillHints) {
+                  gamesMap.set(gameKey, {
+                    ...existing,
+                    ...(shouldTakeLocalParts ? { participants: localGame.participants } : {}),
+                    ...(shouldBackfillHints ? { hints: localGame.hints, maxHints: localGame.maxHints } : {})
+                  });
                 }
               }
             }
@@ -7834,7 +7840,7 @@ export default function App() {
             timeSec: pData.timeSec !== undefined ? Number(pData.timeSec) : (pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : 0),
             elapsedTime: pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : (pData.timeSec !== undefined ? Number(pData.timeSec) : 0),
             mistakes: pData.mistakes !== undefined ? Number(pData.mistakes) : 0,
-            hints: pData.hints !== undefined ? Number(pData.hints) : 0,
+            hints: pData.hints !== undefined ? Number(pData.hints) : (pData.hintsUsed !== undefined ? Number(pData.hintsUsed) : 0),
             isWon: isWon,
             status: pData.status || (isWon ? "completed" : "active"),
             isPending: !isLeft && !isFinished
@@ -7859,7 +7865,7 @@ export default function App() {
                 timeSec: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.timeSec || 0),
                 elapsedTime: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.elapsedTime || 0),
                 mistakes: rData.mistakes !== undefined ? Number(rData.mistakes) : (existing?.mistakes || 0),
-                hints: rData.hints !== undefined ? Number(rData.hints) : (existing?.hints || 0),
+                hints: rData.hints !== undefined ? Number(rData.hints) : (rData.hintsUsed !== undefined ? Number(rData.hintsUsed) : (existing?.hints ?? 0)),
                 isWon: rWon,
                 status: rData.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
                 isPending: rFinished ? false : (rData.isPending !== undefined ? Boolean(rData.isPending) : (existing ? existing.isPending : false))
@@ -7918,7 +7924,7 @@ export default function App() {
           timeSec: p.timeSec !== undefined ? Number(p.timeSec) : (p.elapsedTime !== undefined ? Number(p.elapsedTime) : 0),
           elapsedTime: p.elapsedTime !== undefined ? Number(p.elapsedTime) : (p.timeSec !== undefined ? Number(p.timeSec) : 0),
           mistakes: p.mistakes !== undefined ? Number(p.mistakes) : 0,
-          hints: p.hints !== undefined ? Number(p.hints) : 0,
+          hints: p.hints !== undefined ? Number(p.hints) : (p.hintsUsed !== undefined ? Number(p.hintsUsed) : 0),
           isWon: isWon,
           status: p.status || (isWon ? "completed" : "active"),
           isPending: !isLeft && !isFinished
@@ -7940,7 +7946,7 @@ export default function App() {
           timeSec: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.timeSec || 0),
           elapsedTime: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.elapsedTime || 0),
           mistakes: r.mistakes !== undefined ? Number(r.mistakes) : (existing?.mistakes || 0),
-          hints: r.hints !== undefined ? Number(r.hints) : (existing?.hints || 0),
+          hints: r.hints !== undefined ? Number(r.hints) : (r.hintsUsed !== undefined ? Number(r.hintsUsed) : (existing?.hints ?? 0)),
           isWon: rWon,
           status: r.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
           isPending: rFinished ? false : (r.isPending !== undefined ? Boolean(r.isPending) : (existing ? existing.isPending : false))
@@ -8055,7 +8061,7 @@ export default function App() {
             timeSec: rData.timeSec !== undefined ? Number(rData.timeSec) : 0,
             elapsedTime: rData.timeSec !== undefined ? Number(rData.timeSec) : 0,
             mistakes: rData.mistakes !== undefined ? Number(rData.mistakes) : 0,
-            hints: rData.hints !== undefined ? Number(rData.hints) : 0,
+            hints: rData.hints !== undefined ? Number(rData.hints) : (rData.hintsUsed !== undefined ? Number(rData.hintsUsed) : 0),
             isWon: rWon,
             status: rData.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
             isPending: rFinished ? false : (rData.isPending !== undefined ? Boolean(rData.isPending) : false)
@@ -10289,7 +10295,7 @@ export default function App() {
 
       const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, roomCode) : "";
       const mistakesLimit = currentBoard?.maxMistakesLimit !== undefined ? currentBoard.maxMistakesLimit : (challengeMistakeLimit || 3);
-      const hintsLimit = currentBoard?.hintsRemaining !== undefined ? currentBoard.hintsRemaining : (challengeHintLimit || 3);
+      const hintsLimit = currentBoard?.maxHintsLimit !== undefined ? currentBoard.maxHintsLimit : (challengeHintLimit ?? 3);
 
       await setDoc(doc(db, "rooms", roomCode), {
         roomCode: roomCode,
@@ -10366,6 +10372,8 @@ export default function App() {
       playerName: currentProfileName,
       timeSec: timeToShare,
       mistakes: boardState ? boardState.currentMistakesCount : 0,
+      hints: boardState?.hintsCount ?? 0,
+      maxHints: boardState?.maxHintsLimit ?? challengeHintLimit ?? 3,
       isWon: isWon,
       date: new Date().toISOString()
     };
@@ -10424,6 +10432,8 @@ export default function App() {
       playerName: historyChallengeGame.playerName || currentProfileName,
       timeSec: historyChallengeGame.timeSec,
       mistakes: historyChallengeGame.mistakes,
+      hints: historyChallengeGame.hints ?? (historyChallengeGame as any).hintsUsed ?? 0,
+      maxHints: historyChallengeGame.maxHints ?? hintLimitVal,
       isWon: historyChallengeGame.isWon,
       date: historyChallengeGame.date || new Date().toISOString()
     };
@@ -10681,7 +10691,7 @@ export default function App() {
     setRematchMatchMode("replay");
     setChallengeDifficulty(difficulty);
     setChallengeMistakeLimit(mistakeLimitEnabled ? (boardState.maxMistakesLimit || 3) : 999);
-    setChallengeHintLimit(boardState.hintsRemaining !== undefined ? boardState.hintsRemaining : 3);
+    setChallengeHintLimit(boardState.maxHintsLimit !== undefined ? boardState.maxHintsLimit : 3);
     setChallengeTimerEnabled(timerEnabled);
     setChallengeSeed(seed);
     setPendingRematchSeed(seed);
@@ -10719,7 +10729,7 @@ export default function App() {
         elapsedTime: sessionSeconds,
         mistakes: boardState.currentMistakesCount || 0,
         hints: boardState.hintsCount || 0,
-        maxHints: 3,
+        maxHints: boardState.maxHintsLimit ?? 3,
         isWon: !isFailed,
         date: new Date().toISOString()
       };
@@ -10739,6 +10749,8 @@ export default function App() {
             timeSec: userTime,
             elapsedTime: sessionSeconds,
             mistakes: boardState.currentMistakesCount || 0,
+            hints: boardState.hintsCount || 0,
+            maxHints: boardState.maxHintsLimit ?? 3,
             updatedAt: serverTimestamp()
           }, { merge: true });
         } catch (err) {
@@ -11515,9 +11527,18 @@ export default function App() {
             const uId = data.userId || data.id || d.id;
             if (uId) {
               const existing = mergedMap.get(uId);
+              const resolvedHints = data.hints !== undefined
+                ? Number(data.hints)
+                : (data.hintsUsed !== undefined ? Number(data.hintsUsed) : existing?.hints);
               // Prefer non-pending / winning / more detailed data
               if (!existing || (existing.isPending && !data.isPending) || (!existing.isWon && data.isWon)) {
-                mergedMap.set(uId, { ...data, userId: uId });
+                mergedMap.set(uId, {
+                  ...data,
+                  userId: uId,
+                  ...(resolvedHints !== undefined ? { hints: resolvedHints } : {})
+                });
+              } else if (existing.hints === undefined && resolvedHints !== undefined) {
+                mergedMap.set(uId, { ...existing, hints: resolvedHints });
               }
             }
           });
@@ -11540,12 +11561,40 @@ export default function App() {
               playerName: dData.name || dData.playerName || "Player",
               timeSec: dData.timeSec || dData.elapsedTime || 0,
               mistakes: dData.mistakes || 0,
+              hints: dData.hints !== undefined ? Number(dData.hints) : (dData.hintsUsed !== undefined ? Number(dData.hintsUsed) : 0),
               isWon: dData.status === "won" || !!dData.isWon,
               isPending: dData.status === "active" || dData.status === "solving"
             });
           });
         } catch (roomErr) {
           console.warn("[Rankings] Room fallback query failed:", roomErr);
+        }
+      }
+
+      // 3.5 Resolve canonical room rules (mistakesLimit, hintsLimit) for multiplayer rooms
+      let roomMaxMistakes: number | undefined;
+      let roomMaxHints: number | undefined;
+      const roomCodeIdMatch = game.id?.match(/SUDOKU-(\d+)/i);
+      const canonicalRoomCode = game.roomCode
+        || (game.seed ? String(game.seed).padStart(6, '0').slice(-6) : null)
+        || (roomCodeIdMatch?.[1] ? String(roomCodeIdMatch[1]).padStart(6, '0').slice(-6) : null);
+
+      if (isOnline && (game.isChallenge || game.roomCode) && canonicalRoomCode) {
+        try {
+          const roomSnap = await getDoc(doc(db, "rooms", canonicalRoomCode));
+          if (roomSnap.exists()) {
+            const rData = roomSnap.data();
+            const rawRoomMistakes = rData.mistakesLimit !== undefined ? rData.mistakesLimit : rData.mistakeLimit;
+            const rawRoomHints = rData.hintsLimit !== undefined ? rData.hintsLimit : rData.hintLimit;
+            if (rawRoomMistakes !== undefined && Number.isFinite(Number(rawRoomMistakes))) {
+              roomMaxMistakes = Number(rawRoomMistakes);
+            }
+            if (rawRoomHints !== undefined && Number.isFinite(Number(rawRoomHints))) {
+              roomMaxHints = Number(rawRoomHints);
+            }
+          }
+        } catch (roomMetaErr) {
+          console.warn("[Rankings] Room metadata query failed:", roomMetaErr);
         }
       }
 
@@ -11570,6 +11619,17 @@ export default function App() {
       const results = Array.from(mergedMap.values());
       console.log(`[Rankings] Found ${results.length} participants across all sources for game ${game.id}`);
 
+      if (results.length > 0 || roomMaxMistakes !== undefined || roomMaxHints !== undefined) {
+        setViewingRankingsGame(prev => prev && prev.id === game.id ? {
+          ...prev,
+          userId: prev.userId || game.userId || userProfile?.id,
+          playerName: prev.playerName || game.playerName || getActiveDisplayName(),
+          ...(roomMaxMistakes !== undefined ? { maxMistakes: roomMaxMistakes } : {}),
+          ...(roomMaxHints !== undefined ? { maxHints: roomMaxHints } : {}),
+          ...(results.length > 0 ? { participants: results } : {})
+        } : prev);
+      }
+
       if (results.length > 0) {
         setHistoryRankings(results);
         setChallengeLeaderboardCache(prev => ({
@@ -11578,18 +11638,16 @@ export default function App() {
           ...(game.seed ? { [String(game.seed)]: results } : {})
         }));
 
-        setViewingRankingsGame(prev => prev && prev.id === game.id ? {
-          ...prev,
-          userId: prev.userId || game.userId || userProfile?.id,
-          playerName: prev.playerName || game.playerName || getActiveDisplayName(),
-          participants: results
-        } : prev);
-
         setCompletedGames(prev => {
           const index = prev.findIndex(g => g.id === game.id);
           if (index === -1) return prev;
           const updated = [...prev];
-          updated[index] = repairGameParticipants(updated[index], results);
+          const repaired = repairGameParticipants(updated[index], results);
+          updated[index] = {
+            ...repaired,
+            ...(repaired.maxMistakes === undefined && roomMaxMistakes !== undefined ? { maxMistakes: roomMaxMistakes } : {}),
+            ...(repaired.maxHints === undefined && roomMaxHints !== undefined ? { maxHints: roomMaxHints } : {})
+          };
           const activeUid = getActiveAuthUid() || userProfile?.id || "guest";
           updateVault(activeUid, v => ({ ...v, completedGames: updated }));
           return updated;
@@ -11599,7 +11657,12 @@ export default function App() {
           const index = prev.findIndex(g => g.id === game.id);
           if (index === -1) return prev;
           const updated = [...prev];
-          updated[index] = repairGameParticipants(updated[index], results);
+          const repaired = repairGameParticipants(updated[index], results);
+          updated[index] = {
+            ...repaired,
+            ...(repaired.maxMistakes === undefined && roomMaxMistakes !== undefined ? { maxMistakes: roomMaxMistakes } : {}),
+            ...(repaired.maxHints === undefined && roomMaxHints !== undefined ? { maxHints: roomMaxHints } : {})
+          };
           const activeUid = getActiveAuthUid() || userProfile?.id || "guest";
           updateVault(activeUid, v => ({ ...v, savedGames: updated }));
           return updated;
@@ -11676,6 +11739,14 @@ export default function App() {
     const effIsWon = isImplausibleWin ? false : !!rBody.isWon;
     const effTimeSec = isImplausibleWin ? 9999 : Number(rBody.timeSec);
     const effMistakes = isImplausibleWin ? (boardState?.maxMistakesLimit || 3) : Number(rBody.mistakes);
+    const rawHints = rBody.hints !== undefined
+      ? Number(rBody.hints)
+      : (rBody.hintsUsed !== undefined ? Number(rBody.hintsUsed) : 0);
+    const effHints = Number.isFinite(rawHints) && rawHints >= 0 ? rawHints : 0;
+    const rawMaxHints = rBody.maxHints !== undefined
+      ? Number(rBody.maxHints)
+      : (boardState?.maxHintsLimit !== undefined ? Number(boardState.maxHintsLimit) : undefined);
+    const hasMaxHints = rawMaxHints !== undefined && Number.isFinite(rawMaxHints);
     const effStatus = isImplausibleWin ? "mistake_game_over" : (rBody.status || (rBody.isWon ? "completed" : "mistake_game_over"));
     if (isImplausibleWin) {
       console.warn(`[Anti-Cheat] Implausible solve time (${rBody.timeSec}s) converted to forfeit.`);
@@ -11733,6 +11804,8 @@ export default function App() {
         playerName: effectivePlayerName,
         timeSec: effTimeSec,
         mistakes: effMistakes,
+        hints: effHints,
+        ...(hasMaxHints ? { maxHints: rawMaxHints } : {}),
         isWon: effIsWon,
         isPending: false,
         status: effStatus,
@@ -11760,6 +11833,10 @@ export default function App() {
         if (shouldOverwriteScore) {
           roomPlayerPayload.timeSec = effTimeSec;
           roomPlayerPayload.mistakes = effMistakes;
+          roomPlayerPayload.hints = effHints;
+          if (hasMaxHints) {
+            roomPlayerPayload.maxHints = rawMaxHints;
+          }
         }
         await setDoc(roomPlayerRef, roomPlayerPayload, { merge: true });
 
@@ -11844,6 +11921,10 @@ export default function App() {
             playerName: payload.playerName,
             timeSec: Number(payload.timeSec),
             mistakes: Number(payload.mistakes),
+            hints: Number(payload.hints ?? payload.hintsUsed ?? 0),
+            ...(payload.maxHints !== undefined && Number.isFinite(Number(payload.maxHints))
+              ? { maxHints: Number(payload.maxHints) }
+              : {}),
             isWon: !!payload.isWon,
             isPending: false,
             status: payload.status || (payload.isWon ? "completed" : "mistake_game_over"),
@@ -11920,6 +12001,7 @@ export default function App() {
           playerName: pName,
           timeSec: 0,
           mistakes: 0,
+          hints: 0,
           isWon: false,
           status: "solving",
           isPending: true,
@@ -11939,6 +12021,9 @@ export default function App() {
         name: pName,
         status: isAlreadyCompleted ? "completed" : "active",
         ...(isAlreadyCompleted && existing.data()?.timeSec !== undefined ? { timeSec: existing.data().timeSec } : {}),
+        ...(isAlreadyCompleted && existing.data()?.hints !== undefined
+          ? { hints: Number(existing.data()?.hints) }
+          : (!isAlreadyCompleted ? { hints: 0 } : {})),
         updatedAt: serverTimestamp()
       }, { merge: true });
     } catch (err) {
@@ -11986,6 +12071,7 @@ export default function App() {
             status: p.status || "active",
             isPending: !isLeft && !isFinished,
             mistakes: p.mistakes !== undefined ? Number(p.mistakes) : 0,
+            hints: p.hints !== undefined ? Number(p.hints) : (p.hintsUsed !== undefined ? Number(p.hintsUsed) : 0),
             timeSec: p.timeSec !== undefined ? Number(p.timeSec) : (p.elapsedTime !== undefined ? Number(p.elapsedTime) : 0),
             isWon: p.status === "won" || p.status === "completed" || p.status === "victory" || Boolean(p.isWon),
             updatedAt: p.updatedAt
@@ -11998,9 +12084,13 @@ export default function App() {
         const uId = r.userId || r.id;
         if (uId) {
           const existing = mergedMap.get(uId);
+          const resolvedHints = r.hints !== undefined
+            ? Number(r.hints)
+            : (r.hintsUsed !== undefined ? Number(r.hintsUsed) : (existing?.hints ?? 0));
           mergedMap.set(uId, {
             ...existing,
             ...r,
+            hints: resolvedHints,
             userId: uId,
             playerName: r.playerName || existing?.playerName || "Player",
             status: r.status || existing?.status || (r.isWon ? "completed" : (!r.isPending ? "mistake_game_over" : "active"))
@@ -12161,7 +12251,17 @@ export default function App() {
       }
 
       if (nextSnap && nextSnap.docs && nextSnap.docs.length > 0) {
-        const newBatch = nextSnap.docs.map((d: any) => ({ ...d.data(), id: d.id, userId: d.data().userId || d.id }));
+        const newBatch = nextSnap.docs.map((d: any) => {
+          const dData = d.data();
+          return {
+            ...dData,
+            id: d.id,
+            userId: dData.userId || d.id,
+            hints: dData.hints !== undefined
+              ? Number(dData.hints)
+              : (dData.hintsUsed !== undefined ? Number(dData.hintsUsed) : 0)
+          };
+        });
         setLeaderboardLastVisibleDoc(nextSnap.docs[nextSnap.docs.length - 1]);
         setLeaderboardHasMore(nextSnap.docs.length === 20);
         setSyncedLeaderboard(prev => {
@@ -13840,6 +13940,8 @@ export default function App() {
           const liveRoomId = activeGameId || rematchGameId || (challengeSeed ? String(challengeSeed).padStart(6, '0').slice(-6) : null);
           const currentUid = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id;
           if (liveRoomId && currentUid) {
+            const terminalHints = terminalState.hintsCount ?? 0;
+            const terminalMaxHints = terminalState.maxHintsLimit;
             try {
               setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
                 id: currentUid,
@@ -13850,6 +13952,8 @@ export default function App() {
                 failed: true,
                 isPending: false,
                 mistakes: newMistakes,
+                hints: terminalHints,
+                ...(terminalMaxHints !== undefined ? { maxHints: terminalMaxHints } : {}),
                 timeSec: sessionSeconds,
                 updatedAt: serverTimestamp(),
                 completedAt: serverTimestamp()
@@ -13870,6 +13974,8 @@ export default function App() {
                   isWon: false,
                   isPending: false,
                   mistakes: newMistakes,
+                  hints: terminalHints,
+                  ...(terminalMaxHints !== undefined ? { maxHints: terminalMaxHints } : {}),
                   timeSec: sessionSeconds,
                   updatedAt: serverTimestamp(),
                   completedAt: serverTimestamp()
@@ -14033,6 +14139,8 @@ export default function App() {
                 isPending: false,
                 timeSec: directTimeSec,
                 mistakes: directMistakes,
+                hints: terminalWinState.hintsCount ?? 0,
+                ...(terminalWinState.maxHintsLimit !== undefined ? { maxHints: terminalWinState.maxHintsLimit } : {}),
                 completedAt: serverTimestamp()
               }, { merge: true }).catch(err => {
                 console.warn("[Multiplayer] Immediate victory write notice:", err);
@@ -14201,9 +14309,11 @@ export default function App() {
     }
     const result = await showRewardedHintAd();
     if (result.success) {
+      const grantedAmount =
+        result.rewardAmount && result.rewardAmount > 0 ? result.rewardAmount : 1;
       setShowHintRewardModal(false);
-      updateHintInventory(prev => prev + 1);
-      showToast("+1 Hint Unlocked!");
+      updateHintInventory(prev => prev + grantedAmount);
+      showToast(`+${grantedAmount} Hint Unlocked!`);
       if (currentScreen === "game" && !boardState?.isGameOver) {
         setIsTimerPaused(false);
       }
@@ -15941,7 +16051,24 @@ export default function App() {
                 }}
                 darkMode={darkMode}
                 difficulty={difficulty}
-                boardState={boardState || (challengeSeed ? { seed: challengeSeed, isGameOver: true, maxMistakesLimit: challengeMistakeLimit, currentMistakesCount: 0, hintsCount: 0 } : null)}
+                boardState={boardState || (challengeSeed ? (() => {
+                  const myUid = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid();
+                  const myAuthUid = auth.currentUser?.uid || authUser?.uid;
+                  const myEntry = syncedLeaderboard.find((p: any) =>
+                    p.userId === myUid ||
+                    p.uid === myUid ||
+                    p.id === myUid ||
+                    (myAuthUid && (p.userId === myAuthUid || p.authUid === myAuthUid)) ||
+                    (userProfile?.id && p.guestId === userProfile.id)
+                  );
+                  return {
+                    seed: challengeSeed,
+                    isGameOver: true,
+                    maxMistakesLimit: challengeMistakeLimit,
+                    currentMistakesCount: myEntry ? Number(myEntry.mistakes || 0) : 0,
+                    hintsCount: myEntry ? Number(myEntry.hints ?? myEntry.hintsUsed ?? 0) : 0
+                  };
+                })() : null)}
                 mistakeLimitEnabled={mistakeLimitEnabled}
                 sessionSeconds={sessionSeconds}
                 syncedLeaderboard={syncedLeaderboard}
@@ -16328,6 +16455,20 @@ export default function App() {
                                 </span>
                               </div>
                             )}
+                          </div>
+
+                          {/* Subtle Pastel Hints Used Pill */}
+                          <div className="mt-2.5 flex justify-center">
+                            <div
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border-0 text-[11px] font-sans font-semibold tracking-wide transition-colors ${
+                                darkMode
+                                  ? "bg-amber-950/35 text-amber-200/90 shadow-[0_2px_10px_rgba(0,0,0,0.22)]"
+                                  : "bg-amber-50/90 text-amber-800 shadow-[0_2px_10px_rgba(217,119,6,0.06)]"
+                              }`}
+                            >
+                              <span className="opacity-80">{t("hintsUsedLabel")}:</span>
+                              <span className="font-mono font-bold">{boardState.hintsCount ?? 0}</span>
+                            </div>
                           </div>
                         </div>
                       </>
@@ -16780,7 +16921,11 @@ export default function App() {
 
                             <div className="flex items-center gap-3.5 font-sans text-xs font-black">
                               <div className="flex flex-col items-end leading-tight">
-                                <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">Errs</span>
+                                <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">{t("hintsShortLabel")}</span>
+                                <span className="text-amber-600 dark:text-amber-400">{game.hints ?? 0}</span>
+                              </div>
+                              <div className="flex flex-col items-end leading-tight">
+                                <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">{t("errsLabel")}</span>
                                 <span className="text-rose-500">{game.mistakes}/{game.maxMistakes}</span>
                               </div>
                             </div>
@@ -16867,7 +17012,11 @@ export default function App() {
 
                             <div className="flex items-center gap-3.5 font-sans text-xs font-black">
                               <div className="flex flex-col items-end leading-tight">
-                                <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">Errs</span>
+                                <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">{t("hintsShortLabel")}</span>
+                                <span className="text-amber-600 dark:text-amber-400">{game.hints ?? 0}</span>
+                              </div>
+                              <div className="flex flex-col items-end leading-tight">
+                                <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">{t("errsLabel")}</span>
                                 <span className="text-rose-500">{game.mistakes}/{game.maxMistakes}</span>
                               </div>
                             </div>
@@ -18115,17 +18264,33 @@ export default function App() {
           }}
           darkMode={darkMode}
           difficulty={notificationResultModal?.difficulty || "EASY"}
-          boardState={{
-            seed: notificationResultModal?.seed,
-            isGameOver: true,
-            maxMistakesLimit: notificationResultModal?.mistakesLimit || 3,
-            currentMistakesCount: 0,
-            hintsCount: 0
-          }}
+          boardState={(() => {
+            const myUid = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid();
+            const myAuthUid = auth.currentUser?.uid || authUser?.uid;
+            const myResult = notificationResultModal?.participants?.find((p: any) =>
+              p.userId === myUid ||
+              p.id === myUid ||
+              (myAuthUid && (p.userId === myAuthUid || p.authUid === myAuthUid)) ||
+              (userProfile?.id && p.guestId === userProfile.id)
+            );
+            return {
+              seed: notificationResultModal?.seed,
+              isGameOver: true,
+              maxMistakesLimit: notificationResultModal?.mistakesLimit || 3,
+              currentMistakesCount: myResult ? Number(myResult.mistakes || 0) : 0,
+              hintsCount: myResult ? Number(myResult.hints ?? myResult.hintsUsed ?? 0) : 0
+            };
+          })()}
           mistakeLimitEnabled={Boolean(notificationResultModal?.mistakesLimit && notificationResultModal.mistakesLimit <= 3)}
           sessionSeconds={(() => {
             const myUid = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid();
-            const myResult = notificationResultModal?.participants?.find((p: any) => p.userId === myUid);
+            const myAuthUid = auth.currentUser?.uid || authUser?.uid;
+            const myResult = notificationResultModal?.participants?.find((p: any) =>
+              p.userId === myUid ||
+              p.id === myUid ||
+              (myAuthUid && (p.userId === myAuthUid || p.authUid === myAuthUid)) ||
+              (userProfile?.id && p.guestId === userProfile.id)
+            );
             return myResult ? Number(myResult.timeSec || myResult.elapsedTime || 0) : 0;
           })()}
           syncedLeaderboard={notificationResultModal?.participants || []}
@@ -18279,21 +18444,38 @@ export default function App() {
               </div>
 
               {/* Single Compact Info Banner */}
-              <div className={`px-3.5 py-2 rounded-xl flex items-center justify-center font-sans text-[11px] sm:text-xs font-bold uppercase tracking-wider mb-3 select-none flex-wrap gap-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300 border border-zinc-800/60" : "bg-stone-100/70 text-stone-700 border border-stone-200/50"
-                }`}>
-                {(() => {
-                  const verifiedCode = viewingRankingsGame.roomCode || (viewingRankingsGame.isChallenge ? String(viewingRankingsGame.seed || viewingRankingsGame.id).replace(/\D/g, '').slice(-6) : null);
-                  return (
+              {(() => {
+                const verifiedCode = viewingRankingsGame.roomCode || (viewingRankingsGame.isChallenge ? String(viewingRankingsGame.seed || viewingRankingsGame.id).replace(/\D/g, '').slice(-6) : null);
+                const idMistakesMatch = viewingRankingsGame.id?.match(/-M(\d+)/i);
+                const idHintsMatch = viewingRankingsGame.id?.match(/-H(\d+)/i);
+                const resolvedMaxMistakes = viewingRankingsGame.maxMistakes
+                  ?? (idMistakesMatch ? Number(idMistakesMatch[1]) : undefined)
+                  ?? 3;
+                const resolvedMaxHints = viewingRankingsGame.maxHints
+                  ?? (viewingRankingsGame as any).hintLimit
+                  ?? (idHintsMatch ? Number(idHintsMatch[1]) : undefined)
+                  ?? 3;
+                const mistakesLimitLabel = resolvedMaxMistakes === 0
+                  ? "SUDDEN DEATH"
+                  : resolvedMaxMistakes >= 999
+                    ? "UNLIMITED MISTAKES"
+                    : `${resolvedMaxMistakes} MAX MISTAKES`;
+                const hintsLimitLabel = resolvedMaxHints === 1
+                  ? "1 MAX HINT"
+                  : `${resolvedMaxHints} MAX HINTS`;
+                return (
+                  <div className={`px-3.5 py-2 rounded-xl flex items-center justify-center font-sans text-[11px] sm:text-xs font-bold uppercase tracking-wider mb-3 select-none flex-wrap gap-y-1 ${darkMode ? "bg-zinc-900/60 text-stone-300 border border-zinc-800/60" : "bg-stone-100/70 text-stone-700 border border-stone-200/50"
+                    }`}>
                     <span>{isOnline && verifiedCode ? `ROOM: #${verifiedCode}` : `MATCH #${String(viewingRankingsGame.seed || viewingRankingsGame.id).replace(/\D/g, '').slice(-6)}`}</span>
-                  );
-                })()}
-                <span className="mx-1.5 opacity-40">•</span>
-                <span className="text-[#9D174D] dark:text-pink-300 font-black">{t(viewingRankingsGame.difficulty?.toLowerCase() as any) || viewingRankingsGame.difficulty}</span>
-                <span className="mx-1.5 opacity-40">•</span>
-                <span>{viewingRankingsGame.mistakes}/{viewingRankingsGame.maxMistakes || 3} MISTAKES</span>
-                <span className="mx-1.5 opacity-40">•</span>
-                <span>{(viewingRankingsGame as any).hintsUsed ?? 0} HINTS</span>
-              </div>
+                    <span className="mx-1.5 opacity-40">•</span>
+                    <span className="text-[#9D174D] dark:text-pink-300 font-black">{t(viewingRankingsGame.difficulty?.toLowerCase() as any) || viewingRankingsGame.difficulty}</span>
+                    <span className="mx-1.5 opacity-40">•</span>
+                    <span>{mistakesLimitLabel}</span>
+                    <span className="mx-1.5 opacity-40">•</span>
+                    <span>{hintsLimitLabel}</span>
+                  </div>
+                );
+              })()}
 
               {/* Loader */}
               {isLoadingHistoryRankings && historyRankings.length === 0 ? (
@@ -18311,6 +18493,9 @@ export default function App() {
                       // 1. Seed historical game owner/player statistics
                       const originalPlayerId = viewingRankingsGame.userId || userProfile?.id || 'original-player';
                       const currentLocalName = (userProfile?.name && userProfile.name.trim()) || getActiveDisplayName();
+                      const myAuthUid = auth.currentUser?.uid || authUser?.uid;
+                      const myActiveUid = getActiveAuthUid();
+                      const localMatchHints = viewingRankingsGame.hints ?? (viewingRankingsGame as any).hintsUsed ?? 0;
 
                       const originalPlayer = {
                         id: originalPlayerId,
@@ -18318,7 +18503,7 @@ export default function App() {
                         time: !viewingRankingsGame.isWon ? 9999 : viewingRankingsGame.timeSec,
                         elapsedTime: Number(viewingRankingsGame.timeSec) > 0 && Number(viewingRankingsGame.timeSec) < 9999 ? Number(viewingRankingsGame.timeSec) : 0,
                         mistakes: viewingRankingsGame.mistakes,
-                        hints: (viewingRankingsGame as any).hints ?? (viewingRankingsGame as any).hintsUsed ?? 0,
+                        hints: localMatchHints,
                         failed: !viewingRankingsGame.isWon,
                         isMe: true,
                         isReal: true,
@@ -18332,26 +18517,61 @@ export default function App() {
                         const pId = item.userId || item.id;
                         if (!pId) return;
 
-                        const isCurrentUser = pId === userProfile?.id || pId === originalPlayerId || item.isMe === true;
+                        const isCurrentUser = Boolean(
+                          (myAuthUid && pId === myAuthUid) ||
+                          (myActiveUid && pId === myActiveUid) ||
+                          (userProfile?.id && pId === userProfile.id) ||
+                          pId === originalPlayerId ||
+                          (item.authUid && (item.authUid === myAuthUid || item.authUid === myActiveUid || item.authUid === userProfile?.id)) ||
+                          (item.guestId && (item.guestId === userProfile?.id || item.guestId === originalPlayerId)) ||
+                          item.isMe === true
+                        );
+
+                        let aliasEntry: any;
+                        if (isCurrentUser) {
+                          if (pId !== originalPlayerId && resultsMap.has(originalPlayerId)) {
+                            aliasEntry = resultsMap.get(originalPlayerId);
+                            resultsMap.delete(originalPlayerId);
+                          }
+                          if (userProfile?.id && pId !== userProfile.id && resultsMap.has(userProfile.id)) {
+                            if (!aliasEntry) aliasEntry = resultsMap.get(userProfile.id);
+                            resultsMap.delete(userProfile.id);
+                          }
+                          if (myAuthUid && pId !== myAuthUid && resultsMap.has(myAuthUid)) {
+                            if (!aliasEntry) aliasEntry = resultsMap.get(myAuthUid);
+                            resultsMap.delete(myAuthUid);
+                          }
+                        }
+
+                        const existingEntry = resultsMap.get(pId) || aliasEntry;
                         const pName = isCurrentUser
-                          ? (item.playerName || item.name || viewingRankingsGame.playerName || currentLocalName)
-                          : (item.playerName || item.name || 'Opponent');
+                          ? (item.playerName || item.name || viewingRankingsGame.playerName || existingEntry?.name || currentLocalName)
+                          : (item.playerName || item.name || existingEntry?.name || 'Opponent');
 
                         const isWon = item.isWon !== undefined
                           ? !!item.isWon
                           : (item.failed !== undefined ? !item.failed : !item.isPending);
                         const isPending = !isCurrentUser && (item.isPending ?? false);
-                        const rawTime = Number(item.timeSec ?? item.time ?? item.elapsedTime ?? 0);
+                        const rawTime = Number(item.timeSec ?? item.time ?? item.elapsedTime ?? existingEntry?.time ?? 0);
                         const pTime = !isWon ? 9999 : rawTime;
-                        const elapsedTime = rawTime > 0 && rawTime < 9999 ? rawTime : (Number(item.elapsedTime) || 0);
+                        const elapsedTime = rawTime > 0 && rawTime < 9999
+                          ? rawTime
+                          : (Number(item.elapsedTime) || existingEntry?.elapsedTime || 0);
+                        const resolvedHints = item.hints !== undefined
+                          ? Number(item.hints)
+                          : ((item as any).hintsUsed !== undefined
+                            ? Number((item as any).hintsUsed)
+                            : (existingEntry?.hints !== undefined
+                              ? Number(existingEntry.hints)
+                              : (isCurrentUser ? localMatchHints : 0)));
 
                         resultsMap.set(pId, {
                           id: pId,
                           name: pName,
                           time: pTime,
                           elapsedTime: elapsedTime,
-                          mistakes: item.mistakes !== undefined ? Number(item.mistakes) : 0,
-                          hints: item.hints !== undefined ? Number(item.hints) : ((item as any).hintsUsed ?? 0),
+                          mistakes: item.mistakes !== undefined ? Number(item.mistakes) : (existingEntry?.mistakes ?? 0),
+                          hints: resolvedHints,
                           failed: !isWon && !isPending,
                           isMe: isCurrentUser,
                           isReal: true,
@@ -18396,8 +18616,17 @@ export default function App() {
                           : (player.failed || player.time >= 9999)
                             ? (player.elapsedTime && player.elapsedTime > 0 && player.elapsedTime < 9999 ? formatTimer(player.elapsedTime) : "--:--")
                             : formatTimer(player.time);
-                        const errorsStr = `${player.mistakes}/${viewingRankingsGame.maxMistakes || 3} Errs`;
-                        const hintsStr = `${player.hints ?? 0} Hints`;
+                        const rowIdMistakesMatch = viewingRankingsGame.id?.match(/-M(\d+)/i);
+                        const rowMaxMistakes = viewingRankingsGame.maxMistakes
+                          ?? (rowIdMistakesMatch ? Number(rowIdMistakesMatch[1]) : undefined)
+                          ?? 3;
+                        const errorsStr = `${player.mistakes}/${rowMaxMistakes} Errs`;
+                        const hintsCountVal = player.hints ?? 0;
+                        const hintsStr = hintsCountVal === 0
+                          ? t("zeroHintsCount")
+                          : hintsCountVal === 1
+                          ? t("singleHintCount")
+                          : t("multiHintsCount", { count: hintsCountVal });
                         const statusStr = player.failed ? "FAILED" : isPending ? "PLAYING" : "WON";
 
                         return (

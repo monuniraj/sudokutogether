@@ -1,6 +1,7 @@
-import { Capacitor, PluginListenerHandle } from "@capacitor/core";
+import { Capacitor, PluginListenerHandle, registerPlugin } from "@capacitor/core";
 import {
   AdMob,
+  AdMobRewardItem,
   InterstitialAdPluginEvents,
   RewardAdPluginEvents,
 } from "@capacitor-community/admob";
@@ -9,8 +10,82 @@ import {
 export const TEST_INTERSTITIAL_AD_ID = "ca-app-pub-3940256099942544/1033173712";
 export const TEST_REWARDED_AD_ID = "ca-app-pub-3940256099942544/5224354917";
 
-// Set to true only when switching from Google Test Ad IDs to live production Ad Unit IDs
-export const IS_PRODUCTION = false;
+// Verified Production AdMob Unit IDs
+export const PROD_INTERSTITIAL_AD_ID = "ca-app-pub-2107539674074275/7699541862";
+export const PROD_REWARDED_AD_ID = "ca-app-pub-2107539674074275/2002547967";
+
+// Expected Rewarded Ad item configuration (AdMob console: amount=1, item=hint)
+export const EXPECTED_REWARD_ITEM = "hint";
+export const EXPECTED_REWARD_AMOUNT = 1;
+
+interface AppBuildInfoPlugin {
+  getBuildInfo(): Promise<{ isDebuggable: boolean }>;
+}
+
+const AppBuildInfo = registerPlugin<AppBuildInfoPlugin>("AppBuildInfo");
+
+const viteEnv = (import.meta as any).env || {};
+const IS_VITE_PROD_MODE =
+  Boolean(viteEnv.PROD) &&
+  String(viteEnv.VITE_ADMOB_TEST_MODE ?? "").toLowerCase() !== "true";
+
+// Static Vite release flag; refined on Android at runtime via ApplicationInfo.FLAG_DEBUGGABLE
+export const IS_PRODUCTION = IS_VITE_PROD_MODE;
+
+let isRuntimeProduction: boolean = IS_VITE_PROD_MODE;
+let buildEnvResolved = false;
+let buildEnvPromise: Promise<boolean> | null = null;
+
+async function resolveAdProductionMode(): Promise<boolean> {
+  if (buildEnvResolved) return isRuntimeProduction;
+  if (buildEnvPromise) return buildEnvPromise;
+
+  buildEnvPromise = (async () => {
+    try {
+      if (!IS_VITE_PROD_MODE) {
+        isRuntimeProduction = false;
+        return false;
+      }
+
+      if (!Capacitor.isNativePlatform()) {
+        isRuntimeProduction = true;
+        return true;
+      }
+
+      if (Capacitor.getPlatform() !== "android") {
+        isRuntimeProduction = IS_VITE_PROD_MODE;
+        return isRuntimeProduction;
+      }
+
+      const buildInfo = await AppBuildInfo.getBuildInfo();
+      const isDebuggable = Boolean(buildInfo?.isDebuggable);
+      isRuntimeProduction = IS_VITE_PROD_MODE && !isDebuggable;
+      return isRuntimeProduction;
+    } catch (err) {
+      // Fail safe to test mode on Android if native debuggability cannot be verified
+      console.warn("[AdMob] Failed to read AppBuildInfo; retaining test mode for safety:", err);
+      isRuntimeProduction = false;
+      return false;
+    } finally {
+      buildEnvResolved = true;
+      buildEnvPromise = null;
+    }
+  })();
+
+  return buildEnvPromise;
+}
+
+export function isAdMobProductionMode(): boolean {
+  return isRuntimeProduction;
+}
+
+export function getInterstitialAdUnitId(): string {
+  return isRuntimeProduction ? PROD_INTERSTITIAL_AD_ID : TEST_INTERSTITIAL_AD_ID;
+}
+
+export function getRewardedAdUnitId(): string {
+  return isRuntimeProduction ? PROD_REWARDED_AD_ID : TEST_REWARDED_AD_ID;
+}
 
 export const MAX_DAILY_ADS = 10;
 export const MATCHES_PER_INTERSTITIAL = 3;
@@ -25,6 +100,9 @@ export type RewardAdFailureReason =
 export interface RewardAdResult {
   success: boolean;
   reason?: RewardAdFailureReason;
+  reward?: AdMobRewardItem;
+  rewardAmount?: number;
+  rewardItem?: string;
 }
 
 const STORAGE_KEY_DAILY_IMPRESSIONS = "admob_daily_impressions_v1";
@@ -71,11 +149,42 @@ export function getDailyImpressionsRecord(): DailyImpressionsRecord {
 }
 
 export function isDailyAdCapReached(): boolean {
-  if (!IS_PRODUCTION) {
+  if (!isRuntimeProduction) {
     return false;
   }
   const record = getDailyImpressionsRecord();
   return record.count >= MAX_DAILY_ADS;
+}
+
+function normalizeHintReward(
+  payload: AdMobRewardItem | undefined,
+  isProd: boolean
+): AdMobRewardItem {
+  if (!payload) {
+    return { type: EXPECTED_REWARD_ITEM, amount: EXPECTED_REWARD_AMOUNT };
+  }
+
+  const rawType = typeof payload.type === "string" ? payload.type.trim() : "";
+  const rawAmount =
+    typeof payload.amount === "number" && Number.isFinite(payload.amount)
+      ? Math.floor(payload.amount)
+      : 0;
+  const normalizedType = rawType.toLowerCase();
+
+  if (isProd && (normalizedType !== EXPECTED_REWARD_ITEM || rawAmount !== EXPECTED_REWARD_AMOUNT)) {
+    console.warn(
+      `[AdMob] Unexpected production reward payload (${rawType}:${rawAmount}); aligning to ${EXPECTED_REWARD_ITEM}:${EXPECTED_REWARD_AMOUNT}.`
+    );
+  }
+
+  // Always enforce the configured reward of 1 hint (even when Google sample test ads return coins/10)
+  return {
+    type: normalizedType === EXPECTED_REWARD_ITEM ? normalizedType : EXPECTED_REWARD_ITEM,
+    amount:
+      normalizedType === EXPECTED_REWARD_ITEM && rawAmount > 0
+        ? Math.min(rawAmount, EXPECTED_REWARD_AMOUNT)
+        : EXPECTED_REWARD_AMOUNT,
+  };
 }
 
 export function incrementDailyImpressions(): number {
@@ -169,11 +278,15 @@ async function loadRewardedAdInternal(): Promise<boolean> {
   rewardedPreloadPromise = (async () => {
     try {
       await initAdMob();
+      const isProd = await resolveAdProductionMode();
       await AdMob.prepareRewardVideoAd({
-        adId: TEST_REWARDED_AD_ID,
+        adId: getRewardedAdUnitId(),
+        isTesting: !isProd,
       });
       isRewardedReady = true;
-      console.log("[AdMob] Rewarded video ad preloaded and ready.");
+      console.log(
+        `[AdMob] Rewarded video ad preloaded (${isProd ? "PRODUCTION" : "TEST"} mode).`
+      );
       return true;
     } catch (err) {
       isRewardedReady = false;
@@ -195,11 +308,15 @@ async function loadInterstitialAdInternal(): Promise<boolean> {
   interstitialPreloadPromise = (async () => {
     try {
       await initAdMob();
+      const isProd = await resolveAdProductionMode();
       await AdMob.prepareInterstitial({
-        adId: TEST_INTERSTITIAL_AD_ID,
+        adId: getInterstitialAdUnitId(),
+        isTesting: !isProd,
       });
       isInterstitialReady = true;
-      console.log("[AdMob] Interstitial ad preloaded and ready.");
+      console.log(
+        `[AdMob] Interstitial ad preloaded (${isProd ? "PRODUCTION" : "TEST"} mode).`
+      );
       return true;
     } catch (err) {
       isInterstitialReady = false;
@@ -225,6 +342,7 @@ export async function preloadInterstitialAd(): Promise<void> {
 
 /**
  * Initializes the AdMob SDK if running inside a native mobile environment (Android/iOS),
+ * resolves debug vs. release mode natively (ApplicationInfo.FLAG_DEBUGGABLE + Vite env),
  * registers auto-reload listeners, and warms both ad formats on bootstrap.
  * Bypasses cleanly on desktop/web/PWA environments.
  */
@@ -238,11 +356,14 @@ export async function initAdMob(): Promise<void> {
 
   initPromise = (async () => {
     try {
+      const isProd = await resolveAdProductionMode();
       await AdMob.initialize({
-        initializeForTesting: !IS_PRODUCTION,
+        initializeForTesting: !isProd,
       });
       isInitialized = true;
-      console.log("[AdMob] Native AdMob SDK initialized successfully.");
+      console.log(
+        `[AdMob] Native AdMob SDK initialized (${isProd ? "PRODUCTION" : "TEST"} mode).`
+      );
       await registerLifecycleListeners();
       // Warm both ad slots immediately in background without blocking initialization
       void preloadRewardedAd();
@@ -265,6 +386,8 @@ export async function showInterstitialBetweenMatches(): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) {
     return false;
   }
+
+  await resolveAdProductionMode();
 
   const matchCount = incrementMatchesCounter();
   if (matchCount < MATCHES_PER_INTERSTITIAL) {
@@ -312,7 +435,8 @@ export async function showInterstitialBetweenMatches(): Promise<boolean> {
 
 /**
  * Shows a rewarded video ad for an in-game hint.
- * Resolves { success: true } ONLY when RewardAdPluginEvents.Rewarded actually fired.
+ * Resolves { success: true, reward, rewardAmount: 1, rewardItem: "hint" }
+ * ONLY when RewardAdPluginEvents.Rewarded actually fired.
  * Differentiates LOAD_FAILED, SHOW_FAILED, DISMISSED, NOT_NATIVE, and DAILY_CAP_REACHED.
  */
 export async function showRewardedHintAd(): Promise<RewardAdResult> {
@@ -320,6 +444,8 @@ export async function showRewardedHintAd(): Promise<RewardAdResult> {
     console.warn("[AdMob] Rewarded ads are only supported in native mobile app.");
     return { success: false, reason: "NOT_NATIVE" };
   }
+
+  const isProd = await resolveAdProductionMode();
 
   if (isDailyAdCapReached()) {
     console.log("[AdMob] Daily cap of 10 ads reached. Rewarded ad suppressed.");
@@ -351,6 +477,7 @@ export async function showRewardedHintAd(): Promise<RewardAdResult> {
 
   return new Promise<RewardAdResult>(async (resolve) => {
     let earnedReward = false;
+    let earnedRewardPayload: AdMobRewardItem | undefined;
     let settled = false;
     let rewardListener: PluginListenerHandle | null = null;
     let dismissListener: PluginListenerHandle | null = null;
@@ -374,9 +501,10 @@ export async function showRewardedHintAd(): Promise<RewardAdResult> {
     try {
       rewardListener = await AdMob.addListener(
         RewardAdPluginEvents.Rewarded,
-        () => {
+        (reward: AdMobRewardItem) => {
           earnedReward = true;
-          console.log("[AdMob] User earned rewarded video incentive.");
+          earnedRewardPayload = reward;
+          console.log("[AdMob] User earned rewarded video incentive:", reward);
         }
       );
 
@@ -386,8 +514,14 @@ export async function showRewardedHintAd(): Promise<RewardAdResult> {
           isRewardedReady = false;
           void preloadRewardedAd();
           if (earnedReward) {
+            const normalizedReward = normalizeHintReward(earnedRewardPayload, isProd);
             incrementDailyImpressions();
-            await settle({ success: true });
+            await settle({
+              success: true,
+              reward: normalizedReward,
+              rewardAmount: normalizedReward.amount,
+              rewardItem: normalizedReward.type,
+            });
           } else {
             await settle({ success: false, reason: "DISMISSED" });
           }

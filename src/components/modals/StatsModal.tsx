@@ -14,6 +14,8 @@ export interface CompletedGameRecord {
   timeSec: number;
   mistakes: number;
   maxMistakes: number;
+  hints?: number;
+  maxHints?: number;
   isChallenge?: boolean;
   strictMistakeLimit?: boolean;
   roomCode?: string;
@@ -423,6 +425,14 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       <div className="flex items-center gap-3.5 font-sans text-xs font-black">
                         <div className="flex flex-col items-end leading-tight">
                           <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
+                            {t("hintsShortLabel")}
+                          </span>
+                          <span className="text-amber-600 dark:text-amber-400">
+                            {game.hints ?? 0}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end leading-tight">
+                          <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
                             {t("errsLabel")}
                           </span>
                           <span className="text-rose-500">
@@ -544,6 +554,14 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                       </div>
 
                       <div className="flex items-center gap-3.5 font-sans text-xs font-black">
+                        <div className="flex flex-col items-end leading-tight">
+                          <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
+                            {t("hintsShortLabel")}
+                          </span>
+                          <span className="text-amber-600 dark:text-amber-400">
+                            {game.hints ?? 0}
+                          </span>
+                        </div>
                         <div className="flex flex-col items-end leading-tight">
                           <span className="text-[10px] lg:text-xs text-stone-500 uppercase font-sans mb-1">
                             {t("errsLabel")}
