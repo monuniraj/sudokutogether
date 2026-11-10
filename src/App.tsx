@@ -159,6 +159,14 @@ import { triggerHapticTap, triggerHapticError, triggerHapticCompletion, triggerH
 import { playThemeFeedback, applyThemeToggle } from "./utils/themeFeedback";
 import { scheduleDailyZenNotification, recordGamePlayedAndReschedule } from "./utils/retentionNotifier";
 import { initCrazyGames, getCrazyGamesUser, getCrazyGamesData, setCrazyGamesData, getCrazyGamesInviteLink, isCrazyGamesActive, crazyGamesGameplayStart, crazyGamesGameplayStop } from "./services/CrazyGamesSDK";
+import {
+  type SeoDifficulty,
+  SEO_ROOT_META,
+  SEO_SILO_ORDER,
+  SEO_SILO_MAP,
+  parseDifficultyFromPath,
+  getDifficultyPath,
+} from "./utils/seoSilos";
 import { getToken, onMessage } from "firebase/messaging";
 import { messaging } from "./firebase";
 
@@ -3813,7 +3821,44 @@ export default function App() {
   const [winStreak, setWinStreak] = useState<number>(() => {
     return Number(initialVault.stats.winStreak) || 0;
   });
-  const [difficulty, setDifficulty] = useState<Difficulty>("EASY");
+  const initialRouteDifficultyRef = useRef<SeoDifficulty | null | undefined>(undefined);
+  if (initialRouteDifficultyRef.current === undefined) {
+    initialRouteDifficultyRef.current =
+      typeof window !== "undefined" && !Capacitor.isNativePlatform()
+        ? parseDifficultyFromPath(window.location.pathname)
+        : null;
+  }
+  const hasInitialInviteRef = useRef<boolean | null>(null);
+  if (hasInitialInviteRef.current === null) {
+    let detectedInvite = false;
+    if (typeof window !== "undefined") {
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        if (sp.get("room") || sp.get("challenge") || sp.get("gameId") || sp.get("seed") || sp.get("c")) {
+          detectedInvite = true;
+        } else if (window.location.hash) {
+          const hi = window.location.hash.indexOf("?");
+          if (hi !== -1) {
+            const hp = new URLSearchParams(window.location.hash.substring(hi + 1));
+            if (hp.get("room") || hp.get("challenge") || hp.get("gameId") || hp.get("seed") || hp.get("c")) {
+              detectedInvite = true;
+            }
+          } else {
+            const cleanedHash = window.location.hash.replace(/^[#/]+/, "");
+            if (cleanedHash.startsWith("SUDOKU-")) detectedInvite = true;
+          }
+        }
+        if (!detectedInvite && sessionStorage.getItem("sudoku_invite_challenge")) {
+          detectedInvite = true;
+        }
+      } catch { }
+    }
+    hasInitialInviteRef.current = detectedInvite;
+  }
+  const [routePathname, setRoutePathname] = useState<string>(() =>
+    typeof window !== "undefined" ? window.location.pathname : "/"
+  );
+  const [difficulty, setDifficulty] = useState<Difficulty>(() => initialRouteDifficultyRef.current || "EASY");
 
   // Helper to parse times stored as raw numbers, numeric strings, or mm:ss / hh:mm:ss strings
   const parseTimeToSeconds = (val: unknown): number => {
@@ -6984,11 +7029,17 @@ export default function App() {
     showHowToPlayModal
   ]);
 
+  const generateAndSetNewPuzzleRef = useRef<((level: Difficulty) => Promise<void> | void) | null>(null);
+
   // Navigation interceptor using History API and Capacitor Back Button for Android/system swipe-to-back gestures
   useEffect(() => {
     // Initialize initial state if empty to keep history alignment intact
     if (!window.history.state || !window.history.state.hasOwnProperty("view")) {
-      window.history.replaceState({ view: "home" }, "", window.location.href);
+      window.history.replaceState(
+        { view: "home", difficulty: initialRouteDifficultyRef.current || "EASY" },
+        "",
+        window.location.href
+      );
     }
 
     const handlePopState = (event: PopStateEvent) => {
@@ -7006,8 +7057,20 @@ export default function App() {
         }
       }
 
+      const pathDiff = (!Capacitor.isNativePlatform() && !isCrazyGamesActive() && !challengeModeRef.current)
+        ? parseDifficultyFromPath(window.location.pathname)
+        : null;
+      if (!Capacitor.isNativePlatform()) {
+        setRoutePathname(window.location.pathname);
+      }
+
       // 2. If on a sub-screen or page, navigate back to previous screen
       const state = event.state;
+      const restoredDiff = pathDiff || ((state && typeof state === "object" && state.difficulty) ? (state.difficulty as Difficulty) : null);
+      if (!Capacitor.isNativePlatform() && !isCrazyGamesActive() && !challengeModeRef.current && restoredDiff) {
+        setDifficulty(restoredDiff);
+      }
+
       if (state && typeof state === "object" && state.view) {
         const v = state.view as "home" | "status" | "settings" | "game" | "login" | "together";
         setCurrentScreen(v);
@@ -7018,6 +7081,16 @@ export default function App() {
           if (prev[prev.length - 1] === v) return prev;
           return [...prev, v];
         });
+        if (
+          v === "game" &&
+          restoredDiff &&
+          !Capacitor.isNativePlatform() &&
+          !isCrazyGamesActive() &&
+          !challengeModeRef.current &&
+          boardStateRef.current?.difficulty !== restoredDiff
+        ) {
+          generateAndSetNewPuzzleRef.current?.(restoredDiff);
+        }
       } else {
         navigatorPopRef.current();
       }
@@ -13368,6 +13441,85 @@ export default function App() {
     }
   };
 
+  generateAndSetNewPuzzleRef.current = generateAndSetNewPuzzle;
+
+  const handleSelectDifficultySilo = (
+    lvl: Difficulty,
+    options?: { startNewGame?: boolean; scrollToBoard?: boolean }
+  ) => {
+    setDifficulty(lvl);
+
+    const hasInviteParams = (() => {
+      if (typeof window === "undefined") return false;
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        return Boolean(sp.get("room") || sp.get("challenge") || sp.get("gameId") || sp.get("seed") || sp.get("c"));
+      } catch {
+        return false;
+      }
+    })();
+
+    const allowUrlRouteSync =
+      !Capacitor.isNativePlatform() &&
+      !isCrazyGamesActive() &&
+      !hasInviteParams &&
+      (!challengeMode || Boolean(options?.startNewGame));
+
+    if (allowUrlRouteSync && typeof window !== "undefined") {
+      const nextPath = getDifficultyPath(lvl);
+      setRoutePathname(nextPath);
+      if (window.location.pathname !== nextPath) {
+        try {
+          window.history.pushState(
+            { view: currentScreenRef.current, difficulty: lvl },
+            "",
+            `${nextPath}${window.location.search}${window.location.hash}`
+          );
+        } catch { }
+      }
+    }
+
+    if (options?.startNewGame) {
+      generateAndSetNewPuzzle(lvl);
+      setIsTimerPaused(false);
+      if (currentScreenRef.current !== "game") {
+        navigateToScreen("game");
+      }
+    }
+
+    if (options?.scrollToBoard && typeof document !== "undefined") {
+      setTimeout(() => {
+        document.getElementById("status-and-grid-group")?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    }
+  };
+
+  // Sync <head> title, description, canonical, and social metadata with active web difficulty silo
+  useEffect(() => {
+    if (Capacitor.isNativePlatform() || isCrazyGamesActive()) return;
+    const pathDiff = parseDifficultyFromPath(routePathname);
+    const meta = pathDiff ? SEO_SILO_MAP[pathDiff] : SEO_ROOT_META;
+
+    document.title = meta.title;
+
+    const setMetaTag = (attr: "name" | "property", key: string, value: string) => {
+      const el = document.querySelector(`meta[${attr}="${key}"]`);
+      if (el) el.setAttribute("content", value);
+    };
+
+    setMetaTag("name", "description", meta.description);
+    setMetaTag("property", "og:title", meta.title);
+    setMetaTag("property", "og:description", meta.description);
+    setMetaTag("property", "og:url", meta.canonicalUrl);
+    setMetaTag("name", "twitter:title", meta.title);
+    setMetaTag("name", "twitter:description", meta.description);
+
+    const canonicalEl = document.querySelector('link[rel="canonical"]');
+    if (canonicalEl) {
+      canonicalEl.setAttribute("href", meta.canonicalUrl);
+    }
+  }, [routePathname]);
+
   // Replay / Retry Puzzle: Resets personal board progress without leaving or affecting other room participants
   const handlePersonalReplay = async () => {
     if (!boardState) return;
@@ -13624,10 +13776,19 @@ export default function App() {
   // Desktop Viewport Auto-Start on initial mount
   useEffect(() => {
     if (desktopAutoStartedRef.current) return;
+    if (hasInitialInviteRef.current) {
+      desktopAutoStartedRef.current = true;
+      return;
+    }
     if (typeof window !== "undefined" && window.innerWidth >= 1024) {
       desktopAutoStartedRef.current = true;
+      const requestedRouteDiff = initialRouteDifficultyRef.current;
       const saved = loadCurrentGameFromLocal();
-      if (saved && !saved.state.isGameOver) {
+      if (
+        saved &&
+        !saved.state.isGameOver &&
+        (!requestedRouteDiff || saved.difficulty === requestedRouteDiff)
+      ) {
         const loaded = resumeSavedSession();
         if (loaded) {
           setDifficulty(loaded.difficulty);
@@ -13637,16 +13798,17 @@ export default function App() {
           navigateToScreen("game");
           setCurrentScreen("game");
           setNavigationHistory(["game"]);
-          try { window.history.replaceState({ view: "game" }, "", window.location.href); } catch (e) { }
+          try { window.history.replaceState({ view: "game", difficulty: loaded.difficulty }, "", window.location.href); } catch (e) { }
           return;
         }
       }
-      generateAndSetNewPuzzle(difficulty || "EASY");
+      const targetDiff = requestedRouteDiff || difficulty || "EASY";
+      generateAndSetNewPuzzle(targetDiff);
       setIsTimerPaused(false);
       navigateToScreen("game");
       setCurrentScreen("game");
       setNavigationHistory(["game"]);
-      try { window.history.replaceState({ view: "game" }, "", window.location.href); } catch (e) { }
+      try { window.history.replaceState({ view: "game", difficulty: targetDiff }, "", window.location.href); } catch (e) { }
     }
   }, []);
 
@@ -14603,6 +14765,28 @@ export default function App() {
       return null;
     }
 
+    const activeSiloDiff: SeoDifficulty =
+      challengeMode && boardState?.difficulty
+        ? (boardState.difficulty as SeoDifficulty)
+        : (difficulty as SeoDifficulty);
+    const activeSilo = SEO_SILO_MAP[activeSiloDiff] || SEO_SILO_MAP.EASY;
+
+    const siloCardPalette = darkMode
+      ? activeSiloDiff === "EASY"
+        ? { card: "bg-[#022c22]/50 text-[#d1fae5]", pill: "bg-[#064e3b] text-[#d1fae5]", inner: "bg-black/25 text-[#d1fae5]/90", cta: "bg-[#059669] hover:bg-[#10b981] text-white" }
+        : activeSiloDiff === "MEDIUM"
+          ? { card: "bg-[#451a03]/50 text-[#fef08a]", pill: "bg-[#713f12] text-[#fef08a]", inner: "bg-black/25 text-[#fef08a]/90", cta: "bg-[#d97706] hover:bg-[#f59e0b] text-white" }
+          : activeSiloDiff === "HARD"
+            ? { card: "bg-[#2e1065]/50 text-[#e9d5ff]", pill: "bg-[#4c1d95] text-[#e9d5ff]", inner: "bg-black/25 text-[#e9d5ff]/90", cta: "bg-[#7c3aed] hover:bg-[#8b5cf6] text-white" }
+            : { card: "bg-[#4c0519]/50 text-[#fecdd3]", pill: "bg-[#881337] text-[#fecdd3]", inner: "bg-black/25 text-[#fecdd3]/90", cta: "bg-[#e11d48] hover:bg-[#f43f5e] text-white" }
+      : activeSiloDiff === "EASY"
+        ? { card: "bg-[#ECFDF5] text-[#065F46]", pill: "bg-[#D1FAE5] text-[#065F46]", inner: "bg-white/75 text-[#064E3B]", cta: "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]" }
+        : activeSiloDiff === "MEDIUM"
+          ? { card: "bg-[#FEFCE8] text-[#854D0E]", pill: "bg-[#FEF08A] text-[#854D0E]", inner: "bg-white/75 text-[#713F12]", cta: "bg-[#FFF99D] hover:bg-[#FDE047] text-[#854D0E]" }
+          : activeSiloDiff === "HARD"
+            ? { card: "bg-[#FAF5FF] text-[#6B21A8]", pill: "bg-[#E9D5FF] text-[#6B21A8]", inner: "bg-white/75 text-[#581C87]", cta: "bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8]" }
+            : { card: "bg-[#FFF1F2] text-[#9D174D]", pill: "bg-[#FECDD3] text-[#9D174D]", inner: "bg-white/75 text-[#881337]", cta: "bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9D174D]" };
+
     const faqs = [
       {
         q: t("webFaq1Q"),
@@ -14624,6 +14808,167 @@ export default function App() {
 
     return (
       <section className="w-full max-w-5xl mx-auto px-4 pt-12 pb-6 mt-8 border-t border-stone-200/50 dark:border-zinc-800/50 flex flex-col select-text selection:bg-[#E0F2FE]">
+        {/* Difficulty SEO Silo Guide & Strategy Hub */}
+        <article
+          aria-label={activeSilo.crossLinkLabel}
+          className={`p-6 md:p-8 rounded-3xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.03)] mb-12 transition-colors duration-200 ${siloCardPalette.card}`}
+        >
+          {/* Difficulty Silo Internal Navigation Links */}
+          <nav
+            aria-label="Sudoku Difficulty Silos"
+            className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6"
+          >
+            {SEO_SILO_ORDER.map((lvl) => {
+              const item = SEO_SILO_MAP[lvl];
+              const isCurrent = lvl === activeSiloDiff;
+              const pillTheme = darkMode
+                ? lvl === "EASY"
+                  ? isCurrent ? "bg-[#065F46] text-[#d1fae5] shadow-md" : "bg-zinc-900/60 hover:bg-[#022c22]/60 text-[#d1fae5]/75"
+                  : lvl === "MEDIUM"
+                    ? isCurrent ? "bg-[#854D0E] text-[#fef08a] shadow-md" : "bg-zinc-900/60 hover:bg-[#451a03]/60 text-[#fef08a]/75"
+                    : lvl === "HARD"
+                      ? isCurrent ? "bg-[#6B21A8] text-[#e9d5ff] shadow-md" : "bg-zinc-900/60 hover:bg-[#2e1065]/60 text-[#e9d5ff]/75"
+                      : isCurrent ? "bg-[#9D174D] text-[#fecdd3] shadow-md" : "bg-zinc-900/60 hover:bg-[#4c0519]/60 text-[#fecdd3]/75"
+                : lvl === "EASY"
+                  ? isCurrent ? "bg-[#D1FAE5] text-[#065F46] shadow-sm" : "bg-white/70 hover:bg-[#D1FAE5]/60 text-stone-700 shadow-[0_4px_14px_rgba(0,0,0,0.02)]"
+                  : lvl === "MEDIUM"
+                    ? isCurrent ? "bg-[#FFF99D] text-[#854D0E] shadow-sm" : "bg-white/70 hover:bg-[#FFF99D]/60 text-stone-700 shadow-[0_4px_14px_rgba(0,0,0,0.02)]"
+                    : lvl === "HARD"
+                      ? isCurrent ? "bg-[#F3E8FF] text-[#6B21A8] shadow-sm" : "bg-white/70 hover:bg-[#F3E8FF]/60 text-stone-700 shadow-[0_4px_14px_rgba(0,0,0,0.02)]"
+                      : isCurrent ? "bg-[#FFE4E6] text-[#9D174D] shadow-sm" : "bg-white/70 hover:bg-[#FFE4E6]/60 text-stone-700 shadow-[0_4px_14px_rgba(0,0,0,0.02)]";
+
+              return (
+                <a
+                  key={item.slug}
+                  href={item.path}
+                  aria-current={isCurrent ? "page" : undefined}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    playClickSound();
+                    handleSelectDifficultySilo(item.difficulty, {
+                      startNewGame: context === "game" && !challengeMode,
+                    });
+                  }}
+                  className={`p-3 rounded-2xl border-none flex flex-col justify-between transition-all duration-150 no-underline ${pillTheme}`}
+                >
+                  <span className="font-sans font-black text-xs uppercase tracking-wider leading-tight">
+                    {item.crossLinkLabel}
+                  </span>
+                  <span className="font-mono text-[10px] opacity-85 mt-1 leading-tight">
+                    {item.crossLinkSub}
+                  </span>
+                </a>
+              );
+            })}
+          </nav>
+
+          {/* Silo Header, Clue Specs & Summary */}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold uppercase tracking-wider border-none ${siloCardPalette.pill}`}>
+              <Layers className="w-3.5 h-3.5 shrink-0" />
+              {activeSilo.badgeLabel}
+            </span>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-sans font-semibold border-none ${siloCardPalette.inner}`}>
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              {activeSilo.targetAudience}
+            </span>
+          </div>
+
+          <h1 className="text-xl md:text-3xl font-black tracking-tight leading-tight mb-3">
+            {activeSilo.h1}
+          </h1>
+
+          <p className="text-xs md:text-sm leading-relaxed opacity-90 mb-5">
+            {activeSilo.leadSummary}
+          </p>
+
+          <div className="flex flex-wrap gap-2 mb-6">
+            {activeSilo.primaryTechniques.map((tech) => (
+              <span
+                key={tech}
+                className={`px-3 py-1 rounded-xl text-[11px] font-semibold border-none ${siloCardPalette.inner}`}
+              >
+                {tech}
+              </span>
+            ))}
+          </div>
+
+          {/* Strategy Deep-Dive */}
+          <div className={`p-5 md:p-6 rounded-2xl border-none shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-6 ${siloCardPalette.inner}`}>
+            <div className="flex items-center gap-2 mb-3">
+              <BookOpen className="w-4 h-4 shrink-0" />
+              <h2 className="text-sm md:text-base font-black uppercase tracking-wide">
+                {activeSilo.strategyHeading}
+              </h2>
+            </div>
+            <div className="space-y-3 text-xs md:text-sm leading-relaxed opacity-95">
+              {activeSilo.strategyParagraphs.map((paragraph, i) => (
+                <p key={i}>{paragraph}</p>
+              ))}
+            </div>
+          </div>
+
+          {/* Tactical Checklist & Silo FAQs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+            <div className={`p-5 rounded-2xl border-none shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${siloCardPalette.inner}`}>
+              <h2 className="text-xs md:text-sm font-black uppercase tracking-wider mb-3">
+                {activeSilo.tipsHeading}
+              </h2>
+              <ul className="space-y-2.5 text-xs md:text-sm leading-relaxed">
+                {activeSilo.tips.map((tip, idx) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    <Check className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{tip}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className={`p-5 rounded-2xl border-none shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${siloCardPalette.inner}`}>
+              <h2 className="text-xs md:text-sm font-black uppercase tracking-wider mb-3">
+                {activeSilo.crossLinkLabel} Quick Answers
+              </h2>
+              <div className="space-y-3">
+                {activeSilo.faqs.map((item, idx) => (
+                  <div key={idx}>
+                    <h3 className="font-bold text-xs md:text-sm mb-1">{item.q}</h3>
+                    <p className="text-xs leading-relaxed opacity-90">{item.a}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Direct Launch Action for Selected Difficulty */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                playClickSound();
+                if (context === "home") {
+                  handleSelectDifficultySilo(activeSilo.difficulty, { startNewGame: true });
+                } else {
+                  handleSelectDifficultySilo(activeSilo.difficulty, {
+                    startNewGame: !challengeMode && boardState?.difficulty !== activeSilo.difficulty,
+                    scrollToBoard: true,
+                  });
+                }
+              }}
+              className={`px-6 py-3 rounded-2xl border-none shadow-[0_6px_18px_rgba(0,0,0,0.05)] font-black text-xs md:text-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-all active:scale-[0.98] ${siloCardPalette.cta}`}
+            >
+              <Play className="w-4 h-4 fill-current" />
+              <span>
+                {context === "game" && boardState?.difficulty === activeSilo.difficulty
+                  ? `Return to ${activeSilo.crossLinkLabel} Board`
+                  : `Play ${activeSilo.crossLinkLabel} (${activeSilo.clueCount} Clues)`}
+              </span>
+            </button>
+            <span className="text-[11px] font-mono opacity-75">
+              Canonical Silo: {activeSilo.path}
+            </span>
+          </div>
+        </article>
+
         {/* Our Unique Features (USP) */}
         <div className={`p-8 rounded-3xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.03)] mb-12 ${darkMode ? "bg-indigo-950/20 text-indigo-200" : "bg-[#EEF2FF] text-[#333333]"}`}>
           <div className="flex items-center gap-3 mb-6">
@@ -14851,6 +15196,28 @@ export default function App() {
           {/* Compliant Static Footer */}
           {!Capacitor.isNativePlatform() && (
             <footer className="w-full max-w-4xl mx-auto px-4 py-6 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 text-center text-sm font-sans text-stone-600 select-text">
+              <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs font-semibold">
+                {SEO_SILO_ORDER.map((lvl) => {
+                  const item = SEO_SILO_MAP[lvl];
+                  return (
+                    <a
+                      key={item.slug}
+                      href={item.path}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        playClickSound();
+                        handleSelectDifficultySilo(item.difficulty, {
+                          startNewGame: context === "game" && !challengeMode,
+                          scrollToBoard: context === "game",
+                        });
+                      }}
+                      className="py-1 px-2 text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline"
+                    >
+                      {item.crossLinkLabel}
+                    </a>
+                  );
+                })}
+              </div>
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 max-w-xs sm:max-w-none mx-auto text-center sm:flex sm:flex-row sm:justify-center sm:gap-x-6">
                 <a href="/about.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">{t("aboutUs")}</a>
                 <a href="/contact.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">{t("contactUs")}</a>
@@ -15045,10 +15412,10 @@ export default function App() {
 
           {/* Central Title & Difficulty: Fluid scaling within bounded 1fr track */}
           <div className="min-w-0 flex flex-col items-center justify-center text-center px-1 overflow-hidden pointer-events-none">
-            <h1 className="text-[clamp(1rem,4.2vw,1.35rem)] font-black tracking-tight uppercase font-sans select-none leading-none pt-0.5 truncate max-w-full block">
+            <div className="text-[clamp(1rem,4.2vw,1.35rem)] font-black tracking-tight uppercase font-sans select-none leading-none pt-0.5 truncate max-w-full block">
               <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
               <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
-            </h1>
+            </div>
             {(() => {
               const activeBadgeDiff = currentScreen === "home" ? difficulty : (boardState?.difficulty || difficulty);
               return (
@@ -15242,7 +15609,7 @@ export default function App() {
                           key={lvl}
                           onClick={() => {
                             playClickSound();
-                            setDifficulty(lvl);
+                            handleSelectDifficultySilo(lvl);
                             addLog(`⚙️ Difficulty changed to: ${lvl}`);
                           }}
                           className={`flex-1 h-full flex items-center justify-center text-xs uppercase tracking-wider transition-all duration-150 cursor-pointer select-none rounded-xl border-none outline-none ${btnClass}`}
@@ -15383,7 +15750,7 @@ export default function App() {
 
         {/* PANE 2: ACTIVE GAMEPLAY ARENA */}
         {currentScreen === "game" && (
-          <div className={`h-[100dvh] max-h-[100dvh] w-full overflow-y-auto overscroll-contain flex flex-col justify-start select-none p-1 sm:p-3 md:p-6 pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] pb-[clamp(30px,7.5vh,70px)] lg:pb-16 selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto`}>
+          <div className={`h-[100dvh] max-h-[100dvh] w-full overflow-y-auto overscroll-contain flex flex-col justify-start select-none p-1 sm:p-3 md:p-6 pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] pb-[clamp(30px,7.5vh,70px)] lg:pb-16 selection:bg-[#E0F2FE] bg-transparent ${Capacitor.isNativePlatform() ? "touch-none lg:touch-auto" : "touch-pan-y"}`}>
 
             {/* Main responsive outer layout container - Centers automatically as a unified cohesive block */}
             <div
@@ -15432,8 +15799,7 @@ export default function App() {
                               key={lvl}
                               onClick={() => {
                                 playClickSound();
-                                setDifficulty(lvl);
-                                generateAndSetNewPuzzle(lvl);
+                                handleSelectDifficultySilo(lvl, { startNewGame: true });
                                 addLog(`⚙️ Started new ${lvl} game on desktop`);
                               }}
                               className={`flex-1 h-full flex items-center justify-center text-xs uppercase tracking-wider transition-all duration-150 cursor-pointer select-none rounded-xl outline-none ${btnClass}`}
@@ -16554,9 +16920,9 @@ export default function App() {
               </div>
             )}
 
-            {/* Desktop-only AdSense Compliance section */}
+            {/* Web-only AdSense Compliance section (visible on both desktop & mobile web browsers, strictly hidden in native APK) */}
             {!Capacitor.isNativePlatform() && (
-              <div className="hidden lg:block w-full shrink-0">
+              <div className={!Capacitor.isNativePlatform() ? "block w-full shrink-0" : "hidden"}>
                 {renderAdSenseContent("game")}
               </div>
             )}
