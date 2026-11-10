@@ -16,6 +16,7 @@ import { HintRewardModal } from "./components/modals/HintRewardModal";
 import { initAdMob, showInterstitialBetweenMatches, showRewardedHintAd, isDailyAdCapReached } from "./services/adMobService";
 import { ShareActionWrapper } from "./components/share/ShareActionWrapper";
 import { GuestBannerPill } from "./components/auth/GuestBannerPill";
+import { DailyChallengeCard } from "./features/dailyChallenge/components/DailyChallengeCard";
 import { incrementGuestGameCount } from "./utils/guestTracking";
 import { SudokuBoard, CompletionPulse } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
@@ -15761,27 +15762,12 @@ export default function App() {
                   <GuestBannerPill onConnectGoogle={handleConnectGoogle} darkMode={darkMode} />
                 )}
 
-                {/* SIDE-BY-SIDE FEATURE BOXES (DAILY CHALLENGE & SUDOKU SOLVER) */}
-                <div className="w-full grid grid-cols-2 gap-3 sm:gap-3.5 shrink-0 select-none" id="home-feature-boxes-container">
-                  <button
-                    type="button"
-                    id="home-daily-challenge-btn"
-                    onClick={() => {
-                      playClickSound();
-                      triggerHapticTap(vibrations);
-                      alert(t("comingSoonMessage"));
-                    }}
-                    className={`w-full border-0 outline-none py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
-                      darkMode
-                        ? "bg-[#451a03]/80 hover:bg-[#78350f]/85 text-[#fde68a] shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
-                        : "bg-[#FEF3C7]/90 hover:bg-[#FDE68A]/90 text-[#92400E] shadow-[0_6px_18px_rgba(146,64,14,0.06)]"
-                    }`}
-                  >
-                    <Calendar className="w-4 h-4 shrink-0 stroke-[2.2]" />
-                    <span className="font-sans font-bold text-xs tracking-wide truncate leading-none">
-                      {t("dailyChallengeLabel")}
-                    </span>
-                  </button>
+                {/* DAILY CHALLENGE CARD & SUDOKU SOLVER */}
+                <div className="w-full flex flex-col gap-2.5 shrink-0 select-none" id="home-feature-boxes-container">
+                  <DailyChallengeCard
+                    uid={isGuestSession ? null : authUser?.uid}
+                    darkMode={darkMode}
+                  />
                   <button
                     type="button"
                     id="home-sudoku-solver-btn"
@@ -16557,24 +16543,11 @@ export default function App() {
                   className="hidden lg:flex w-full items-stretch gap-2 mb-0 shrink-0 select-none"
                   id="desktop-feature-boxes-container"
                 >
-                  <button
-                    type="button"
-                    id="desktop-daily-challenge-btn"
-                    onClick={() => {
-                      playClickSound();
-                      alert(t("comingSoonMessage"));
-                    }}
-                    className={`flex-1 min-w-0 h-[38px] px-2.5 rounded-xl border-0 outline-none flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
-                      darkMode
-                        ? "bg-[#451a03]/85 hover:bg-[#78350f]/90 text-[#fde68a] shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
-                        : "bg-[#FEF3C7]/90 hover:bg-[#FDE68A]/90 text-[#92400E] shadow-[0_6px_16px_rgba(146,64,14,0.06)]"
-                    }`}
-                  >
-                    <Calendar className="w-3.5 h-3.5 shrink-0 stroke-[2.2]" />
-                    <span className="font-sans font-bold text-[11px] tracking-tight truncate leading-none">
-                      {t("dailyChallengeLabel")}
-                    </span>
-                  </button>
+                  <DailyChallengeCard
+                    uid={isGuestSession ? null : authUser?.uid}
+                    darkMode={darkMode}
+                    compact
+                  />
                   <button
                     type="button"
                     id="desktop-sudoku-solver-btn"
