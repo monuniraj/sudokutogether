@@ -273,14 +273,14 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[130] flex items-center justify-center p-3.5 sm:p-4 bg-black/65 backdrop-blur-sm select-none"
+      className="fixed inset-0 z-[10000] overflow-y-auto flex justify-center p-3.5 sm:p-4 pt-[calc(76px+env(safe-area-inset-top,0px))] pb-4 sm:pb-6 bg-black/65 backdrop-blur-sm select-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="daily-calendar-modal-title"
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-md rounded-3xl border-0 shadow-none p-4 sm:p-5 transition-colors ${
+        className={`w-full max-w-md max-h-[85dvh] overflow-y-auto my-auto rounded-3xl border-0 shadow-none p-4 sm:p-5 transition-colors ${
           darkMode
             ? "bg-[#18181b] text-zinc-100"
             : "bg-[#FDFBF7] text-[#1C1917]"
@@ -335,9 +335,15 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
                 : "bg-[#F4EFE6] text-[#1C1917]"
             }`}
           >
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold opacity-75">
-              <Trophy className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>{td("daily.totalSolvedLabel", "Total Solved")}</span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold">
+              <Trophy
+                className={`w-3.5 h-3.5 shrink-0 ${
+                  darkMode ? "text-emerald-400" : "text-[#065F46]"
+                }`}
+              />
+              <span className={darkMode ? "text-zinc-300" : "text-stone-700"}>
+                {td("daily.totalSolvedLabel", "Total Solved")}
+              </span>
             </span>
             <span className="font-mono font-black text-base">
               {stats.totalCompleted}
@@ -351,9 +357,15 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
                 : "bg-[#F4EFE6] text-[#1C1917]"
             }`}
           >
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold opacity-75">
-              <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>{td("daily.longestStreakShort", "Best Streak")}</span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold">
+              <Flame
+                className={`w-3.5 h-3.5 shrink-0 ${
+                  darkMode ? "text-amber-400" : "text-[#92400E]"
+                }`}
+              />
+              <span className={darkMode ? "text-zinc-300" : "text-stone-700"}>
+                {td("daily.longestStreakShort", "Best Streak")}
+              </span>
             </span>
             <span className="font-mono font-black text-base">
               {stats.longestStreak}
@@ -405,7 +417,9 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
           {weekdayHeaders.map((label, idx) => (
             <div
               key={idx}
-              className="text-center font-sans text-[10px] font-bold uppercase tracking-wider opacity-55"
+              className={`text-center font-sans text-[10px] font-bold uppercase tracking-wider ${
+                darkMode ? "text-zinc-400" : "text-stone-700"
+              }`}
             >
               {label}
             </div>
@@ -431,6 +445,13 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
             const isInProgress =
               !isCompleted && !isFailed && progress?.status === "IN_PROGRESS";
 
+            const todayRingClasses =
+              isToday && !isFuture
+                ? darkMode
+                  ? "ring-2 ring-[#F59E0B] ring-offset-2 ring-offset-zinc-900"
+                  : "ring-2 ring-[#D97706] ring-offset-2 ring-offset-[#FDFBF7]"
+                : "";
+
             let tileClasses = "";
             if (isFuture) {
               tileClasses = darkMode
@@ -444,10 +465,14 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
               tileClasses = darkMode
                 ? "bg-[#4c0519]/75 hover:bg-[#881337] text-[#fecdd3] cursor-pointer"
                 : "bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9F1239] cursor-pointer";
+            } else if (isInProgress) {
+              tileClasses = darkMode
+                ? "bg-[#0c4a6e]/50 hover:bg-[#0c4a6e]/70 text-[#bae6fd] cursor-pointer"
+                : "bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1] cursor-pointer";
             } else if (isToday) {
               tileClasses = darkMode
-                ? "bg-[#27272a] hover:bg-[#323236] text-zinc-100 ring-2 ring-[#818cf8]/80 cursor-pointer"
-                : "bg-[#FEF3C7] hover:bg-[#FDE68A] text-[#92400E] ring-2 ring-[#6366F1]/75 cursor-pointer";
+                ? "bg-[#78350F]/40 hover:bg-[#78350F]/55 text-[#FEF3C7] cursor-pointer"
+                : "bg-[#FEF3C7] hover:bg-[#FDE68A] text-[#78350F] cursor-pointer";
             } else {
               tileClasses = darkMode
                 ? "bg-[#222225] hover:bg-[#2c2c30] text-zinc-300 cursor-pointer"
@@ -461,7 +486,7 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
                 disabled={isFuture}
                 onClick={() => handleCellClick(dateKey)}
                 aria-label={`${dateKey}${isCompleted ? " completed" : isToday ? " today" : ""}`}
-                className={`h-[52px] rounded-xl border-0 shadow-none p-1 flex flex-col items-center justify-between transition-transform active:scale-95 ${tileClasses}`}
+                className={`h-[52px] rounded-xl border-0 shadow-none p-1 flex flex-col items-center justify-between transition-transform active:scale-95 ${tileClasses} ${todayRingClasses}`}
               >
                 <span className="font-mono text-xs font-black leading-none mt-0.5">
                   {day}
@@ -485,17 +510,21 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
                   </div>
                 ) : isInProgress ? (
                   <div className="flex flex-col items-center leading-none gap-0.5">
-                    <Clock className="w-2.5 h-2.5 text-sky-400 shrink-0 stroke-[2.4]" />
-                    <span className="font-mono text-[8.5px] font-bold opacity-85">
+                    <Clock
+                      className={`w-2.5 h-2.5 shrink-0 stroke-[2.4] ${
+                        darkMode ? "text-sky-400" : "text-[#0369A1]"
+                      }`}
+                    />
+                    <span className="font-mono text-[10px] font-bold">
                       {formatDurationMMSS(progress.elapsedSeconds)}
                     </span>
                   </div>
                 ) : isToday ? (
-                  <span className="font-mono text-[8px] font-black uppercase tracking-tight opacity-85 mb-0.5">
+                  <span className="font-mono text-[9px] font-black uppercase tracking-tight mb-0.5">
                     {getShortDifficultyLabel(dayDifficulty)}
                   </span>
                 ) : (
-                  <span className="w-1.5 h-1.5 rounded-full bg-current opacity-20 mb-1" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-current opacity-35 mb-1" />
                 )}
               </button>
             );
@@ -506,29 +535,55 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
         <div
           className={`w-full rounded-2xl border-0 shadow-none px-3 py-2 flex flex-col gap-1.5 text-[10px] font-semibold ${
             darkMode
-              ? "bg-[#222225] text-zinc-400"
-              : "bg-[#F4EFE6] text-stone-600"
+              ? "bg-[#222225] text-zinc-300"
+              : "bg-[#F4EFE6] text-stone-700"
           }`}
         >
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1">
-              <Trophy className="w-3 h-3 text-emerald-400 shrink-0" />
+              <Trophy
+                className={`w-3 h-3 shrink-0 ${
+                  darkMode ? "text-emerald-400" : "text-[#065F46]"
+                }`}
+              />
               <span>{td("daily.legendCompleted", "Completed")}</span>
             </span>
             <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full ring-2 ring-[#6366F1]/80 inline-block" />
+              <span
+                className={`w-2.5 h-2.5 rounded-full inline-block ${
+                  darkMode
+                    ? "bg-[#78350F]/70 ring-2 ring-[#F59E0B]"
+                    : "bg-[#FEF3C7] ring-2 ring-[#D97706]"
+                }`}
+              />
               <span>{td("daily.legendToday", "Today")}</span>
             </span>
             <span className="inline-flex items-center gap-1">
-              <Clock className="w-3 h-3 text-sky-400 shrink-0" />
+              <Clock
+                className={`w-3 h-3 shrink-0 ${
+                  darkMode ? "text-sky-400" : "text-[#0369A1]"
+                }`}
+              />
+              <span>{td("daily.legendInProgress", "In Progress")}</span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span
+                className={`w-2 h-2 rounded-full inline-block ${
+                  darkMode ? "bg-zinc-400" : "bg-stone-500"
+                }`}
+              />
               <span>{td("daily.legendArchive", "Archive")}</span>
             </span>
             <span className="inline-flex items-center gap-1">
-              <Lock className="w-3 h-3 opacity-60 shrink-0" />
+              <Lock
+                className={`w-3 h-3 shrink-0 ${
+                  darkMode ? "text-zinc-500" : "text-stone-500"
+                }`}
+              />
               <span>{td("daily.legendLocked", "Locked")}</span>
             </span>
           </div>
-          <p className="opacity-70 leading-snug">
+          <p className={`leading-snug ${darkMode ? "text-zinc-400" : "text-stone-600"}`}>
             {td(
               "daily.archiveStreakNote",
               "Past archive puzzles save your solve time but do not increment active streaks."
