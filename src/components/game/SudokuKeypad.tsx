@@ -276,7 +276,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
       </div>
 
       {/* 2. NUMBER PAD: 1-9 */}
-      <div className="shrink-0 w-full mt-1 lg:mt-0 pb-0.5 overflow-visible px-1 sm:px-0" id="game-number-pad-deck">
+      <div className="shrink-0 w-full mt-1 lg:mt-0 pb-0.5 lg:pb-0 overflow-visible px-1 sm:px-0" id="game-number-pad-deck">
         <style>{`
           @keyframes sudokuKeypadMicroElevation {
             0% { transform: scale(1) translateY(0); }

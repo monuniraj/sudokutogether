@@ -16529,7 +16529,7 @@ export default function App() {
               >
 
                 {/* ROW 1: MULTIPLAYER BUTTON (Desktop-only, matches Difficulty selector baseline, label spacing, and height) */}
-                <div className="hidden lg:flex w-full flex-col mb-3 lg:mb-2 shrink-0 select-none pb-0" id="desktop-multiplayer-container">
+                <div className="hidden lg:flex w-full flex-col mb-3 lg:mb-0 shrink-0 select-none pb-0" id="desktop-multiplayer-container">
                   <div className="flex items-center justify-between gap-4 mb-2 invisible pointer-events-none">
                     <span className="block text-xs font-black uppercase tracking-wider font-mono">
                       {t("selectDifficulty")}
@@ -16554,7 +16554,7 @@ export default function App() {
 
                 {/* SIDE-BY-SIDE FEATURE BOXES (Desktop lg: strictly above #desktop-current-record-container) */}
                 <div
-                  className="hidden lg:flex w-full items-stretch gap-2 mb-2 shrink-0 select-none"
+                  className="hidden lg:flex w-full items-stretch gap-2 mb-0 shrink-0 select-none"
                   id="desktop-feature-boxes-container"
                 >
                   <button
@@ -16596,7 +16596,7 @@ export default function App() {
                 </div>
 
                 {/* AUTHENTIC CURRENT RECORD / PLAY STORE CONVERSION CAROUSEL (Desktop lg: ONLY) */}
-                <div className="hidden lg:flex w-full mb-3 lg:mb-2 shrink-0 select-none h-[76px] lg:h-[58px]" id="desktop-current-record-container">
+                <div className="hidden lg:flex w-full mb-3 lg:mb-0 shrink-0 select-none h-[76px] lg:h-[58px]" id="desktop-current-record-container">
                   {(() => {
                     const activeDiff = ((boardState?.difficulty || difficulty).toUpperCase()) as Difficulty;
                     const bestSecs = personalBestTimes[activeDiff] || 0;
@@ -16837,7 +16837,7 @@ export default function App() {
                     setIsTimerPaused(false);
                     addLog("🔄 Started a fresh new board!");
                   }}
-                  className={`hidden lg:flex w-full lg:h-[46px] border-none px-4 mt-3 lg:mt-3 items-center justify-center font-mono text-sm sm:text-base lg:text-[15px] font-bold tracking-wider uppercase transition-all duration-150 select-none rounded-xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 leading-none ${darkMode
+                  className={`hidden lg:flex w-full lg:h-[46px] border-none px-4 mt-3 lg:mt-0 items-center justify-center font-mono text-sm sm:text-base lg:text-[15px] font-bold tracking-wider uppercase transition-all duration-150 select-none rounded-xl active:scale-[0.98] active:translate-y-px cursor-pointer shadow-md shrink-0 leading-none ${darkMode
                     ? "bg-[#4c0519] hover:bg-[#4c0519]/80 text-[#fecdd3]"
                     : "bg-[#FFE4E6] hover:bg-[#FFE4E6]/85 active:bg-[#FBCFE8] text-[#9D174D]"
                     }`}
