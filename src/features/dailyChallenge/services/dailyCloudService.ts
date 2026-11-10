@@ -10,11 +10,18 @@
  */
 
 import {
+  collection,
   doc,
+  getCountFromServer,
   getDoc,
   getDocFromServer,
+  getDocs,
+  limit,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
+  where,
   writeBatch,
   type DocumentData,
   type DocumentReference,
@@ -432,17 +439,36 @@ export async function saveDailyProgressToCloud(
   }
 }
 
+export interface DailyLeaderboardEntry {
+  uid: string;
+  playerName: string;
+  isGuest: boolean;
+  time: number;
+  mistakes: number;
+  completedAt: number;
+}
+
+export interface DailyLeaderboardResult {
+  entries: DailyLeaderboardEntry[];
+  userRank: number | null;
+  userEntry: DailyLeaderboardEntry | null;
+  isAuthenticated: boolean;
+  isOfflineOrError: boolean;
+}
+
 /**
- * Atomically records a completed Daily Challenge outcome to both:
+ * Atomically records a completed Daily Challenge outcome to:
  * - `/users/{uid}/daily_challenges/{YYYY-MM-DD}`
  * - `/users/{uid}/daily_stats/meta`
+ * - `/daily_challenges/{YYYY-MM-DD}/completions/{uid}` (Global Daily Leaderboard)
  * Strictly exits early without network calls for guest users.
  */
 export async function recordDailyCompletionToCloud(
   uid: string | null | undefined,
   date: string,
   record: DayRecord,
-  stats: DailyStats
+  stats: DailyStats,
+  playerName?: string
 ): Promise<void> {
   const cleanUid = resolveAuthenticatedUid(uid);
   if (!cleanUid) return;
@@ -507,6 +533,30 @@ export async function recordDailyCompletionToCloud(
     serverUpdatedAt: serverTimestamp(),
   };
 
+  const resolvedPlayerName =
+    (playerName && playerName.trim()) ||
+    auth?.currentUser?.displayName?.trim() ||
+    "Player";
+
+  const leaderboardDocRef = doc(
+    db,
+    DAILY_CHALLENGES_SUBCOLLECTION,
+    normalizedDate,
+    "completions",
+    cleanUid
+  );
+
+  const leaderboardPayload: Record<string, unknown> = {
+    uid: cleanUid,
+    playerName: resolvedPlayerName,
+    isGuest: false,
+    time: cleanRecord.timeSeconds,
+    mistakes: cleanRecord.mistakes,
+    difficulty: cleanRecord.difficulty,
+    completedAt,
+    updatedAt: serverTimestamp(),
+  };
+
   try {
     const batch = writeBatch(db);
     batch.set(getDailyChallengeDocRef(cleanUid, normalizedDate), challengePayload, {
@@ -515,9 +565,184 @@ export async function recordDailyCompletionToCloud(
     batch.set(getDailyStatsMetaDocRef(cleanUid), statsPayload, {
       merge: true,
     });
+    batch.set(leaderboardDocRef, leaderboardPayload, { merge: true });
     await batch.commit();
+  } catch {
+    // Fallback: guarantee private user stats commit even if global leaderboard rules block
+    try {
+      const privateBatch = writeBatch(db);
+      privateBatch.set(getDailyChallengeDocRef(cleanUid, normalizedDate), challengePayload, {
+        merge: true,
+      });
+      privateBatch.set(getDailyStatsMetaDocRef(cleanUid), statsPayload, {
+        merge: true,
+      });
+      await privateBatch.commit();
+    } catch (err) {
+      console.warn("[DailyCloudService] Failed to record daily completion:", err);
+    }
+  }
+}
+
+function hydrateLeaderboardEntry(
+  docId: string,
+  data: DocumentData
+): DailyLeaderboardEntry {
+  const entryUid =
+    typeof data.uid === "string" && data.uid.trim() ? data.uid.trim() : docId;
+  const rawName =
+    typeof data.playerName === "string" && data.playerName.trim()
+      ? data.playerName.trim()
+      : typeof data.displayName === "string" && data.displayName.trim()
+        ? data.displayName.trim()
+        : "Player";
+  const isGuest =
+    typeof data.isGuest === "boolean"
+      ? data.isGuest
+      : entryUid.toLowerCase().startsWith("guest");
+  const time = Math.max(
+    0,
+    Math.floor(Number(data.time ?? data.timeSeconds ?? data.elapsedSeconds) || 0)
+  );
+  const mistakes = Math.max(
+    0,
+    Math.floor(Number(data.mistakes ?? data.mistakesCount) || 0)
+  );
+  const completedAt = toEpochMillis(data.completedAt, 0);
+
+  return {
+    uid: entryUid,
+    playerName: rawName,
+    isGuest,
+    time,
+    mistakes,
+    completedAt,
+  };
+}
+
+/**
+ * Queries `/daily_challenges/{date}/completions` ordered by `time ASC, mistakes ASC` (limit 20)
+ * and resolves the active authenticated user's rank (including when outside Top 20).
+ * Strictly bypasses Firestore for guest users.
+ */
+export async function fetchDailyLeaderboard(
+  uid: string | null | undefined,
+  date: string
+): Promise<DailyLeaderboardResult> {
+  const cleanUid = resolveAuthenticatedUid(uid);
+  if (!cleanUid) {
+    return {
+      entries: [],
+      userRank: null,
+      userEntry: null,
+      isAuthenticated: false,
+      isOfflineOrError: false,
+    };
+  }
+
+  const normalizedDate = String(date || "").trim();
+  parseDateKey(normalizedDate);
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return {
+      entries: [],
+      userRank: null,
+      userEntry: null,
+      isAuthenticated: true,
+      isOfflineOrError: true,
+    };
+  }
+
+  try {
+    const completionsCol = collection(
+      db,
+      DAILY_CHALLENGES_SUBCOLLECTION,
+      normalizedDate,
+      "completions"
+    );
+
+    let entries: DailyLeaderboardEntry[] = [];
+    try {
+      const topQuery = query(
+        completionsCol,
+        orderBy("time", "asc"),
+        orderBy("mistakes", "asc"),
+        limit(20)
+      );
+      const snap = await getDocs(topQuery);
+      entries = snap.docs.map((d) => hydrateLeaderboardEntry(d.id, d.data()));
+    } catch {
+      // Composite index fallback: order by time ASC and tie-break by mistakes ASC client-side
+      const fallbackQuery = query(
+        completionsCol,
+        orderBy("time", "asc"),
+        limit(20)
+      );
+      const snap = await getDocs(fallbackQuery);
+      entries = snap.docs
+        .map((d) => hydrateLeaderboardEntry(d.id, d.data()))
+        .sort((a, b) => a.time - b.time || a.mistakes - b.mistakes);
+    }
+
+    const foundIdx = entries.findIndex((entry) => entry.uid === cleanUid);
+    if (foundIdx >= 0) {
+      return {
+        entries,
+        userRank: foundIdx + 1,
+        userEntry: entries[foundIdx],
+        isAuthenticated: true,
+        isOfflineOrError: false,
+      };
+    }
+
+    // Active user is outside Top 20: check if they have a cloud completion and count faster runs
+    const userDocRef = doc(
+      db,
+      DAILY_CHALLENGES_SUBCOLLECTION,
+      normalizedDate,
+      "completions",
+      cleanUid
+    );
+    const userSnap = await readServerFirstDoc(userDocRef);
+    if (!userSnap.exists() || !userSnap.data()) {
+      return {
+        entries,
+        userRank: null,
+        userEntry: null,
+        isAuthenticated: true,
+        isOfflineOrError: false,
+      };
+    }
+
+    const userEntry = hydrateLeaderboardEntry(userSnap.id, userSnap.data()!);
+    let userRank: number | null = null;
+    try {
+      const fasterQuery = query(
+        completionsCol,
+        where("time", "<", userEntry.time)
+      );
+      const countSnap = await getCountFromServer(fasterQuery);
+      userRank = (countSnap.data().count || 0) + 1;
+    } catch {
+      userRank = entries.length + 1;
+    }
+
+    return {
+      entries,
+      userRank,
+      userEntry,
+      isAuthenticated: true,
+      isOfflineOrError: false,
+    };
   } catch (err) {
-    console.warn("[DailyCloudService] Failed to record daily completion:", err);
+    console.warn("[DailyCloudService] Failed to fetch daily leaderboard:", err);
+    return {
+      entries: [],
+      userRank: null,
+      userEntry: null,
+      isAuthenticated: true,
+      isOfflineOrError: true,
+    };
   }
 }
 
