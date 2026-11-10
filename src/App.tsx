@@ -17,8 +17,10 @@ import { initAdMob, showInterstitialBetweenMatches, showRewardedHintAd, isDailyA
 import { ShareActionWrapper } from "./components/share/ShareActionWrapper";
 import { GuestBannerPill } from "./components/auth/GuestBannerPill";
 import { DailyChallengeCard, type DailyChallengeLaunchPayload } from "./features/dailyChallenge/components/DailyChallengeCard";
+import { DailyCalendarModal } from "./features/dailyChallenge/components/DailyCalendarModal";
 import { DailyResultModal } from "./features/dailyChallenge/components/DailyResultModal";
-import { saveDailyProgress, recordDailyCompletion, getDailyStats } from "./features/dailyChallenge/services/dailyStorage";
+import { formatDateKey, generateDailyPuzzle } from "./features/dailyChallenge/services/dailyGenerator";
+import { saveDailyProgress, recordDailyCompletion, getDailyStats, getDailyProgress } from "./features/dailyChallenge/services/dailyStorage";
 import { saveDailyProgressToCloud, recordDailyCompletionToCloud } from "./features/dailyChallenge/services/dailyCloudService";
 import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./features/dailyChallenge/types/daily.types";
 import { incrementGuestGameCount } from "./utils/guestTracking";
@@ -9985,11 +9987,18 @@ export default function App() {
 
   const hasTriggeredGameOverRef = useRef(false);
   const gameOverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isDailyBoardContextRef = useRef(false);
 
   useEffect(() => {
     if (boardState?.isGameOver) {
       if (!hasTriggeredGameOverRef.current) {
         hasTriggeredGameOverRef.current = true;
+        if (isDailyBoardContextRef.current) {
+          setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
+          setActiveKeypadNum(null);
+          setLockedNum(null);
+          return;
+        }
         const isDisconnected = !isOnline;
         if (challengeMode && isDisconnected) {
           setWasDisconnectedMultiplayer(true);
@@ -10007,7 +10016,9 @@ export default function App() {
         }
 
         gameOverTimeoutRef.current = setTimeout(() => {
-          setShowGameOverModal(true);
+          if (!isDailyBoardContextRef.current) {
+            setShowGameOverModal(true);
+          }
           setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
           setActiveKeypadNum(null);
           setLockedNum(null);
@@ -10069,6 +10080,10 @@ export default function App() {
   const resumeSavedSession = () => {
     const loaded = loadCurrentGameFromLocal();
     if (loaded) {
+      isDailyBoardContextRef.current = false;
+      setDailyChallengeActiveDate(null);
+      setDailyChallengeIsArchive(false);
+      setIsDailyReviewSession(false);
       setBoardState(loaded.state);
       setSessionSeconds(loaded.seconds);
       setDifficulty(loaded.difficulty);
@@ -11619,7 +11634,7 @@ export default function App() {
       }
     }
 
-    // Daily Challenge completion/failure hook (when playing today's Daily Challenge on the master board)
+    // Daily Challenge completion/failure hook (when playing Today or an Archive Daily Challenge on the master board)
     if (dailyChallengeActiveDate && activeBoard) {
       const dailyUid = isGuestSession ? null : authUser?.uid;
       const completedAt = Date.now();
@@ -11634,7 +11649,25 @@ export default function App() {
         });
       });
 
+      isDailyBoardContextRef.current = true;
+      setShowGameOverModal(false);
+      setIsDailyReviewSession(true);
+      setDailyChallengeLoadedBoardDate(dailyChallengeActiveDate);
+
       if (isWon) {
+        const updatedDailyStats = recordDailyCompletion(
+          {
+            date: dailyChallengeActiveDate,
+            difficulty: dailyChallengeDifficulty,
+            timeSeconds: sessionSeconds,
+            mistakes: finalMistakes,
+            hints: hintsUsed,
+            completedAt,
+            isArchive: dailyChallengeIsArchive,
+          },
+          dailyUid
+        );
+
         saveDailyProgress(
           {
             date: dailyChallengeActiveDate,
@@ -11654,18 +11687,6 @@ export default function App() {
           dailyUid
         );
 
-        const updatedDailyStats = recordDailyCompletion(
-          {
-            date: dailyChallengeActiveDate,
-            difficulty: dailyChallengeDifficulty,
-            timeSeconds: sessionSeconds,
-            mistakes: finalMistakes,
-            hints: hintsUsed,
-            completedAt,
-          },
-          dailyUid
-        );
-
         if (dailyUid) {
           const dayRecord = updatedDailyStats.recordsByDate[dailyChallengeActiveDate] ?? {
             date: dailyChallengeActiveDate,
@@ -11677,6 +11698,7 @@ export default function App() {
             isPerfect: finalMistakes === 0 && hintsUsed === 0,
             completedAt,
             updatedAt: completedAt,
+            isArchive: dailyChallengeIsArchive,
           };
           void recordDailyCompletionToCloud(
             dailyUid,
@@ -11686,16 +11708,20 @@ export default function App() {
           );
         }
 
-        setDailyRefreshCounter((c) => c + 1);
-        setDailyResultModalState({
+        const completedModalPayload = {
           isOpen: true,
           date: dailyChallengeActiveDate,
           difficulty: dailyChallengeDifficulty,
-          status: "COMPLETED",
+          status: "COMPLETED" as DailyChallengeStatus,
           elapsedTime: sessionSeconds,
           mistakes: finalMistakes,
           stats: updatedDailyStats,
-        });
+          fromCalendar: false,
+          fallbackSolvedOnReview: true,
+        };
+        setDailyRefreshCounter((c) => c + 1);
+        setDailyReviewSummaryMeta(completedModalPayload);
+        setDailyResultModalState(completedModalPayload);
       } else {
         const failedProgress = saveDailyProgress(
           {
@@ -11720,16 +11746,20 @@ export default function App() {
           void saveDailyProgressToCloud(dailyUid, failedProgress);
         }
 
-        setDailyRefreshCounter((c) => c + 1);
-        setDailyResultModalState({
+        const failedModalPayload = {
           isOpen: true,
           date: dailyChallengeActiveDate,
           difficulty: dailyChallengeDifficulty,
-          status: "FAILED",
+          status: "FAILED" as DailyChallengeStatus,
           elapsedTime: sessionSeconds,
           mistakes: finalMistakes,
           stats: updatedDailyStats,
-        });
+          fromCalendar: false,
+          fallbackSolvedOnReview: false,
+        };
+        setDailyRefreshCounter((c) => c + 1);
+        setDailyReviewSummaryMeta(failedModalPayload);
+        setDailyResultModalState(failedModalPayload);
       }
     }
 
@@ -13539,6 +13569,12 @@ export default function App() {
     preloadedBoardData?: { puzzle?: number[][]; solution?: number[][] },
     isChallengeModeOverride?: boolean
   ) => {
+    isDailyBoardContextRef.current = false;
+    setDailyChallengeActiveDate(null);
+    setDailyChallengeIsArchive(false);
+    setIsDailyReviewSession(false);
+    setDailyReviewSummaryMeta(null);
+    setDailyChallengeLoadedBoardDate(null);
     setVisualizingBacktrack(false);
     setGeneratorLogs([]);
     setIsNewRecordAchieved(false);
@@ -14060,8 +14096,24 @@ export default function App() {
   };
 
   const [dailyChallengeActiveDate, setDailyChallengeActiveDate] = useState<string | null>(null);
+  const [dailyChallengeIsArchive, setDailyChallengeIsArchive] = useState<boolean>(false);
   const [dailyChallengeDifficulty, setDailyChallengeDifficulty] = useState<DailyDifficulty>("EASY");
   const [dailyRefreshCounter, setDailyRefreshCounter] = useState<number>(0);
+  const [isDailyReviewSession, setIsDailyReviewSession] = useState<boolean>(false);
+  const [dailyChallengeLoadedBoardDate, setDailyChallengeLoadedBoardDate] = useState<string | null>(null);
+  const [isPostGameDailyCalendarOpen, setIsPostGameDailyCalendarOpen] = useState<boolean>(false);
+  const [postGameDailyCalendarAnchorDate, setPostGameDailyCalendarAnchorDate] = useState<string | undefined>(undefined);
+  const [dailyReviewSummaryMeta, setDailyReviewSummaryMeta] = useState<{
+    isOpen: boolean;
+    date: string;
+    difficulty: DailyDifficulty;
+    status: DailyChallengeStatus;
+    elapsedTime: number;
+    mistakes: number;
+    stats: DailyStats;
+    fromCalendar?: boolean;
+    fallbackSolvedOnReview?: boolean;
+  } | null>(null);
   const [dailyResultModalState, setDailyResultModalState] = useState<{
     isOpen: boolean;
     date: string;
@@ -14070,6 +14122,8 @@ export default function App() {
     elapsedTime: number;
     mistakes: number;
     stats: DailyStats;
+    fromCalendar?: boolean;
+    fallbackSolvedOnReview?: boolean;
   } | null>(null);
   const dailyCloudAutoSaveTimerRef = useRef<number | null>(null);
 
@@ -14078,6 +14132,8 @@ export default function App() {
     const mappedUiDifficulty: Difficulty =
       payload.difficulty === "MASTER" ? "EXPERT" : payload.difficulty;
 
+    const todayKey = formatDateKey(new Date());
+    const isArchiveRun = Boolean(payload.isArchive) || payload.date < todayKey;
     const saved = payload.savedProgress;
     const hasRestorableProgress = Boolean(
       saved &&
@@ -14086,7 +14142,11 @@ export default function App() {
         saved.boardFlat.length === 81
     );
 
-    const restoredFlat = hasRestorableProgress ? saved!.boardFlat : null;
+    const restoredFlat = hasRestorableProgress
+      ? saved!.boardFlat
+      : payload.reviewOnly && payload.fallbackSolvedOnReview
+        ? payload.solved.flat()
+        : null;
     const restoredNotes = hasRestorableProgress ? saved!.notesByCell || {} : {};
     const restoredElapsed = hasRestorableProgress ? Math.max(0, saved!.elapsedSeconds || 0) : 0;
     const restoredMistakes = hasRestorableProgress ? Math.max(0, saved!.mistakesCount || 0) : 0;
@@ -14117,6 +14177,9 @@ export default function App() {
             };
           })
       );
+
+    isDailyBoardContextRef.current = true;
+    hasTriggeredGameOverRef.current = Boolean(payload.reviewOnly);
 
     setChallengeMode(false);
     setActiveGameId(null);
@@ -14154,11 +14217,35 @@ export default function App() {
     setGameSessionKey(Date.now());
 
     setDailyChallengeDifficulty(payload.difficulty);
+    setDailyChallengeIsArchive(isArchiveRun);
     setDailyChallengeActiveDate(payload.reviewOnly ? null : payload.date);
+    setIsDailyReviewSession(Boolean(payload.reviewOnly));
+    setDailyChallengeLoadedBoardDate(payload.date);
+    setIsPostGameDailyCalendarOpen(false);
+    setDailyResultModalState(null);
+
+    if (payload.reviewOnly) {
+      const reviewUid = isGuestSession ? null : authUser?.uid;
+      const reviewStats = getDailyStats(reviewUid, todayKey);
+      const dayRec = reviewStats.recordsByDate[payload.date];
+      setDailyReviewSummaryMeta({
+        isOpen: true,
+        date: payload.date,
+        difficulty: payload.difficulty,
+        status: dayRec?.status ?? saved?.status ?? (payload.fallbackSolvedOnReview ? "COMPLETED" : "FAILED"),
+        elapsedTime: dayRec?.timeSeconds ?? restoredElapsed,
+        mistakes: dayRec?.mistakes ?? restoredMistakes,
+        stats: reviewStats,
+        fromCalendar: false,
+        fallbackSolvedOnReview: Boolean(payload.fallbackSolvedOnReview || dayRec?.status === "COMPLETED"),
+      });
+    } else {
+      setDailyReviewSummaryMeta(null);
+    }
 
     setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
     navigateToScreen("game");
-  }, [soundEffects]);
+  }, [soundEffects, isGuestSession, authUser?.uid]);
 
   // Auto-save in-progress Daily Challenge state on the master board
   useEffect(() => {
@@ -16454,6 +16541,10 @@ export default function App() {
                               type="button"
                               onClick={() => {
                                 playClickSound();
+                                if (isDailyReviewSession && dailyReviewSummaryMeta) {
+                                  setDailyResultModalState({ ...dailyReviewSummaryMeta, isOpen: true });
+                                  return;
+                                }
                                 const isDisconnected = !isOnline;
                                 if (challengeMode && isDisconnected) {
                                   setWasDisconnectedMultiplayer(true);
@@ -17315,7 +17406,7 @@ export default function App() {
             )}
 
             {/* 2. SOLO GAME OVER AND VICTORY OVERLAY (when challengeMode is false OR offline fallback) */}
-            {boardState && showGameOverModal && (!isTrueMultiplayer) && (
+            {boardState && showGameOverModal && (!isTrueMultiplayer) && !dailyChallengeActiveDate && !isDailyReviewSession && !dailyResultModalState?.isOpen && !isPostGameDailyCalendarOpen && (
               <div className="fixed inset-0 z-50 bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm flex items-center justify-center p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
                 {/* Backdrop click dismisser — closes overlay and reveals the completed board */}
                 <div
@@ -19513,21 +19604,59 @@ export default function App() {
         />
       )}
 
-      {/* DAILY CHALLENGE RESULT & STREAK MODAL */}
+      {/* DAILY CHALLENGE RESULT, LEADERBOARD & CALENDAR MODALS */}
       {Boolean(dailyResultModalState?.isOpen) && dailyResultModalState && (
         <DailyResultModal
           isOpen={dailyResultModalState.isOpen}
+          uid={isGuestSession ? null : authUser?.uid}
           onClose={() => {
             setDailyResultModalState(null);
             setDailyChallengeActiveDate(null);
+            setDailyChallengeIsArchive(false);
+            setIsDailyReviewSession(false);
+            isDailyBoardContextRef.current = false;
             setShowCelebrationConfetti(false);
             navigateToScreen("home");
           }}
           onReviewBoard={() => {
-            setDailyResultModalState(null);
-            setDailyChallengeActiveDate(null);
+            const targetDate = dailyResultModalState.date;
+            const isComp = dailyResultModalState.status === "COMPLETED";
             setShowCelebrationConfetti(false);
+            if (targetDate === dailyChallengeLoadedBoardDate && boardState) {
+              setDailyResultModalState(null);
+              setDailyChallengeActiveDate(null);
+              setIsDailyReviewSession(true);
+              return;
+            }
+            const reviewUid = isGuestSession ? null : authUser?.uid;
+            const generated = generateDailyPuzzle(targetDate);
+            const savedProg = getDailyProgress(targetDate, reviewUid);
+            setDailyResultModalState(null);
+            handleLaunchDailyChallenge({
+              date: generated.date,
+              difficulty: generated.difficulty,
+              puzzle: generated.puzzle,
+              solved: generated.solved,
+              seed: generated.seed,
+              savedProgress: savedProg,
+              reviewOnly: true,
+              fallbackSolvedOnReview: isComp,
+            });
           }}
+          onOpenCalendarHistory={() => {
+            setPostGameDailyCalendarAnchorDate(dailyResultModalState.date);
+            setDailyResultModalState(null);
+            setIsPostGameDailyCalendarOpen(true);
+          }}
+          onBackToCalendar={
+            dailyResultModalState.fromCalendar
+              ? () => {
+                  setPostGameDailyCalendarAnchorDate(dailyResultModalState.date);
+                  setDailyResultModalState(null);
+                  setIsPostGameDailyCalendarOpen(true);
+                }
+              : undefined
+          }
           date={dailyResultModalState.date}
           difficulty={dailyResultModalState.difficulty}
           status={dailyResultModalState.status}
@@ -19535,6 +19664,45 @@ export default function App() {
           mistakes={dailyResultModalState.mistakes}
           stats={dailyResultModalState.stats}
           darkMode={darkMode}
+        />
+      )}
+
+      {isPostGameDailyCalendarOpen && (
+        <DailyCalendarModal
+          isOpen={isPostGameDailyCalendarOpen}
+          uid={isGuestSession ? null : authUser?.uid}
+          darkMode={darkMode}
+          initialDate={postGameDailyCalendarAnchorDate}
+          refreshTrigger={dailyRefreshCounter}
+          onClose={() => {
+            setIsPostGameDailyCalendarOpen(false);
+            setDailyChallengeActiveDate(null);
+            setDailyChallengeIsArchive(false);
+            setIsDailyReviewSession(false);
+            isDailyBoardContextRef.current = false;
+            setShowCelebrationConfetti(false);
+            navigateToScreen("home");
+          }}
+          onLaunchDayPuzzle={(payload) => {
+            setIsPostGameDailyCalendarOpen(false);
+            setShowCelebrationConfetti(false);
+            handleLaunchDailyChallenge(payload);
+          }}
+          onInspectDayResult={({ date: inspectedDate, record, stats }) => {
+            setPostGameDailyCalendarAnchorDate(inspectedDate);
+            setIsPostGameDailyCalendarOpen(false);
+            setDailyResultModalState({
+              isOpen: true,
+              date: inspectedDate,
+              difficulty: record.difficulty,
+              status: record.status,
+              elapsedTime: record.timeSeconds,
+              mistakes: record.mistakes,
+              stats,
+              fromCalendar: true,
+              fallbackSolvedOnReview: record.status === "COMPLETED",
+            });
+          }}
         />
       )}
 

@@ -218,12 +218,13 @@ export function calculateDailyStats(
     }
   }
 
-  // Calculate longestStreak across sorted unique completed dates
+  // Calculate longestStreak across sorted unique non-archive completed dates
+  const streakRecords = completedRecords.filter((rec) => !rec.isArchive);
   let longestStreak = 0;
   let runningStreak = 0;
   let prevUtcMs: number | null = null;
 
-  for (const rec of completedRecords) {
+  for (const rec of streakRecords) {
     try {
       const currUtcMs = dateKeyToUtcMs(rec.date);
       if (prevUtcMs !== null && currUtcMs - prevUtcMs === MS_PER_DAY) {
@@ -240,8 +241,8 @@ export function calculateDailyStats(
     }
   }
 
-  // Calculate currentStreak anchored to referenceDateKey (today or yesterday)
-  const completedDateSet = new Set(completedRecords.map((r) => r.date));
+  // Calculate currentStreak anchored to referenceDateKey (today or yesterday), excluding Archive Play
+  const completedDateSet = new Set(streakRecords.map((r) => r.date));
   let currentStreak = 0;
 
   try {
@@ -354,6 +355,7 @@ export function saveDailyProgress(
           ? sanitizedProgress.completedAt ?? now
           : null,
       updatedAt: now,
+      ...(existingRecord?.isArchive !== undefined ? { isArchive: existingRecord.isArchive } : {}),
     };
   }
 
@@ -412,6 +414,7 @@ export function recordDailyCompletion(
       isPerfect: existing.isPerfect || isPerfect,
       completedAt: existing.completedAt ?? now,
       updatedAt: now,
+      isArchive: existing.isArchive === true,
     };
   } else {
     vault.recordsByDate[normalizedDate] = {
@@ -424,6 +427,7 @@ export function recordDailyCompletion(
       isPerfect,
       completedAt: now,
       updatedAt: now,
+      isArchive: Boolean(input.isArchive),
     };
   }
 

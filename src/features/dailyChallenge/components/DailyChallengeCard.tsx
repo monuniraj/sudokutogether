@@ -26,9 +26,11 @@ import { generateDailyPuzzle } from "../services/dailyGenerator";
 import { getDailyProgress, getDailyStats } from "../services/dailyStorage";
 import type {
   DailyChallengeProgress,
+  DailyChallengeStatus,
   DailyDifficulty,
   DailyStats,
 } from "../types/daily.types";
+import { DailyCalendarModal } from "./DailyCalendarModal";
 import { DailyResultModal } from "./DailyResultModal";
 
 export interface DailyChallengeLaunchPayload {
@@ -39,6 +41,8 @@ export interface DailyChallengeLaunchPayload {
   seed: number;
   savedProgress: DailyChallengeProgress | null;
   reviewOnly?: boolean;
+  isArchive?: boolean;
+  fallbackSolvedOnReview?: boolean;
 }
 
 export interface DailyChallengeCardProps {
@@ -98,7 +102,17 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
 }) => {
   const { t } = useTranslation();
   const daily = useDailyChallenge({ uid });
-  const [isResultOpen, setIsResultOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [calendarAnchorDate, setCalendarAnchorDate] = useState<string | undefined>(undefined);
+  const [inspectedResult, setInspectedResult] = useState<{
+    date: string;
+    difficulty: DailyDifficulty;
+    status: DailyChallengeStatus;
+    elapsedTime: number;
+    mistakes: number;
+    stats: DailyStats;
+    fromCalendar: boolean;
+  } | null>(null);
 
   // Sync live local vault snapshot whenever App.tsx updates daily progress/completion
   const [liveSnapshot, setLiveSnapshot] = useState<{
@@ -135,9 +149,15 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
   );
 
   const launchMasterBoard = useCallback(
-    (reviewOnly = false) => {
-      const generated = generateDailyPuzzle(daily.date);
-      const latestProgress = getDailyProgress(daily.date, uid);
+    (options?: {
+      date?: string;
+      reviewOnly?: boolean;
+      isArchive?: boolean;
+      fallbackSolvedOnReview?: boolean;
+    }) => {
+      const targetDate = options?.date ?? daily.date;
+      const generated = generateDailyPuzzle(targetDate);
+      const latestProgress = getDailyProgress(targetDate, uid);
       if (onStartDailyChallenge) {
         onStartDailyChallenge({
           date: generated.date,
@@ -146,7 +166,9 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
           solved: generated.solved,
           seed: generated.seed,
           savedProgress: latestProgress,
-          reviewOnly,
+          reviewOnly: options?.reviewOnly,
+          isArchive: options?.isArchive ?? targetDate < daily.date,
+          fallbackSolvedOnReview: options?.fallbackSolvedOnReview,
         });
       }
     },
@@ -155,11 +177,106 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
 
   const handleCardClick = useCallback(() => {
     if (effectiveStatus === "COMPLETED" || effectiveStatus === "FAILED") {
-      setIsResultOpen(true);
+      setInspectedResult({
+        date: daily.date,
+        difficulty: daily.difficulty,
+        status: effectiveStatus,
+        elapsedTime: effectiveElapsed,
+        mistakes: effectiveMistakes,
+        stats: effectiveStats,
+        fromCalendar: false,
+      });
       return;
     }
-    launchMasterBoard(false);
-  }, [effectiveStatus, launchMasterBoard]);
+    launchMasterBoard({ date: daily.date, reviewOnly: false, isArchive: false });
+  }, [
+    effectiveStatus,
+    daily.date,
+    daily.difficulty,
+    effectiveElapsed,
+    effectiveMistakes,
+    effectiveStats,
+    launchMasterBoard,
+  ]);
+
+  const openCalendar = useCallback(
+    (e?: React.SyntheticEvent) => {
+      if (e) {
+        e.stopPropagation();
+      }
+      setCalendarAnchorDate(daily.date);
+      setInspectedResult(null);
+      setIsCalendarOpen(true);
+    },
+    [daily.date]
+  );
+
+  const sharedModals = (
+    <>
+      <DailyResultModal
+        isOpen={Boolean(inspectedResult)}
+        onClose={() => setInspectedResult(null)}
+        onReviewBoard={() => {
+          const targetDate = inspectedResult?.date ?? daily.date;
+          const isComp = inspectedResult?.status === "COMPLETED";
+          setInspectedResult(null);
+          launchMasterBoard({
+            date: targetDate,
+            reviewOnly: true,
+            fallbackSolvedOnReview: isComp,
+          });
+        }}
+        onOpenCalendarHistory={() => {
+          setCalendarAnchorDate(inspectedResult?.date ?? daily.date);
+          setInspectedResult(null);
+          setIsCalendarOpen(true);
+        }}
+        onBackToCalendar={
+          inspectedResult?.fromCalendar
+            ? () => {
+                setCalendarAnchorDate(inspectedResult.date);
+                setInspectedResult(null);
+                setIsCalendarOpen(true);
+              }
+            : undefined
+        }
+        uid={uid}
+        date={inspectedResult?.date ?? daily.date}
+        difficulty={inspectedResult?.difficulty ?? daily.difficulty}
+        status={inspectedResult?.status ?? effectiveStatus}
+        elapsedTime={inspectedResult?.elapsedTime ?? effectiveElapsed}
+        mistakes={inspectedResult?.mistakes ?? effectiveMistakes}
+        stats={inspectedResult?.stats ?? effectiveStats}
+        darkMode={darkMode}
+      />
+
+      <DailyCalendarModal
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
+        onLaunchDayPuzzle={(payload) => {
+          setIsCalendarOpen(false);
+          onStartDailyChallenge?.(payload);
+        }}
+        onInspectDayResult={({ date: inspectedDate, record, stats }) => {
+          setCalendarAnchorDate(inspectedDate);
+          setIsCalendarOpen(false);
+          setInspectedResult({
+            date: inspectedDate,
+            difficulty: record.difficulty,
+            status: record.status,
+            elapsedTime: record.timeSeconds,
+            mistakes: record.mistakes,
+            stats,
+            fromCalendar: true,
+          });
+        }}
+        uid={uid}
+        darkMode={darkMode}
+        initialDate={calendarAnchorDate || daily.date}
+        refreshTrigger={refreshTrigger}
+      />
+    </>
+  );
 
   const formattedTimer = formatDurationMMSS(effectiveElapsed);
 
@@ -188,18 +305,37 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
   if (compact) {
     return (
       <>
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           id="desktop-daily-challenge-btn"
           onClick={handleCardClick}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleCardClick();
+            }
+          }}
           className={`flex-1 min-w-0 h-[38px] px-2.5 rounded-xl border-0 shadow-none outline-none flex items-center justify-between gap-1.5 transition-transform duration-150 cursor-pointer active:scale-[0.98] ${
             darkMode
               ? "bg-[#451a03]/85 hover:bg-[#78350f]/90 text-[#fde68a]"
               : "bg-[#FEF3C7]/95 hover:bg-[#FDE68A]/95 text-[#92400E]"
           }`}
         >
-          <span className="inline-flex items-center gap-1.5 min-w-0">
-            <Calendar className="w-3.5 h-3.5 shrink-0 stroke-[2.2]" />
+          <span className="inline-flex items-center gap-1 min-w-0">
+            <button
+              type="button"
+              onClick={openCalendar}
+              aria-label={td("daily.openCalendarBtn", "Open Daily Calendar")}
+              title={td("daily.openCalendarBtn", "Open Daily Calendar")}
+              className={`p-1 -ml-1 rounded-lg border-0 shadow-none flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
+                darkMode
+                  ? "hover:bg-black/30 text-[#fde68a]"
+                  : "hover:bg-white/60 text-[#92400E]"
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5 shrink-0 stroke-[2.2]" />
+            </button>
             <span className="font-sans font-bold text-[11px] tracking-tight truncate leading-none">
               {td("daily.cardTitle", "Daily Challenge")}
             </span>
@@ -208,23 +344,9 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
             <Flame className="w-3 h-3 shrink-0" />
             <span>{effectiveStats.currentStreak}</span>
           </span>
-        </button>
+        </div>
 
-        <DailyResultModal
-          isOpen={isResultOpen}
-          onClose={() => setIsResultOpen(false)}
-          onReviewBoard={() => {
-            setIsResultOpen(false);
-            launchMasterBoard(true);
-          }}
-          date={daily.date}
-          difficulty={daily.difficulty}
-          status={effectiveStatus}
-          elapsedTime={effectiveElapsed}
-          mistakes={effectiveMistakes}
-          stats={effectiveStats}
-          darkMode={darkMode}
-        />
+        {sharedModals}
       </>
     );
   }
@@ -248,7 +370,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
             : "bg-[#FEF3C7] hover:bg-[#FDE68A]/80 text-[#92400E]"
         }`}
       >
-        {/* Top Row: Date + Difficulty Badge | Current Streak */}
+        {/* Top Row: Date + Difficulty Badge | Calendar Trigger + Current Streak */}
         <div className="flex items-center justify-between gap-2 mb-2.5">
           <div className="flex items-center gap-2 min-w-0">
             <span
@@ -256,7 +378,11 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
                 darkMode ? "bg-black/25" : "bg-white/75"
               }`}
             >
-              <Calendar className="w-3.5 h-3.5 stroke-[2.2]" />
+              {effectiveStatus === "COMPLETED" ? (
+                <Trophy className="w-3.5 h-3.5 stroke-[2.2]" />
+              ) : (
+                <Flame className="w-3.5 h-3.5 stroke-[2.2]" />
+              )}
             </span>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
@@ -278,21 +404,37 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
             </div>
           </div>
 
-          {/* Streak Badge */}
-          <div
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border-0 shadow-none shrink-0 font-mono text-xs font-black ${
-              darkMode
-                ? "bg-black/25 text-[#fde68a]"
-                : "bg-white/80 text-[#92400E]"
-            }`}
-            title={td("daily.currentStreakLabel", "Current Streak")}
-          >
-            {effectiveStatus === "COMPLETED" ? (
-              <Trophy className="w-3.5 h-3.5 shrink-0 stroke-[2.3]" />
-            ) : (
-              <Flame className="w-3.5 h-3.5 shrink-0 stroke-[2.3]" />
-            )}
-            <span>{effectiveStats.currentStreak}</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={openCalendar}
+              aria-label={td("daily.openCalendarBtn", "Open Daily Calendar")}
+              title={td("daily.openCalendarBtn", "Open Daily Calendar")}
+              className={`w-7 h-7 rounded-full border-0 shadow-none flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95 ${
+                darkMode
+                  ? "bg-black/25 hover:bg-black/45 text-[#fde68a]"
+                  : "bg-white/80 hover:bg-white text-[#92400E]"
+              }`}
+            >
+              <Calendar className="w-4 h-4 stroke-[2.2]" />
+            </button>
+
+            {/* Streak Badge */}
+            <div
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border-0 shadow-none shrink-0 font-mono text-xs font-black ${
+                darkMode
+                  ? "bg-black/25 text-[#fde68a]"
+                  : "bg-white/80 text-[#92400E]"
+              }`}
+              title={td("daily.currentStreakLabel", "Current Streak")}
+            >
+              {effectiveStatus === "COMPLETED" ? (
+                <Trophy className="w-3.5 h-3.5 shrink-0 stroke-[2.3]" />
+              ) : (
+                <Flame className="w-3.5 h-3.5 shrink-0 stroke-[2.3]" />
+              )}
+              <span>{effectiveStats.currentStreak}</span>
+            </div>
           </div>
         </div>
 
@@ -314,21 +456,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
         </div>
       </div>
 
-      <DailyResultModal
-        isOpen={isResultOpen}
-        onClose={() => setIsResultOpen(false)}
-        onReviewBoard={() => {
-          setIsResultOpen(false);
-          launchMasterBoard(true);
-        }}
-        date={daily.date}
-        difficulty={daily.difficulty}
-        status={effectiveStatus}
-        elapsedTime={effectiveElapsed}
-        mistakes={effectiveMistakes}
-        stats={effectiveStats}
-        darkMode={darkMode}
-      />
+      {sharedModals}
     </>
   );
 };

@@ -227,6 +227,7 @@ function reconcileStatsWithCloud(
             mistakes: rec.mistakes,
             hints: rec.hints,
             completedAt: rec.completedAt ?? rec.updatedAt,
+            ...(typeof rec.isArchive === "boolean" ? { isArchive: rec.isArchive } : {}),
           },
           uid,
           referenceDateKey

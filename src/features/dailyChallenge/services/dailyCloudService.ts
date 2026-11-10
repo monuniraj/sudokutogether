@@ -260,6 +260,7 @@ function hydrateDayRecordFromDocData(
         : status === "COMPLETED" && mistakes === 0 && hints === 0,
     completedAt: completedAtMs && completedAtMs > 0 ? completedAtMs : null,
     updatedAt,
+    ...(typeof rec.isArchive === "boolean" ? { isArchive: rec.isArchive } : {}),
   };
 }
 
@@ -493,6 +494,7 @@ export async function recordDailyCompletionToCloud(
     isPerfect: Boolean(record.isPerfect),
     completedAt,
     updatedAt,
+    ...(typeof record.isArchive === "boolean" ? { isArchive: record.isArchive } : {}),
   };
 
   const challengePayload: Record<string, unknown> = {

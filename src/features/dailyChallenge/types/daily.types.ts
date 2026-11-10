@@ -59,6 +59,8 @@ export interface DayRecord {
   completedAt: number | null;
   /** Epoch timestamp (ms) of last update */
   updatedAt: number;
+  /** True when solved retrospectively via Archive Play (does not count toward streaks) */
+  isArchive?: boolean;
 }
 
 export interface DailyStats {
@@ -118,5 +120,7 @@ export interface RecordDailyCompletionInput {
   hints: number;
   /** Optional completion timestamp in epoch ms (defaults to Date.now()) */
   completedAt?: number;
+  /** True when completed retrospectively via Archive Play (excluded from streaks) */
+  isArchive?: boolean;
 }
 
