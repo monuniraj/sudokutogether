@@ -37,6 +37,7 @@ const ALIAS_MAP: Record<string, TranslationKey> = {
   MEDIUM: 'medium',
   HARD: 'hard',
   EXPERT: 'expert',
+  MASTER: 'master',
   SETPIN: 'setPin',
   SET4DIGITPIN: 'setPin',
   INCOGNITOMODE: 'incognitoMode',
@@ -48,18 +49,18 @@ const ALIAS_MAP: Record<string, TranslationKey> = {
 /**
  * Industry-standard localized puzzle difficulty terms across all 9 supported locales.
  */
-export const DIFFICULTY_TRANSLATIONS: Record<string, { easy: string; medium: string; hard: string; expert: string }> = {
-  en: { easy: "Easy", medium: "Medium", hard: "Hard", expert: "Expert" },
-  hi: { easy: "आसान", medium: "मध्यम", hard: "कठिन", expert: "विशेषज्ञ" },
-  es: { easy: "Fácil", medium: "Medio", hard: "Difícil", expert: "Experto" },
-  fr: { easy: "Facile", medium: "Moyen", hard: "Difficile", expert: "Expert" },
-  de: { easy: "Einfach", medium: "Mittel", hard: "Schwer", expert: "Experte" },
-  it: { easy: "Facile", medium: "Medio", hard: "Difficile", expert: "Esperto" },
-  pt: { easy: "Fácil", medium: "Médio", hard: "Difícil", expert: "Especialista" },
-  'pt-BR': { easy: "Fácil", medium: "Médio", hard: "Difícil", expert: "Especialista" },
-  ja: { easy: "かんたん", medium: "ふつう", hard: "むずかしい", expert: "エキスパート" },
-  ru: { easy: "Легкий", medium: "Средний", hard: "Сложный", expert: "Эксперт" },
-  ko: { easy: "쉬움", medium: "보통", hard: "어려움", expert: "전문가" },
+export const DIFFICULTY_TRANSLATIONS: Record<string, { easy: string; medium: string; hard: string; expert: string; master?: string }> = {
+  en: { easy: "Easy", medium: "Medium", hard: "Hard", expert: "Expert", master: "Master" },
+  hi: { easy: "आसान", medium: "मध्यम", hard: "कठिन", expert: "विशेषज्ञ", master: "मास्टर" },
+  es: { easy: "Fácil", medium: "Medio", hard: "Difícil", expert: "Experto", master: "Maestro" },
+  fr: { easy: "Facile", medium: "Moyen", hard: "Difficile", expert: "Expert", master: "Maître" },
+  de: { easy: "Einfach", medium: "Mittel", hard: "Schwer", expert: "Experte", master: "Meister" },
+  it: { easy: "Facile", medium: "Medio", hard: "Difficile", expert: "Esperto", master: "Maestro" },
+  pt: { easy: "Fácil", medium: "Médio", hard: "Difícil", expert: "Especialista", master: "Mestre" },
+  'pt-BR': { easy: "Fácil", medium: "Médio", hard: "Difícil", expert: "Especialista", master: "Mestre" },
+  ja: { easy: "かんたん", medium: "ふつう", hard: "むずかしい", expert: "エキスパート", master: "マスター" },
+  ru: { easy: "Легкий", medium: "Средний", hard: "Сложный", expert: "Эксперт", master: "Мастер" },
+  ko: { easy: "쉬움", medium: "보통", hard: "어려움", expert: "전문가", master: "마스터" },
 };
 
 /**
@@ -285,10 +286,11 @@ export function useTranslation() {
     (key: TranslationKey | string, params?: Record<string, string | number>): string => {
       // Direct difficulty key interception across all 9 locales
       const lowerKey = String(key).toLowerCase();
-      if (lowerKey === 'easy' || lowerKey === 'medium' || lowerKey === 'hard' || lowerKey === 'expert') {
+      if (lowerKey === 'easy' || lowerKey === 'medium' || lowerKey === 'hard' || lowerKey === 'expert' || lowerKey === 'master') {
         const diffDict = DIFFICULTY_TRANSLATIONS[lang] || DIFFICULTY_TRANSLATIONS['en'];
-        if (diffDict && diffDict[lowerKey as 'easy' | 'medium' | 'hard' | 'expert']) {
-          return diffDict[lowerKey as 'easy' | 'medium' | 'hard' | 'expert'];
+        const diffVal = diffDict?.[lowerKey as 'easy' | 'medium' | 'hard' | 'expert' | 'master'];
+        if (diffVal) {
+          return diffVal;
         }
       }
 

@@ -11,7 +11,7 @@
  *   - Today unplayed/active (accent highlight ring + difficulty tag -> launches puzzle)
  *   - Past missed days (Archive Play on master board without incrementing streaks)
  *   - Future days (muted, locked, unclickable)
- * - All user-facing strings wrapped with `t('daily.<key>', 'English Fallback')`.
+ * - All user-facing strings wrapped with `t(...)` across all 9 supported languages.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -78,18 +78,18 @@ function formatDurationMMSS(totalSeconds: number): string {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-function getShortDifficultyLabel(difficulty: DailyDifficulty): string {
+function getShortDifficultyKey(difficulty: DailyDifficulty): string {
   switch (difficulty) {
     case "EASY":
-      return "EASY";
+      return "dailyDiffShortEasy";
     case "MEDIUM":
-      return "MED";
+      return "dailyDiffShortMedium";
     case "HARD":
-      return "HARD";
+      return "dailyDiffShortHard";
     case "EXPERT":
-      return "EXP";
+      return "dailyDiffShortExpert";
     case "MASTER":
-      return "MSTR";
+      return "dailyDiffShortMaster";
   }
 }
 
@@ -127,17 +127,6 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
       setViewMonthIndex(m - 1);
     }
   }, [isOpen, initialDate, todayKey]);
-
-  const td = useCallback(
-    (key: string, fallback: string): string => {
-      const val = (t as (k: string) => string)(key);
-      if (!val || val === key || /^daily\./i.test(val)) {
-        return fallback;
-      }
-      return val;
-    },
-    [t]
-  );
 
   // Close cleanly on Escape key
   useEffect(() => {
@@ -186,15 +175,15 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
 
   const weekdayHeaders = useMemo(
     () => [
-      td("daily.weekdayMon", "Mon"),
-      td("daily.weekdayTue", "Tue"),
-      td("daily.weekdayWed", "Wed"),
-      td("daily.weekdayThu", "Thu"),
-      td("daily.weekdayFri", "Fri"),
-      td("daily.weekdaySat", "Sat"),
-      td("daily.weekdaySun", "Sun"),
+      t("dailyWeekdayMon"),
+      t("dailyWeekdayTue"),
+      t("dailyWeekdayWed"),
+      t("dailyWeekdayThu"),
+      t("dailyWeekdayFri"),
+      t("dailyWeekdaySat"),
+      t("dailyWeekdaySun"),
     ],
-    [td]
+    [t]
   );
 
   const calendarCells = useMemo(() => {
@@ -304,10 +293,10 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
                 id="daily-calendar-modal-title"
                 className="font-sans font-black text-sm sm:text-base leading-tight truncate"
               >
-                {td("daily.calendarTitle", "Daily Challenge Calendar")}
+                {t("dailyCalendarTitle")}
               </h2>
               <p className="font-sans text-[11px] font-semibold opacity-65 truncate">
-                {td("daily.calendarSubtitle", "Select any past day for Archive Play")}
+                {t("dailyCalendarSubtitle")}
               </p>
             </div>
           </div>
@@ -315,7 +304,7 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            aria-label={td("daily.closeBtn", "Close")}
+            aria-label={t("closeBtn")}
             className={`w-8 h-8 rounded-2xl border-0 shadow-none flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95 ${
               darkMode
                 ? "bg-[#222225] hover:bg-[#2c2c30] text-zinc-300"
@@ -329,45 +318,45 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
         {/* Career Summary Strip: Total Solved & Longest Streak */}
         <div className="grid grid-cols-2 gap-2 mb-3.5">
           <div
-            className={`rounded-2xl border-0 shadow-none px-3 py-2 flex items-center justify-between ${
+            className={`rounded-2xl border-0 shadow-none px-2.5 sm:px-3 py-2 flex items-center justify-between gap-1.5 min-w-0 ${
               darkMode
                 ? "bg-[#222225] text-zinc-100"
                 : "bg-[#F4EFE6] text-[#1C1917]"
             }`}
           >
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold">
+            <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-bold min-w-0">
               <Trophy
                 className={`w-3.5 h-3.5 shrink-0 ${
                   darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
                 }`}
               />
-              <span className={darkMode ? "text-zinc-300" : "text-stone-700"}>
-                {td("daily.totalSolvedLabel", "Total Solved")}
+              <span className={`truncate ${darkMode ? "text-zinc-300" : "text-stone-700"}`}>
+                {t("dailyTotalSolvedLabel")}
               </span>
             </span>
-            <span className="font-mono font-black text-base">
+            <span className="font-mono font-black text-base shrink-0">
               {stats.totalCompleted}
             </span>
           </div>
 
           <div
-            className={`rounded-2xl border-0 shadow-none px-3 py-2 flex items-center justify-between ${
+            className={`rounded-2xl border-0 shadow-none px-2.5 sm:px-3 py-2 flex items-center justify-between gap-1.5 min-w-0 ${
               darkMode
                 ? "bg-[#222225] text-zinc-100"
                 : "bg-[#F4EFE6] text-[#1C1917]"
             }`}
           >
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold">
+            <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-bold min-w-0">
               <Flame
                 className={`w-3.5 h-3.5 shrink-0 ${
                   darkMode ? "text-amber-400" : "text-[#92400E]"
                 }`}
               />
-              <span className={darkMode ? "text-zinc-300" : "text-stone-700"}>
-                {td("daily.longestStreakShort", "Best Streak")}
+              <span className={`truncate ${darkMode ? "text-zinc-300" : "text-stone-700"}`}>
+                {t("dailyLongestStreakShort")}
               </span>
             </span>
-            <span className="font-mono font-black text-base">
+            <span className="font-mono font-black text-base shrink-0">
               {stats.longestStreak}
             </span>
           </div>
@@ -384,8 +373,8 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
           <button
             type="button"
             onClick={handlePrevMonth}
-            aria-label={td("daily.prevMonthBtn", "Previous Month")}
-            className={`w-8 h-8 rounded-xl border-0 shadow-none flex items-center justify-center cursor-pointer transition-colors active:scale-95 ${
+            aria-label={t("dailyPrevMonthBtn")}
+            className={`w-8 h-8 rounded-xl border-0 shadow-none flex items-center justify-center shrink-0 cursor-pointer transition-colors active:scale-95 ${
               darkMode
                 ? "hover:bg-[#2c2c30] text-zinc-200"
                 : "hover:bg-[#EAE3D5] text-stone-700"
@@ -394,15 +383,15 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
             <ChevronLeft className="w-4 h-4 stroke-[2.4]" />
           </button>
 
-          <span className="font-sans font-black text-sm tracking-tight capitalize">
+          <span className="font-sans font-black text-sm tracking-tight capitalize truncate px-1 text-center">
             {monthTitle}
           </span>
 
           <button
             type="button"
             onClick={handleNextMonth}
-            aria-label={td("daily.nextMonthBtn", "Next Month")}
-            className={`w-8 h-8 rounded-xl border-0 shadow-none flex items-center justify-center cursor-pointer transition-colors active:scale-95 ${
+            aria-label={t("dailyNextMonthBtn")}
+            className={`w-8 h-8 rounded-xl border-0 shadow-none flex items-center justify-center shrink-0 cursor-pointer transition-colors active:scale-95 ${
               darkMode
                 ? "hover:bg-[#2c2c30] text-zinc-200"
                 : "hover:bg-[#EAE3D5] text-stone-700"
@@ -417,7 +406,7 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
           {weekdayHeaders.map((label, idx) => (
             <div
               key={idx}
-              className={`text-center font-sans text-[10px] font-bold uppercase tracking-wider ${
+              className={`text-center font-sans text-[10px] font-bold uppercase tracking-tight sm:tracking-wider truncate ${
                 darkMode ? "text-zinc-400" : "text-stone-700"
               }`}
             >
@@ -485,7 +474,13 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
                 type="button"
                 disabled={isFuture}
                 onClick={() => handleCellClick(dateKey)}
-                aria-label={`${dateKey}${isCompleted ? " completed" : isToday ? " today" : ""}`}
+                aria-label={
+                  isCompleted
+                    ? t("dailyTileCompletedAria", { date: dateKey })
+                    : isToday
+                      ? t("dailyTileTodayAria", { date: dateKey })
+                      : dateKey
+                }
                 className={`h-[52px] rounded-xl border-0 shadow-none p-1 flex flex-col items-center justify-between transition-transform active:scale-95 ${tileClasses} ${todayRingClasses}`}
               >
                 <span className="font-mono text-xs font-black leading-none mt-0.5">
@@ -509,7 +504,7 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
                   <div className="flex flex-col items-center leading-none gap-0.5">
                     <XCircle className="w-2.5 h-2.5 shrink-0 stroke-[2.4]" />
                     <span className="font-mono text-[8px] font-bold uppercase">
-                      {td("daily.failedShort", "3/3")}
+                      3/3
                     </span>
                   </div>
                 ) : isInProgress ? (
@@ -524,8 +519,8 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
                     </span>
                   </div>
                 ) : isToday ? (
-                  <span className="font-mono text-[9px] font-black uppercase tracking-tight mb-0.5">
-                    {getShortDifficultyLabel(dayDifficulty)}
+                  <span className="font-mono text-[8.5px] sm:text-[9px] font-black uppercase tracking-tight mb-0.5 max-w-full truncate px-0.5">
+                    {t(getShortDifficultyKey(dayDifficulty))}
                   </span>
                 ) : (
                   <span className="w-1.5 h-1.5 rounded-full bg-current opacity-35 mb-1" />
@@ -543,16 +538,16 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
               : "bg-[#F4EFE6] text-stone-700"
           }`}
         >
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1">
+          <div className="flex items-center justify-between gap-x-2.5 gap-y-1 flex-wrap">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap shrink-0">
               <Trophy
                 className={`w-3 h-3 shrink-0 ${
                   darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
                 }`}
               />
-              <span>{td("daily.legendCompleted", "Completed")}</span>
+              <span>{t("dailyLegendCompleted")}</span>
             </span>
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap shrink-0">
               <span
                 className={`w-2.5 h-2.5 rounded-full inline-block ${
                   darkMode
@@ -560,38 +555,35 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
                     : "bg-[#FEF3C7] ring-2 ring-[#D97706]"
                 }`}
               />
-              <span>{td("daily.legendToday", "Today")}</span>
+              <span>{t("dailyLegendToday")}</span>
             </span>
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap shrink-0">
               <Clock
                 className={`w-3 h-3 shrink-0 ${
                   darkMode ? "text-sky-400" : "text-[#0369A1]"
                 }`}
               />
-              <span>{td("daily.legendInProgress", "In Progress")}</span>
+              <span>{t("dailyLegendInProgress")}</span>
             </span>
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap shrink-0">
               <span
                 className={`w-2 h-2 rounded-full inline-block ${
                   darkMode ? "bg-zinc-400" : "bg-stone-500"
                 }`}
               />
-              <span>{td("daily.legendArchive", "Archive")}</span>
+              <span>{t("dailyLegendArchive")}</span>
             </span>
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap shrink-0">
               <Lock
                 className={`w-3 h-3 shrink-0 ${
                   darkMode ? "text-zinc-500" : "text-stone-500"
                 }`}
               />
-              <span>{td("daily.legendLocked", "Locked")}</span>
+              <span>{t("dailyLegendLocked")}</span>
             </span>
           </div>
           <p className={`leading-snug ${darkMode ? "text-zinc-400" : "text-stone-600"}`}>
-            {td(
-              "daily.archiveStreakNote",
-              "Past archive puzzles save your solve time but do not increment active streaks."
-            )}
+            {t("dailyArchiveStreakNote")}
           </p>
         </div>
       </div>

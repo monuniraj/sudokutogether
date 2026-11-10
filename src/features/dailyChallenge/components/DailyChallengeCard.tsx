@@ -8,7 +8,7 @@
  * - Opens `DailyResultModal` when viewing completed/failed results & streak stats.
  * - Pastel borderless, shadowless surfaces with smooth curved corners.
  * - Strictly Lucide React SVG vector icons (zero emojis).
- * - All user-facing strings wrapped with `t('daily.<key>', 'English Fallback')`.
+ * - All user-facing strings wrapped with `t(...)` across all 9 supported languages.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -170,17 +170,6 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
     liveSnapshot.progress?.mistakesCount ?? daily.mistakes;
   const effectiveStats = liveSnapshot.stats;
 
-  const td = useCallback(
-    (key: string, fallback: string): string => {
-      const val = (t as (k: string) => string)(key);
-      if (!val || val === key || /^daily\./i.test(val)) {
-        return fallback;
-      }
-      return val;
-    },
-    [t]
-  );
-
   const launchMasterBoard = useCallback(
     (options?: {
       date?: string;
@@ -315,12 +304,12 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
 
   const ctaLabel =
     effectiveStatus === "IN_PROGRESS"
-      ? `${td("daily.resumeCta", "Resume")} (${formattedTimer})`
+      ? `${t("dailyResumeCta")} (${formattedTimer})`
       : effectiveStatus === "COMPLETED"
-        ? td("daily.completedCta", "Completed (View Stats)")
+        ? t("dailyCompletedCta")
         : effectiveStatus === "FAILED"
-          ? td("daily.failedCta", "Failed (View Stats)")
-          : td("daily.playTodayCta", "Play Today");
+          ? t("dailyFailedCta")
+          : t("dailyPlayTodayCta");
 
   const completedLightTextClass = getCompletedCtaLightTextClass(daily.difficulty);
 
@@ -344,8 +333,8 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
           type="button"
           id="desktop-daily-challenge-btn"
           onClick={openCalendar}
-          aria-label={td("daily.openCalendarBtn", "Open Daily Calendar")}
-          title={td("daily.openCalendarBtn", "Open Daily Calendar")}
+          aria-label={t("dailyOpenCalendarBtn")}
+          title={t("dailyOpenCalendarBtn")}
           className={`flex-1 min-w-0 h-[38px] px-2.5 rounded-xl border-0 shadow-none outline-none flex items-center justify-between gap-1.5 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
             darkMode
               ? "bg-[#451a03]/85 hover:bg-[#78350f]/90 text-[#fde68a]"
@@ -355,7 +344,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
           <span className="inline-flex items-center gap-1.5 min-w-0">
             <Calendar className="w-3.5 h-3.5 shrink-0 stroke-[2.2]" />
             <span className="font-sans font-bold text-[11px] tracking-tight truncate leading-none">
-              {td("daily.cardTitle", "Daily Challenge")}
+              {t("dailyChallengeLabel")}
             </span>
           </span>
           <span className="inline-flex items-center gap-1 shrink-0 font-mono text-[10px] font-black opacity-85">
@@ -399,17 +388,17 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
               )}
             </span>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <span className="font-sans font-black text-xs sm:text-sm leading-none truncate">
-                  {td("daily.cardTitle", "Daily Challenge")}
+                  {t("dailyChallengeLabel")}
                 </span>
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border-0 shadow-none ${getDifficultyBadgeClasses(
+                  className={`inline-flex items-center shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase border-0 shadow-none ${getDifficultyBadgeClasses(
                     daily.difficulty,
                     darkMode
                   )}`}
                 >
-                  {daily.difficulty}
+                  {t(daily.difficulty.toLowerCase())}
                 </span>
               </div>
               <span className="font-mono text-[11px] font-semibold opacity-80 block mt-0.5">
@@ -422,8 +411,8 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
             <button
               type="button"
               onClick={openCalendar}
-              aria-label={td("daily.openCalendarBtn", "Open Daily Calendar")}
-              title={td("daily.openCalendarBtn", "Open Daily Calendar")}
+              aria-label={t("dailyOpenCalendarBtn")}
+              title={t("dailyOpenCalendarBtn")}
               className={`w-7 h-7 rounded-full border-0 shadow-none flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95 ${
                 darkMode
                   ? "bg-black/25 hover:bg-black/45 text-[#fde68a]"
@@ -440,7 +429,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
                   ? "bg-black/25 text-[#fde68a]"
                   : "bg-white/80 text-[#92400E]"
               }`}
-              title={td("daily.currentStreakLabel", "Current Streak")}
+              title={t("dailyCurrentStreakLabel")}
             >
               {effectiveStatus === "COMPLETED" ? (
                 <Trophy
@@ -463,9 +452,9 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
             e.stopPropagation();
             handlePlayOrResume();
           }}
-          className={`w-full py-2.5 px-3.5 rounded-xl border-0 flex items-center justify-between gap-2 font-sans font-black text-xs sm:text-sm transition-all duration-150 cursor-pointer active:scale-[0.98] ${ctaButtonClasses}`}
+          className={`w-full min-w-0 py-2.5 px-3 sm:px-3.5 rounded-xl border-0 flex items-center justify-between gap-2 font-sans font-black text-xs sm:text-sm whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-[0.98] ${ctaButtonClasses}`}
         >
-          <span className="inline-flex items-center gap-2 truncate">
+          <span className="inline-flex items-center gap-2 flex-1 min-w-0">
             {effectiveStatus === "FAILED" ? (
               <XCircle className="w-4 h-4 shrink-0 stroke-[2.3]" />
             ) : effectiveStatus !== "COMPLETED" ? (

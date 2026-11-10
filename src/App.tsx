@@ -16279,13 +16279,13 @@ export default function App() {
                         <Sudoku3DWatermark difficulty={difficulty} />
 
                         <div className="text-center relative z-10 max-w-full">
-                          <span className="text-[10px] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80">
+                          <span className="text-[10px] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80 truncate max-w-full">
                             {t('home_record_banner_title')}
                           </span>
-                          <h2 className="text-xl md:text-3xl uppercase tracking-tight flex items-center justify-center gap-2 font-sans font-black">
-                            <Timer className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3.5] shrink-0" />
-                            <span>{t('home_record_banner_best_time')}:</span>
-                            <span className="font-mono font-black text-2xl md:text-3xl">
+                          <h2 className="text-base sm:text-xl md:text-2xl uppercase tracking-tight flex flex-nowrap items-center justify-center gap-1.5 sm:gap-2 font-sans font-black whitespace-nowrap max-w-full">
+                            <Timer className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3.2] shrink-0" />
+                            <span className="truncate">{t('home_record_banner_best_time')}:</span>
+                            <span className="font-mono font-black text-lg sm:text-2xl whitespace-nowrap shrink-0">
                               {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
                             </span>
                           </h2>
@@ -16636,8 +16636,8 @@ export default function App() {
                               }}
                               className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${darkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-700"
                                 }`}
-                              aria-label={challengeMode ? "View Match Results & Rematch" : "View Game Summary"}
-                              title={challengeMode ? "View Match Results & Rematch" : "View Game Summary"}
+                              aria-label={challengeMode ? t("hudViewMatchResultsTooltip") : t("hudViewGameSummaryTooltip")}
+                              title={challengeMode ? t("hudViewMatchResultsTooltip") : t("hudViewGameSummaryTooltip")}
                               id="hud-results-summary-button"
                             >
                               <Trophy className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
@@ -17045,7 +17045,7 @@ export default function App() {
                               {/* Hero Metric */}
                               <div className="flex flex-nowrap items-center justify-center gap-1.5 max-w-full whitespace-nowrap">
                                 <Timer className="w-3.5 h-3.5 stroke-[2.2] opacity-90 shrink-0" />
-                                <span className="font-sans font-bold text-[11px] sm:text-xs uppercase tracking-tight opacity-90 leading-tight whitespace-nowrap">
+                                <span className="font-sans font-bold text-[11px] sm:text-xs uppercase tracking-tight opacity-90 leading-tight whitespace-nowrap min-w-0 truncate">
                                   {t("home_record_banner_best_time")}:
                                 </span>
                                 <span className="font-mono font-bold text-sm sm:text-base tabular-nums tracking-wide leading-tight whitespace-nowrap shrink-0">

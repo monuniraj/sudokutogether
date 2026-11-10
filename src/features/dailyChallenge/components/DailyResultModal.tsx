@@ -11,7 +11,7 @@
  * - Clickable date badge & bottom "View Calendar & History" wired to `DailyCalendarModal`,
  *   plus `<ChevronLeft />` Back navigation when opened from the calendar.
  * - Strictly Lucide React SVG vector icons (zero emojis).
- * - All user-facing strings wrapped with `t('daily.<key>', 'English Fallback')`.
+ * - All user-facing strings wrapped with `t(...)` across all 9 supported languages.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -158,17 +158,6 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
     return null;
   }, [uid]);
 
-  const td = useCallback(
-    (key: string, fallback: string): string => {
-      const val = (t as (k: string) => string)(key);
-      if (!val || val === key || /^daily\./i.test(val)) {
-        return fallback;
-      }
-      return val;
-    },
-    [t]
-  );
-
   useEffect(() => {
     if (!isOpen) {
       setCopied(false);
@@ -236,25 +225,26 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
     const formattedTime = formatDurationMMSS(elapsedTime);
     const statusLabel =
       status === "COMPLETED"
-        ? `${td("daily.solvedIn", "Solved in")} ${formattedTime}`
+        ? t("dailySolvedIn", { time: formattedTime })
         : status === "FAILED"
-          ? td("daily.challengeFailed", "Challenge Failed")
-          : td("daily.inProgress", "In Progress");
+          ? t("dailyChallengeFailed")
+          : t("dailyInProgress");
 
     const shareUrl = "https://sudokusync.com";
+    const shareTitle = t("dailyShareTitle", { date });
     const shareText = [
-      `SudokuSync Daily Challenge (${date})`,
-      `${td("daily.difficultyLabel", "Difficulty")}: ${difficulty}`,
+      shareTitle,
+      `${t("difficultyLabel")}: ${t(difficulty.toLowerCase())}`,
       statusLabel,
-      `${td("daily.mistakesLabel", "Mistakes")}: ${mistakes}/3`,
-      `${td("daily.streakLabel", "Streak")}: ${stats.currentStreak}`,
+      `${t("errsLabel")}: ${mistakes}/3`,
+      `${t("dailyStreakLabel")}: ${stats.currentStreak}`,
       shareUrl,
     ].join("\n");
 
     try {
       if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
         await navigator.share({
-          title: `SudokuSync Daily Challenge — ${date}`,
+          title: shareTitle,
           text: shareText,
           url: shareUrl,
         });
@@ -289,7 +279,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
         window.setTimeout(() => setCopied(false), 2500);
       } catch {}
     }
-  }, [date, difficulty, elapsedTime, mistakes, stats.currentStreak, status, td]);
+  }, [date, difficulty, elapsedTime, mistakes, stats.currentStreak, status, t]);
 
   const isCompleted = status === "COMPLETED";
   const isFailed = status === "FAILED";
@@ -301,7 +291,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
     if (isCompleted) {
       return {
         uid: resolvedUid || "you",
-        playerName: td("daily.youLabel", "You"),
+        playerName: t("dailyYouLabel"),
         isGuest: false,
         time: elapsedTime,
         mistakes,
@@ -314,7 +304,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
     leaderboard.userEntry,
     isCompleted,
     resolvedUid,
-    td,
+    t,
     elapsedTime,
     mistakes,
   ]);
@@ -363,7 +353,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
               <button
                 type="button"
                 onClick={onBackToCalendar}
-                aria-label={td("daily.backToCalendarBtn", "Back to Calendar")}
+                aria-label={t("dailyBackToCalendarBtn")}
                 className={`w-8 h-8 rounded-2xl border-0 shadow-none flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95 ${
                   darkMode
                     ? "bg-[#222225] hover:bg-[#2c2c30] text-zinc-200"
@@ -396,18 +386,18 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                 className="font-sans font-black text-sm sm:text-base leading-tight truncate"
               >
                 {isCompleted
-                  ? td("daily.completedTitle", "Daily Challenge Completed")
+                  ? t("dailyCompletedTitle")
                   : isFailed
-                    ? td("daily.failedTitle", "Daily Challenge Failed")
-                    : td("daily.statsTitle", "Daily Challenge Stats")}
+                    ? t("dailyFailedTitle")
+                    : t("dailyStatsTitle")}
               </h2>
 
-              <div className="flex items-center gap-1.5 mt-1">
+              <div className="flex items-center flex-wrap gap-1.5 mt-1">
                 <button
                   type="button"
                   onClick={onOpenCalendarHistory}
                   disabled={!onOpenCalendarHistory}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border-0 shadow-none font-mono text-[11px] font-bold transition-colors ${
+                  className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full border-0 shadow-none font-mono text-[11px] font-bold transition-colors ${
                     onOpenCalendarHistory
                       ? darkMode
                         ? "bg-[#222225] hover:bg-[#2c2c30] text-zinc-300 cursor-pointer"
@@ -422,12 +412,12 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                 </button>
 
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase border-0 shadow-none ${getDifficultyBadgeClasses(
+                  className={`inline-flex items-center shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase border-0 shadow-none ${getDifficultyBadgeClasses(
                     difficulty,
                     darkMode
                   )}`}
                 >
-                  {difficulty}
+                  {t(difficulty.toLowerCase())}
                 </span>
               </div>
             </div>
@@ -436,7 +426,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            aria-label={td("daily.closeBtn", "Close")}
+            aria-label={t("closeBtn")}
             className={`w-8 h-8 rounded-2xl border-0 shadow-none flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95 ${
               darkMode
                 ? "bg-[#222225] hover:bg-[#2c2c30] text-zinc-300"
@@ -451,14 +441,14 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
         <div className="w-full grid grid-cols-3 gap-2 mb-3.5">
           {/* Box 1: Solved Time + PB */}
           <div
-            className={`rounded-2xl border-0 shadow-none px-2.5 py-2 flex flex-col items-center justify-center min-w-0 ${
+            className={`rounded-2xl border-0 shadow-none px-1.5 sm:px-2.5 py-2 flex flex-col items-center justify-center min-w-0 ${
               darkMode
                 ? "bg-[#222225] text-zinc-100"
                 : "bg-[#F4EFE6] text-[#1C1917]"
             }`}
           >
             <div
-              className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${
+              className={`flex items-center justify-center gap-1 max-w-full min-w-0 text-[10px] font-bold uppercase tracking-tight sm:tracking-wider ${
                 darkMode ? "text-zinc-400" : "text-stone-600"
               }`}
             >
@@ -467,17 +457,17 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                   darkMode ? "text-sky-400" : "text-[#0369A1]"
                 }`}
               />
-              <span>{td("daily.timeLabel", "Time")}</span>
+              <span className="truncate">{t("timeLabel")}</span>
             </div>
             <div className="font-mono font-black text-sm sm:text-base leading-tight mt-0.5">
               {formatDurationMMSS(elapsedTime)}
             </div>
             <span
-              className={`font-mono text-[10px] font-semibold mt-0.5 leading-none truncate ${
+              className={`font-mono text-[10px] font-semibold mt-0.5 leading-none max-w-full truncate ${
                 darkMode ? "text-zinc-400" : "text-stone-600"
               }`}
             >
-              {td("daily.pbShort", "PB")}:{" "}
+              {t("dailyPbShort")}:{" "}
               {stats.bestTimeSeconds !== null
                 ? formatDurationMMSS(stats.bestTimeSeconds)
                 : "--:--"}
@@ -486,14 +476,14 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
 
           {/* Box 2: Mistakes */}
           <div
-            className={`rounded-2xl border-0 shadow-none px-2.5 py-2 flex flex-col items-center justify-center min-w-0 ${
+            className={`rounded-2xl border-0 shadow-none px-1.5 sm:px-2.5 py-2 flex flex-col items-center justify-center min-w-0 ${
               darkMode
                 ? "bg-[#222225] text-zinc-100"
                 : "bg-[#F4EFE6] text-[#1C1917]"
             }`}
           >
             <div
-              className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${
+              className={`flex items-center justify-center gap-1 max-w-full min-w-0 text-[10px] font-bold uppercase tracking-tight sm:tracking-wider ${
                 darkMode ? "text-zinc-400" : "text-stone-600"
               }`}
             >
@@ -502,30 +492,30 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                   darkMode ? "text-rose-400" : "text-[#BE123C]"
                 }`}
               />
-              <span>{td("daily.mistakesLabel", "Mistakes")}</span>
+              <span className="truncate">{t("errsLabel")}</span>
             </div>
             <div className="font-mono font-black text-sm sm:text-base leading-tight mt-0.5">
               {mistakes} / 3
             </div>
             <span
-              className={`font-sans text-[10px] font-semibold mt-0.5 leading-none truncate ${
+              className={`font-sans text-[10px] font-semibold mt-0.5 leading-none max-w-full truncate ${
                 darkMode ? "text-zinc-400" : "text-stone-600"
               }`}
             >
-              {stats.totalCompleted} {td("daily.solvedCountShort", "solved")}
+              {t("dailySolvedCountShort", { count: stats.totalCompleted })}
             </span>
           </div>
 
           {/* Box 3: Streak (explicit Streak header to avoid confusion with Rank) */}
           <div
-            className={`rounded-2xl border-0 shadow-none px-2.5 py-2 flex flex-col items-center justify-center min-w-0 ${
+            className={`rounded-2xl border-0 shadow-none px-1.5 sm:px-2.5 py-2 flex flex-col items-center justify-center min-w-0 ${
               darkMode
                 ? "bg-[#222225] text-zinc-100"
                 : "bg-[#F4EFE6] text-[#1C1917]"
             }`}
           >
             <div
-              className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${
+              className={`flex items-center justify-center gap-1 max-w-full min-w-0 text-[10px] font-bold uppercase tracking-tight sm:tracking-wider ${
                 darkMode ? "text-zinc-400" : "text-stone-600"
               }`}
             >
@@ -542,17 +532,17 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                   }`}
                 />
               )}
-              <span>{td("daily.streakLabel", "Streak")}</span>
+              <span className="truncate">{t("dailyStreakLabel")}</span>
             </div>
             <div className="font-mono font-black text-sm sm:text-base leading-tight mt-0.5">
               {stats.currentStreak}
             </div>
             <span
-              className={`font-mono text-[10px] font-semibold mt-0.5 leading-none truncate ${
+              className={`font-mono text-[10px] font-semibold mt-0.5 leading-none max-w-full truncate ${
                 darkMode ? "text-zinc-400" : "text-stone-600"
               }`}
             >
-              {td("daily.bestShort", "Best")}: {stats.longestStreak}
+              {t("dailyBestShort", { count: stats.longestStreak })}
             </span>
           </div>
         </div>
@@ -567,24 +557,24 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
         >
           {/* Leaderboard Section Header */}
           <div
-            className={`px-3.5 py-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider border-0 ${
+            className={`px-3.5 py-2 flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-wider border-0 ${
               darkMode
                 ? "bg-[#27272a] text-zinc-300"
                 : "bg-[#EDE6DA] text-stone-600"
             }`}
           >
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 min-w-0">
               <Trophy
                 className={`w-3.5 h-3.5 shrink-0 ${
                   darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
                 }`}
               />
-              <span>
-                {td("daily.globalLeaderboardTitle", "Global Daily Leaderboard")}
+              <span className="truncate">
+                {t("dailyGlobalLeaderboardTitle")}
               </span>
             </span>
-            <span className="font-mono text-[10px] opacity-75">
-              {td("daily.top20Badge", "Top 20")}
+            <span className="font-mono text-[10px] opacity-75 shrink-0 whitespace-nowrap">
+              {t("dailyTop20Badge")}
             </span>
           </div>
 
@@ -601,16 +591,13 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                 <Users className="w-4 h-4 stroke-[2.2]" />
               </div>
               <p className="font-sans text-xs font-bold leading-snug max-w-[270px] opacity-80">
-                {td(
-                  "daily.signInLeaderboardPrompt",
-                  "Sign in with Google to rank on the Global Daily Leaderboard"
-                )}
+                {t("dailySignInLeaderboardPrompt")}
               </p>
             </div>
           ) : isLoadingLeaderboard ? (
             <div className="h-[130px] flex items-center justify-center gap-2 text-xs font-semibold opacity-70">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>{td("daily.loadingLeaderboard", "Loading standings...")}</span>
+              <span>{t("dailyLoadingLeaderboard")}</span>
             </div>
           ) : (
             <>
@@ -622,10 +609,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
               >
                 {leaderboard.entries.length === 0 ? (
                   <div className="py-7 px-4 text-center text-xs font-semibold opacity-70">
-                    {td(
-                      "daily.noCompletionsYet",
-                      "No finishers recorded yet today. Claim the #1 spot!"
-                    )}
+                    {t("dailyNoCompletionsYet")}
                   </div>
                 ) : (
                   leaderboard.entries.map((entry, idx) => {
@@ -667,7 +651,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
 
                           <span className="font-sans font-bold truncate">
                             {isMe
-                              ? `${entry.playerName} (${td("daily.youLabel", "You")})`
+                              ? `${entry.playerName} (${t("dailyYouLabel")})`
                               : entry.playerName}
                           </span>
 
@@ -679,7 +663,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                                   : "bg-[#EDE8DE] text-stone-600"
                               }`}
                             >
-                              {td("daily.guestTag", "Guest")}
+                              {t("dailyGuestTag")}
                             </span>
                           )}
                         </div>
@@ -720,10 +704,10 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                     </span>
                     <div className="min-w-0">
                       <span className="font-sans font-black text-xs block leading-tight truncate">
-                        {td("daily.youLabel", "You")}
+                        {t("dailyYouLabel")}
                       </span>
-                      <span className="font-sans text-[10px] font-semibold opacity-70 block leading-tight">
-                        {td("daily.yourStandingLabel", "Your Standing")}
+                      <span className="font-sans text-[10px] font-semibold opacity-70 block leading-tight truncate">
+                        {t("dailyYourStandingLabel")}
                       </span>
                     </div>
                   </div>
@@ -747,7 +731,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
           <button
             type="button"
             onClick={handleShareChallenge}
-            className={`py-3 px-3 rounded-2xl border-0 shadow-none font-sans font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 cursor-pointer transition-transform active:scale-[0.98] ${
+            className={`py-3 px-2.5 sm:px-3 min-w-0 rounded-2xl border-0 shadow-none font-sans font-black text-[11px] sm:text-sm whitespace-nowrap flex items-center justify-center gap-1.5 cursor-pointer transition-transform active:scale-[0.98] ${
               darkMode
                 ? "bg-[#0c4a6e] hover:bg-[#075985] text-[#bae6fd]"
                 : "bg-[#BAE6FD] hover:bg-[#7DD3FC] text-[#0C4A6E]"
@@ -757,14 +741,14 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
               <>
                 <Check className="w-4 h-4 stroke-[2.5] shrink-0" />
                 <span className="truncate">
-                  {td("daily.copiedShare", "Copied")}
+                  {t("dailyCopiedShare")}
                 </span>
               </>
             ) : (
               <>
                 <Share2 className="w-4 h-4 stroke-[2.2] shrink-0" />
                 <span className="truncate">
-                  {td("daily.shareChallengeBtn", "Share Challenge")}
+                  {t("dailyShareChallengeBtn")}
                 </span>
               </>
             )}
@@ -773,7 +757,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
           <button
             type="button"
             onClick={onReviewBoard}
-            className={`py-3 px-3 rounded-2xl border-0 shadow-none font-sans font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.98] ${
+            className={`py-3 px-2.5 sm:px-3 min-w-0 rounded-2xl border-0 shadow-none font-sans font-bold text-[11px] sm:text-sm whitespace-nowrap flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.98] ${
               darkMode
                 ? "bg-[#2e1065] hover:bg-[#3b0764] text-[#e9d5ff]"
                 : "bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8]"
@@ -781,7 +765,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
           >
             <Eye className="w-4 h-4 stroke-[2.2] shrink-0" />
             <span className="truncate">
-              {td("daily.reviewBoardBtn", "Review Board")}
+              {t("dailyReviewBoardBtn")}
             </span>
           </button>
         </div>
@@ -791,7 +775,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
           type="button"
           onClick={onOpenCalendarHistory}
           disabled={!onOpenCalendarHistory}
-          className={`w-full mt-2 py-2.5 px-3 rounded-2xl border-0 shadow-none font-sans font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] ${
+          className={`w-full min-w-0 mt-2 py-2.5 px-3 rounded-2xl border-0 shadow-none font-sans font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] ${
             onOpenCalendarHistory ? "cursor-pointer" : "opacity-60 cursor-default"
           } ${
             darkMode
@@ -800,7 +784,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
           }`}
         >
           <Calendar className="w-3.5 h-3.5 stroke-[2.2] shrink-0" />
-          <span>{td("daily.calendarHistoryBtn", "View Calendar & History")}</span>
+          <span className="truncate">{t("dailyCalendarHistoryBtn")}</span>
         </button>
       </div>
     </div>
