@@ -244,7 +244,7 @@ export function useDailyChallenge(
 ): UseDailyChallengeReturn {
   const normalizedOptions: UseDailyChallengeOptions =
     typeof optionsOrUid === "string" || optionsOrUid === null
-      ? { uid: optionsOrUid }
+      ? { uid: typeof optionsOrUid === "string" ? optionsOrUid : null }
       : optionsOrUid ?? {};
 
   const uid = normalizedOptions.uid;

@@ -10514,7 +10514,7 @@ export default function App() {
   const ensureCanonicalRoomProvisioned = async (
     targetSeed?: number,
     targetDiff?: Difficulty,
-    targetBoard?: SudokuBoardState | null,
+    targetBoard?: BoardState | null,
     targetSolution?: number[][] | null
   ): Promise<string | null> => {
     const currentBoard = targetBoard || boardState;
@@ -11644,7 +11644,7 @@ export default function App() {
       activeBoard.grid.forEach((row, rIdx) => {
         row.forEach((cell, cIdx) => {
           if (cell.notes && cell.notes.size > 0) {
-            notesByCell[rIdx * 9 + cIdx] = Array.from(cell.notes).sort((a, b) => a - b);
+            notesByCell[rIdx * 9 + cIdx] = Array.from<number>(cell.notes).sort((a, b) => a - b);
           }
         });
       });
@@ -14263,7 +14263,7 @@ export default function App() {
     boardState.grid.forEach((row, rIdx) => {
       row.forEach((cell, cIdx) => {
         if (cell.notes && cell.notes.size > 0) {
-          notesByCell[rIdx * 9 + cIdx] = Array.from(cell.notes).sort((a, b) => a - b);
+          notesByCell[rIdx * 9 + cIdx] = Array.from<number>(cell.notes).sort((a, b) => a - b);
         }
       });
     });
@@ -16436,11 +16436,11 @@ export default function App() {
 
         {/* PANE 2: ACTIVE GAMEPLAY ARENA */}
         {currentScreen === "game" && (
-          <div id="game-scroll-container" className={`flex-1 min-h-0 h-full w-full overflow-y-auto overscroll-contain flex flex-col justify-start select-none p-1 sm:p-3 md:p-6 pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] pb-[clamp(30px,7.5vh,70px)] lg:pb-16 selection:bg-[#E0F2FE] bg-transparent ${Capacitor.isNativePlatform() ? "touch-none lg:touch-auto" : "touch-pan-y"}`}>
+          <div id="game-scroll-container" className="flex-1 min-h-0 h-full w-full overflow-hidden lg:overflow-y-auto overscroll-none lg:overscroll-contain flex flex-col justify-start select-none p-1 sm:p-3 md:p-6 pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] pb-2 lg:pb-16 selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto">
 
             {/* Main responsive outer layout container - Centers automatically as a unified cohesive block */}
             <div
-              className="w-full lg:w-fit flex flex-col lg:flex-row gap-4 sm:gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto mt-[clamp(15px,4.5vh,40px)] mb-auto lg:my-auto shrink-0"
+              className="w-full lg:w-fit flex flex-col lg:flex-row gap-2 sm:gap-3 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto mt-1 sm:mt-2 mb-auto lg:my-auto shrink-0"
               id="main-responsive-game-container"
             >
 
@@ -16824,83 +16824,13 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* MOBILE-WEB CONVERSION & RECORD PILL SLOT (< 1024px, Web-only) */}
-                {!Capacitor.isNativePlatform() && (() => {
-                  const activeDiff = ((boardState?.difficulty || difficulty).toUpperCase()) as Difficulty;
-                  const bestSecs = personalBestTimes[activeDiff] || 0;
-                  const mobileRecordPalette = darkMode ? (
-                    activeDiff === "EASY" ? "bg-[#022c22]/90 text-[#d1fae5] shadow-[0_6px_16px_rgba(0,0,0,0.35)]" :
-                      activeDiff === "MEDIUM" ? "bg-[#451a03]/90 text-[#fef08a] shadow-[0_6px_16px_rgba(0,0,0,0.35)]" :
-                        activeDiff === "HARD" ? "bg-[#2e1065]/90 text-[#e9d5ff] shadow-[0_6px_16px_rgba(0,0,0,0.35)]" :
-                          "bg-[#4c0519]/90 text-[#fecdd3] shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
-                  ) : (
-                    activeDiff === "EASY" ? "bg-[#D1FAE5]/85 text-[#065F46] shadow-[0_6px_16px_rgba(6,95,70,0.06)]" :
-                      activeDiff === "MEDIUM" ? "bg-[#FFF99D]/85 text-[#854D0E] shadow-[0_6px_16px_rgba(133,77,14,0.06)]" :
-                        activeDiff === "HARD" ? "bg-[#F3E8FF]/85 text-[#6B21A8] shadow-[0_6px_16px_rgba(107,33,168,0.06)]" :
-                          "bg-[#FFE4E6]/85 text-[#9D174D] shadow-[0_6px_16px_rgba(157,23,77,0.06)]"
-                  );
-
-                  return (
-                    <div
-                      className="flex lg:hidden w-full mt-2 px-0.5 h-[44px] shrink-0 select-none items-center justify-center"
-                      id="mobile-conversion-badge-container"
-                    >
-                      <AnimatePresence mode="wait" initial={false}>
-                        {conversionBadgeView === "playStore" ? (
-                          <motion.a
-                            key="mobile-badge-playstore"
-                            href={PLAY_STORE_URL}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            id="mobile-playstore-conversion-badge"
-                            initial={{ opacity: 0, y: 4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -4 }}
-                            transition={{ duration: 0.22, ease: "easeOut" }}
-                            className={`w-full h-full px-4 rounded-2xl border-0 outline-none no-underline flex items-center justify-between gap-2 transition-colors duration-200 cursor-pointer active:scale-[0.99] ${darkMode
-                              ? "bg-[#0c4a6e]/90 hover:bg-[#075985] text-[#bae6fd] shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
-                              : "bg-[#E0F2FE]/90 hover:bg-[#BAE6FD]/90 text-[#0369A1] shadow-[0_6px_16px_rgba(3,105,161,0.07)]"
-                              }`}
-                          >
-                            <span className="flex items-center gap-2 min-w-0">
-                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-white/90 dark:bg-white/95 shadow-[0_2px_6px_rgba(3,105,161,0.08)] shrink-0">
-                                <GooglePlayIcon className="w-4 h-4 shrink-0" />
-                              </span>
-                              <span className="font-sans font-bold text-xs sm:text-sm uppercase tracking-wider truncate leading-none">
-                                {t("getAndroidApp")}
-                              </span>
-                            </span>
-                            <ChevronRight className="w-4 h-4 shrink-0 opacity-75" />
-                          </motion.a>
-                        ) : (
-                          <motion.div
-                            key="mobile-badge-record"
-                            initial={{ opacity: 0, y: 4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -4 }}
-                            transition={{ duration: 0.22, ease: "easeOut" }}
-                            className={`w-full h-full px-4 rounded-2xl border-0 flex items-center justify-between gap-2 ${mobileRecordPalette}`}
-                          >
-                            <span className="flex items-center gap-1.5 min-w-0">
-                              <Timer className="w-3.5 h-3.5 shrink-0 stroke-[2] opacity-85" />
-                              <span className="font-sans font-bold text-xs uppercase tracking-wider truncate leading-none opacity-90">
-                                {t("home_record_banner_best_time")}:
-                              </span>
-                            </span>
-                            <span className="font-mono font-bold text-sm tabular-nums tracking-wide leading-none shrink-0">
-                              {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
-                            </span>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                })()}
+                {/* Mobile in-game banner removed so 9x9 board connects directly with tool controls */}
+                <div className="hidden" id="mobile-conversion-badge-container" />
               </div>
 
               {/* COLUMN 2: CONTROLS & NUMBERS DECK */}
               <div
-                className="w-full lg:w-[292px] shrink-0 flex flex-col gap-3 sm:gap-4 lg:gap-0 lg:justify-between px-2 py-3 sm:px-2 sm:py-4 lg:p-0 transition-colors duration-300 border-none select-none mt-2 lg:mt-0"
+                className="w-full lg:w-[292px] shrink-0 flex flex-col gap-2 sm:gap-3 lg:gap-0 lg:justify-between px-2 py-1.5 sm:py-2 lg:p-0 transition-colors duration-300 border-none select-none mt-1 lg:mt-0"
                 id="game-controls-column"
               >
 
@@ -17765,9 +17695,9 @@ export default function App() {
               </div>
             )}
 
-            {/* Web-only AdSense Compliance section (visible on both desktop & mobile web browsers, strictly hidden in native APK) */}
+            {/* Desktop-only AdSense Compliance section (mobile SEO remains on Home Pane 1) */}
             {!Capacitor.isNativePlatform() && (
-              <div className={!Capacitor.isNativePlatform() ? "block w-full shrink-0" : "hidden"}>
+              <div className="hidden lg:block w-full shrink-0">
                 {renderAdSenseContent("game")}
               </div>
             )}
