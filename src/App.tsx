@@ -10107,6 +10107,8 @@ export default function App() {
       setDailyChallengeActiveDate(null);
       setDailyChallengeIsArchive(false);
       setIsDailyReviewSession(false);
+      setDailyReviewSummaryMeta(null);
+      setDailyChallengeLoadedBoardDate(null);
       setBoardState(loaded.state);
       setSessionSeconds(loaded.seconds);
       setDifficulty(loaded.difficulty);
@@ -14222,7 +14224,6 @@ export default function App() {
     setHistory([]);
     setLockedNum(null);
     setActiveKeypadNum(null);
-    updateHintInventory(Math.max(0, 3 - restoredHints));
     setSessionSeconds(restoredElapsed);
     setIsTimerPaused(false);
     setShowGameOverModal(false);
@@ -15038,6 +15039,10 @@ export default function App() {
   const triggerSmartHintRef = useRef<() => void>(() => {});
 
   const handleWatchRewardAd = async () => {
+    if (Boolean(dailyChallengeActiveDate) || Boolean(challengeMode)) {
+      setShowHintRewardModal(false);
+      return;
+    }
     if (!Capacitor.isNativePlatform()) {
       showToast("Rewarded videos are only supported in mobile app.");
       return;
@@ -15071,13 +15076,17 @@ export default function App() {
   const triggerSmartHint = () => {
     if (!boardState || boardState.isGameOver) return;
 
-    const isChallengeGame = Boolean(challengeMode);
-    const hintsLeft = isChallengeGame
-      ? Math.max(0, (boardState.maxHintsLimit ?? challengeHintLimit ?? 3) - boardState.hintsCount)
+    const isDailyGame = Boolean(dailyChallengeActiveDate);
+    const isRankedCompetitiveMode = Boolean(challengeMode) || isDailyGame;
+    const maxCompetitiveHints = isDailyGame
+      ? 3
+      : (boardState.maxHintsLimit ?? challengeHintLimit ?? 3);
+    const hintsLeft = isRankedCompetitiveMode
+      ? Math.max(0, maxCompetitiveHints - boardState.hintsCount)
       : hintInventoryRef.current;
 
     if (hintsLeft <= 0) {
-      if (isChallengeGame) {
+      if (isRankedCompetitiveMode) {
         showToast(t("hintLimitReachedToast"));
       } else {
         setIsTimerPaused(true);
@@ -15143,7 +15152,7 @@ export default function App() {
       hintsCount: prev.hintsCount + 1
     } : null);
 
-    if (!isChallengeGame) {
+    if (!isRankedCompetitiveMode) {
       updateHintInventory(prev => Math.max(0, prev - 1));
     }
 
@@ -16566,20 +16575,64 @@ export default function App() {
                               type="button"
                               onClick={() => {
                                 playClickSound();
-                                if (isDailyReviewSession && dailyReviewSummaryMeta) {
-                                  setDailyResultModalState({ ...dailyReviewSummaryMeta, isOpen: true });
-                                  return;
+                                if (Boolean(dailyChallengeActiveDate || isDailyReviewSession || dailyChallengeLoadedBoardDate)) {
+                                  const targetDate =
+                                    dailyChallengeActiveDate ||
+                                    dailyChallengeLoadedBoardDate ||
+                                    dailyReviewSummaryMeta?.date ||
+                                    formatDateKey(new Date());
+                                  const dailyUid = isGuestSession ? null : authUser?.uid;
+                                  const stats = getDailyStats(dailyUid);
+                                  const progress = getDailyProgress(targetDate, dailyUid);
+                                  const dayRecord = stats.recordsByDate[targetDate];
+                                  const resolvedStatus: DailyChallengeStatus =
+                                    dailyReviewSummaryMeta?.status ??
+                                    dayRecord?.status ??
+                                    (progress?.status === "COMPLETED" || progress?.status === "FAILED"
+                                      ? progress.status
+                                      : (boardState?.currentMistakesCount ?? 0) >= 3
+                                        ? "FAILED"
+                                        : "COMPLETED");
+
+                                  setDailyResultModalState({
+                                    isOpen: true,
+                                    date: targetDate,
+                                    difficulty:
+                                      dailyReviewSummaryMeta?.difficulty ??
+                                      dayRecord?.difficulty ??
+                                      dailyChallengeDifficulty ??
+                                      "MEDIUM",
+                                    status: resolvedStatus,
+                                    elapsedTime:
+                                      dailyReviewSummaryMeta?.elapsedTime ??
+                                      dayRecord?.timeSeconds ??
+                                      progress?.elapsedSeconds ??
+                                      sessionSeconds,
+                                    mistakes:
+                                      boardState?.currentMistakesCount ??
+                                      dayRecord?.mistakes ??
+                                      progress?.mistakesCount ??
+                                      0,
+                                    stats,
+                                    fromCalendar: false,
+                                    fallbackSolvedOnReview: Boolean(
+                                      dailyReviewSummaryMeta?.fallbackSolvedOnReview ??
+                                      resolvedStatus === "COMPLETED"
+                                    ),
+                                  });
+                                } else {
+                                  // PRESERVE 100% UNTOUCHED for Classic Solo and Multiplayer
+                                  const isDisconnected = !isOnline;
+                                  if (challengeMode && isDisconnected) {
+                                    setWasDisconnectedMultiplayer(true);
+                                  } else if (!challengeMode) {
+                                    setWasDisconnectedMultiplayer(false);
+                                  }
+                                  if (challengeMode && !isDisconnected) {
+                                    setEndGameStep(1);
+                                  }
+                                  setShowGameOverModal(true);
                                 }
-                                const isDisconnected = !isOnline;
-                                if (challengeMode && isDisconnected) {
-                                  setWasDisconnectedMultiplayer(true);
-                                } else if (!challengeMode) {
-                                  setWasDisconnectedMultiplayer(false);
-                                }
-                                if (challengeMode && !isDisconnected) {
-                                  setEndGameStep(1);
-                                }
-                                setShowGameOverModal(true);
                               }}
                               className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${darkMode ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-700"
                                 }`}
@@ -17025,7 +17078,7 @@ export default function App() {
                   onErase={handleClearCell}
                   onHint={triggerSmartHint}
                   hintInventory={hintInventory}
-                  isChallengeMode={Boolean(challengeMode)}
+                  isChallengeMode={Boolean(challengeMode) || Boolean(dailyChallengeActiveDate) || isDailyReviewSession}
                   onNumberSelect={(num) => {
                     if (boardState?.isGameOver) {
                       playClickSound();
@@ -22433,7 +22486,7 @@ export default function App() {
 
       {/* 💡 REWARDED AD HINT MODAL */}
       <HintRewardModal
-        isOpen={showHintRewardModal}
+        isOpen={showHintRewardModal && !Boolean(dailyChallengeActiveDate) && !Boolean(challengeMode)}
         onClose={handleCloseHintRewardModal}
         onWatchAd={handleWatchRewardAd}
         isOnline={isOnline}

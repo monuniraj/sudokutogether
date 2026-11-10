@@ -95,6 +95,23 @@ function getDifficultyBadgeClasses(
   }
 }
 
+function getCompletedCtaLightTextClass(difficulty: DailyDifficulty): string {
+  switch (difficulty) {
+    case "EASY":
+      return "text-[#065F46]";
+    case "MEDIUM":
+      return "text-[#78350F]";
+    case "HARD":
+      return "text-[#5B21B6]";
+    case "EXPERT":
+      return "text-[#9F1239]";
+    case "MASTER":
+      return "text-[#3730A3]";
+    default:
+      return "text-[#78350F]";
+  }
+}
+
 export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
   uid,
   darkMode = false,
@@ -305,18 +322,20 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
           ? td("daily.failedCta", "Failed (View Stats)")
           : td("daily.playTodayCta", "Play Today");
 
+  const completedLightTextClass = getCompletedCtaLightTextClass(daily.difficulty);
+
   const ctaButtonClasses =
     effectiveStatus === "COMPLETED"
       ? darkMode
-        ? "bg-[#064e3b] hover:bg-[#065f46] text-[#a7f3d0]"
-        : "bg-[#A7F3D0] hover:bg-[#6EE7B7] text-[#065F46]"
+        ? "bg-zinc-800 hover:bg-[#323236] shadow-none text-[#fde68a]"
+        : `bg-white hover:bg-white/95 shadow-sm ${completedLightTextClass}`
       : effectiveStatus === "FAILED"
         ? darkMode
-          ? "bg-[#881337] hover:bg-[#9f1239] text-[#fecdd3]"
-          : "bg-[#FECDD3] hover:bg-[#FDA4AF] text-[#9F1239]"
+          ? "bg-[#881337] hover:bg-[#9f1239] shadow-none text-[#fecdd3]"
+          : "bg-[#FECDD3] hover:bg-[#FDA4AF] shadow-none text-[#9F1239]"
         : darkMode
-          ? "bg-[#b45309] hover:bg-[#d97706] text-[#fef3c7]"
-          : "bg-[#FCD34D] hover:bg-[#FBBF24] text-[#78350F]";
+          ? "bg-[#b45309] hover:bg-[#d97706] shadow-none text-[#fef3c7]"
+          : "bg-[#FCD34D] hover:bg-[#FBBF24] shadow-none text-[#78350F]";
 
   if (compact) {
     return (
@@ -444,20 +463,14 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
             e.stopPropagation();
             handlePlayOrResume();
           }}
-          className={`w-full py-2.5 px-3.5 rounded-xl border-0 shadow-none flex items-center justify-between gap-2 font-sans font-black text-xs sm:text-sm transition-all duration-150 cursor-pointer active:scale-[0.98] ${ctaButtonClasses}`}
+          className={`w-full py-2.5 px-3.5 rounded-xl border-0 flex items-center justify-between gap-2 font-sans font-black text-xs sm:text-sm transition-all duration-150 cursor-pointer active:scale-[0.98] ${ctaButtonClasses}`}
         >
           <span className="inline-flex items-center gap-2 truncate">
-            {effectiveStatus === "COMPLETED" ? (
-              <Trophy
-                className={`w-4 h-4 shrink-0 stroke-[2.3] ${
-                  darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
-                }`}
-              />
-            ) : effectiveStatus === "FAILED" ? (
+            {effectiveStatus === "FAILED" ? (
               <XCircle className="w-4 h-4 shrink-0 stroke-[2.3]" />
-            ) : (
+            ) : effectiveStatus !== "COMPLETED" ? (
               <Play className="w-4 h-4 shrink-0 stroke-[2.3]" />
-            )}
+            ) : null}
             <span className="truncate">{ctaLabel}</span>
           </span>
           <ChevronRight className="w-4 h-4 shrink-0 stroke-[2.4] opacity-80" />

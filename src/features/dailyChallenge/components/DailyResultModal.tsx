@@ -323,8 +323,8 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
 
   const headerPillClasses = isCompleted
     ? darkMode
-      ? "bg-[#064e3b] text-[#a7f3d0]"
-      : "bg-[#D1FAE5] text-[#065F46]"
+      ? "bg-[#78350F]/40 text-[#FBBF24]"
+      : "bg-[#FEF3C7] text-[#B45309]"
     : isFailed
       ? darkMode
         ? "bg-[#881337] text-[#fecdd3]"
