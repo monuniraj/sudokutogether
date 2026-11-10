@@ -19,9 +19,9 @@ import { GuestBannerPill } from "./components/auth/GuestBannerPill";
 import { DailyChallengeCard, type DailyChallengeLaunchPayload } from "./features/dailyChallenge/components/DailyChallengeCard";
 import { DailyCalendarModal } from "./features/dailyChallenge/components/DailyCalendarModal";
 import { DailyResultModal } from "./features/dailyChallenge/components/DailyResultModal";
-import { formatDateKey, generateDailyPuzzle } from "./features/dailyChallenge/services/dailyGenerator";
+import { formatDateKey, generateDailyPuzzle, parseDateKey } from "./features/dailyChallenge/services/dailyGenerator";
 import { saveDailyProgress, recordDailyCompletion, getDailyStats, getDailyProgress } from "./features/dailyChallenge/services/dailyStorage";
-import { saveDailyProgressToCloud, recordDailyCompletionToCloud } from "./features/dailyChallenge/services/dailyCloudService";
+import { saveDailyProgressToCloud, recordDailyCompletionToCloud, checkPlayerDailyEligibility, fetchDailyProgressFromCloud, resolveProgressConflict } from "./features/dailyChallenge/services/dailyCloudService";
 import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./features/dailyChallenge/types/daily.types";
 import { incrementGuestGameCount } from "./utils/guestTracking";
 import { SudokuBoard, CompletionPulse } from "./components/game/SudokuBoard";
@@ -1807,9 +1807,13 @@ export default function App() {
   const [isAuthHydrating, setIsAuthHydrating] = useState<boolean>(() => {
     return Boolean(getActiveAuthUid());
   });
+  const isAuthHydratingRef = useRef<boolean>(isAuthHydrating);
+  isAuthHydratingRef.current = isAuthHydrating;
   const [isAppReady, setIsAppReady] = useState<boolean>(() => {
     return !getActiveAuthUid();
   });
+  const isAppReadyRef = useRef<boolean>(isAppReady);
+  isAppReadyRef.current = isAppReady;
   const isExplicitLogoutRef = useRef<boolean>(false);
   const isHydrationCompleteRef = useRef<boolean>(!getActiveAuthUid());
 
@@ -2327,6 +2331,35 @@ export default function App() {
     fromCalendar?: boolean;
     fallbackSolvedOnReview?: boolean;
   } | null>(null);
+  const [dailyChallengeActiveDate, setDailyChallengeActiveDate] = useState<string | null>(null);
+  const dailyChallengeActiveDateRef = useRef<string | null>(null);
+  dailyChallengeActiveDateRef.current = dailyChallengeActiveDate;
+  const [dailyChallengeIsArchive, setDailyChallengeIsArchive] = useState<boolean>(false);
+  const [dailyChallengeDifficulty, setDailyChallengeDifficulty] = useState<DailyDifficulty>("EASY");
+  const dailyChallengeDifficultyRef = useRef<DailyDifficulty>("EASY");
+  dailyChallengeDifficultyRef.current = dailyChallengeDifficulty;
+  const [dailyRefreshCounter, setDailyRefreshCounter] = useState<number>(0);
+  const [isDailyReviewSession, setIsDailyReviewSession] = useState<boolean>(false);
+  const [dailyChallengeLoadedBoardDate, setDailyChallengeLoadedBoardDate] = useState<string | null>(null);
+  const [isDailyExhibition, setIsDailyExhibition] = useState<boolean>(false);
+  const isDailyExhibitionRef = useRef<boolean>(false);
+  const [isDailyRoomActive, setIsDailyRoomActive] = useState<boolean>(false);
+  const isDailyRoomRef = useRef<boolean>(false);
+  const pendingDailyDeepLinkRef = useRef<string | null>(null);
+  const handleLaunchDailyChallengeRef = useRef<((payload: DailyChallengeLaunchPayload) => void) | null>(null);
+  const launchDailyByDateKeyRef = useRef<((dateKey: string) => Promise<void>) | null>(null);
+  const [dailyReviewSummaryMeta, setDailyReviewSummaryMeta] = useState<{
+    isOpen: boolean;
+    date: string;
+    difficulty: DailyDifficulty;
+    status: DailyChallengeStatus;
+    elapsedTime: number;
+    mistakes: number;
+    stats: DailyStats;
+    fromCalendar?: boolean;
+    fallbackSolvedOnReview?: boolean;
+  } | null>(null);
+  const dailyCloudAutoSaveTimerRef = useRef<number | null>(null);
   const [joinRoomCodeInput, setJoinRoomCodeInput] = useState<string>("");
   const [joinRoomPinInput, setJoinRoomPinInput] = useState<string>("");
   const [joinRoomError, setJoinRoomError] = useState<string | null>(null);
@@ -2604,6 +2637,8 @@ export default function App() {
     mistakesLimit: number;
     hintsLimit: number;
     timerEnabled: boolean;
+    gameMode?: string;
+    dailyDate?: string | null;
     endGameStep?: 1 | 2;
     lastVisibleDoc?: QueryDocumentSnapshot | null;
     hasMore?: boolean;
@@ -2922,6 +2957,10 @@ export default function App() {
         challengeTimerEnabled: challengeTimerEnabled,
         challengeDifficulty: challengeDifficulty,
         rematchGameId: rematchGameId,
+        isDailyRoom: Boolean(isMulti && isDailyRoomRef.current && dailyChallengeActiveDateRef.current),
+        dailyDate: (isMulti && isDailyRoomRef.current) ? dailyChallengeActiveDateRef.current : null,
+        dailyDifficulty: (isMulti && isDailyRoomRef.current) ? dailyChallengeDifficultyRef.current : null,
+        isDailyExhibition: Boolean(isMulti && isDailyRoomRef.current && isDailyExhibitionRef.current),
         playerCredentials: userProfile?.id ? { id: userProfile.id, name: getActiveDisplayName() } : null
       };
       localStorage.setItem(getScopedKey("savedSession"), JSON.stringify(sessionData));
@@ -2993,6 +3032,10 @@ export default function App() {
         challengeTimerEnabled: sessionData.challengeTimerEnabled ?? true,
         challengeDifficulty: (sessionData.challengeDifficulty as Difficulty) || (sessionData.difficulty as Difficulty),
         rematchGameId: sessionData.rematchGameId || null,
+        isDailyRoom: Boolean(sessionData.isDailyRoom && sessionData.dailyDate),
+        dailyDate: typeof sessionData.dailyDate === "string" ? sessionData.dailyDate : null,
+        dailyDifficulty: (sessionData.dailyDifficulty as DailyDifficulty) || null,
+        isDailyExhibition: Boolean(sessionData.isDailyExhibition),
         playerCredentials: sessionData.playerCredentials || null
       };
     } catch (error) {
@@ -3925,14 +3968,24 @@ export default function App() {
     let detectedInvite = false;
     if (typeof window !== "undefined") {
       try {
+        const isValidDailyParam = (val: string | null): boolean => {
+          if (!val) return false;
+          try {
+            const trimmed = val.trim();
+            parseDateKey(trimmed);
+            return trimmed <= formatDateKey(new Date());
+          } catch {
+            return false;
+          }
+        };
         const sp = new URLSearchParams(window.location.search);
-        if (sp.get("room") || sp.get("challenge") || sp.get("gameId") || sp.get("seed") || sp.get("c")) {
+        if (sp.get("room") || sp.get("challenge") || sp.get("gameId") || sp.get("seed") || sp.get("c") || isValidDailyParam(sp.get("daily"))) {
           detectedInvite = true;
         } else if (window.location.hash) {
           const hi = window.location.hash.indexOf("?");
           if (hi !== -1) {
             const hp = new URLSearchParams(window.location.hash.substring(hi + 1));
-            if (hp.get("room") || hp.get("challenge") || hp.get("gameId") || hp.get("seed") || hp.get("c")) {
+            if (hp.get("room") || hp.get("challenge") || hp.get("gameId") || hp.get("seed") || hp.get("c") || isValidDailyParam(hp.get("daily"))) {
               detectedInvite = true;
             }
           } else {
@@ -3940,7 +3993,7 @@ export default function App() {
             if (cleanedHash.startsWith("SUDOKU-")) detectedInvite = true;
           }
         }
-        if (!detectedInvite && sessionStorage.getItem("sudoku_invite_challenge")) {
+        if (!detectedInvite && (sessionStorage.getItem("sudoku_invite_challenge") || isValidDailyParam(sessionStorage.getItem("sudoku_invite_daily")))) {
           detectedInvite = true;
         }
       } catch { }
@@ -5570,17 +5623,17 @@ export default function App() {
                   }
                 } else {
                   setSavedSessionInfo(null);
-                  if (isSwitchingUid || !shouldPreserveWebGameBoard) {
+                  if ((isSwitchingUid || !shouldPreserveWebGameBoard) && !isDailyBoardContextRef.current) {
                     setBoardState(null);
                     setSessionSeconds(0);
                   }
-                  if (shouldPreserveWebGameBoard && (isSwitchingUid || !boardStateRef.current)) {
+                  if (shouldPreserveWebGameBoard && !isDailyBoardContextRef.current && (isSwitchingUid || !boardStateRef.current)) {
                     generateAndSetNewPuzzleRef.current?.(initialRouteDifficultyRef.current || difficultyRef.current || "EASY");
                   }
                 }
               } catch {
                 setSavedSessionInfo(null);
-                if (shouldPreserveWebGameBoard && (isSwitchingUid || !boardStateRef.current)) {
+                if (shouldPreserveWebGameBoard && !isDailyBoardContextRef.current && (isSwitchingUid || !boardStateRef.current)) {
                   if (isSwitchingUid) {
                     setBoardState(null);
                     setSessionSeconds(0);
@@ -5590,11 +5643,11 @@ export default function App() {
               }
             } else {
               setSavedSessionInfo(null);
-              if (isSwitchingUid || !shouldPreserveWebGameBoard || !boardStateRef.current) {
+              if ((isSwitchingUid || !shouldPreserveWebGameBoard || !boardStateRef.current) && !isDailyBoardContextRef.current) {
                 setBoardState(null);
                 setSessionSeconds(0);
               }
-              if (shouldPreserveWebGameBoard && (isSwitchingUid || !boardStateRef.current)) {
+              if (shouldPreserveWebGameBoard && !isDailyBoardContextRef.current && (isSwitchingUid || !boardStateRef.current)) {
                 generateAndSetNewPuzzleRef.current?.(initialRouteDifficultyRef.current || difficultyRef.current || "EASY");
               }
             }
@@ -5610,11 +5663,11 @@ export default function App() {
             setPersonalBestTimes({});
             personalBestTimesRef.current = {};
             setSavedSessionInfo(null);
-            if (isSwitchingUid || !shouldPreserveWebGameBoard || !boardStateRef.current) {
+            if ((isSwitchingUid || !shouldPreserveWebGameBoard || !boardStateRef.current) && !isDailyBoardContextRef.current) {
               setBoardState(null);
               setSessionSeconds(0);
             }
-            if (shouldPreserveWebGameBoard && (isSwitchingUid || !boardStateRef.current)) {
+            if (shouldPreserveWebGameBoard && !isDailyBoardContextRef.current && (isSwitchingUid || !boardStateRef.current)) {
               generateAndSetNewPuzzleRef.current?.(initialRouteDifficultyRef.current || difficultyRef.current || "EASY");
             }
           }
@@ -5874,7 +5927,7 @@ export default function App() {
       if (typeof window === "undefined") return false;
       try {
         const sp = new URLSearchParams(window.location.search);
-        return Boolean(sp.get("room") || sp.get("challenge") || sp.get("gameId") || sp.get("seed") || sp.get("c"));
+        return Boolean(sp.get("room") || sp.get("challenge") || sp.get("gameId") || sp.get("seed") || sp.get("c") || sp.get("daily"));
       } catch {
         return false;
       }
@@ -6643,6 +6696,19 @@ export default function App() {
     setRoomPin("");
     setRematchInviteStates({});
     setLobbyAcceptedUserIds(new Set());
+    if (isDailyRoomRef.current) {
+      dailyChallengeActiveDateRef.current = null;
+      setDailyChallengeActiveDate(null);
+      setDailyChallengeIsArchive(false);
+      setIsDailyReviewSession(false);
+      setDailyReviewSummaryMeta(null);
+      setDailyChallengeLoadedBoardDate(null);
+      isDailyBoardContextRef.current = false;
+    }
+    isDailyRoomRef.current = false;
+    setIsDailyRoomActive(false);
+    isDailyExhibitionRef.current = false;
+    setIsDailyExhibition(false);
     addLog("🧹 Room session cleared. Restored clean Solo state.");
   };
 
@@ -7729,23 +7795,53 @@ export default function App() {
 
       const isLocked = Boolean(rData.isLocked || rData.pin);
       const pin = (rData.pin || rData.roomPin || "").trim();
-      const seed = rData.seed !== undefined ? Number(rData.seed) : parseInt(roomCode, 10);
-      const diff = (rData.difficulty || "EASY").toUpperCase() as Difficulty;
-      const mistakesLimit = rData.mistakesLimit !== undefined
-        ? Number(rData.mistakesLimit)
-        : (rData.mistakeLimit !== undefined ? Number(rData.mistakeLimit) : 3);
-      const hintsLimit = rData.hintsLimit !== undefined
-        ? Number(rData.hintsLimit)
-        : (rData.hintLimit !== undefined ? Number(rData.hintLimit) : 3);
-      const timerEnabled = rData.timerEnabled !== undefined ? Boolean(rData.timerEnabled) : true;
+      const isDailyRoom = rData.gameMode === "daily" && Boolean(rData.dailyDate);
 
-      // 6. Decode puzzle into a 9x9 grid. Solution: use legacy room solutionFlat if a legacy host still
-      // published it; otherwise deterministically regenerate it locally from (difficulty, seed) so the
-      // solved board never needs to travel over the network (anti solution-leak).
+      let normalizedDailyDate: string | null = null;
+      let dailyGen: ReturnType<typeof generateDailyPuzzle> | null = null;
+      let masterBoardDifficulty: Difficulty = (rData.difficulty || "EASY").toUpperCase() as Difficulty;
+
+      if (isDailyRoom) {
+        try {
+          normalizedDailyDate = String(rData.dailyDate).trim();
+          parseDateKey(normalizedDailyDate);
+          dailyGen = generateDailyPuzzle(normalizedDailyDate);
+          masterBoardDifficulty = dailyGen.difficulty === "MASTER" ? "EXPERT" : dailyGen.difficulty;
+        } catch (dailyErr) {
+          console.error("[executeJoinRoom] Invalid dailyDate on daily room:", rData.dailyDate, dailyErr);
+          return { success: false, error: "Invalid Daily Challenge room date." };
+        }
+      }
+
+      const seed = isDailyRoom && dailyGen
+        ? dailyGen.seed
+        : (rData.seed !== undefined ? Number(rData.seed) : parseInt(roomCode, 10));
+      const diff: Difficulty = isDailyRoom
+        ? masterBoardDifficulty
+        : ((rData.difficulty || "EASY").toUpperCase() as Difficulty);
+      const mistakesLimit = isDailyRoom
+        ? 3
+        : (rData.mistakesLimit !== undefined
+          ? Number(rData.mistakesLimit)
+          : (rData.mistakeLimit !== undefined ? Number(rData.mistakeLimit) : 3));
+      const hintsLimit = isDailyRoom
+        ? 3
+        : (rData.hintsLimit !== undefined
+          ? Number(rData.hintsLimit)
+          : (rData.hintLimit !== undefined ? Number(rData.hintLimit) : 3));
+      const timerEnabled = isDailyRoom
+        ? true
+        : (rData.timerEnabled !== undefined ? Boolean(rData.timerEnabled) : true);
+
+      // 6. Decode puzzle into a 9x9 grid. For Daily Challenge rooms, reconstruct strictly from dailyGenerator
+      // for 100% host/joiner solver parity without reading classic puzzleCache or calling generateFlatBoardForSeed.
       let puzzle2D: number[][];
       let solution2D: number[][];
 
-      if (Array.isArray(rData.puzzleFlat) && rData.puzzleFlat.length === 81) {
+      if (isDailyRoom && dailyGen) {
+        puzzle2D = dailyGen.puzzle.map(r => [...r]);
+        solution2D = dailyGen.solved.map(r => [...r]);
+      } else if (Array.isArray(rData.puzzleFlat) && rData.puzzleFlat.length === 81) {
         puzzle2D = Array(9).fill(null).map((_, r) =>
           Array(9).fill(null).map((_, c) => Number(rData.puzzleFlat[r * 9 + c]))
         );
@@ -7785,11 +7881,52 @@ export default function App() {
         });
       });
 
-      // Prime cache for instant reloads
-      puzzleCache.set(`${diff}_${seed}`, {
-        solved: solution2D.map(r => [...r]),
-        puzzle: puzzle2D.map(r => [...r])
-      });
+      if (!isDailyRoom) {
+        // Prime cache for instant reloads in classic rooms only
+        puzzleCache.set(`${diff}_${seed}`, {
+          solved: solution2D.map(r => [...r]),
+          puzzle: puzzle2D.map(r => [...r])
+        });
+      }
+
+      // Pre-flight eligibility gate & state tracking for Daily Challenge rooms vs Classic rooms
+      if (isDailyRoom && normalizedDailyDate && dailyGen) {
+        const curAuth = await ensureActiveAuthUser().catch(() => auth.currentUser);
+        const eligibilityUid = (!curAuth || curAuth.isAnonymous) ? null : curAuth.uid;
+        let isExhibition = false;
+        try {
+          const eligibility = await checkPlayerDailyEligibility(eligibilityUid, normalizedDailyDate);
+          isExhibition = eligibility === "EXHIBITION";
+        } catch {
+          isExhibition = false;
+        }
+
+        isDailyBoardContextRef.current = false; // Allow GameOverModal room standings on multiplayer completion
+        isDailyRoomRef.current = true;
+        setIsDailyRoomActive(true);
+        isDailyExhibitionRef.current = isExhibition;
+        setIsDailyExhibition(isExhibition);
+        dailyChallengeActiveDateRef.current = normalizedDailyDate;
+        setDailyChallengeActiveDate(normalizedDailyDate);
+        dailyChallengeDifficultyRef.current = dailyGen.difficulty;
+        setDailyChallengeDifficulty(dailyGen.difficulty);
+        setDailyChallengeIsArchive(normalizedDailyDate < formatDateKey(new Date()));
+        setDailyChallengeLoadedBoardDate(normalizedDailyDate);
+        setIsDailyReviewSession(false);
+        setDailyReviewSummaryMeta(null);
+      } else {
+        isDailyBoardContextRef.current = false;
+        isDailyRoomRef.current = false;
+        setIsDailyRoomActive(false);
+        isDailyExhibitionRef.current = false;
+        setIsDailyExhibition(false);
+        dailyChallengeActiveDateRef.current = null;
+        setDailyChallengeActiveDate(null);
+        setDailyChallengeIsArchive(false);
+        setIsDailyReviewSession(false);
+        setDailyReviewSummaryMeta(null);
+        setDailyChallengeLoadedBoardDate(null);
+      }
 
       // If in an active multiplayer match and joining a different match, mark previous match left/forfeited
       if (challengeMode && activeGameId && activeGameId !== roomCode) {
@@ -7827,7 +7964,9 @@ export default function App() {
       setRoomPin(pin);
       setHistory([]);
       setLockedNum(null);
-      updateHintInventory(hintsLimit);
+      if (!isDailyRoom) {
+        updateHintInventory(hintsLimit);
+      }
       setSessionSeconds(0);
       setIsTimerPaused(false);
 
@@ -8110,6 +8249,7 @@ export default function App() {
             mistakes: pData.mistakes !== undefined ? Number(pData.mistakes) : 0,
             hints: pData.hints !== undefined ? Number(pData.hints) : (pData.hintsUsed !== undefined ? Number(pData.hintsUsed) : 0),
             isWon: isWon,
+            ...(typeof pData.isExhibition === "boolean" ? { isExhibition: pData.isExhibition } : {}),
             status: pData.status || (isWon ? "completed" : "active"),
             isPending: !isLeft && !isFinished
           });
@@ -8135,6 +8275,7 @@ export default function App() {
                 mistakes: rData.mistakes !== undefined ? Number(rData.mistakes) : (existing?.mistakes || 0),
                 hints: rData.hints !== undefined ? Number(rData.hints) : (rData.hintsUsed !== undefined ? Number(rData.hintsUsed) : (existing?.hints ?? 0)),
                 isWon: rWon,
+                ...(typeof (rData.isExhibition ?? existing?.isExhibition) === "boolean" ? { isExhibition: Boolean(rData.isExhibition ?? existing?.isExhibition) } : {}),
                 status: rData.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
                 isPending: rFinished ? false : (rData.isPending !== undefined ? Boolean(rData.isPending) : (existing ? existing.isPending : false))
               });
@@ -8149,10 +8290,15 @@ export default function App() {
             ...prev,
             participants: resultsList.length > 0 ? resultsList : prev.participants,
             seed: roomData?.seed ? Number(roomData.seed) : prev.seed,
-            difficulty: roomData?.difficulty ? (roomData.difficulty).toUpperCase() as Difficulty : prev.difficulty,
+            difficulty: roomData?.difficulty
+              ? ((String(roomData.difficulty).toUpperCase() === "MASTER" ? "EXPERT" : String(roomData.difficulty).toUpperCase()) as Difficulty)
+              : prev.difficulty,
             mistakesLimit: roomData?.mistakesLimit !== undefined ? roomData.mistakesLimit : prev.mistakesLimit,
             hintsLimit: roomData?.hintsLimit !== undefined ? roomData.hintsLimit : prev.hintsLimit,
             timerEnabled: roomData?.timerEnabled !== undefined ? roomData.timerEnabled : prev.timerEnabled,
+            ...(roomData?.gameMode === "daily" && roomData?.dailyDate
+              ? { gameMode: "daily", dailyDate: String(roomData.dailyDate).trim() }
+              : {}),
             lastVisibleDoc: lastDoc,
             hasMore,
             isLoadingMore: false
@@ -8194,6 +8340,7 @@ export default function App() {
           mistakes: p.mistakes !== undefined ? Number(p.mistakes) : 0,
           hints: p.hints !== undefined ? Number(p.hints) : (p.hintsUsed !== undefined ? Number(p.hintsUsed) : 0),
           isWon: isWon,
+          ...(typeof p.isExhibition === "boolean" ? { isExhibition: p.isExhibition } : {}),
           status: p.status || (isWon ? "completed" : "active"),
           isPending: !isLeft && !isFinished
         });
@@ -8216,6 +8363,7 @@ export default function App() {
           mistakes: r.mistakes !== undefined ? Number(r.mistakes) : (existing?.mistakes || 0),
           hints: r.hints !== undefined ? Number(r.hints) : (r.hintsUsed !== undefined ? Number(r.hintsUsed) : (existing?.hints ?? 0)),
           isWon: rWon,
+          ...(typeof (r.isExhibition ?? existing?.isExhibition) === "boolean" ? { isExhibition: Boolean(r.isExhibition ?? existing?.isExhibition) } : {}),
           status: r.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
           isPending: rFinished ? false : (r.isPending !== undefined ? Boolean(r.isPending) : (existing ? existing.isPending : false))
         });
@@ -10039,7 +10187,7 @@ export default function App() {
         }
 
         gameOverTimeoutRef.current = setTimeout(() => {
-          if (!isDailyBoardContextRef.current) {
+          if (!isDailyBoardContextRef.current && !(isDailyRoomRef.current && !isOnline)) {
             setShowGameOverModal(true);
           }
           setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
@@ -10103,21 +10251,57 @@ export default function App() {
   const resumeSavedSession = () => {
     const loaded = loadCurrentGameFromLocal();
     if (loaded) {
-      isDailyBoardContextRef.current = false;
-      setDailyChallengeActiveDate(null);
-      setDailyChallengeIsArchive(false);
-      setIsDailyReviewSession(false);
-      setDailyReviewSummaryMeta(null);
-      setDailyChallengeLoadedBoardDate(null);
+      let resolvedDailyRoom = false;
+      if (loaded.isMultiplayer && loaded.isDailyRoom && loaded.dailyDate) {
+        try {
+          parseDateKey(loaded.dailyDate);
+          const dailyGen = generateDailyPuzzle(loaded.dailyDate);
+          isDailyBoardContextRef.current = false; // Multiplayer daily room uses GameOverModal standings
+          isDailyRoomRef.current = true;
+          setIsDailyRoomActive(true);
+          isDailyExhibitionRef.current = Boolean(loaded.isDailyExhibition);
+          setIsDailyExhibition(Boolean(loaded.isDailyExhibition));
+          dailyChallengeActiveDateRef.current = loaded.dailyDate;
+          setDailyChallengeActiveDate(loaded.dailyDate);
+          const restoredDailyDiff = loaded.dailyDifficulty || dailyGen.difficulty;
+          dailyChallengeDifficultyRef.current = restoredDailyDiff;
+          setDailyChallengeDifficulty(restoredDailyDiff);
+          setDailyChallengeIsArchive(loaded.dailyDate < formatDateKey(new Date()));
+          setIsDailyReviewSession(false);
+          setDailyReviewSummaryMeta(null);
+          setDailyChallengeLoadedBoardDate(loaded.dailyDate);
+          setSolutionGrid(dailyGen.solved.map(r => [...r]));
+          resolvedDailyRoom = true;
+        } catch {
+          resolvedDailyRoom = false;
+        }
+      }
+
+      if (!resolvedDailyRoom) {
+        isDailyBoardContextRef.current = false;
+        isDailyRoomRef.current = false;
+        setIsDailyRoomActive(false);
+        isDailyExhibitionRef.current = false;
+        setIsDailyExhibition(false);
+        dailyChallengeActiveDateRef.current = null;
+        setDailyChallengeActiveDate(null);
+        setDailyChallengeIsArchive(false);
+        setIsDailyReviewSession(false);
+        setDailyReviewSummaryMeta(null);
+        setDailyChallengeLoadedBoardDate(null);
+      }
+
       setBoardState(loaded.state);
       setSessionSeconds(loaded.seconds);
       setDifficulty(loaded.difficulty);
 
-      const boardArr = loaded.state.grid.map(row =>
-        row.map(c => c.isOriginalClue ? c.value : 0)
-      );
-      solveSudokuRecursive(boardArr);
-      setSolutionGrid(boardArr);
+      if (!resolvedDailyRoom) {
+        const boardArr = loaded.state.grid.map(row =>
+          row.map(c => c.isOriginalClue ? c.value : 0)
+        );
+        solveSudokuRecursive(boardArr);
+        setSolutionGrid(boardArr);
+      }
 
       if (loaded.state.isGameOver) {
         hasTriggeredGameOverRef.current = true;
@@ -10130,9 +10314,9 @@ export default function App() {
         setRematchGameId(loaded.roomCode);
         if (loaded.challengeSeed) setChallengeSeed(loaded.challengeSeed);
         setIsHost(loaded.isHost);
-        setChallengeMistakeLimit(loaded.challengeMistakeLimit);
-        setChallengeHintLimit(loaded.challengeHintLimit);
-        setChallengeTimerEnabled(loaded.challengeTimerEnabled);
+        setChallengeMistakeLimit(resolvedDailyRoom ? 3 : loaded.challengeMistakeLimit);
+        setChallengeHintLimit(resolvedDailyRoom ? 3 : loaded.challengeHintLimit);
+        setChallengeTimerEnabled(resolvedDailyRoom ? true : loaded.challengeTimerEnabled);
         setChallengeDifficulty(loaded.challengeDifficulty);
 
         // Force listener re-attachment & fresh snapshot fetch
@@ -10147,6 +10331,9 @@ export default function App() {
         const userId = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id || "GUEST_ANON";
         const docId = getSeedDocId(loaded.roomCode);
         const playerTerminalStatus = loaded.state.currentMistakesCount >= loaded.state.maxMistakesLimit ? "mistake_game_over" : "completed";
+        const dailyRoomMeta = resolvedDailyRoom && loaded.dailyDate
+          ? { isExhibition: Boolean(loaded.isDailyExhibition), gameMode: "daily", dailyDate: loaded.dailyDate }
+          : {};
         try {
           setDoc(doc(db, "rooms", loaded.roomCode, "players", userId), {
             id: userId,
@@ -10155,6 +10342,7 @@ export default function App() {
             name: getActiveDisplayName(),
             status: loaded.state.isGameOver ? playerTerminalStatus : "active",
             mistakes: loaded.state.currentMistakesCount,
+            ...dailyRoomMeta,
             updatedAt: serverTimestamp()
           }, { merge: true });
 
@@ -10169,6 +10357,7 @@ export default function App() {
               isPending: true,
               mistakes: loaded.state.currentMistakesCount,
               timeSec: loaded.seconds,
+              ...dailyRoomMeta,
               updatedAt: serverTimestamp()
             }, { merge: true });
           }
@@ -10313,15 +10502,23 @@ export default function App() {
             showToast(t("roomSessionClosedToast"));
             return;
           }
+          const isDailyInviteRoom = rData.gameMode === "daily" && Boolean(rData.dailyDate);
           const rSeed = rData.seed !== undefined ? Number(rData.seed) : parseInt(code, 10);
-          const rDiff = (rData.difficulty || "EASY").toUpperCase() as Difficulty;
-          const rMistakes = rData.mistakesLimit !== undefined
-            ? Number(rData.mistakesLimit)
-            : (rData.mistakeLimit !== undefined ? Number(rData.mistakeLimit) : 3);
-          const rHints = rData.hintsLimit !== undefined
-            ? Number(rData.hintsLimit)
-            : (rData.hintLimit !== undefined ? Number(rData.hintLimit) : 3);
-          const rTimer = rData.timerEnabled !== undefined ? Boolean(rData.timerEnabled) : true;
+          const rawRDiff = (rData.difficulty || "EASY").toUpperCase();
+          const rDiff = (rawRDiff === "MASTER" ? "EXPERT" : rawRDiff) as Difficulty;
+          const rMistakes = isDailyInviteRoom
+            ? 3
+            : (rData.mistakesLimit !== undefined
+              ? Number(rData.mistakesLimit)
+              : (rData.mistakeLimit !== undefined ? Number(rData.mistakeLimit) : 3));
+          const rHints = isDailyInviteRoom
+            ? 3
+            : (rData.hintsLimit !== undefined
+              ? Number(rData.hintsLimit)
+              : (rData.hintLimit !== undefined ? Number(rData.hintLimit) : 3));
+          const rTimer = isDailyInviteRoom
+            ? true
+            : (rData.timerEnabled !== undefined ? Boolean(rData.timerEnabled) : true);
           const isLocked = Boolean(rData.isLocked);
           const storedPinHash = (rData.pinHash || "").trim();
           const legacyPin = (rData.pin || rData.roomPin || "").trim();
@@ -10523,7 +10720,9 @@ export default function App() {
     if (!challengeSeed) {
       setChallengeSeed(targetSeed);
     }
-    const activeRoomCode = String(targetSeed).padStart(6, '0').slice(-6);
+    const activeRoomCode = (activeGameId && /^\d{6}$/.test(activeGameId))
+      ? activeGameId
+      : String(targetSeed).padStart(6, '0').slice(-6);
     const currentProfileName = getActiveDisplayName();
     let chalUrl = `${getChallengeBaseUrl()}?room=${activeRoomCode}&sender=${encodeURIComponent(currentProfileName)}`;
     const cgInvite = await getCrazyGamesInviteLink({ roomId: activeRoomCode, sender: currentProfileName });
@@ -10543,18 +10742,23 @@ export default function App() {
     targetSolution?: number[][] | null
   ): Promise<string | null> => {
     const currentBoard = targetBoard || boardState;
+    const isDailyRoomSession = Boolean(isDailyRoomRef.current && dailyChallengeActiveDateRef.current);
     const seed = targetSeed || currentBoard?.seed || challengeSeed || (Math.floor(Math.random() * 900000) + 100000);
-    const roomCode = String(seed).padStart(6, '0').slice(-6);
+    const roomCode = (activeGameId && /^\d{6}$/.test(activeGameId))
+      ? activeGameId
+      : String(seed).padStart(6, '0').slice(-6);
     const diff = targetDiff || currentBoard?.difficulty || difficulty || "EASY";
 
     // 1. FAST CACHE RETRIEVAL (Must run even when offline!)
-    const existingRecord = completedGamesRef.current.find(
-      g =>
-        Boolean(g.isRoomCreated && g.roomCode) &&
-        ((targetSeed && g.seed === targetSeed) || (g.seed === seed) || (g.id && g.id.includes(`-${seed}-`)))
-    );
-    if (existingRecord?.isRoomCreated && existingRecord?.roomCode) {
-      return existingRecord.roomCode;
+    if (!isDailyRoomSession) {
+      const existingRecord = completedGamesRef.current.find(
+        g =>
+          Boolean(g.isRoomCreated && g.roomCode) &&
+          ((targetSeed && g.seed === targetSeed) || (g.seed === seed) || (g.id && g.id.includes(`-${seed}-`)))
+      );
+      if (existingRecord?.isRoomCreated && existingRecord?.roomCode) {
+        return existingRecord.roomCode;
+      }
     }
     if (activeGameId && activeGameId.length === 6) {
       return activeGameId;
@@ -10573,7 +10777,9 @@ export default function App() {
 
     try {
       let puzzleFlat: number[] | null = null;
-      if ((currentBoard as any)?.initialGrid) {
+      if (isDailyRoomSession && dailyChallengeActiveDateRef.current) {
+        puzzleFlat = generateDailyPuzzle(dailyChallengeActiveDateRef.current).puzzleFlat;
+      } else if ((currentBoard as any)?.initialGrid) {
         puzzleFlat = (currentBoard as any).initialGrid.flat();
       } else if (currentBoard?.grid) {
         puzzleFlat = currentBoard.grid.map(row => row.map(cell => cell.isOriginalClue ? cell.value : 0)).flat();
@@ -10583,13 +10789,20 @@ export default function App() {
       }
 
       const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, roomCode) : "";
-      const mistakesLimit = currentBoard?.maxMistakesLimit !== undefined ? currentBoard.maxMistakesLimit : (challengeMistakeLimit || 3);
-      const hintsLimit = currentBoard?.maxHintsLimit !== undefined ? currentBoard.maxHintsLimit : (challengeHintLimit ?? 3);
+      const mistakesLimit = isDailyRoomSession
+        ? 3
+        : (currentBoard?.maxMistakesLimit !== undefined ? currentBoard.maxMistakesLimit : (challengeMistakeLimit || 3));
+      const hintsLimit = isDailyRoomSession
+        ? 3
+        : (currentBoard?.maxHintsLimit !== undefined ? currentBoard.maxHintsLimit : (challengeHintLimit ?? 3));
 
       await setDoc(doc(db, "rooms", roomCode), {
         roomCode: roomCode,
         seed: seed,
-        difficulty: diff,
+        difficulty: isDailyRoomSession ? dailyChallengeDifficultyRef.current : diff,
+        ...(isDailyRoomSession && dailyChallengeActiveDateRef.current
+          ? { gameMode: "daily", dailyDate: dailyChallengeActiveDateRef.current }
+          : {}),
         hostId: uId,
         hostName: pName,
         createdById: uId,
@@ -10597,7 +10810,7 @@ export default function App() {
         ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
         mistakesLimit: mistakesLimit,
         hintsLimit: hintsLimit,
-        timerEnabled: timerEnabled,
+        timerEnabled: isDailyRoomSession ? true : timerEnabled,
         isLocked: isRoomLocked,
         pinHash: hashedPin,
         status: "active",
@@ -10806,11 +11019,126 @@ export default function App() {
     setSharingPendingChallenge(null);
   };
 
-  const openCreateRoomModal = (initialDifficulty: Difficulty = "EASY", initialTimer: boolean = true) => {
+  const openCreateRoomModal = (initialDifficulty: Difficulty = "EASY", initialTimer: boolean = true, dailyDateOverride?: string) => {
     if (!isOnline) {
       setShowMultiplayerForkModal(true);
       return;
     }
+
+    if (dailyDateOverride) {
+      let normalizedDailyDate = String(dailyDateOverride).trim();
+      try {
+        parseDateKey(normalizedDailyDate);
+      } catch {
+        normalizedDailyDate = formatDateKey(new Date());
+      }
+      const dailyGen = generateDailyPuzzle(normalizedDailyDate);
+      const masterBoardDifficulty: Difficulty = dailyGen.difficulty === "MASTER" ? "EXPERT" : dailyGen.difficulty;
+      const roomCode = String(Math.floor(100000 + Math.random() * 900000));
+
+      isDailyBoardContextRef.current = false;
+      isDailyRoomRef.current = true;
+      setIsDailyRoomActive(true);
+      isDailyExhibitionRef.current = false;
+      setIsDailyExhibition(false);
+      dailyChallengeActiveDateRef.current = normalizedDailyDate;
+      setDailyChallengeActiveDate(normalizedDailyDate);
+      dailyChallengeDifficultyRef.current = dailyGen.difficulty;
+      setDailyChallengeDifficulty(dailyGen.difficulty);
+      setDailyChallengeIsArchive(normalizedDailyDate < formatDateKey(new Date()));
+      setIsDailyReviewSession(false);
+      setDailyReviewSummaryMeta(null);
+      setDailyChallengeLoadedBoardDate(normalizedDailyDate);
+
+      setChallengeDifficulty(masterBoardDifficulty);
+      setChallengeMistakeLimit(3);
+      setChallengeHintLimit(3);
+      setChallengeTimerEnabled(true);
+      setIsRoomLocked(false);
+      setRoomPin("");
+      setIsHost(true);
+      setChallengeSeed(dailyGen.seed);
+      setActiveGameId(roomCode);
+      setRematchGameId(roomCode);
+
+      setMultiplayerPlayers(prev => prev.map(p => ({
+        ...p,
+        inviteStatus: 'idle' as const,
+        inviteSentTimestamp: undefined,
+        declinedTimestamp: undefined
+      })));
+      setLobbyAcceptedUserIds(new Set());
+      setRematchInviteStates({});
+
+      setShowMultiplayerForkModal(false);
+      setShowJoinRoomModal(false);
+      setShowCreateChallengeModal(true);
+
+      const activeHostId = auth.currentUser?.uid || userProfile?.id || getOrCreateGuestIdentity().id;
+      const activeHostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
+
+      setDoc(doc(db, "rooms", roomCode), {
+        roomCode: roomCode,
+        seed: dailyGen.seed,
+        gameMode: "daily",
+        dailyDate: normalizedDailyDate,
+        difficulty: dailyGen.difficulty,
+        hostId: activeHostId,
+        hostName: activeHostName,
+        createdById: activeHostId,
+        createdByName: activeHostName,
+        puzzleFlat: dailyGen.puzzleFlat,
+        mistakesLimit: 3,
+        hintsLimit: 3,
+        timerEnabled: true,
+        isLocked: false,
+        pinHash: "",
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        expiresAt: 0
+      }).then(async () => {
+        const curAuth = await ensureActiveAuthUser().catch(() => auth.currentUser);
+        const eligibilityUid = (!curAuth || curAuth.isAnonymous) ? null : curAuth.uid;
+        let isExhibition = false;
+        try {
+          const eligibility = await checkPlayerDailyEligibility(eligibilityUid, normalizedDailyDate);
+          isExhibition = eligibility === "EXHIBITION";
+        } catch {
+          isExhibition = false;
+        }
+        isDailyExhibitionRef.current = isExhibition;
+        setIsDailyExhibition(isExhibition);
+        const playerDocId = curAuth?.uid || activeHostId;
+        await setDoc(doc(db, "rooms", roomCode, "players", playerDocId), {
+          id: playerDocId,
+          authUid: curAuth?.uid || authUser?.uid,
+          guestId: userProfile?.id,
+          name: activeHostName,
+          status: "active",
+          isExhibition,
+          gameMode: "daily",
+          dailyDate: normalizedDailyDate,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      }).catch(err => {
+        console.error("[Firestore] Failed to initialize daily room document:", err);
+      });
+      return;
+    }
+
+    isDailyBoardContextRef.current = false;
+    isDailyRoomRef.current = false;
+    setIsDailyRoomActive(false);
+    isDailyExhibitionRef.current = false;
+    setIsDailyExhibition(false);
+    dailyChallengeActiveDateRef.current = null;
+    setDailyChallengeActiveDate(null);
+    setDailyChallengeIsArchive(false);
+    setIsDailyReviewSession(false);
+    setDailyReviewSummaryMeta(null);
+    setDailyChallengeLoadedBoardDate(null);
+
     const canonicalSeed = Math.floor(100000 + Math.random() * 900000);
     const roomCode = canonicalSeed.toString();
 
@@ -10917,31 +11245,45 @@ export default function App() {
     isClosed?: boolean;
   }) => {
     const seed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
-    const code = String(seed).padStart(6, '0').slice(-6);
+    const code = (activeGameId && /^\d{6}$/.test(activeGameId))
+      ? activeGameId
+      : String(seed).padStart(6, '0').slice(-6);
+    const isDailyRoomSession = Boolean(isDailyRoomRef.current && dailyChallengeActiveDateRef.current);
 
     const payload: any = {
       updatedAt: serverTimestamp()
     };
-    if (updates.difficulty !== undefined) {
-      payload.difficulty = updates.difficulty;
-      // Synchronously regenerate puzzleFlat matching the seed and new difficulty.
-      // The solution is intentionally NOT published; joiners derive it locally from the seed.
-      const generated = generateFlatBoardForSeed(updates.difficulty, seed);
-      payload.puzzleFlat = generated.puzzleFlat;
-      puzzleCache.set(`${updates.difficulty}_${seed}`, {
-        solved: generated.solved.map(r => [...r]),
-        puzzle: generated.puzzle.map(r => [...r])
-      });
+    if (isDailyRoomSession && dailyChallengeActiveDateRef.current) {
+      payload.gameMode = "daily";
+      payload.dailyDate = dailyChallengeActiveDateRef.current;
+      payload.difficulty = dailyChallengeDifficultyRef.current;
+      payload.mistakesLimit = 3;
+      payload.mistakeLimit = 3;
+      payload.hintsLimit = 3;
+      payload.hintLimit = 3;
+      payload.timerEnabled = true;
+    } else {
+      if (updates.difficulty !== undefined) {
+        payload.difficulty = updates.difficulty;
+        // Synchronously regenerate puzzleFlat matching the seed and new difficulty.
+        // The solution is intentionally NOT published; joiners derive it locally from the seed.
+        const generated = generateFlatBoardForSeed(updates.difficulty, seed);
+        payload.puzzleFlat = generated.puzzleFlat;
+        puzzleCache.set(`${updates.difficulty}_${seed}`, {
+          solved: generated.solved.map(r => [...r]),
+          puzzle: generated.puzzle.map(r => [...r])
+        });
+      }
+      if (updates.mistakesLimit !== undefined) {
+        payload.mistakesLimit = updates.mistakesLimit;
+        payload.mistakeLimit = updates.mistakesLimit;
+      }
+      if (updates.hintsLimit !== undefined) {
+        payload.hintsLimit = updates.hintsLimit;
+        payload.hintLimit = updates.hintsLimit;
+      }
+      if (updates.timerEnabled !== undefined) payload.timerEnabled = updates.timerEnabled;
     }
-    if (updates.mistakesLimit !== undefined) {
-      payload.mistakesLimit = updates.mistakesLimit;
-      payload.mistakeLimit = updates.mistakesLimit;
-    }
-    if (updates.hintsLimit !== undefined) {
-      payload.hintsLimit = updates.hintsLimit;
-      payload.hintLimit = updates.hintsLimit;
-    }
-    if (updates.timerEnabled !== undefined) payload.timerEnabled = updates.timerEnabled;
     if (updates.isLocked !== undefined) payload.isLocked = updates.isLocked;
     if (updates.pin !== undefined) {
       payload.pinHash = updates.pin ? await hashRoomPin(updates.pin, code) : "";
@@ -11051,13 +11393,42 @@ export default function App() {
 
   const executeStartGameAction = () => {
     const canonicalSeed = challengeSeed || 100000;
-    const activeRoomCode = String(canonicalSeed).padStart(6, '0').slice(-6);
+    const activeRoomCode = (activeGameId && /^\d{6}$/.test(activeGameId))
+      ? activeGameId
+      : String(canonicalSeed).padStart(6, '0').slice(-6);
+    const isDailyRoomSession = Boolean(isDailyRoomRef.current && dailyChallengeActiveDateRef.current);
 
     // ─── OFFLINE BRANCH: start as a pure Solo game for this instance only ───
     // setChallengeMode(false) is scoped to this specific game start. As soon as
     // the user returns online and opens a new multiplayer room, challengeMode will
     // be set to true again by the normal online path below — no lingering flag.
     if (!isOnline) {
+      isDailyRoomRef.current = false;
+      setIsDailyRoomActive(false);
+      isDailyExhibitionRef.current = false;
+      setIsDailyExhibition(false);
+
+      if (isDailyRoomSession && dailyChallengeActiveDateRef.current) {
+        const dKey = dailyChallengeActiveDateRef.current;
+        const dGen = generateDailyPuzzle(dKey);
+        const dailyUid = (isGuestSession || !auth.currentUser || auth.currentUser.isAnonymous)
+          ? null
+          : (authUser?.uid || auth.currentUser.uid);
+        handleLaunchDailyChallengeRef.current?.({
+          date: dGen.date,
+          difficulty: dGen.difficulty,
+          puzzle: dGen.puzzle,
+          solved: dGen.solved,
+          seed: dGen.seed,
+          savedProgress: getDailyProgress(dKey, dailyUid),
+          isArchive: dKey < formatDateKey(new Date()),
+        });
+        setShowCreateChallengeModal(false);
+        setIsTimerPaused(false);
+        showToast(t("offlineSoloToast"));
+        return;
+      }
+
       setChallengeMode(false);       // Solo game — no multiplayer end-game screen
       setActiveGameId(null);         // No room tracking for this instance
       setRematchGameId(null);        // No rematch session for this instance
@@ -11074,6 +11445,92 @@ export default function App() {
       setShowCreateChallengeModal(false);
       setIsTimerPaused(false);
       showToast(t("offlineSoloToast"));
+      navigateToScreen("game");
+      return;
+    }
+
+    // ─── ONLINE DAILY ROOM BRANCH: strictly use generateDailyPuzzle (no puzzleCache / generateFlatBoardForSeed) ───
+    if (isDailyRoomSession && dailyChallengeActiveDateRef.current) {
+      const dailyDateKey = dailyChallengeActiveDateRef.current;
+      const dailyGen = generateDailyPuzzle(dailyDateKey);
+      const masterBoardDifficulty: Difficulty = dailyGen.difficulty === "MASTER" ? "EXPERT" : dailyGen.difficulty;
+      const finishedGrid: SudokuCell[][] = Array(9).fill(null).map((_, r) =>
+        Array(9).fill(null).map((__, c) => {
+          const val = dailyGen.puzzle[r][c];
+          return {
+            row: r,
+            col: c,
+            value: val,
+            isOriginalClue: val !== 0,
+            isUserInput: false,
+            notes: new Set<number>()
+          };
+        })
+      );
+
+      isDailyBoardContextRef.current = false;
+      setOpenedCreateFromMultiplayerResult(false);
+      setActiveGameId(activeRoomCode);
+      setRematchGameId(activeRoomCode);
+      setChallengeMode(true);
+      setIsHost(true);
+      setChallengeSeed(dailyGen.seed);
+      setChallengeDifficulty(masterBoardDifficulty);
+      setChallengeMistakeLimit(3);
+      setChallengeHintLimit(3);
+      setChallengeTimerEnabled(true);
+      setDifficulty(masterBoardDifficulty);
+      setMistakeLimitEnabled(true);
+      setTimerEnabled(true);
+      dailyChallengeDifficultyRef.current = dailyGen.difficulty;
+      setDailyChallengeDifficulty(dailyGen.difficulty);
+      setDailyChallengeIsArchive(dailyDateKey < formatDateKey(new Date()));
+      setDailyChallengeLoadedBoardDate(dailyDateKey);
+      setIsDailyReviewSession(false);
+      setDailyReviewSummaryMeta(null);
+
+      setSolutionGrid(dailyGen.solved.map(r => [...r]));
+      setBoardState({
+        grid: finishedGrid,
+        initialGrid: dailyGen.puzzle,
+        solutionGrid: dailyGen.solved,
+        selectedRow: null,
+        selectedCol: null,
+        currentMistakesCount: 0,
+        maxMistakesLimit: 3,
+        hintsCount: 0,
+        maxHintsLimit: 3,
+        isGameOver: false,
+        difficulty: masterBoardDifficulty,
+        seed: dailyGen.seed
+      });
+      setHistory([]);
+      setLockedNum(null);
+      setActiveKeypadNum(null);
+      setSessionSeconds(0);
+      setShowGameOverModal(false);
+      setIsVictoryActive(false);
+      setGameSessionKey(Date.now());
+      setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
+
+      setDoc(doc(db, "rooms", activeRoomCode), {
+        roomCode: activeRoomCode,
+        seed: dailyGen.seed,
+        gameMode: "daily",
+        dailyDate: dailyDateKey,
+        difficulty: dailyGen.difficulty,
+        puzzleFlat: dailyGen.puzzleFlat,
+        mistakesLimit: 3,
+        mistakeLimit: 3,
+        hintsLimit: 3,
+        hintLimit: 3,
+        timerEnabled: true,
+        updatedAt: serverTimestamp()
+      }, { merge: true }).catch(() => { });
+
+      registerChallengeJoin(activeRoomCode, true);
+      setShowCreateChallengeModal(false);
+      setIsTimerPaused(false);
       navigateToScreen("game");
       return;
     }
@@ -11198,17 +11655,20 @@ export default function App() {
     addLog(`📤 Custom challenge invite dispatched to player.`);
 
     const activeAuth = await ensureActiveAuthUser();
+    const isDailyRoomSession = Boolean(!historyChallengeGame && isDailyRoomRef.current && dailyChallengeActiveDateRef.current);
     const seed = historyChallengeGame?.seed || challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
-    const activeRoomCode = String(seed).padStart(6, '0').slice(-6);
+    const activeRoomCode = !historyChallengeGame && activeGameId && /^\d{6}$/.test(activeGameId)
+      ? activeGameId
+      : String(seed).padStart(6, '0').slice(-6);
     const currentUserId = activeAuth?.uid || userProfile?.id;
     const currentUserName = getActiveDisplayName() || userProfileRef.current?.displayName || userProfileRef.current?.name || getOrCreateGuestIdentity().displayName;
 
     // Ensure room is synced with current settings before invite is dispatched
     await updateRoomSettingsInFirestore({
       difficulty: currentDifficulty,
-      mistakesLimit: challengeMistakeLimit,
-      hintsLimit: challengeHintLimit,
-      timerEnabled: challengeTimerEnabled
+      mistakesLimit: isDailyRoomSession ? 3 : challengeMistakeLimit,
+      hintsLimit: isDailyRoomSession ? 3 : challengeHintLimit,
+      timerEnabled: isDailyRoomSession ? true : challengeTimerEnabled
     });
 
     // Target the intact recipient playerId directly
@@ -11232,11 +11692,14 @@ export default function App() {
         hostId: currentUserId,
         roomCode: activeRoomCode,
         gameId: activeRoomCode,
-        difficulty: currentDifficulty,
+        difficulty: isDailyRoomSession ? dailyChallengeDifficultyRef.current : currentDifficulty,
         seed: seed,
-        maxMistakes: challengeMistakeLimit,
-        hintLimit: challengeHintLimit,
-        timerEnabled: challengeTimerEnabled,
+        ...(isDailyRoomSession && dailyChallengeActiveDateRef.current
+          ? { gameMode: "daily", dailyDate: dailyChallengeActiveDateRef.current }
+          : {}),
+        maxMistakes: isDailyRoomSession ? 3 : challengeMistakeLimit,
+        hintLimit: isDailyRoomSession ? 3 : challengeHintLimit,
+        timerEnabled: isDailyRoomSession ? true : challengeTimerEnabled,
         status: "pending",
         timestamp: Date.now(),
         expiresAt: 0
@@ -11660,8 +12123,16 @@ export default function App() {
     }
 
     // Daily Challenge completion/failure hook (when playing Today or an Archive Daily Challenge on the master board)
-    if (dailyChallengeActiveDate && activeBoard) {
-      const dailyUid = isGuestSession ? null : authUser?.uid;
+    const activeDailyDateKey = dailyChallengeActiveDateRef.current || dailyChallengeActiveDate;
+    if (activeDailyDateKey && activeBoard) {
+      const isDailyMultiplayerSession = Boolean(challengeMode || isDailyRoomRef.current);
+      const isExhibitionSession = Boolean(isDailyRoomRef.current && isDailyExhibitionRef.current);
+      const activeDailyDifficulty = isDailyRoomRef.current
+        ? dailyChallengeDifficultyRef.current
+        : dailyChallengeDifficulty;
+      const dailyUid = (isGuestSession || !auth.currentUser || auth.currentUser.isAnonymous)
+        ? null
+        : (authUser?.uid || auth.currentUser.uid);
       const completedAt = Date.now();
       const boardFlat = activeBoard.grid.flatMap(row => row.map(cell => cell.value));
       const puzzleFlat = activeBoard.grid.flatMap(row => row.map(cell => (cell.isOriginalClue ? cell.value : 0)));
@@ -11674,30 +12145,37 @@ export default function App() {
         });
       });
 
-      isDailyBoardContextRef.current = true;
-      setShowGameOverModal(false);
-      setIsDailyReviewSession(true);
-      setDailyChallengeLoadedBoardDate(dailyChallengeActiveDate);
+      if (!isDailyMultiplayerSession) {
+        isDailyBoardContextRef.current = true;
+        setShowGameOverModal(false);
+        setIsDailyReviewSession(true);
+        setDailyChallengeLoadedBoardDate(activeDailyDateKey);
+      } else {
+        isDailyBoardContextRef.current = false;
+      }
 
       if (isWon) {
         const updatedDailyStats = recordDailyCompletion(
           {
-            date: dailyChallengeActiveDate,
-            difficulty: dailyChallengeDifficulty,
+            date: activeDailyDateKey,
+            difficulty: activeDailyDifficulty,
             timeSeconds: sessionSeconds,
             mistakes: finalMistakes,
             hints: hintsUsed,
             completedAt,
             isArchive: dailyChallengeIsArchive,
+            isExhibition: isExhibitionSession,
           },
-          dailyUid
+          dailyUid,
+          undefined,
+          { isExhibition: isExhibitionSession }
         );
 
         saveDailyProgress(
           {
-            date: dailyChallengeActiveDate,
+            date: activeDailyDateKey,
             seed: gameSeed,
-            difficulty: dailyChallengeDifficulty,
+            difficulty: activeDailyDifficulty,
             status: "COMPLETED",
             boardFlat,
             puzzleFlat,
@@ -11708,14 +12186,16 @@ export default function App() {
             startedAt: Math.max(0, completedAt - sessionSeconds * 1000),
             updatedAt: completedAt,
             completedAt,
+            isExhibition: isExhibitionSession,
           },
-          dailyUid
+          dailyUid,
+          { isExhibition: isExhibitionSession }
         );
 
         if (dailyUid) {
-          const dayRecord = updatedDailyStats.recordsByDate[dailyChallengeActiveDate] ?? {
-            date: dailyChallengeActiveDate,
-            difficulty: dailyChallengeDifficulty,
+          const dayRecord = updatedDailyStats.recordsByDate[activeDailyDateKey] ?? {
+            date: activeDailyDateKey,
+            difficulty: activeDailyDifficulty,
             status: "COMPLETED" as const,
             timeSeconds: sessionSeconds,
             mistakes: finalMistakes,
@@ -11727,32 +12207,39 @@ export default function App() {
           };
           void recordDailyCompletionToCloud(
             dailyUid,
-            dailyChallengeActiveDate,
+            activeDailyDateKey,
             dayRecord,
-            updatedDailyStats
+            updatedDailyStats,
+            pName,
+            { isExhibition: isExhibitionSession }
           );
         }
 
-        const completedModalPayload = {
-          isOpen: true,
-          date: dailyChallengeActiveDate,
-          difficulty: dailyChallengeDifficulty,
-          status: "COMPLETED" as DailyChallengeStatus,
-          elapsedTime: sessionSeconds,
-          mistakes: finalMistakes,
-          stats: updatedDailyStats,
-          fromCalendar: false,
-          fallbackSolvedOnReview: true,
-        };
-        setDailyRefreshCounter((c) => c + 1);
-        setDailyReviewSummaryMeta(completedModalPayload);
-        setDailyResultModalState(completedModalPayload);
+        if (!isExhibitionSession) {
+          setDailyRefreshCounter((c) => c + 1);
+        }
+
+        if (!isDailyMultiplayerSession || !isOnline) {
+          const completedModalPayload = {
+            isOpen: true,
+            date: activeDailyDateKey,
+            difficulty: activeDailyDifficulty,
+            status: "COMPLETED" as DailyChallengeStatus,
+            elapsedTime: sessionSeconds,
+            mistakes: finalMistakes,
+            stats: updatedDailyStats,
+            fromCalendar: false,
+            fallbackSolvedOnReview: true,
+          };
+          setDailyReviewSummaryMeta(completedModalPayload);
+          setDailyResultModalState(completedModalPayload);
+        }
       } else {
         const failedProgress = saveDailyProgress(
           {
-            date: dailyChallengeActiveDate,
+            date: activeDailyDateKey,
             seed: gameSeed,
-            difficulty: dailyChallengeDifficulty,
+            difficulty: activeDailyDifficulty,
             status: "FAILED",
             boardFlat,
             puzzleFlat,
@@ -11762,29 +12249,36 @@ export default function App() {
             hintsCount: hintsUsed,
             startedAt: Math.max(0, completedAt - sessionSeconds * 1000),
             updatedAt: completedAt,
+            isExhibition: isExhibitionSession,
           },
-          dailyUid
+          dailyUid,
+          { isExhibition: isExhibitionSession }
         );
 
         const updatedDailyStats = getDailyStats(dailyUid);
         if (dailyUid) {
-          void saveDailyProgressToCloud(dailyUid, failedProgress);
+          void saveDailyProgressToCloud(dailyUid, failedProgress, { isExhibition: isExhibitionSession });
         }
 
-        const failedModalPayload = {
-          isOpen: true,
-          date: dailyChallengeActiveDate,
-          difficulty: dailyChallengeDifficulty,
-          status: "FAILED" as DailyChallengeStatus,
-          elapsedTime: sessionSeconds,
-          mistakes: finalMistakes,
-          stats: updatedDailyStats,
-          fromCalendar: false,
-          fallbackSolvedOnReview: false,
-        };
-        setDailyRefreshCounter((c) => c + 1);
-        setDailyReviewSummaryMeta(failedModalPayload);
-        setDailyResultModalState(failedModalPayload);
+        if (!isExhibitionSession) {
+          setDailyRefreshCounter((c) => c + 1);
+        }
+
+        if (!isDailyMultiplayerSession || !isOnline) {
+          const failedModalPayload = {
+            isOpen: true,
+            date: activeDailyDateKey,
+            difficulty: activeDailyDifficulty,
+            status: "FAILED" as DailyChallengeStatus,
+            elapsedTime: sessionSeconds,
+            mistakes: finalMistakes,
+            stats: updatedDailyStats,
+            fromCalendar: false,
+            fallbackSolvedOnReview: false,
+          };
+          setDailyReviewSummaryMeta(failedModalPayload);
+          setDailyResultModalState(failedModalPayload);
+        }
       }
     }
 
@@ -12214,6 +12708,14 @@ export default function App() {
         console.warn("[Firestore] PB score check notice:", checkErr);
       }
 
+      const dailyRoomMeta = (isDailyRoomRef.current && dailyChallengeActiveDateRef.current)
+        ? {
+            isExhibition: isDailyExhibitionRef.current,
+            gameMode: "daily",
+            dailyDate: dailyChallengeActiveDateRef.current,
+          }
+        : {};
+
       const newRecord = {
         challengeId: rBody.challengeId,
         userId: effectiveUserId,
@@ -12227,6 +12729,7 @@ export default function App() {
         isWon: effIsWon,
         isPending: false,
         status: effStatus,
+        ...dailyRoomMeta,
         date: rBody.date || new Date().toISOString(),
         timestamp: serverTimestamp()
       };
@@ -12246,6 +12749,7 @@ export default function App() {
           name: effectivePlayerName,
           status: effStatus,
           isWon: effIsWon,
+          ...dailyRoomMeta,
           updatedAt: serverTimestamp()
         };
         if (shouldOverwriteScore) {
@@ -12410,6 +12914,13 @@ export default function App() {
       const docId = getSeedDocId(challengeId);
       const participantRef = doc(db, "challenge_results", docId, "participants", authUid);
       const existing = await getDoc(participantRef);
+      const dailyJoinMeta = (isDailyRoomRef.current && dailyChallengeActiveDateRef.current)
+        ? {
+            isExhibition: isDailyExhibitionRef.current,
+            gameMode: "daily",
+            dailyDate: dailyChallengeActiveDateRef.current,
+          }
+        : {};
       if (!existing.exists() || existing.data()?.status === "left" || existing.data()?.status === "abandoned" || existing.data()?.status === "disconnected") {
         await setDoc(participantRef, {
           challengeId,
@@ -12423,6 +12934,7 @@ export default function App() {
           isWon: false,
           status: "solving",
           isPending: true,
+          ...dailyJoinMeta,
           date: new Date().toISOString(),
           timestamp: serverTimestamp()
         }, { merge: true });
@@ -12438,6 +12950,7 @@ export default function App() {
         guestId,
         name: pName,
         status: isAlreadyCompleted ? "completed" : "active",
+        ...dailyJoinMeta,
         ...(isAlreadyCompleted && existing.data()?.timeSec !== undefined ? { timeSec: existing.data().timeSec } : {}),
         ...(isAlreadyCompleted && existing.data()?.hints !== undefined
           ? { hints: Number(existing.data()?.hints) }
@@ -12492,6 +13005,7 @@ export default function App() {
             hints: p.hints !== undefined ? Number(p.hints) : (p.hintsUsed !== undefined ? Number(p.hintsUsed) : 0),
             timeSec: p.timeSec !== undefined ? Number(p.timeSec) : (p.elapsedTime !== undefined ? Number(p.elapsedTime) : 0),
             isWon: p.status === "won" || p.status === "completed" || p.status === "victory" || Boolean(p.isWon),
+            ...(typeof p.isExhibition === "boolean" ? { isExhibition: p.isExhibition } : {}),
             updatedAt: p.updatedAt
           });
         }
@@ -12511,6 +13025,9 @@ export default function App() {
             hints: resolvedHints,
             userId: uId,
             playerName: r.playerName || existing?.playerName || "Player",
+            ...(typeof (r.isExhibition ?? existing?.isExhibition) === "boolean"
+              ? { isExhibition: Boolean(r.isExhibition ?? existing?.isExhibition) }
+              : {}),
             status: r.status || existing?.status || (r.isWon ? "completed" : (!r.isPending ? "mistake_game_over" : "active"))
           });
         }
@@ -13318,6 +13835,7 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     let chalParam = params.get("room") || params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("c");
+    let dailyParam = params.get("daily");
     let queryPw = params.get("pin") || params.get("pw") || params.get("password");
     let senderParam = params.get("sender") || params.get("senderName") || params.get("invitedBy") || params.get("sender_name");
     let targetUidParam = params.get("targetUid") || params.get("toUserId") || params.get("recipientId") || params.get("to");
@@ -13330,6 +13848,9 @@ export default function App() {
         const qs = window.location.hash.substring(hashIndex + 1);
         const hashParams = new URLSearchParams(qs);
         chalParam = hashParams.get("room") || hashParams.get("challenge") || hashParams.get("gameId") || hashParams.get("seed") || hashParams.get("c");
+        if (!dailyParam) {
+          dailyParam = hashParams.get("daily");
+        }
         if (!queryPw) {
           queryPw = hashParams.get("pin") || hashParams.get("pw") || hashParams.get("password");
         }
@@ -13375,6 +13896,18 @@ export default function App() {
       } catch (e) { }
     }
 
+    if (!chalParam && !dailyParam) {
+      try {
+        const ssDaily = sessionStorage.getItem("sudoku_invite_daily");
+        if (ssDaily) {
+          dailyParam = ssDaily;
+        }
+      } catch (e) { }
+    }
+    try {
+      sessionStorage.removeItem("sudoku_invite_daily");
+    } catch (e) { }
+
     if (chalParam) {
       const sanitizedChallenge = sanitizeGameId(chalParam);
       const sanitizedPw = queryPw ? sanitizePassword(queryPw) : undefined;
@@ -13384,9 +13917,25 @@ export default function App() {
       } else if (sanitizedChallenge) {
         handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true, targetUidParam || undefined);
       }
+    } else if (dailyParam) {
+      try {
+        const trimmedDaily = dailyParam.trim();
+        parseDateKey(trimmedDaily);
+        if (trimmedDaily <= formatDateKey(new Date())) {
+          pendingDailyDeepLinkRef.current = trimmedDaily;
+        }
+      } catch { }
     }
     // Zero-state on startup: Do NOT auto-generate a background puzzle.
   }, []);
+
+  // Process deferred ?daily=YYYY-MM-DD deep links once app hydration finishes
+  useEffect(() => {
+    const queuedDate = pendingDailyDeepLinkRef.current;
+    if (!queuedDate || !isAppReady || isAuthHydrating) return;
+    pendingDailyDeepLinkRef.current = null;
+    void launchDailyByDateKeyRef.current?.(queuedDate);
+  }, [isAppReady, isAuthHydrating]);
 
   // Handle Capacitor native deep links (appUrlOpen events)
   useEffect(() => {
@@ -13403,6 +13952,7 @@ export default function App() {
             const urlObj = new URL(event.url);
             const params = new URLSearchParams(urlObj.search);
             let chalParam = params.get("room") || params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("c");
+            let dailyParam = params.get("daily");
             let queryPw = params.get("pin") || params.get("pw") || params.get("password");
             let senderParam = params.get("sender") || params.get("senderName") || params.get("invitedBy") || params.get("sender_name");
             let targetUidParam = params.get("targetUid") || params.get("toUserId") || params.get("recipientId") || params.get("to");
@@ -13414,6 +13964,9 @@ export default function App() {
                 const qs = urlObj.hash.substring(hashIdx + 1);
                 const hashParams = new URLSearchParams(qs);
                 chalParam = hashParams.get("room") || hashParams.get("challenge") || hashParams.get("gameId") || hashParams.get("seed") || hashParams.get("c");
+                if (!dailyParam) {
+                  dailyParam = hashParams.get("daily");
+                }
                 if (!queryPw) {
                   queryPw = hashParams.get("pin") || hashParams.get("pw") || hashParams.get("password");
                 }
@@ -13438,6 +13991,18 @@ export default function App() {
               } else if (sanitizedChallenge) {
                 handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true, targetUidParam || undefined);
               }
+            } else if (dailyParam) {
+              try {
+                const trimmedDaily = dailyParam.trim();
+                parseDateKey(trimmedDaily);
+                if (trimmedDaily <= formatDateKey(new Date())) {
+                  if (isAppReadyRef.current && !isAuthHydratingRef.current) {
+                    void launchDailyByDateKeyRef.current?.(trimmedDaily);
+                  } else {
+                    pendingDailyDeepLinkRef.current = trimmedDaily;
+                  }
+                }
+              } catch { }
             }
           } catch (e) {
             console.error("Failed to parse incoming deep link URL:", e);
@@ -13598,11 +14163,16 @@ export default function App() {
     isChallengeModeOverride?: boolean
   ) => {
     isDailyBoardContextRef.current = false;
+    dailyChallengeActiveDateRef.current = null;
     setDailyChallengeActiveDate(null);
     setDailyChallengeIsArchive(false);
     setIsDailyReviewSession(false);
     setDailyReviewSummaryMeta(null);
     setDailyChallengeLoadedBoardDate(null);
+    isDailyRoomRef.current = false;
+    setIsDailyRoomActive(false);
+    isDailyExhibitionRef.current = false;
+    setIsDailyExhibition(false);
     setVisualizingBacktrack(false);
     setGeneratorLogs([]);
     setIsNewRecordAchieved(false);
@@ -13809,7 +14379,7 @@ export default function App() {
       if (typeof window === "undefined") return false;
       try {
         const sp = new URLSearchParams(window.location.search);
-        return Boolean(sp.get("room") || sp.get("challenge") || sp.get("gameId") || sp.get("seed") || sp.get("c"));
+        return Boolean(sp.get("room") || sp.get("challenge") || sp.get("gameId") || sp.get("seed") || sp.get("c") || sp.get("daily"));
       } catch {
         return false;
       }
@@ -13908,7 +14478,9 @@ export default function App() {
     setHistory([]);
     setLockedNum(null);
     setActiveKeypadNum(null);
-    updateHintInventory(boardState.maxHintsLimit !== undefined ? boardState.maxHintsLimit : 3);
+    if (!dailyChallengeActiveDateRef.current && !isDailyRoomRef.current) {
+      updateHintInventory(boardState.maxHintsLimit !== undefined ? boardState.maxHintsLimit : 3);
+    }
     setSessionSeconds(0);
     setIsTimerPaused(false);
     setShowGameOverModal(false);
@@ -13917,7 +14489,9 @@ export default function App() {
     // Update room progress in Firestore if active in online challenge mode
     if (challengeMode && isOnline) {
       const liveSeed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
-      const liveRoomCode = String(liveSeed).padStart(6, '0').slice(-6);
+      const liveRoomCode = (activeGameId && /^\d{6}$/.test(activeGameId))
+        ? activeGameId
+        : String(liveSeed).padStart(6, '0').slice(-6);
       const targetUid = auth.currentUser?.uid || authUser?.uid || (userProfile?.id && !userProfile.id.startsWith("GUEST_") ? userProfile.id : null) || userProfile?.id;
       if (targetUid && liveRoomCode) {
         try {
@@ -13928,6 +14502,13 @@ export default function App() {
             progress: 0,
             mistakes: 0,
             status: "active",
+            ...(isDailyRoomRef.current && dailyChallengeActiveDateRef.current
+              ? {
+                  isExhibition: isDailyExhibitionRef.current,
+                  gameMode: "daily",
+                  dailyDate: dailyChallengeActiveDateRef.current,
+                }
+              : {}),
             updatedAt: serverTimestamp()
           }, { merge: true });
         } catch (e) { }
@@ -13951,6 +14532,11 @@ export default function App() {
           setShowMultiplayerForkModal(true);
           return;
         }
+        if (dailyChallengeActiveDateRef.current) {
+          const dDiff = dailyChallengeDifficultyRef.current === "MASTER" ? "EXPERT" : dailyChallengeDifficultyRef.current;
+          openCreateRoomModal(dDiff, true, dailyChallengeActiveDateRef.current);
+          return;
+        }
         setShowCreateChallengeModal(true);
       }
       return;
@@ -13964,6 +14550,82 @@ export default function App() {
 
     // If already in an active challenge match (as host or guest), DO NOT re-escalate or clobber Firestore!
     if (challengeMode) {
+      setShowMidGameInviteModal(true);
+      return;
+    }
+
+    // Daily Challenge Solo -> Daily Challenge Room Escalation (preserves daily solver parity, 3/3/true locks, & eligibility gating)
+    if (!isDailyRoomRef.current && Boolean(dailyChallengeActiveDateRef.current)) {
+      const dailyDateKey = dailyChallengeActiveDateRef.current!;
+      const dailyGen = generateDailyPuzzle(dailyDateKey);
+      const mappedDiff: Difficulty = dailyGen.difficulty === "MASTER" ? "EXPERT" : dailyGen.difficulty;
+      const liveRoomCode = String(Math.floor(100000 + Math.random() * 900000));
+
+      const curAuth = await ensureActiveAuthUser().catch(() => auth.currentUser);
+      const eligibilityUid = (!curAuth || curAuth.isAnonymous) ? null : curAuth.uid;
+      let isExhibition = false;
+      try {
+        const eligibility = await checkPlayerDailyEligibility(eligibilityUid, dailyDateKey);
+        isExhibition = eligibility === "EXHIBITION";
+      } catch {
+        isExhibition = false;
+      }
+
+      isDailyBoardContextRef.current = false;
+      isDailyRoomRef.current = true;
+      setIsDailyRoomActive(true);
+      isDailyExhibitionRef.current = isExhibition;
+      setIsDailyExhibition(isExhibition);
+      dailyChallengeDifficultyRef.current = dailyGen.difficulty;
+      setDailyChallengeDifficulty(dailyGen.difficulty);
+
+      setChallengeMode(true);
+      setIsHost(true);
+      setActiveGameId(liveRoomCode);
+      setRematchGameId(liveRoomCode);
+      setChallengeSeed(dailyGen.seed);
+      setChallengeDifficulty(mappedDiff);
+      setChallengeMistakeLimit(3);
+      setChallengeHintLimit(3);
+      setChallengeTimerEnabled(true);
+      setDifficulty(mappedDiff);
+      setMistakeLimitEnabled(true);
+      setTimerEnabled(true);
+      setBoardState(prev => prev ? {
+        ...prev,
+        maxMistakesLimit: 3,
+        maxHintsLimit: 3
+      } : null);
+
+      const activeHostId = userProfile?.id || auth.currentUser?.uid || getOrCreateGuestIdentity().id;
+      const activeHostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
+      const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, liveRoomCode) : "";
+
+      setDoc(doc(db, "rooms", liveRoomCode), {
+        roomCode: liveRoomCode,
+        seed: dailyGen.seed,
+        gameMode: "daily",
+        dailyDate: dailyDateKey,
+        difficulty: dailyGen.difficulty,
+        hostId: activeHostId,
+        hostName: activeHostName,
+        createdById: activeHostId,
+        createdByName: activeHostName,
+        puzzleFlat: dailyGen.puzzleFlat,
+        mistakesLimit: 3,
+        hintsLimit: 3,
+        timerEnabled: true,
+        isLocked: isRoomLocked,
+        pinHash: hashedPin,
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        expiresAt: 0
+      }, { merge: true }).catch(err => {
+        console.error("[Firestore] Failed to write mid-game daily room document:", err);
+      });
+
+      registerChallengeJoin(liveRoomCode, true);
       setShowMidGameInviteModal(true);
       return;
     }
@@ -14123,25 +14785,6 @@ export default function App() {
     setHistory(prev => [...prev.slice(-45), gridClone]);
   };
 
-  const [dailyChallengeActiveDate, setDailyChallengeActiveDate] = useState<string | null>(null);
-  const [dailyChallengeIsArchive, setDailyChallengeIsArchive] = useState<boolean>(false);
-  const [dailyChallengeDifficulty, setDailyChallengeDifficulty] = useState<DailyDifficulty>("EASY");
-  const [dailyRefreshCounter, setDailyRefreshCounter] = useState<number>(0);
-  const [isDailyReviewSession, setIsDailyReviewSession] = useState<boolean>(false);
-  const [dailyChallengeLoadedBoardDate, setDailyChallengeLoadedBoardDate] = useState<string | null>(null);
-  const [dailyReviewSummaryMeta, setDailyReviewSummaryMeta] = useState<{
-    isOpen: boolean;
-    date: string;
-    difficulty: DailyDifficulty;
-    status: DailyChallengeStatus;
-    elapsedTime: number;
-    mistakes: number;
-    stats: DailyStats;
-    fromCalendar?: boolean;
-    fallbackSolvedOnReview?: boolean;
-  } | null>(null);
-  const dailyCloudAutoSaveTimerRef = useRef<number | null>(null);
-
   const handleLaunchDailyChallenge = useCallback((payload: DailyChallengeLaunchPayload) => {
     playClickSound();
     const mappedUiDifficulty: Difficulty =
@@ -14194,6 +14837,10 @@ export default function App() {
       );
 
     isDailyBoardContextRef.current = true;
+    isDailyRoomRef.current = false;
+    setIsDailyRoomActive(false);
+    isDailyExhibitionRef.current = false;
+    setIsDailyExhibition(false);
     hasTriggeredGameOverRef.current = Boolean(payload.reviewOnly);
 
     setChallengeMode(false);
@@ -14230,8 +14877,10 @@ export default function App() {
     setIsVictoryActive(false);
     setGameSessionKey(Date.now());
 
+    dailyChallengeDifficultyRef.current = payload.difficulty;
     setDailyChallengeDifficulty(payload.difficulty);
     setDailyChallengeIsArchive(isArchiveRun);
+    dailyChallengeActiveDateRef.current = payload.reviewOnly ? null : payload.date;
     setDailyChallengeActiveDate(payload.reviewOnly ? null : payload.date);
     setIsDailyReviewSession(Boolean(payload.reviewOnly));
     setDailyChallengeLoadedBoardDate(payload.date);
@@ -14239,7 +14888,9 @@ export default function App() {
     setDailyResultModalState(null);
 
     if (payload.reviewOnly) {
-      const reviewUid = isGuestSession ? null : authUser?.uid;
+      const reviewUid = (isGuestSession || !auth.currentUser || auth.currentUser.isAnonymous)
+        ? null
+        : (authUser?.uid || auth.currentUser.uid);
       const reviewStats = getDailyStats(reviewUid, todayKey);
       const dayRec = reviewStats.recordsByDate[payload.date];
       setDailyReviewSummaryMeta({
@@ -14260,14 +14911,96 @@ export default function App() {
     setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
     navigateToScreen("game");
   }, [soundEffects, isGuestSession, authUser?.uid]);
+  handleLaunchDailyChallengeRef.current = handleLaunchDailyChallenge;
+
+  const launchDailyByDateKey = useCallback(async (rawDateKey: string) => {
+    const normalized = String(rawDateKey || "").trim();
+    const todayKey = formatDateKey(new Date());
+    try {
+      parseDateKey(normalized);
+    } catch {
+      return;
+    }
+    if (normalized > todayKey) return;
+
+    const generated = generateDailyPuzzle(normalized);
+    const curAuth = auth.currentUser;
+    const dailyUid = (isGuestSession || !curAuth || curAuth.isAnonymous)
+      ? null
+      : (authUser?.uid || curAuth.uid);
+
+    let resolvedProg = getDailyProgress(normalized, dailyUid);
+    const stats = getDailyStats(dailyUid, normalized);
+    let eligibility: "OFFICIAL_DAILY" | "EXHIBITION" = "OFFICIAL_DAILY";
+
+    if (dailyUid && navigator.onLine !== false) {
+      try {
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
+        const cloudResult = await Promise.race([
+          Promise.all([
+            fetchDailyProgressFromCloud(dailyUid, normalized).catch(() => null),
+            checkPlayerDailyEligibility(dailyUid, normalized).catch(() => "OFFICIAL_DAILY" as const),
+          ]),
+          timeoutPromise,
+        ]);
+        if (Array.isArray(cloudResult)) {
+          const [cloudProg, cloudElig] = cloudResult;
+          resolvedProg = resolveProgressConflict(resolvedProg, cloudProg);
+          eligibility = cloudElig;
+        }
+      } catch { }
+    } else {
+      try {
+        eligibility = await checkPlayerDailyEligibility(dailyUid, normalized);
+      } catch { }
+    }
+
+    const dayRec = stats.recordsByDate[normalized];
+    const alreadyTerminal =
+      resolvedProg?.status === "COMPLETED" ||
+      resolvedProg?.status === "FAILED" ||
+      dayRec?.status === "COMPLETED" ||
+      dayRec?.status === "FAILED" ||
+      eligibility === "EXHIBITION";
+
+    handleLaunchDailyChallengeRef.current?.({
+      date: generated.date,
+      difficulty: generated.difficulty,
+      puzzle: generated.puzzle,
+      solved: generated.solved,
+      seed: generated.seed,
+      savedProgress: resolvedProg,
+      isArchive: normalized < todayKey,
+      reviewOnly: alreadyTerminal,
+      fallbackSolvedOnReview: Boolean(
+        dayRec?.status === "COMPLETED" || resolvedProg?.status === "COMPLETED"
+      ),
+    });
+
+    if (typeof window !== "undefined") {
+      try {
+        const urlObj = new URL(window.location.href);
+        if (urlObj.searchParams.has("daily")) {
+          urlObj.searchParams.delete("daily");
+          window.history.replaceState({ view: "game" }, "", urlObj.pathname + urlObj.search + urlObj.hash);
+        }
+      } catch { }
+    }
+  }, [isGuestSession, authUser?.uid]);
+  launchDailyByDateKeyRef.current = launchDailyByDateKey;
 
   // Auto-save in-progress Daily Challenge state on the master board
   useEffect(() => {
     if (!dailyChallengeActiveDate || !boardState || boardState.isGameOver) {
       return;
     }
+    if (isDailyRoomRef.current && isDailyExhibitionRef.current) {
+      return;
+    }
 
-    const dailyUid = isGuestSession ? null : authUser?.uid;
+    const dailyUid = (isGuestSession || !auth.currentUser || auth.currentUser.isAnonymous)
+      ? null
+      : (authUser?.uid || auth.currentUser.uid);
     const now = Date.now();
     const boardFlat = boardState.grid.flatMap((row) => row.map((cell) => cell.value));
     const puzzleFlat = boardState.grid.flatMap((row) =>
@@ -14306,7 +15039,8 @@ export default function App() {
         startedAt: Math.max(0, now - sessionSeconds * 1000),
         updatedAt: now,
       },
-      dailyUid
+      dailyUid,
+      { isExhibition: isDailyExhibitionRef.current }
     );
 
     if (sessionSeconds % 2 === 0) {
@@ -14319,7 +15053,7 @@ export default function App() {
       }
       dailyCloudAutoSaveTimerRef.current = window.setTimeout(() => {
         dailyCloudAutoSaveTimerRef.current = null;
-        void saveDailyProgressToCloud(dailyUid, progressPayload);
+        void saveDailyProgressToCloud(dailyUid, progressPayload, { isExhibition: isDailyExhibitionRef.current });
       }, 1500);
     }
 
@@ -14336,11 +15070,18 @@ export default function App() {
     sessionSeconds,
     isGuestSession,
     authUser?.uid,
+    isDailyRoomActive,
+    isDailyExhibition,
   ]);
 
   const handleStartNewGame = () => {
     playClickSound();
+    dailyChallengeActiveDateRef.current = null;
     setDailyChallengeActiveDate(null);
+    isDailyRoomRef.current = false;
+    setIsDailyRoomActive(false);
+    isDailyExhibitionRef.current = false;
+    setIsDailyExhibition(false);
     setIsVictoryActive(false);
     setGameSessionKey(Date.now());
     setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
@@ -14682,6 +15423,13 @@ export default function App() {
           if (liveRoomId && currentUid) {
             const terminalHints = terminalState.hintsCount ?? 0;
             const terminalMaxHints = terminalState.maxHintsLimit;
+            const dailyRoomMeta = (isDailyRoomRef.current && dailyChallengeActiveDateRef.current)
+              ? {
+                  isExhibition: isDailyExhibitionRef.current,
+                  gameMode: "daily",
+                  dailyDate: dailyChallengeActiveDateRef.current,
+                }
+              : {};
             try {
               setDoc(doc(db, "rooms", liveRoomId, "players", currentUid), {
                 id: currentUid,
@@ -14694,6 +15442,7 @@ export default function App() {
                 mistakes: newMistakes,
                 hints: terminalHints,
                 ...(terminalMaxHints !== undefined ? { maxHints: terminalMaxHints } : {}),
+                ...dailyRoomMeta,
                 timeSec: sessionSeconds,
                 updatedAt: serverTimestamp(),
                 completedAt: serverTimestamp()
@@ -14716,6 +15465,7 @@ export default function App() {
                   mistakes: newMistakes,
                   hints: terminalHints,
                   ...(terminalMaxHints !== undefined ? { maxHints: terminalMaxHints } : {}),
+                  ...dailyRoomMeta,
                   timeSec: sessionSeconds,
                   updatedAt: serverTimestamp(),
                   completedAt: serverTimestamp()
@@ -14740,6 +15490,13 @@ export default function App() {
                 name: getActiveDisplayName(),
                 mistakes: newMistakes,
                 status: "active",
+                ...(isDailyRoomRef.current && dailyChallengeActiveDateRef.current
+                  ? {
+                      isExhibition: isDailyExhibitionRef.current,
+                      gameMode: "daily",
+                      dailyDate: dailyChallengeActiveDateRef.current,
+                    }
+                  : {}),
                 updatedAt: serverTimestamp()
               }, { merge: true }).catch(() => { });
             } catch (err) { }
@@ -14881,6 +15638,13 @@ export default function App() {
                 mistakes: directMistakes,
                 hints: terminalWinState.hintsCount ?? 0,
                 ...(terminalWinState.maxHintsLimit !== undefined ? { maxHints: terminalWinState.maxHintsLimit } : {}),
+                ...(isDailyRoomRef.current && dailyChallengeActiveDateRef.current
+                  ? {
+                      isExhibition: isDailyExhibitionRef.current,
+                      gameMode: "daily",
+                      dailyDate: dailyChallengeActiveDateRef.current,
+                    }
+                  : {}),
                 completedAt: serverTimestamp()
               }, { merge: true }).catch(err => {
                 console.warn("[Multiplayer] Immediate victory write notice:", err);
@@ -14913,6 +15677,13 @@ export default function App() {
                 progress: progressPct,
                 mistakes: newMistakes,
                 status: "active",
+                ...(isDailyRoomRef.current && dailyChallengeActiveDateRef.current
+                  ? {
+                      isExhibition: isDailyExhibitionRef.current,
+                      gameMode: "daily",
+                      dailyDate: dailyChallengeActiveDateRef.current,
+                    }
+                  : {}),
                 updatedAt: serverTimestamp()
               }, { merge: true }).catch(() => { });
             } catch (err) { }
@@ -15076,7 +15847,7 @@ export default function App() {
   const triggerSmartHint = () => {
     if (!boardState || boardState.isGameOver) return;
 
-    const isDailyGame = Boolean(dailyChallengeActiveDate);
+    const isDailyGame = Boolean(dailyChallengeActiveDate || dailyChallengeActiveDateRef.current || isDailyRoomRef.current);
     const isRankedCompetitiveMode = Boolean(challengeMode) || isDailyGame;
     const maxCompetitiveHints = isDailyGame
       ? 3
@@ -15871,7 +16642,7 @@ export default function App() {
   );
   const isMultiplayerGame = Boolean(challengeMode || activeGameId || rematchGameId || challengeSeed);
   const isTrueMultiplayer = Boolean(
-    isMultiplayerGame && isOnline && (participantCount >= 2 || hasJoinedOpponents || endGameStep === 2)
+    isMultiplayerGame && isOnline && (participantCount >= 2 || hasJoinedOpponents || endGameStep === 2 || isDailyRoomActive)
   );
 
   return (
@@ -15983,17 +16754,20 @@ export default function App() {
                 triggerHapticTap(vibrations);
                 if (currentScreen === "game") {
                   // Requirement 3: Navigating to Home or Status via Back button must NOT forfeit; session remains intact for Resume
-                  if (!dailyChallengeActiveDate && !isDailyBoardContextRef.current) {
+                  if ((!dailyChallengeActiveDate && !isDailyBoardContextRef.current) || isDailyRoomRef.current || challengeMode) {
                     saveCurrentGameToLocal(boardState, sessionSeconds, difficulty);
-                  } else if (dailyChallengeActiveDate && boardState && !boardState.isGameOver) {
-                    const dailyUid = isGuestSession ? null : authUser?.uid;
+                  }
+                  if (dailyChallengeActiveDate && boardState && !boardState.isGameOver && !(isDailyRoomRef.current && isDailyExhibitionRef.current)) {
+                    const dailyUid = (isGuestSession || !auth.currentUser || auth.currentUser.isAnonymous)
+                      ? null
+                      : (authUser?.uid || auth.currentUser.uid);
                     const latestDaily = getDailyProgress(dailyChallengeActiveDate, dailyUid);
                     if (latestDaily && dailyUid) {
                       if (dailyCloudAutoSaveTimerRef.current !== null && typeof window !== "undefined") {
                         window.clearTimeout(dailyCloudAutoSaveTimerRef.current);
                         dailyCloudAutoSaveTimerRef.current = null;
                       }
-                      void saveDailyProgressToCloud(dailyUid, latestDaily);
+                      void saveDailyProgressToCloud(dailyUid, latestDaily, { isExhibition: false });
                     }
                   }
                   setCurrentScreen("home");
@@ -16575,7 +17349,7 @@ export default function App() {
                               type="button"
                               onClick={() => {
                                 playClickSound();
-                                if (Boolean(dailyChallengeActiveDate || isDailyReviewSession || dailyChallengeLoadedBoardDate)) {
+                                if (((!challengeMode && !isDailyRoomActive) || (isDailyRoomActive && !isOnline)) && Boolean(dailyChallengeActiveDate || isDailyReviewSession || dailyChallengeLoadedBoardDate)) {
                                   const targetDate =
                                     dailyChallengeActiveDate ||
                                     dailyChallengeLoadedBoardDate ||
@@ -17299,7 +18073,10 @@ export default function App() {
                 onSameGameReplay={async () => {
                   setRematchMatchMode("replay");
                   const seed = pendingRematchSeed ?? boardState?.seed ?? (Math.floor(Math.random() * 900000) + 100000);
-                  const roomCode = String(seed).padStart(6, '0').slice(-6);
+                  const roomCode = (activeGameId && /^\d{6}$/.test(activeGameId))
+                    ? activeGameId
+                    : String(seed).padStart(6, '0').slice(-6);
+                  const isDailyReplayRoom = Boolean(isDailyRoomRef.current && dailyChallengeActiveDateRef.current);
 
                   const othersList: Array<{ id: string; name: string; isReal: boolean }> = [];
                   syncedLeaderboard.forEach(r => {
@@ -17329,15 +18106,18 @@ export default function App() {
                       await setDoc(doc(db, "rooms", roomCode), {
                         roomCode: roomCode,
                         seed: seed,
-                        difficulty: challengeDifficulty,
+                        difficulty: isDailyReplayRoom ? dailyChallengeDifficultyRef.current : challengeDifficulty,
+                        ...(isDailyReplayRoom
+                          ? { gameMode: "daily", dailyDate: dailyChallengeActiveDateRef.current }
+                          : {}),
                         hostId: hostId,
                         hostName: hostName,
                         createdById: hostId,
                         createdByName: hostName,
                         ...(puzzleFlat && puzzleFlat.length === 81 ? { puzzleFlat } : {}),
-                        mistakesLimit: challengeMistakeLimit,
-                        hintsLimit: challengeHintLimit,
-                        timerEnabled: challengeTimerEnabled,
+                        mistakesLimit: isDailyReplayRoom ? 3 : challengeMistakeLimit,
+                        hintsLimit: isDailyReplayRoom ? 3 : challengeHintLimit,
+                        timerEnabled: isDailyReplayRoom ? true : challengeTimerEnabled,
                         isLocked: isRoomLocked,
                         pinHash: hashedPin,
                         status: "active",
@@ -17375,29 +18155,106 @@ export default function App() {
                 handleReinviteAll={handleReinviteAll}
                 isInvitingAll={isInvitingAll}
                 shareChallengeLink={shareChallengeLink}
-                onStartRematchGame={() => {
+                onStartRematchGame={async () => {
                   if (!isOnline) {
                     showToast(t("noInternetConnection") || "No internet connection");
                     return;
                   }
                   const targetSeed = pendingRematchSeed ?? challengeSeed ?? 100000;
-                  const roomCode = String(targetSeed).padStart(6, '0').slice(-6);
+                  const roomCode = (activeGameId && /^\d{6}$/.test(activeGameId))
+                    ? activeGameId
+                    : String(targetSeed).padStart(6, '0').slice(-6);
 
                   addLog(`⚔️ Launching match duel in room #${roomCode}...`);
-                  setActiveGameId(roomCode);
-                  setRematchGameId(roomCode);
-                  setChallengeMode(true);
-                  setChallengeSeed(targetSeed);
-                  setChallengeDifficulty(challengeDifficulty);
-                  setChallengeMistakeLimit(challengeMistakeLimit);
-                  setChallengeTimerEnabled(challengeTimerEnabled);
-                  setChallengeHintLimit(challengeHintLimit);
-                  setDifficulty(challengeDifficulty);
-                  setMistakeLimitEnabled(challengeMistakeLimit !== 999);
-                  setTimerEnabled(challengeTimerEnabled);
+                  if (isDailyRoomRef.current && dailyChallengeActiveDateRef.current) {
+                    const dDate = dailyChallengeActiveDateRef.current;
+                    const dailyGen = generateDailyPuzzle(dDate);
+                    const mappedDiff: Difficulty = dailyGen.difficulty === "MASTER" ? "EXPERT" : dailyGen.difficulty;
 
-                  registerChallengeJoin(roomCode);
-                  generateAndSetNewPuzzle(challengeDifficulty, targetSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit, undefined, true);
+                    const curAuth = await ensureActiveAuthUser().catch(() => auth.currentUser);
+                    const eligibilityUid = (!curAuth || curAuth.isAnonymous) ? null : curAuth.uid;
+                    let isExhibition = true;
+                    try {
+                      const eligibility = await checkPlayerDailyEligibility(eligibilityUid, dDate);
+                      isExhibition = eligibility === "EXHIBITION";
+                    } catch {
+                      isExhibition = isDailyExhibitionRef.current;
+                    }
+
+                    const finishedGrid: SudokuCell[][] = Array(9).fill(null).map((_, r) =>
+                      Array(9).fill(null).map((__, c) => {
+                        const val = dailyGen.puzzle[r][c];
+                        return {
+                          row: r,
+                          col: c,
+                          value: val,
+                          isOriginalClue: val !== 0,
+                          isUserInput: false,
+                          notes: new Set<number>()
+                        };
+                      })
+                    );
+
+                    isDailyBoardContextRef.current = false;
+                    isDailyRoomRef.current = true;
+                    setIsDailyRoomActive(true);
+                    isDailyExhibitionRef.current = isExhibition;
+                    setIsDailyExhibition(isExhibition);
+                    dailyChallengeDifficultyRef.current = dailyGen.difficulty;
+                    setDailyChallengeDifficulty(dailyGen.difficulty);
+                    hasTriggeredGameOverRef.current = false;
+
+                    setActiveGameId(roomCode);
+                    setRematchGameId(roomCode);
+                    setChallengeMode(true);
+                    setChallengeSeed(dailyGen.seed);
+                    setChallengeDifficulty(mappedDiff);
+                    setChallengeMistakeLimit(3);
+                    setChallengeHintLimit(3);
+                    setChallengeTimerEnabled(true);
+                    setDifficulty(mappedDiff);
+                    setMistakeLimitEnabled(true);
+                    setTimerEnabled(true);
+
+                    setSolutionGrid(dailyGen.solved.map(r => [...r]));
+                    setBoardState({
+                      grid: finishedGrid,
+                      initialGrid: dailyGen.puzzle,
+                      solutionGrid: dailyGen.solved,
+                      selectedRow: null,
+                      selectedCol: null,
+                      currentMistakesCount: 0,
+                      maxMistakesLimit: 3,
+                      hintsCount: 0,
+                      maxHintsLimit: 3,
+                      isGameOver: false,
+                      difficulty: mappedDiff,
+                      seed: dailyGen.seed
+                    });
+                    setHistory([]);
+                    setLockedNum(null);
+                    setActiveKeypadNum(null);
+                    setIsVictoryActive(false);
+                    setGameSessionKey(Date.now());
+                    setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
+
+                    registerChallengeJoin(roomCode, true);
+                  } else {
+                    setActiveGameId(roomCode);
+                    setRematchGameId(roomCode);
+                    setChallengeMode(true);
+                    setChallengeSeed(targetSeed);
+                    setChallengeDifficulty(challengeDifficulty);
+                    setChallengeMistakeLimit(challengeMistakeLimit);
+                    setChallengeTimerEnabled(challengeTimerEnabled);
+                    setChallengeHintLimit(challengeHintLimit);
+                    setDifficulty(challengeDifficulty);
+                    setMistakeLimitEnabled(challengeMistakeLimit !== 999);
+                    setTimerEnabled(challengeTimerEnabled);
+
+                    registerChallengeJoin(roomCode);
+                    generateAndSetNewPuzzle(challengeDifficulty, targetSeed, challengeMistakeLimit, challengeTimerEnabled, challengeHintLimit, undefined, true);
+                  }
                   setSessionSeconds(0);
                   setIsTimerPaused(false);
                   setShowGameOverModal(false);
@@ -19167,14 +20024,44 @@ export default function App() {
               setShowCreateChallengeModal(false);
               setOpenedCreateFromMultiplayerResult(false);
               setShowGameOverModal(false);
+              if (!challengeMode) {
+                isDailyRoomRef.current = false;
+                setIsDailyRoomActive(false);
+                isDailyExhibitionRef.current = false;
+                setIsDailyExhibition(false);
+                if (!boardState) {
+                  dailyChallengeActiveDateRef.current = null;
+                  setDailyChallengeActiveDate(null);
+                }
+              }
             }}
             onBack={openedCreateFromMultiplayerResult ? () => {
               setShowCreateChallengeModal(false);
               setOpenedCreateFromMultiplayerResult(false);
+              if (!challengeMode) {
+                isDailyRoomRef.current = false;
+                setIsDailyRoomActive(false);
+                isDailyExhibitionRef.current = false;
+                setIsDailyExhibition(false);
+                if (!boardState) {
+                  dailyChallengeActiveDateRef.current = null;
+                  setDailyChallengeActiveDate(null);
+                }
+              }
               setShowGameOverModal(true);
               setEndGameStep(1);
             } : () => {
               setShowCreateChallengeModal(false);
+              if (!challengeMode) {
+                isDailyRoomRef.current = false;
+                setIsDailyRoomActive(false);
+                isDailyExhibitionRef.current = false;
+                setIsDailyExhibition(false);
+                if (!boardState) {
+                  dailyChallengeActiveDateRef.current = null;
+                  setDailyChallengeActiveDate(null);
+                }
+              }
               setShowMultiplayerForkModal(true);
             }}
             challengeSeed={challengeSeed}
@@ -19476,6 +20363,16 @@ export default function App() {
             setShowCelebrationConfetti(false);
             setLockedNum(null);
             setActiveKeypadNum(null);
+            if (!challengeMode) {
+              isDailyRoomRef.current = false;
+              setIsDailyRoomActive(false);
+              isDailyExhibitionRef.current = false;
+              setIsDailyExhibition(false);
+              if (!boardState) {
+                dailyChallengeActiveDateRef.current = null;
+                setDailyChallengeActiveDate(null);
+              }
+            }
           }}
           darkMode={darkMode}
           difficulty={notificationResultModal?.difficulty || "EASY"}
@@ -19523,6 +20420,7 @@ export default function App() {
             const roomCode = notificationResultModal?.roomCode || String(seed).padStart(6, '0').slice(-6);
             const diff = notificationResultModal?.difficulty || "EASY";
             const parts = notificationResultModal?.participants || [];
+            const nDailyDate = notificationResultModal?.gameMode === "daily" ? notificationResultModal?.dailyDate : null;
 
             setRematchMatchMode("replay");
             const othersList: Array<{ id: string; name: string; isReal: boolean }> = [];
@@ -19537,6 +20435,18 @@ export default function App() {
             setChallengeSeed(seed);
             setPendingRematchSeed(seed);
             setChallengeDifficulty(diff);
+            if (nDailyDate) {
+              isDailyRoomRef.current = true;
+              setIsDailyRoomActive(true);
+              dailyChallengeActiveDateRef.current = nDailyDate;
+              setDailyChallengeActiveDate(nDailyDate);
+              const dGen = generateDailyPuzzle(nDailyDate);
+              dailyChallengeDifficultyRef.current = dGen.difficulty;
+              setDailyChallengeDifficulty(dGen.difficulty);
+              setChallengeMistakeLimit(3);
+              setChallengeHintLimit(3);
+              setChallengeTimerEnabled(true);
+            }
             setRematchInvitedPlayers(new Set());
             setLobbyAcceptedUserIds(new Set());
             setRematchInviteStates({});
@@ -19569,7 +20479,7 @@ export default function App() {
           handleReinviteAll={handleReinviteAll}
           isInvitingAll={isInvitingAll}
           shareChallengeLink={shareChallengeLink}
-          onStartRematchGame={() => {
+          onStartRematchGame={async () => {
             if (!isOnline) {
               showToast(t("noInternetConnection") || "No internet connection");
               return;
@@ -19580,23 +20490,104 @@ export default function App() {
             const mLimit = notificationResultModal?.mistakesLimit || 3;
             const tEnabled = notificationResultModal?.timerEnabled ?? true;
             const hLimit = notificationResultModal?.hintsLimit || 3;
+            const nDailyDate = notificationResultModal?.gameMode === "daily" ? notificationResultModal?.dailyDate : null;
 
             setNotificationResultModal(null);
             addLog(`⚔️ Launching match duel in room #${roomCode}...`);
-            setActiveGameId(roomCode);
-            setRematchGameId(roomCode);
-            setChallengeMode(true);
-            setChallengeSeed(targetSeed);
-            setChallengeDifficulty(diff);
-            setChallengeMistakeLimit(mLimit);
-            setChallengeTimerEnabled(tEnabled);
-            setChallengeHintLimit(hLimit);
-            setDifficulty(diff);
-            setMistakeLimitEnabled(mLimit !== 999);
-            setTimerEnabled(tEnabled);
+            if (nDailyDate) {
+              const dailyGen = generateDailyPuzzle(nDailyDate);
+              const mappedDiff: Difficulty = dailyGen.difficulty === "MASTER" ? "EXPERT" : dailyGen.difficulty;
 
-            registerChallengeJoin(roomCode);
-            generateAndSetNewPuzzle(diff, targetSeed, mLimit, tEnabled, hLimit, undefined, true);
+              const curAuth = await ensureActiveAuthUser().catch(() => auth.currentUser);
+              const eligibilityUid = (!curAuth || curAuth.isAnonymous) ? null : curAuth.uid;
+              let isExhibition = true;
+              try {
+                const eligibility = await checkPlayerDailyEligibility(eligibilityUid, nDailyDate);
+                isExhibition = eligibility === "EXHIBITION";
+              } catch {
+                isExhibition = false;
+              }
+
+              const finishedGrid: SudokuCell[][] = Array(9).fill(null).map((_, r) =>
+                Array(9).fill(null).map((__, c) => {
+                  const val = dailyGen.puzzle[r][c];
+                  return {
+                    row: r,
+                    col: c,
+                    value: val,
+                    isOriginalClue: val !== 0,
+                    isUserInput: false,
+                    notes: new Set<number>()
+                  };
+                })
+              );
+
+              isDailyBoardContextRef.current = false;
+              isDailyRoomRef.current = true;
+              setIsDailyRoomActive(true);
+              isDailyExhibitionRef.current = isExhibition;
+              setIsDailyExhibition(isExhibition);
+              dailyChallengeActiveDateRef.current = nDailyDate;
+              setDailyChallengeActiveDate(nDailyDate);
+              dailyChallengeDifficultyRef.current = dailyGen.difficulty;
+              setDailyChallengeDifficulty(dailyGen.difficulty);
+              setDailyChallengeIsArchive(nDailyDate < formatDateKey(new Date()));
+              setDailyChallengeLoadedBoardDate(nDailyDate);
+              setIsDailyReviewSession(false);
+              setDailyReviewSummaryMeta(null);
+              hasTriggeredGameOverRef.current = false;
+
+              setActiveGameId(roomCode);
+              setRematchGameId(roomCode);
+              setChallengeMode(true);
+              setChallengeSeed(dailyGen.seed);
+              setChallengeDifficulty(mappedDiff);
+              setChallengeMistakeLimit(3);
+              setChallengeHintLimit(3);
+              setChallengeTimerEnabled(true);
+              setDifficulty(mappedDiff);
+              setMistakeLimitEnabled(true);
+              setTimerEnabled(true);
+
+              setSolutionGrid(dailyGen.solved.map(r => [...r]));
+              setBoardState({
+                grid: finishedGrid,
+                initialGrid: dailyGen.puzzle,
+                solutionGrid: dailyGen.solved,
+                selectedRow: null,
+                selectedCol: null,
+                currentMistakesCount: 0,
+                maxMistakesLimit: 3,
+                hintsCount: 0,
+                maxHintsLimit: 3,
+                isGameOver: false,
+                difficulty: mappedDiff,
+                seed: dailyGen.seed
+              });
+              setHistory([]);
+              setLockedNum(null);
+              setActiveKeypadNum(null);
+              setIsVictoryActive(false);
+              setGameSessionKey(Date.now());
+              setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
+
+              registerChallengeJoin(roomCode, true);
+            } else {
+              setActiveGameId(roomCode);
+              setRematchGameId(roomCode);
+              setChallengeMode(true);
+              setChallengeSeed(targetSeed);
+              setChallengeDifficulty(diff);
+              setChallengeMistakeLimit(mLimit);
+              setChallengeTimerEnabled(tEnabled);
+              setChallengeHintLimit(hLimit);
+              setDifficulty(diff);
+              setMistakeLimitEnabled(mLimit !== 999);
+              setTimerEnabled(tEnabled);
+
+              registerChallengeJoin(roomCode);
+              generateAndSetNewPuzzle(diff, targetSeed, mLimit, tEnabled, hLimit, undefined, true);
+            }
             setSessionSeconds(0);
             setIsTimerPaused(false);
             setShowGameOverModal(false);
@@ -19615,10 +20606,16 @@ export default function App() {
           uid={isGuestSession ? null : authUser?.uid}
           onClose={() => {
             setDailyResultModalState(null);
+            dailyChallengeActiveDateRef.current = null;
             setDailyChallengeActiveDate(null);
             setDailyChallengeIsArchive(false);
             setIsDailyReviewSession(false);
             isDailyBoardContextRef.current = false;
+            isDailyRoomRef.current = false;
+            setIsDailyRoomActive(false);
+            isDailyExhibitionRef.current = false;
+            setIsDailyExhibition(false);
+            setShowGameOverModal(false);
             setShowCelebrationConfetti(false);
             navigateToScreen("home");
           }}
@@ -19680,10 +20677,16 @@ export default function App() {
           refreshTrigger={dailyRefreshCounter}
           onClose={() => {
             setIsPostGameDailyCalendarOpen(false);
+            dailyChallengeActiveDateRef.current = null;
             setDailyChallengeActiveDate(null);
             setDailyChallengeIsArchive(false);
             setIsDailyReviewSession(false);
             isDailyBoardContextRef.current = false;
+            isDailyRoomRef.current = false;
+            setIsDailyRoomActive(false);
+            isDailyExhibitionRef.current = false;
+            setIsDailyExhibition(false);
+            setShowGameOverModal(false);
             setShowCelebrationConfetti(false);
             navigateToScreen("home");
           }}
