@@ -451,3 +451,4 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
 
   return createPortal(modalContent, document.body);
 };
+

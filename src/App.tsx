@@ -16,7 +16,11 @@ import { HintRewardModal } from "./components/modals/HintRewardModal";
 import { initAdMob, showInterstitialBetweenMatches, showRewardedHintAd, isDailyAdCapReached } from "./services/adMobService";
 import { ShareActionWrapper } from "./components/share/ShareActionWrapper";
 import { GuestBannerPill } from "./components/auth/GuestBannerPill";
-import { DailyChallengeCard } from "./features/dailyChallenge/components/DailyChallengeCard";
+import { DailyChallengeCard, type DailyChallengeLaunchPayload } from "./features/dailyChallenge/components/DailyChallengeCard";
+import { DailyResultModal } from "./features/dailyChallenge/components/DailyResultModal";
+import { saveDailyProgress, recordDailyCompletion, getDailyStats } from "./features/dailyChallenge/services/dailyStorage";
+import { saveDailyProgressToCloud, recordDailyCompletionToCloud } from "./features/dailyChallenge/services/dailyCloudService";
+import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./features/dailyChallenge/types/daily.types";
 import { incrementGuestGameCount } from "./utils/guestTracking";
 import { SudokuBoard, CompletionPulse } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
@@ -11615,6 +11619,120 @@ export default function App() {
       }
     }
 
+    // Daily Challenge completion/failure hook (when playing today's Daily Challenge on the master board)
+    if (dailyChallengeActiveDate && activeBoard) {
+      const dailyUid = isGuestSession ? null : authUser?.uid;
+      const completedAt = Date.now();
+      const boardFlat = activeBoard.grid.flatMap(row => row.map(cell => cell.value));
+      const puzzleFlat = activeBoard.grid.flatMap(row => row.map(cell => (cell.isOriginalClue ? cell.value : 0)));
+      const notesByCell: Record<number, number[]> = {};
+      activeBoard.grid.forEach((row, rIdx) => {
+        row.forEach((cell, cIdx) => {
+          if (cell.notes && cell.notes.size > 0) {
+            notesByCell[rIdx * 9 + cIdx] = Array.from(cell.notes).sort((a, b) => a - b);
+          }
+        });
+      });
+
+      if (isWon) {
+        saveDailyProgress(
+          {
+            date: dailyChallengeActiveDate,
+            seed: gameSeed,
+            difficulty: dailyChallengeDifficulty,
+            status: "COMPLETED",
+            boardFlat,
+            puzzleFlat,
+            notesByCell,
+            elapsedSeconds: sessionSeconds,
+            mistakesCount: finalMistakes,
+            hintsCount: hintsUsed,
+            startedAt: Math.max(0, completedAt - sessionSeconds * 1000),
+            updatedAt: completedAt,
+            completedAt,
+          },
+          dailyUid
+        );
+
+        const updatedDailyStats = recordDailyCompletion(
+          {
+            date: dailyChallengeActiveDate,
+            difficulty: dailyChallengeDifficulty,
+            timeSeconds: sessionSeconds,
+            mistakes: finalMistakes,
+            hints: hintsUsed,
+            completedAt,
+          },
+          dailyUid
+        );
+
+        if (dailyUid) {
+          const dayRecord = updatedDailyStats.recordsByDate[dailyChallengeActiveDate] ?? {
+            date: dailyChallengeActiveDate,
+            difficulty: dailyChallengeDifficulty,
+            status: "COMPLETED" as const,
+            timeSeconds: sessionSeconds,
+            mistakes: finalMistakes,
+            hints: hintsUsed,
+            isPerfect: finalMistakes === 0 && hintsUsed === 0,
+            completedAt,
+            updatedAt: completedAt,
+          };
+          void recordDailyCompletionToCloud(
+            dailyUid,
+            dailyChallengeActiveDate,
+            dayRecord,
+            updatedDailyStats
+          );
+        }
+
+        setDailyRefreshCounter((c) => c + 1);
+        setDailyResultModalState({
+          isOpen: true,
+          date: dailyChallengeActiveDate,
+          difficulty: dailyChallengeDifficulty,
+          status: "COMPLETED",
+          elapsedTime: sessionSeconds,
+          mistakes: finalMistakes,
+          stats: updatedDailyStats,
+        });
+      } else {
+        const failedProgress = saveDailyProgress(
+          {
+            date: dailyChallengeActiveDate,
+            seed: gameSeed,
+            difficulty: dailyChallengeDifficulty,
+            status: "FAILED",
+            boardFlat,
+            puzzleFlat,
+            notesByCell,
+            elapsedSeconds: sessionSeconds,
+            mistakesCount: finalMistakes,
+            hintsCount: hintsUsed,
+            startedAt: Math.max(0, completedAt - sessionSeconds * 1000),
+            updatedAt: completedAt,
+          },
+          dailyUid
+        );
+
+        const updatedDailyStats = getDailyStats(dailyUid);
+        if (dailyUid) {
+          void saveDailyProgressToCloud(dailyUid, failedProgress);
+        }
+
+        setDailyRefreshCounter((c) => c + 1);
+        setDailyResultModalState({
+          isOpen: true,
+          date: dailyChallengeActiveDate,
+          difficulty: dailyChallengeDifficulty,
+          status: "FAILED",
+          elapsedTime: sessionSeconds,
+          mistakes: finalMistakes,
+          stats: updatedDailyStats,
+        });
+      }
+    }
+
     // AdMob Interstitial: Paced at 1 ad every 3 matches (capped at 10/day, native mobile only)
     showInterstitialBetweenMatches().catch(err => {
       console.warn("[AdMob] Interstitial trigger error:", err);
@@ -13941,8 +14059,187 @@ export default function App() {
     setHistory(prev => [...prev.slice(-45), gridClone]);
   };
 
+  const [dailyChallengeActiveDate, setDailyChallengeActiveDate] = useState<string | null>(null);
+  const [dailyChallengeDifficulty, setDailyChallengeDifficulty] = useState<DailyDifficulty>("EASY");
+  const [dailyRefreshCounter, setDailyRefreshCounter] = useState<number>(0);
+  const [dailyResultModalState, setDailyResultModalState] = useState<{
+    isOpen: boolean;
+    date: string;
+    difficulty: DailyDifficulty;
+    status: DailyChallengeStatus;
+    elapsedTime: number;
+    mistakes: number;
+    stats: DailyStats;
+  } | null>(null);
+  const dailyCloudAutoSaveTimerRef = useRef<number | null>(null);
+
+  const handleLaunchDailyChallenge = useCallback((payload: DailyChallengeLaunchPayload) => {
+    playClickSound();
+    const mappedUiDifficulty: Difficulty =
+      payload.difficulty === "MASTER" ? "EXPERT" : payload.difficulty;
+
+    const saved = payload.savedProgress;
+    const hasRestorableProgress = Boolean(
+      saved &&
+        (saved.status === "IN_PROGRESS" || payload.reviewOnly) &&
+        Array.isArray(saved.boardFlat) &&
+        saved.boardFlat.length === 81
+    );
+
+    const restoredFlat = hasRestorableProgress ? saved!.boardFlat : null;
+    const restoredNotes = hasRestorableProgress ? saved!.notesByCell || {} : {};
+    const restoredElapsed = hasRestorableProgress ? Math.max(0, saved!.elapsedSeconds || 0) : 0;
+    const restoredMistakes = hasRestorableProgress ? Math.max(0, saved!.mistakesCount || 0) : 0;
+    const restoredHints = hasRestorableProgress ? Math.max(0, saved!.hintsCount || 0) : 0;
+
+    const finishedGrid: SudokuCell[][] = Array(9)
+      .fill(null)
+      .map((_, r) =>
+        Array(9)
+          .fill(null)
+          .map((__, c) => {
+            const idx = r * 9 + c;
+            const clueVal = payload.puzzle[r][c];
+            const isOriginalClue = clueVal !== 0;
+            const restoredVal = restoredFlat ? Number(restoredFlat[idx]) || 0 : 0;
+            const finalVal = isOriginalClue ? clueVal : restoredVal;
+            const cellNotes =
+              !isOriginalClue && finalVal === 0 && Array.isArray(restoredNotes[idx])
+                ? new Set<number>(restoredNotes[idx])
+                : new Set<number>();
+            return {
+              row: r,
+              col: c,
+              value: finalVal,
+              isOriginalClue,
+              isUserInput: !isOriginalClue && finalVal !== 0,
+              notes: cellNotes,
+            };
+          })
+      );
+
+    setChallengeMode(false);
+    setActiveGameId(null);
+    setRematchGameId(null);
+    setChallengeSeed(null);
+
+    setDifficulty(mappedUiDifficulty);
+    setMistakeLimitEnabled(true);
+    setTimerEnabled(true);
+    setSolutionGrid(payload.solved.map((r) => [...r]));
+
+    setBoardState({
+      grid: finishedGrid,
+      initialGrid: payload.puzzle,
+      solutionGrid: payload.solved,
+      selectedRow: null,
+      selectedCol: null,
+      currentMistakesCount: restoredMistakes,
+      maxMistakesLimit: 3,
+      hintsCount: restoredHints,
+      maxHintsLimit: 3,
+      isGameOver: Boolean(payload.reviewOnly),
+      difficulty: mappedUiDifficulty,
+      seed: payload.seed,
+    });
+
+    setHistory([]);
+    setLockedNum(null);
+    setActiveKeypadNum(null);
+    updateHintInventory(Math.max(0, 3 - restoredHints));
+    setSessionSeconds(restoredElapsed);
+    setIsTimerPaused(false);
+    setShowGameOverModal(false);
+    setIsVictoryActive(false);
+    setGameSessionKey(Date.now());
+
+    setDailyChallengeDifficulty(payload.difficulty);
+    setDailyChallengeActiveDate(payload.reviewOnly ? null : payload.date);
+
+    setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
+    navigateToScreen("game");
+  }, [soundEffects]);
+
+  // Auto-save in-progress Daily Challenge state on the master board
+  useEffect(() => {
+    if (!dailyChallengeActiveDate || !boardState || boardState.isGameOver) {
+      return;
+    }
+
+    const dailyUid = isGuestSession ? null : authUser?.uid;
+    const now = Date.now();
+    const boardFlat = boardState.grid.flatMap((row) => row.map((cell) => cell.value));
+    const puzzleFlat = boardState.grid.flatMap((row) =>
+      row.map((cell) => (cell.isOriginalClue ? cell.value : 0))
+    );
+    const notesByCell: Record<number, number[]> = {};
+    boardState.grid.forEach((row, rIdx) => {
+      row.forEach((cell, cIdx) => {
+        if (cell.notes && cell.notes.size > 0) {
+          notesByCell[rIdx * 9 + cIdx] = Array.from(cell.notes).sort((a, b) => a - b);
+        }
+      });
+    });
+
+    const hasAnyUserAction =
+      sessionSeconds > 0 ||
+      boardState.currentMistakesCount > 0 ||
+      boardState.hintsCount > 0 ||
+      Object.keys(notesByCell).length > 0 ||
+      boardState.grid.some((row) => row.some((cell) => cell.isUserInput));
+
+    if (!hasAnyUserAction) return;
+
+    const progressPayload = saveDailyProgress(
+      {
+        date: dailyChallengeActiveDate,
+        seed: boardState.seed,
+        difficulty: dailyChallengeDifficulty,
+        status: "IN_PROGRESS",
+        boardFlat,
+        puzzleFlat,
+        notesByCell,
+        elapsedSeconds: sessionSeconds,
+        mistakesCount: boardState.currentMistakesCount,
+        hintsCount: boardState.hintsCount,
+        startedAt: Math.max(0, now - sessionSeconds * 1000),
+        updatedAt: now,
+      },
+      dailyUid
+    );
+
+    if (sessionSeconds % 2 === 0) {
+      setDailyRefreshCounter((c) => c + 1);
+    }
+
+    if (dailyUid && typeof window !== "undefined") {
+      if (dailyCloudAutoSaveTimerRef.current !== null) {
+        window.clearTimeout(dailyCloudAutoSaveTimerRef.current);
+      }
+      dailyCloudAutoSaveTimerRef.current = window.setTimeout(() => {
+        dailyCloudAutoSaveTimerRef.current = null;
+        void saveDailyProgressToCloud(dailyUid, progressPayload);
+      }, 1500);
+    }
+
+    return () => {
+      if (dailyCloudAutoSaveTimerRef.current !== null && typeof window !== "undefined") {
+        window.clearTimeout(dailyCloudAutoSaveTimerRef.current);
+        dailyCloudAutoSaveTimerRef.current = null;
+      }
+    };
+  }, [
+    dailyChallengeActiveDate,
+    dailyChallengeDifficulty,
+    boardState,
+    sessionSeconds,
+    isGuestSession,
+    authUser?.uid,
+  ]);
+
   const handleStartNewGame = () => {
     playClickSound();
+    setDailyChallengeActiveDate(null);
     setIsVictoryActive(false);
     setGameSessionKey(Date.now());
     setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
@@ -15767,6 +16064,8 @@ export default function App() {
                   <DailyChallengeCard
                     uid={isGuestSession ? null : authUser?.uid}
                     darkMode={darkMode}
+                    onStartDailyChallenge={handleLaunchDailyChallenge}
+                    refreshTrigger={dailyRefreshCounter}
                   />
                   <button
                     type="button"
@@ -16547,6 +16846,8 @@ export default function App() {
                     uid={isGuestSession ? null : authUser?.uid}
                     darkMode={darkMode}
                     compact
+                    onStartDailyChallenge={handleLaunchDailyChallenge}
+                    refreshTrigger={dailyRefreshCounter}
                   />
                   <button
                     type="button"
@@ -19209,6 +19510,31 @@ export default function App() {
             try { window.history.replaceState({ view: "game" }, "", window.location.pathname); } catch (e) { }
             showToast(t("matchStartedToast"));
           }}
+        />
+      )}
+
+      {/* DAILY CHALLENGE RESULT & STREAK MODAL */}
+      {Boolean(dailyResultModalState?.isOpen) && dailyResultModalState && (
+        <DailyResultModal
+          isOpen={dailyResultModalState.isOpen}
+          onClose={() => {
+            setDailyResultModalState(null);
+            setDailyChallengeActiveDate(null);
+            setShowCelebrationConfetti(false);
+            navigateToScreen("home");
+          }}
+          onReviewBoard={() => {
+            setDailyResultModalState(null);
+            setDailyChallengeActiveDate(null);
+            setShowCelebrationConfetti(false);
+          }}
+          date={dailyResultModalState.date}
+          difficulty={dailyResultModalState.difficulty}
+          status={dailyResultModalState.status}
+          elapsedTime={dailyResultModalState.elapsedTime}
+          mistakes={dailyResultModalState.mistakes}
+          stats={dailyResultModalState.stats}
+          darkMode={darkMode}
         />
       )}
 
