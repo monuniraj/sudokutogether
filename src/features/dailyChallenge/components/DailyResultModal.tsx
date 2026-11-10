@@ -342,14 +342,14 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[130] flex items-center justify-center p-3.5 sm:p-4 bg-black/65 backdrop-blur-sm select-none"
+      className="fixed inset-0 z-[10000] overflow-y-auto flex justify-center p-3.5 sm:p-4 pt-[calc(76px+env(safe-area-inset-top,0px))] pb-4 sm:pb-6 bg-black/65 backdrop-blur-sm select-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="daily-result-modal-title"
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-md rounded-3xl border-0 shadow-none p-4 sm:p-5 transition-colors ${
+        className={`w-full max-w-md max-h-[85dvh] overflow-y-auto my-auto rounded-3xl border-0 shadow-none p-4 sm:p-5 transition-colors ${
           darkMode
             ? "bg-[#18181b] text-zinc-100"
             : "bg-[#FDFBF7] text-[#1C1917]"
@@ -378,7 +378,11 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
               className={`w-9 h-9 rounded-2xl border-0 shadow-none flex items-center justify-center shrink-0 ${headerPillClasses}`}
             >
               {isCompleted ? (
-                <Trophy className="w-4 h-4 stroke-[2.3]" />
+                <Trophy
+                  className={`w-4 h-4 stroke-[2.3] ${
+                    darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
+                  }`}
+                />
               ) : isFailed ? (
                 <XCircle className="w-4 h-4 stroke-[2.3]" />
               ) : (
@@ -453,14 +457,26 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                 : "bg-[#F4EFE6] text-[#1C1917]"
             }`}
           >
-            <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider opacity-65">
-              <Clock className="w-3 h-3 text-sky-400 shrink-0 stroke-[2.3]" />
+            <div
+              className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${
+                darkMode ? "text-zinc-400" : "text-stone-600"
+              }`}
+            >
+              <Clock
+                className={`w-3 h-3 shrink-0 stroke-[2.3] ${
+                  darkMode ? "text-sky-400" : "text-[#0369A1]"
+                }`}
+              />
               <span>{td("daily.timeLabel", "Time")}</span>
             </div>
             <div className="font-mono font-black text-sm sm:text-base leading-tight mt-0.5">
               {formatDurationMMSS(elapsedTime)}
             </div>
-            <span className="font-mono text-[10px] font-semibold opacity-55 mt-0.5 leading-none truncate">
+            <span
+              className={`font-mono text-[10px] font-semibold mt-0.5 leading-none truncate ${
+                darkMode ? "text-zinc-400" : "text-stone-600"
+              }`}
+            >
               {td("daily.pbShort", "PB")}:{" "}
               {stats.bestTimeSeconds !== null
                 ? formatDurationMMSS(stats.bestTimeSeconds)
@@ -476,14 +492,26 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                 : "bg-[#F4EFE6] text-[#1C1917]"
             }`}
           >
-            <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider opacity-65">
-              <AlertCircle className="w-3 h-3 text-rose-400 shrink-0 stroke-[2.3]" />
+            <div
+              className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${
+                darkMode ? "text-zinc-400" : "text-stone-600"
+              }`}
+            >
+              <AlertCircle
+                className={`w-3 h-3 shrink-0 stroke-[2.3] ${
+                  darkMode ? "text-rose-400" : "text-[#BE123C]"
+                }`}
+              />
               <span>{td("daily.mistakesLabel", "Mistakes")}</span>
             </div>
             <div className="font-mono font-black text-sm sm:text-base leading-tight mt-0.5">
               {mistakes} / 3
             </div>
-            <span className="font-sans text-[10px] font-semibold opacity-55 mt-0.5 leading-none truncate">
+            <span
+              className={`font-sans text-[10px] font-semibold mt-0.5 leading-none truncate ${
+                darkMode ? "text-zinc-400" : "text-stone-600"
+              }`}
+            >
               {stats.totalCompleted} {td("daily.solvedCountShort", "solved")}
             </span>
           </div>
@@ -496,18 +524,34 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                 : "bg-[#F4EFE6] text-[#1C1917]"
             }`}
           >
-            <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider opacity-65">
+            <div
+              className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${
+                darkMode ? "text-zinc-400" : "text-stone-600"
+              }`}
+            >
               {isCompleted ? (
-                <Trophy className="w-3 h-3 text-amber-400 shrink-0 stroke-[2.3]" />
+                <Trophy
+                  className={`w-3 h-3 shrink-0 stroke-[2.3] ${
+                    darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
+                  }`}
+                />
               ) : (
-                <Flame className="w-3 h-3 text-amber-400 shrink-0 stroke-[2.3]" />
+                <Flame
+                  className={`w-3 h-3 shrink-0 stroke-[2.3] ${
+                    darkMode ? "text-[#FBBF24]" : "text-[#D97706]"
+                  }`}
+                />
               )}
               <span>{td("daily.streakLabel", "Streak")}</span>
             </div>
             <div className="font-mono font-black text-sm sm:text-base leading-tight mt-0.5">
               {stats.currentStreak}
             </div>
-            <span className="font-mono text-[10px] font-semibold opacity-55 mt-0.5 leading-none truncate">
+            <span
+              className={`font-mono text-[10px] font-semibold mt-0.5 leading-none truncate ${
+                darkMode ? "text-zinc-400" : "text-stone-600"
+              }`}
+            >
               {td("daily.bestShort", "Best")}: {stats.longestStreak}
             </span>
           </div>
@@ -530,7 +574,11 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
             }`}
           >
             <span className="inline-flex items-center gap-1.5">
-              <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <Trophy
+                className={`w-3.5 h-3.5 shrink-0 ${
+                  darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
+                }`}
+              />
               <span>
                 {td("daily.globalLeaderboardTitle", "Global Daily Leaderboard")}
               </span>
@@ -608,7 +656,11 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
                             )}`}
                           >
                             {isTopThree && (
-                              <Trophy className="w-2.5 h-2.5 shrink-0 stroke-[2.4]" />
+                              <Trophy
+                                className={`w-2.5 h-2.5 shrink-0 stroke-[2.4] ${
+                                  darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
+                                }`}
+                              />
                             )}
                             <span>#{rank}</span>
                           </span>
@@ -721,10 +773,10 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
           <button
             type="button"
             onClick={onReviewBoard}
-            className={`py-3 px-3 rounded-2xl border-0 shadow-none font-sans font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 cursor-pointer transition-transform active:scale-[0.98] ${
+            className={`py-3 px-3 rounded-2xl border-0 shadow-none font-sans font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-[0.98] ${
               darkMode
                 ? "bg-[#2e1065] hover:bg-[#3b0764] text-[#e9d5ff]"
-                : "bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3]"
+                : "bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8]"
             }`}
           >
             <Eye className="w-4 h-4 stroke-[2.2] shrink-0" />
@@ -734,17 +786,17 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
           </button>
         </div>
 
-        {/* Full-Width Subtle Tertiary Button: Calendar & History */}
+        {/* Full-Width Tactile Daily Pill: Calendar & History */}
         <button
           type="button"
           onClick={onOpenCalendarHistory}
           disabled={!onOpenCalendarHistory}
-          className={`w-full mt-2 py-2.5 px-3 rounded-2xl border-0 shadow-none font-sans font-bold text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-[0.99] ${
+          className={`w-full mt-2 py-2.5 px-3 rounded-2xl border-0 shadow-none font-sans font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] ${
             onOpenCalendarHistory ? "cursor-pointer" : "opacity-60 cursor-default"
           } ${
             darkMode
-              ? "bg-[#222225] hover:bg-[#2c2c30] text-zinc-300"
-              : "bg-[#F4EFE6] hover:bg-[#EAE3D5] text-stone-700"
+              ? "bg-[#451a03]/85 hover:bg-[#78350f] text-[#fde68a]"
+              : "bg-[#FEF3C7] hover:bg-[#FDE68A] text-[#92400E]"
           }`}
         >
           <Calendar className="w-3.5 h-3.5 stroke-[2.2] shrink-0" />

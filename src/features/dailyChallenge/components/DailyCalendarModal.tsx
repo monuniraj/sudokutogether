@@ -338,7 +338,7 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
             <span className="inline-flex items-center gap-1.5 text-xs font-bold">
               <Trophy
                 className={`w-3.5 h-3.5 shrink-0 ${
-                  darkMode ? "text-emerald-400" : "text-[#065F46]"
+                  darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
                 }`}
               />
               <span className={darkMode ? "text-zinc-300" : "text-stone-700"}>
@@ -496,7 +496,11 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
                   <Lock className="w-2.5 h-2.5 opacity-45 mb-0.5" />
                 ) : isCompleted ? (
                   <div className="flex flex-col items-center leading-none gap-0.5">
-                    <Trophy className="w-2.5 h-2.5 shrink-0 stroke-[2.4]" />
+                    <Trophy
+                      className={`w-2.5 h-2.5 shrink-0 stroke-[2.4] ${
+                        darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
+                      }`}
+                    />
                     <span className="font-mono text-[8.5px] font-bold tracking-tighter">
                       {formatDurationMMSS(record.timeSeconds)}
                     </span>
@@ -543,7 +547,7 @@ export const DailyCalendarModal: React.FC<DailyCalendarModalProps> = ({
             <span className="inline-flex items-center gap-1">
               <Trophy
                 className={`w-3 h-3 shrink-0 ${
-                  darkMode ? "text-emerald-400" : "text-[#065F46]"
+                  darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
                 }`}
               />
               <span>{td("daily.legendCompleted", "Completed")}</span>

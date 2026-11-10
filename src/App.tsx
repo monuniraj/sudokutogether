@@ -4137,7 +4137,8 @@ export default function App() {
   // Strict Particle Canvas Lifecycle Guard: immediately unmount & dispose confetti whenever end-game is dismissed, any secondary modal is opened, or screen changes
   useEffect(() => {
     if (
-      !showGameOverModal ||
+      (!showGameOverModal && !dailyResultModalState?.isOpen) ||
+      isPostGameDailyCalendarOpen ||
       currentScreen !== "game" ||
       showHowToPlayModal ||
       showResetSettingsModal ||
@@ -4155,6 +4156,8 @@ export default function App() {
     }
   }, [
     showGameOverModal,
+    dailyResultModalState?.isOpen,
+    isPostGameDailyCalendarOpen,
     currentScreen,
     showHowToPlayModal,
     showResetSettingsModal,
@@ -16985,20 +16988,20 @@ export default function App() {
                             {/* 3D Isometric Sudoku Perspective Watermark */}
                             <Sudoku3DWatermark difficulty={activeDiff} />
 
-                            <div className="text-center w-full relative z-10 flex flex-col items-center justify-center gap-1">
+                            <div className="text-center w-full h-full relative z-10 flex flex-col items-center justify-center gap-0.5">
                               {/* Hero Metric */}
                               <div className="flex items-center justify-center gap-1.5">
                                 <Timer className="w-4 h-4 stroke-[2] opacity-90 shrink-0" />
-                                <span className="font-sans font-bold text-sm sm:text-base uppercase tracking-wider opacity-90 leading-none">
+                                <span className="font-sans font-bold text-sm sm:text-base uppercase tracking-wider opacity-90 leading-tight">
                                   {t("home_record_banner_best_time")}:
                                 </span>
-                                <span className="font-mono font-bold text-lg sm:text-xl tabular-nums tracking-wide leading-none">
+                                <span className="font-mono font-bold text-lg sm:text-xl tabular-nums tracking-wide leading-tight">
                                   {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
                                 </span>
                               </div>
 
                               {/* Subtitle Prompt */}
-                              <p className="text-[10px] select-none handwriting opacity-60 font-normal leading-none tracking-wide truncate max-w-full">
+                              <p className="m-0 text-[10px] select-none handwriting opacity-75 font-normal leading-tight tracking-wide truncate max-w-full">
                                 {bestSecs > 0
                                   ? t("break_your_record")
                                   : t("noRecordPrompt")}

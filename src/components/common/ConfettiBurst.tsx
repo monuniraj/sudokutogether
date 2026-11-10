@@ -361,7 +361,7 @@ export const ConfettiBurst: React.FC<ConfettiBurstProps> = ({ darkMode = false, 
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-[100]"
+      className="fixed inset-0 pointer-events-none z-[10002]"
       style={{ touchAction: "none" }}
     />
   );

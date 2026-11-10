@@ -370,7 +370,11 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
               }`}
             >
               {effectiveStatus === "COMPLETED" ? (
-                <Trophy className="w-3.5 h-3.5 stroke-[2.2]" />
+                <Trophy
+                  className={`w-3.5 h-3.5 stroke-[2.2] ${
+                    darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
+                  }`}
+                />
               ) : (
                 <Flame className="w-3.5 h-3.5 stroke-[2.2]" />
               )}
@@ -420,7 +424,11 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
               title={td("daily.currentStreakLabel", "Current Streak")}
             >
               {effectiveStatus === "COMPLETED" ? (
-                <Trophy className="w-3.5 h-3.5 shrink-0 stroke-[2.3]" />
+                <Trophy
+                  className={`w-3.5 h-3.5 shrink-0 stroke-[2.3] ${
+                    darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
+                  }`}
+                />
               ) : (
                 <Flame className="w-3.5 h-3.5 shrink-0 stroke-[2.3]" />
               )}
@@ -440,7 +448,11 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
         >
           <span className="inline-flex items-center gap-2 truncate">
             {effectiveStatus === "COMPLETED" ? (
-              <Trophy className="w-4 h-4 shrink-0 stroke-[2.3]" />
+              <Trophy
+                className={`w-4 h-4 shrink-0 stroke-[2.3] ${
+                  darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
+                }`}
+              />
             ) : effectiveStatus === "FAILED" ? (
               <XCircle className="w-4 h-4 shrink-0 stroke-[2.3]" />
             ) : (
