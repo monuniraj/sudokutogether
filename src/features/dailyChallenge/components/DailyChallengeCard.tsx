@@ -327,7 +327,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
   const ctaButtonClasses =
     effectiveStatus === "COMPLETED"
       ? darkMode
-        ? "bg-zinc-800 hover:bg-[#323236] shadow-none text-[#fde68a]"
+        ? "bg-[#240d02] hover:bg-[#1a0901] text-[#fde68a] shadow-none"
         : `bg-white hover:bg-white/95 shadow-sm ${completedLightTextClass}`
       : effectiveStatus === "FAILED"
         ? darkMode

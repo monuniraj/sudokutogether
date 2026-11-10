@@ -17022,7 +17022,7 @@ export default function App() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -4 }}
                             transition={{ duration: 0.22, ease: "easeOut" }}
-                            className={`card w-full h-full py-2.5 px-4 lg:py-1.5 lg:px-3 relative overflow-hidden rounded-2xl border-0 transition-colors duration-200 select-none flex flex-col justify-center items-center gap-1 lg:gap-0 ${darkMode ? (
+                            className={`card w-full h-full py-2.5 px-4 lg:py-1.5 lg:px-3 relative overflow-hidden rounded-2xl border-0 transition-colors duration-200 select-none flex items-center justify-center ${darkMode ? (
                               activeDiff === "EASY" ? "bg-[#022c22]/90 text-[#d1fae5] shadow-lg" :
                                 activeDiff === "MEDIUM" ? "bg-[#451a03]/90 text-[#fef08a] shadow-lg" :
                                   activeDiff === "HARD" ? "bg-[#2e1065]/90 text-[#e9d5ff] shadow-lg" :
@@ -17041,14 +17041,14 @@ export default function App() {
                             {/* 3D Isometric Sudoku Perspective Watermark */}
                             <Sudoku3DWatermark difficulty={activeDiff} />
 
-                            <div className="text-center w-full h-full relative z-10 flex flex-col items-center justify-center gap-0.5">
+                            <div className="text-center w-full h-full relative z-10 flex flex-col items-center justify-center gap-0.5 m-0 p-0 max-w-full">
                               {/* Hero Metric */}
-                              <div className="flex items-center justify-center gap-1.5">
-                                <Timer className="w-4 h-4 stroke-[2] opacity-90 shrink-0" />
-                                <span className="font-sans font-bold text-sm sm:text-base uppercase tracking-wider opacity-90 leading-tight">
+                              <div className="flex flex-nowrap items-center justify-center gap-1.5 max-w-full whitespace-nowrap">
+                                <Timer className="w-3.5 h-3.5 stroke-[2.2] opacity-90 shrink-0" />
+                                <span className="font-sans font-bold text-[11px] sm:text-xs uppercase tracking-tight opacity-90 leading-tight whitespace-nowrap">
                                   {t("home_record_banner_best_time")}:
                                 </span>
-                                <span className="font-mono font-bold text-lg sm:text-xl tabular-nums tracking-wide leading-tight">
+                                <span className="font-mono font-bold text-sm sm:text-base tabular-nums tracking-wide leading-tight whitespace-nowrap shrink-0">
                                   {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
                                 </span>
                               </div>
