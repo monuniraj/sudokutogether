@@ -11,7 +11,7 @@
  * - All user-facing strings wrapped with `t('daily.<key>', 'English Fallback')`.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Calendar,
   ChevronRight,
@@ -56,6 +56,8 @@ export interface DailyChallengeCardProps {
   onStartDailyChallenge?: (payload: DailyChallengeLaunchPayload) => void;
   /** Optional counter incremented by App.tsx whenever daily vault state updates */
   refreshTrigger?: number;
+  /** Notifies parent App shell whenever Calendar or Result modal opens/closes (for timer auto-pause) */
+  onModalOpenChange?: (isOpen: boolean) => void;
 }
 
 function formatDurationMMSS(totalSeconds: number): string {
@@ -99,9 +101,10 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
   compact = false,
   onStartDailyChallenge,
   refreshTrigger = 0,
+  onModalOpenChange,
 }) => {
   const { t } = useTranslation();
-  const daily = useDailyChallenge({ uid });
+  const daily = useDailyChallenge({ uid, enableTimer: false });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [calendarAnchorDate, setCalendarAnchorDate] = useState<string | undefined>(undefined);
   const [inspectedResult, setInspectedResult] = useState<{
@@ -113,6 +116,19 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
     stats: DailyStats;
     fromCalendar: boolean;
   } | null>(null);
+
+  const onModalOpenChangeRef = useRef(onModalOpenChange);
+  onModalOpenChangeRef.current = onModalOpenChange;
+
+  useEffect(() => {
+    onModalOpenChangeRef.current?.(isCalendarOpen || Boolean(inspectedResult));
+  }, [isCalendarOpen, inspectedResult]);
+
+  useEffect(() => {
+    return () => {
+      onModalOpenChangeRef.current?.(false);
+    };
+  }, []);
 
   // Sync live local vault snapshot whenever App.tsx updates daily progress/completion
   const [liveSnapshot, setLiveSnapshot] = useState<{
@@ -175,7 +191,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
     [daily.date, uid, onStartDailyChallenge]
   );
 
-  const handleCardClick = useCallback(() => {
+  const handlePlayOrResume = useCallback(() => {
     if (effectiveStatus === "COMPLETED" || effectiveStatus === "FAILED") {
       setInspectedResult({
         date: daily.date,
@@ -292,50 +308,33 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
   const ctaButtonClasses =
     effectiveStatus === "COMPLETED"
       ? darkMode
-        ? "bg-[#064e3b] text-[#a7f3d0]"
-        : "bg-[#D1FAE5] text-[#065F46]"
+        ? "bg-[#064e3b] hover:bg-[#065f46] text-[#a7f3d0]"
+        : "bg-[#A7F3D0] hover:bg-[#6EE7B7] text-[#065F46]"
       : effectiveStatus === "FAILED"
         ? darkMode
-          ? "bg-[#881337] text-[#fecdd3]"
-          : "bg-[#FFE4E6] text-[#9F1239]"
+          ? "bg-[#881337] hover:bg-[#9f1239] text-[#fecdd3]"
+          : "bg-[#FECDD3] hover:bg-[#FDA4AF] text-[#9F1239]"
         : darkMode
-          ? "bg-[#92400e] text-[#fef3c7]"
-          : "bg-[#FDE68A] text-[#78350F]";
+          ? "bg-[#b45309] hover:bg-[#d97706] text-[#fef3c7]"
+          : "bg-[#FCD34D] hover:bg-[#FBBF24] text-[#78350F]";
 
   if (compact) {
     return (
       <>
-        <div
-          role="button"
-          tabIndex={0}
+        <button
+          type="button"
           id="desktop-daily-challenge-btn"
-          onClick={handleCardClick}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              handleCardClick();
-            }
-          }}
-          className={`flex-1 min-w-0 h-[38px] px-2.5 rounded-xl border-0 shadow-none outline-none flex items-center justify-between gap-1.5 transition-transform duration-150 cursor-pointer active:scale-[0.98] ${
+          onClick={openCalendar}
+          aria-label={td("daily.openCalendarBtn", "Open Daily Calendar")}
+          title={td("daily.openCalendarBtn", "Open Daily Calendar")}
+          className={`flex-1 min-w-0 h-[38px] px-2.5 rounded-xl border-0 shadow-none outline-none flex items-center justify-between gap-1.5 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
             darkMode
               ? "bg-[#451a03]/85 hover:bg-[#78350f]/90 text-[#fde68a]"
               : "bg-[#FEF3C7]/95 hover:bg-[#FDE68A]/95 text-[#92400E]"
           }`}
         >
-          <span className="inline-flex items-center gap-1 min-w-0">
-            <button
-              type="button"
-              onClick={openCalendar}
-              aria-label={td("daily.openCalendarBtn", "Open Daily Calendar")}
-              title={td("daily.openCalendarBtn", "Open Daily Calendar")}
-              className={`p-1 -ml-1 rounded-lg border-0 shadow-none flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
-                darkMode
-                  ? "hover:bg-black/30 text-[#fde68a]"
-                  : "hover:bg-white/60 text-[#92400E]"
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5 shrink-0 stroke-[2.2]" />
-            </button>
+          <span className="inline-flex items-center gap-1.5 min-w-0">
+            <Calendar className="w-3.5 h-3.5 shrink-0 stroke-[2.2]" />
             <span className="font-sans font-bold text-[11px] tracking-tight truncate leading-none">
               {td("daily.cardTitle", "Daily Challenge")}
             </span>
@@ -344,7 +343,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
             <Flame className="w-3 h-3 shrink-0" />
             <span>{effectiveStats.currentStreak}</span>
           </span>
-        </div>
+        </button>
 
         {sharedModals}
       </>
@@ -354,20 +353,12 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
   return (
     <>
       <div
-        role="button"
-        tabIndex={0}
         id="home-daily-challenge-card"
-        onClick={handleCardClick}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            handleCardClick();
-          }
-        }}
-        className={`w-full rounded-2xl border-0 shadow-none p-3.5 sm:p-4 transition-transform duration-150 cursor-pointer active:scale-[0.99] select-none ${
+        onClick={openCalendar}
+        className={`w-full rounded-2xl border-0 shadow-none p-3.5 sm:p-4 transition-colors duration-150 cursor-pointer select-none ${
           darkMode
-            ? "bg-[#451a03]/85 hover:bg-[#78350f]/80 text-[#fde68a]"
-            : "bg-[#FEF3C7] hover:bg-[#FDE68A]/80 text-[#92400E]"
+            ? "bg-[#451a03]/75 hover:bg-[#451a03]/95 text-[#fde68a]"
+            : "bg-[#FEF3C7]/80 hover:bg-[#FEF3C7] text-[#92400E]"
         }`}
       >
         {/* Top Row: Date + Difficulty Badge | Calendar Trigger + Current Streak */}
@@ -438,9 +429,14 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
           </div>
         </div>
 
-        {/* Bottom Dynamic CTA Pill */}
-        <div
-          className={`w-full py-2.5 px-3.5 rounded-xl border-0 shadow-none flex items-center justify-between gap-2 font-sans font-black text-xs sm:text-sm ${ctaButtonClasses}`}
+        {/* Bottom Dynamic Action CTA Button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePlayOrResume();
+          }}
+          className={`w-full py-2.5 px-3.5 rounded-xl border-0 shadow-none flex items-center justify-between gap-2 font-sans font-black text-xs sm:text-sm transition-all duration-150 cursor-pointer active:scale-[0.98] ${ctaButtonClasses}`}
         >
           <span className="inline-flex items-center gap-2 truncate">
             {effectiveStatus === "COMPLETED" ? (
@@ -453,7 +449,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
             <span className="truncate">{ctaLabel}</span>
           </span>
           <ChevronRight className="w-4 h-4 shrink-0 stroke-[2.4] opacity-80" />
-        </div>
+        </button>
       </div>
 
       {sharedModals}

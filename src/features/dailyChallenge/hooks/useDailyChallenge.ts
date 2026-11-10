@@ -48,6 +48,8 @@ export interface UseDailyChallengeOptions {
   initialDate?: string;
   /** Debounce delay in milliseconds for cloud auto-save writes (default: 1500ms) */
   autoSaveDebounceMs?: number;
+  /** Enable internal 1-second gameplay timer & visibility auto-pause (default: false for passive display cards) */
+  enableTimer?: boolean;
 }
 
 export interface UseDailyChallengeReturn {
@@ -248,6 +250,7 @@ export function useDailyChallenge(
       : optionsOrUid ?? {};
 
   const uid = normalizedOptions.uid;
+  const enableTimer = Boolean(normalizedOptions.enableTimer);
   const autoSaveDebounceMs =
     typeof normalizedOptions.autoSaveDebounceMs === "number" &&
     normalizedOptions.autoSaveDebounceMs >= 0
@@ -490,9 +493,9 @@ export function useDailyChallenge(
     };
   }, [date, uid, clearScheduledCloudSave]);
 
-  // 1-Second Gameplay Timer Ticker (runs strictly when IN_PROGRESS and not paused)
+  // 1-Second Gameplay Timer Ticker (opt-in via enableTimer, and strictly when IN_PROGRESS and not paused)
   useEffect(() => {
-    if (isLoading || status !== "IN_PROGRESS" || isPaused) {
+    if (!enableTimer || isLoading || status !== "IN_PROGRESS" || isPaused) {
       return;
     }
 
@@ -515,11 +518,11 @@ export function useDailyChallenge(
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [isLoading, status, isPaused, buildProgressPayload]);
+  }, [enableTimer, isLoading, status, isPaused, buildProgressPayload]);
 
-  // Auto-pause timer & flush progress on document visibility change (background/tab switch)
+  // Auto-pause timer & flush progress on document visibility change (opt-in active gameplay instances only)
   useEffect(() => {
-    if (typeof document === "undefined") return;
+    if (!enableTimer || typeof document === "undefined") return;
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -535,7 +538,7 @@ export function useDailyChallenge(
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [persistProgressNow]);
+  }, [enableTimer, persistProgressNow]);
 
   const selectCell = useCallback((index: number | null) => {
     if (index === null) {

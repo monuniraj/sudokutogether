@@ -2313,6 +2313,20 @@ export default function App() {
   const [showMultiplayerForkModal, setShowMultiplayerForkModal] = useState<boolean>(false);
   const [showHintRewardModal, setShowHintRewardModal] = useState<boolean>(false);
   const [showJoinRoomModal, setShowJoinRoomModal] = useState<boolean>(false);
+  const [isDailyCardModalOpen, setIsDailyCardModalOpen] = useState<boolean>(false);
+  const [isPostGameDailyCalendarOpen, setIsPostGameDailyCalendarOpen] = useState<boolean>(false);
+  const [postGameDailyCalendarAnchorDate, setPostGameDailyCalendarAnchorDate] = useState<string | undefined>(undefined);
+  const [dailyResultModalState, setDailyResultModalState] = useState<{
+    isOpen: boolean;
+    date: string;
+    difficulty: DailyDifficulty;
+    status: DailyChallengeStatus;
+    elapsedTime: number;
+    mistakes: number;
+    stats: DailyStats;
+    fromCalendar?: boolean;
+    fallbackSolvedOnReview?: boolean;
+  } | null>(null);
   const [joinRoomCodeInput, setJoinRoomCodeInput] = useState<string>("");
   const [joinRoomPinInput, setJoinRoomPinInput] = useState<string>("");
   const [joinRoomError, setJoinRoomError] = useState<string | null>(null);
@@ -7060,6 +7074,8 @@ export default function App() {
 
   // Topmost modal closer for Android system back button & popstate handling
   const closeTopmostModal = (): boolean => {
+    if (isPostGameDailyCalendarOpen) { setIsPostGameDailyCalendarOpen(false); return true; }
+    if (dailyResultModalState?.isOpen) { setDailyResultModalState(null); return true; }
     if (openDropdown) { setOpenDropdown(null); return true; }
     if (playerToUnfriend) { setPlayerToUnfriend(null); return true; }
     if (notificationResultModal) { setNotificationResultModal(null); return true; }
@@ -7108,6 +7124,8 @@ export default function App() {
 
   const getOpenModalCount = (): number => {
     let count = 0;
+    if (isPostGameDailyCalendarOpen) count++;
+    if (dailyResultModalState?.isOpen) count++;
     if (openDropdown) count++;
     if (playerToUnfriend) count++;
     if (notificationResultModal) count++;
@@ -7195,7 +7213,9 @@ export default function App() {
     showCreateChallengeModal,
     showJoinRoomModal,
     showMultiplayerForkModal,
-    showHowToPlayModal
+    showHowToPlayModal,
+    isPostGameDailyCalendarOpen,
+    dailyResultModalState
   ]);
 
   // Navigation interceptor using History API and Capacitor Back Button for Android/system swipe-to-back gestures
@@ -13042,7 +13062,10 @@ export default function App() {
     showLoginRequiredModal ||
     showTargetLoginRequiredModal ||
     showHistoryChallengeModal ||
-    Boolean(notificationResultModal)
+    Boolean(notificationResultModal) ||
+    isDailyCardModalOpen ||
+    isPostGameDailyCalendarOpen ||
+    Boolean(dailyResultModalState?.isOpen)
   );
   useLayoutEffect(() => {
     if (isPauseModalOpen) {
@@ -14101,20 +14124,7 @@ export default function App() {
   const [dailyRefreshCounter, setDailyRefreshCounter] = useState<number>(0);
   const [isDailyReviewSession, setIsDailyReviewSession] = useState<boolean>(false);
   const [dailyChallengeLoadedBoardDate, setDailyChallengeLoadedBoardDate] = useState<string | null>(null);
-  const [isPostGameDailyCalendarOpen, setIsPostGameDailyCalendarOpen] = useState<boolean>(false);
-  const [postGameDailyCalendarAnchorDate, setPostGameDailyCalendarAnchorDate] = useState<string | undefined>(undefined);
   const [dailyReviewSummaryMeta, setDailyReviewSummaryMeta] = useState<{
-    isOpen: boolean;
-    date: string;
-    difficulty: DailyDifficulty;
-    status: DailyChallengeStatus;
-    elapsedTime: number;
-    mistakes: number;
-    stats: DailyStats;
-    fromCalendar?: boolean;
-    fallbackSolvedOnReview?: boolean;
-  } | null>(null);
-  const [dailyResultModalState, setDailyResultModalState] = useState<{
     isOpen: boolean;
     date: string;
     difficulty: DailyDifficulty;
@@ -15961,7 +15971,19 @@ export default function App() {
                 triggerHapticTap(vibrations);
                 if (currentScreen === "game") {
                   // Requirement 3: Navigating to Home or Status via Back button must NOT forfeit; session remains intact for Resume
-                  saveCurrentGameToLocal(boardState, sessionSeconds, difficulty);
+                  if (!dailyChallengeActiveDate && !isDailyBoardContextRef.current) {
+                    saveCurrentGameToLocal(boardState, sessionSeconds, difficulty);
+                  } else if (dailyChallengeActiveDate && boardState && !boardState.isGameOver) {
+                    const dailyUid = isGuestSession ? null : authUser?.uid;
+                    const latestDaily = getDailyProgress(dailyChallengeActiveDate, dailyUid);
+                    if (latestDaily && dailyUid) {
+                      if (dailyCloudAutoSaveTimerRef.current !== null && typeof window !== "undefined") {
+                        window.clearTimeout(dailyCloudAutoSaveTimerRef.current);
+                        dailyCloudAutoSaveTimerRef.current = null;
+                      }
+                      void saveDailyProgressToCloud(dailyUid, latestDaily);
+                    }
+                  }
                   setCurrentScreen("home");
                   setNavigationHistory(["home"]);
                   window.history.pushState({ view: "home" }, "", window.location.href);
@@ -16868,6 +16890,7 @@ export default function App() {
                     darkMode={darkMode}
                     compact
                     onStartDailyChallenge={handleLaunchDailyChallenge}
+                    onModalOpenChange={setIsDailyCardModalOpen}
                     refreshTrigger={dailyRefreshCounter}
                   />
                   <button
@@ -16962,14 +16985,9 @@ export default function App() {
                             {/* 3D Isometric Sudoku Perspective Watermark */}
                             <Sudoku3DWatermark difficulty={activeDiff} />
 
-                            <div className="text-center w-full relative z-10 flex flex-col items-center gap-0.5 lg:gap-0">
-                              {/* Tier 1: Top Mini Header */}
-                              <span className="text-[9px] uppercase font-mono tracking-widest block font-normal opacity-60 leading-none">
-                                {t("home_record_banner_title")}
-                              </span>
-
-                              {/* Tier 2: Center Hero Metric */}
-                              <div className="flex items-center justify-center gap-1.5 my-0.5 lg:my-0">
+                            <div className="text-center w-full relative z-10 flex flex-col items-center justify-center gap-1">
+                              {/* Hero Metric */}
+                              <div className="flex items-center justify-center gap-1.5">
                                 <Timer className="w-4 h-4 stroke-[2] opacity-90 shrink-0" />
                                 <span className="font-sans font-bold text-sm sm:text-base uppercase tracking-wider opacity-90 leading-none">
                                   {t("home_record_banner_best_time")}:
@@ -16979,7 +16997,7 @@ export default function App() {
                                 </span>
                               </div>
 
-                              {/* Tier 3: Bottom Subtitle Prompt */}
+                              {/* Subtitle Prompt */}
                               <p className="text-[10px] select-none handwriting opacity-60 font-normal leading-none tracking-wide truncate max-w-full">
                                 {bestSecs > 0
                                   ? t("break_your_record")
