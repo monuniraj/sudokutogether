@@ -36,6 +36,7 @@ import type {
   DayRecord,
 } from "../types/daily.types";
 import { getDailyDifficultyForDate, getSeedForDate, parseDateKey } from "./dailyGenerator";
+import { getDailyProgress, getDailyStats } from "./dailyStorage";
 
 const USERS_COLLECTION = "users";
 const DAILY_CHALLENGES_SUBCOLLECTION = "daily_challenges";
@@ -93,6 +94,13 @@ function getDailyChallengeDocRef(uid: string, dateKey: string): DocumentReferenc
 
 function getDailyStatsMetaDocRef(uid: string): DocumentReference<DocumentData> {
   return doc(db, USERS_COLLECTION, uid, DAILY_STATS_SUBCOLLECTION, DAILY_STATS_META_DOC);
+}
+
+function getGlobalCompletionDocRef(
+  dateKey: string,
+  uid: string
+): DocumentReference<DocumentData> {
+  return doc(db, DAILY_CHALLENGES_SUBCOLLECTION, dateKey, "completions", uid);
 }
 
 /**
@@ -178,11 +186,103 @@ function normalizeNotesMap(raw: unknown): Record<number, number[]> {
 async function readServerFirstDoc(
   ref: DocumentReference<DocumentData>
 ): Promise<DocumentSnapshot<DocumentData>> {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return await getDoc(ref);
+  }
   try {
     return await getDocFromServer(ref);
   } catch {
     return await getDoc(ref);
   }
+}
+
+async function safeReadServerFirstDoc(
+  ref: DocumentReference<DocumentData>
+): Promise<DocumentSnapshot<DocumentData> | null> {
+  try {
+    return await readServerFirstDoc(ref);
+  } catch {
+    return null;
+  }
+}
+
+export type DailyEligibilityStatus = "OFFICIAL_DAILY" | "EXHIBITION";
+
+export interface DailyCloudWriteOptions {
+  /** When true (e.g. multiplayer exhibition replays), bypasses official cloud writes */
+  isExhibition?: boolean;
+}
+
+function isTerminalDailyStatus(raw: unknown): boolean {
+  const normalized = normalizeStatusValue(raw);
+  return normalized === "COMPLETED" || normalized === "FAILED";
+}
+
+function isCompletionSnapCompleted(
+  snap: DocumentSnapshot<DocumentData> | null
+): boolean {
+  if (!snap || !snap.exists()) return false;
+  const data = snap.data();
+  if (!data || data.status === undefined || data.status === null) {
+    // Legacy completion docs represent a completed run by document existence
+    return true;
+  }
+  return normalizeStatusValue(data.status) === "COMPLETED";
+}
+
+/**
+ * Determines whether a player is eligible for an official Daily Challenge attempt
+ * ("OFFICIAL_DAILY") or has already finished/failed this calendar date locally or
+ * in Cloud Firestore ("EXHIBITION").
+ */
+export async function checkPlayerDailyEligibility(
+  uid: string | null | undefined,
+  dateKey: string
+): Promise<DailyEligibilityStatus> {
+  const normalizedDate = String(dateKey || "").trim();
+  parseDateKey(normalizedDate);
+
+  const cleanUid = resolveAuthenticatedUid(uid);
+  const storageUid = cleanUid ?? null;
+
+  // 1. Local vault inspection (authoritative for instant/offline disqualifications)
+  const localProgress = getDailyProgress(normalizedDate, storageUid);
+  if (
+    localProgress &&
+    (localProgress.status === "COMPLETED" || localProgress.status === "FAILED")
+  ) {
+    return "EXHIBITION";
+  }
+
+  const localStats = getDailyStats(storageUid, normalizedDate);
+  const localRecord = localStats.recordsByDate[normalizedDate];
+  if (
+    localRecord &&
+    (localRecord.status === "COMPLETED" || localRecord.status === "FAILED")
+  ) {
+    return "EXHIBITION";
+  }
+
+  // Strictly avoid Firestore calls for guest or anonymous sessions
+  if (!cleanUid) {
+    return "OFFICIAL_DAILY";
+  }
+
+  // 2. Cloud Firestore SSOT inspection
+  const [completionSnap, challengeSnap] = await Promise.all([
+    safeReadServerFirstDoc(getGlobalCompletionDocRef(normalizedDate, cleanUid)),
+    safeReadServerFirstDoc(getDailyChallengeDocRef(cleanUid, normalizedDate)),
+  ]);
+
+  if (isCompletionSnapCompleted(completionSnap)) {
+    return "EXHIBITION";
+  }
+
+  if (challengeSnap?.exists() && isTerminalDailyStatus(challengeSnap.data()?.status)) {
+    return "EXHIBITION";
+  }
+
+  return "OFFICIAL_DAILY";
 }
 
 function hydrateProgressFromDocData(
@@ -395,12 +495,15 @@ export async function fetchDailyProgressFromCloud(
 
 /**
  * Persists in-progress or updated Daily Challenge state to `/users/{uid}/daily_challenges/{YYYY-MM-DD}`.
- * Strictly exits early without network calls for guest users.
+ * Strictly exits early without network calls for guest users or exhibition sessions.
  */
 export async function saveDailyProgressToCloud(
   uid: string | null | undefined,
-  progress: DailyChallengeProgress
+  progress: DailyChallengeProgress & DailyCloudWriteOptions,
+  options?: DailyCloudWriteOptions
 ): Promise<void> {
+  if (progress.isExhibition || options?.isExhibition) return;
+
   const cleanUid = resolveAuthenticatedUid(uid);
   if (!cleanUid) return;
 
@@ -462,20 +565,41 @@ export interface DailyLeaderboardResult {
  * - `/users/{uid}/daily_challenges/{YYYY-MM-DD}`
  * - `/users/{uid}/daily_stats/meta`
  * - `/daily_challenges/{YYYY-MM-DD}/completions/{uid}` (Global Daily Leaderboard)
- * Strictly exits early without network calls for guest users.
+ * Strictly exits early without network calls for guest users, exhibition sessions,
+ * or when a completion record already exists (preserving write-once immutability).
  */
 export async function recordDailyCompletionToCloud(
   uid: string | null | undefined,
   date: string,
   record: DayRecord,
   stats: DailyStats,
-  playerName?: string
+  playerName?: string,
+  options?: DailyCloudWriteOptions
 ): Promise<void> {
+  if (options?.isExhibition) return;
+
   const cleanUid = resolveAuthenticatedUid(uid);
   if (!cleanUid) return;
 
   const normalizedDate = String(date || record.date || "").trim();
   parseDateKey(normalizedDate);
+
+  const userChallengeDocRef = getDailyChallengeDocRef(cleanUid, normalizedDate);
+  const leaderboardDocRef = getGlobalCompletionDocRef(normalizedDate, cleanUid);
+
+  // Inspect existing completion state before writing to prevent overwriting official records
+  const [existingLeaderboardSnap, existingChallengeSnap] = await Promise.all([
+    safeReadServerFirstDoc(leaderboardDocRef),
+    safeReadServerFirstDoc(userChallengeDocRef),
+  ]);
+
+  if (
+    isCompletionSnapCompleted(existingLeaderboardSnap) ||
+    (existingChallengeSnap?.exists() &&
+      isTerminalDailyStatus(existingChallengeSnap.data()?.status))
+  ) {
+    return;
+  }
 
   const now = Date.now();
   const updatedAt = toEpochMillis(record.updatedAt, now) || now;
@@ -540,18 +664,11 @@ export async function recordDailyCompletionToCloud(
     auth?.currentUser?.displayName?.trim() ||
     "Player";
 
-  const leaderboardDocRef = doc(
-    db,
-    DAILY_CHALLENGES_SUBCOLLECTION,
-    normalizedDate,
-    "completions",
-    cleanUid
-  );
-
   const leaderboardPayload: Record<string, unknown> = {
     uid: cleanUid,
     playerName: resolvedPlayerName,
     isGuest: false,
+    status: "COMPLETED",
     time: cleanRecord.timeSeconds,
     mistakes: cleanRecord.mistakes,
     difficulty: cleanRecord.difficulty,
@@ -561,19 +678,19 @@ export async function recordDailyCompletionToCloud(
 
   try {
     const batch = writeBatch(db);
-    batch.set(getDailyChallengeDocRef(cleanUid, normalizedDate), challengePayload, {
+    batch.set(userChallengeDocRef, challengePayload, {
       merge: true,
     });
     batch.set(getDailyStatsMetaDocRef(cleanUid), statsPayload, {
       merge: true,
     });
-    batch.set(leaderboardDocRef, leaderboardPayload, { merge: true });
+    batch.set(leaderboardDocRef, leaderboardPayload);
     await batch.commit();
   } catch {
     // Fallback: guarantee private user stats commit even if global leaderboard rules block
     try {
       const privateBatch = writeBatch(db);
-      privateBatch.set(getDailyChallengeDocRef(cleanUid, normalizedDate), challengePayload, {
+      privateBatch.set(userChallengeDocRef, challengePayload, {
         merge: true,
       });
       privateBatch.set(getDailyStatsMetaDocRef(cleanUid), statsPayload, {

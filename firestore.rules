@@ -132,6 +132,16 @@ service cloud.firestore {
                               && isOptionalBool(request.resource.data, 'isFriend');
         allow delete: if isOwner(userId);
       }
+
+      // Daily challenge per-date progress & completion state: strictly isolated to the profile owner
+      match /daily_challenges/{dateKey} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Daily challenge career statistics: strictly isolated to the profile owner
+      match /daily_stats/{docId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // =========================================================================
@@ -201,6 +211,20 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if isValidString(userId, 1, 100);
       allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // =========================================================================
+    // 6. GLOBAL DAILY LEADERBOARDS (/daily_challenges)
+    // =========================================================================
+    match /daily_challenges/{dateKey}/completions/{uid} {
+      // Public leaderboard: anyone can read global daily completion standings
+      allow read: if true;
+
+      // Write-once creation: only the authenticated user may create their own entry once
+      allow create: if request.auth != null && request.auth.uid == uid;
+
+      // Strict write-once immutability to prevent overwriting past solve times
+      allow update, delete: if false;
     }
   }
 }

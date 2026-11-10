@@ -306,20 +306,29 @@ export function getDailyProgress(
   };
 }
 
+export interface DailyWriteOptions {
+  /** When true (e.g. multiplayer exhibition replays), bypasses updating official local vault stats/progress */
+  isExhibition?: boolean;
+}
+
 /**
  * Persists in-progress or updated Daily Challenge state into the scoped local vault
  * and keeps the calendar DayRecord status synchronized.
+ * Safely exits without mutating official records when flagged as exhibition mode.
  */
 export function saveDailyProgress(
-  progress: DailyChallengeProgress,
-  uid?: string | null
+  progress: DailyChallengeProgress & DailyWriteOptions,
+  uid?: string | null,
+  options?: DailyWriteOptions
 ): DailyChallengeProgress {
   const normalizedDate = progress.date.trim();
   parseDateKey(normalizedDate);
 
   const now = Date.now();
+  const isExhibition = Boolean(progress.isExhibition || options?.isExhibition);
+  const { isExhibition: _ignoredExhibitionFlag, ...baseProgress } = progress;
   const sanitizedProgress: DailyChallengeProgress = {
-    ...progress,
+    ...baseProgress,
     date: normalizedDate,
     boardFlat: [...progress.boardFlat],
     puzzleFlat: [...progress.puzzleFlat],
@@ -332,6 +341,10 @@ export function saveDailyProgress(
     startedAt: progress.startedAt || now,
     updatedAt: now,
   };
+
+  if (isExhibition) {
+    return sanitizedProgress;
+  }
 
   const vault = readDailyVault(uid);
   vault.progressByDate[normalizedDate] = sanitizedProgress;
@@ -379,14 +392,21 @@ export function getDailyStats(
  * Records a completed Daily Challenge run for a specific YYYY-MM-DD date,
  * updates any saved progress entry to "COMPLETED", recalculates consecutive
  * streaks and personal bests, and returns the updated DailyStats.
+ * Safely bypasses vault writes and returns unchanged DailyStats when flagged as exhibition mode.
  */
 export function recordDailyCompletion(
-  input: RecordDailyCompletionInput,
+  input: RecordDailyCompletionInput & DailyWriteOptions,
   uid?: string | null,
-  referenceDateKey: string = formatDateKey()
+  referenceDateKey: string = formatDateKey(),
+  options?: DailyWriteOptions
 ): DailyStats {
   const normalizedDate = input.date.trim();
   parseDateKey(normalizedDate);
+
+  const isExhibition = Boolean(input.isExhibition || options?.isExhibition);
+  if (isExhibition) {
+    return getDailyStats(uid, referenceDateKey);
+  }
 
   const now = input.completedAt ?? Date.now();
   const timeSeconds = Math.max(0, Math.floor(Number(input.timeSeconds) || 0));
