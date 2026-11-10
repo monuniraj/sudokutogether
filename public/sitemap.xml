@@ -7,25 +7,217 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://sudokusync.com/easy</loc>
+    <loc>https://sudokusync.com/en/easy</loc>
     <lastmod>2026-11-10</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sudokusync.com/medium</loc>
+    <loc>https://sudokusync.com/en/medium</loc>
     <lastmod>2026-11-10</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sudokusync.com/hard</loc>
+    <loc>https://sudokusync.com/en/hard</loc>
     <lastmod>2026-11-10</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://sudokusync.com/expert</loc>
+    <loc>https://sudokusync.com/en/expert</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/hi/easy</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/hi/medium</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/hi/hard</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/hi/expert</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/de/easy</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/de/medium</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/de/hard</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/de/expert</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/ja/easy</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/ja/medium</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/ja/hard</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/ja/expert</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/ko/easy</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/ko/medium</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/ko/hard</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/ko/expert</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/es/easy</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/es/medium</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/es/hard</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/es/expert</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/fr/easy</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/fr/medium</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/fr/hard</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/fr/expert</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/it/easy</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/it/medium</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/it/hard</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/it/expert</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/pt-br/easy</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/pt-br/medium</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/pt-br/hard</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/pt-br/expert</loc>
     <lastmod>2026-11-10</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>

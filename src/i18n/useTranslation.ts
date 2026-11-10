@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { translations, TranslationKey, Language, LANGUAGES, LanguageOption } from './translations';
 import { getActiveAuthUid } from '../utils/storageEngine';
+import { parseDifficultyFromPath } from '../utils/seoSilos';
 
 const STORAGE_KEY = 'sudoku_language';
 const LANGUAGE_CHANGE_EVENT = 'sudoku_language_change';
@@ -184,6 +185,14 @@ function getScopedLanguageKey(): string {
 export function getDeviceLanguage(): Language {
   if (typeof window === 'undefined' || !navigator) return 'en';
 
+  const isNative = Boolean((window as any).Capacitor?.isNativePlatform?.());
+  if (!isNative && window.location?.pathname) {
+    const parsedRoute = parseDifficultyFromPath(window.location.pathname);
+    if (parsedRoute.hasExplicitLanguage && translations[parsedRoute.language]) {
+      return parsedRoute.language;
+    }
+  }
+
   const scopedKey = getScopedLanguageKey();
   const saved = (localStorage.getItem(scopedKey) || localStorage.getItem(STORAGE_KEY)) as Language | null;
   if (saved && translations[saved]) {
@@ -221,6 +230,9 @@ let globalLanguageState: Language = getDeviceLanguage();
 export function setGlobalLanguage(lang: Language): void {
   if (!translations[lang]) return;
   globalLanguageState = lang;
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = lang;
+  }
   try {
     localStorage.setItem(getScopedLanguageKey(), lang);
     localStorage.setItem(STORAGE_KEY, lang);
@@ -244,6 +256,12 @@ export function getCurrentLanguage(): Language {
  */
 export function useTranslation() {
   const [lang, setLangState] = useState<Language>(globalLanguageState);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = lang;
+    }
+  }, [lang]);
 
   useEffect(() => {
     const handleLanguageChange = (e: Event) => {

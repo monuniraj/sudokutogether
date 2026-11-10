@@ -145,7 +145,10 @@ import {
   Link2,
   XCircle,
   Crown,
-  WifiOff
+  WifiOff,
+  Calendar,
+  Search,
+  Globe
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Capacitor } from '@capacitor/core';
@@ -161,11 +164,16 @@ import { scheduleDailyZenNotification, recordGamePlayedAndReschedule } from "./u
 import { initCrazyGames, getCrazyGamesUser, getCrazyGamesData, setCrazyGamesData, getCrazyGamesInviteLink, isCrazyGamesActive, crazyGamesGameplayStart, crazyGamesGameplayStop } from "./services/CrazyGamesSDK";
 import {
   type SeoDifficulty,
+  type SeoLanguage,
+  SEO_LANGUAGES,
   SEO_ROOT_META,
   SEO_SILO_ORDER,
   SEO_SILO_MAP,
   parseDifficultyFromPath,
   getDifficultyPath,
+  getLocalizedSeoSilo,
+  getRootSeoMeta,
+  getSeoPath,
 } from "./utils/seoSilos";
 import { getToken, onMessage } from "firebase/messaging";
 import { messaging } from "./firebase";
@@ -1687,6 +1695,51 @@ export const persistGuestThemeToVault = (themeUpdates: Partial<{ activeTheme: "O
 // Module-level audio throttle & deduplication state (enforces 1000ms cooldown)
 let lastNotificationSoundTime = 0;
 const lastPlayedSoundKeys = new Map<string, number>();
+
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.mologic.sudokusync";
+
+function GooglePlayIcon({ className = "w-4 h-4 shrink-0" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3.5 2.2L13.24 12L3.5 21.8C3.18 21.48 3 21.02 3 20.48V3.52C3 2.98 3.18 2.52 3.5 2.2Z" fill="#4285F4" />
+      <path d="M3.5 2.2L15.96 9.26L13.24 12L3.5 2.2Z" fill="#34A853" />
+      <path d="M15.96 9.26L20.2 11.66Q21 12 20.2 12.34L15.96 14.74L13.24 12L15.96 9.26Z" fill="#FBBC04" />
+      <path d="M3.5 21.8L13.24 12L15.96 14.74L3.5 21.8Z" fill="#EA4335" />
+    </svg>
+  );
+}
+
+function useConversionBadgeRotation() {
+  const [badgeView, setBadgeView] = useState<"bestTime" | "playStore">("bestTime");
+  const lastCellTapTimestampRef = useRef<number>(0);
+
+  const recordCellTap = useCallback(() => {
+    if (Capacitor.isNativePlatform()) return;
+    lastCellTapTimestampRef.current = Date.now();
+  }, []);
+
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+    const interval = setInterval(() => {
+      if (Date.now() - lastCellTapTimestampRef.current < 5000) {
+        return;
+      }
+      setBadgeView((prev) => (prev === "bestTime" ? "playStore" : "bestTime"));
+    }, 7000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return {
+    badgeView: Capacitor.isNativePlatform() ? ("bestTime" as const) : badgeView,
+    recordCellTap,
+  };
+}
 
 export default function App() {
   const { t, language } = useTranslation();
@@ -3361,6 +3414,8 @@ export default function App() {
 
   // Reference to current active board state across the app
   const boardStateRef = useRef<BoardState | null>(null);
+  const generateAndSetNewPuzzleRef = useRef<((level: Difficulty) => Promise<void> | void) | null>(null);
+  const resumeSavedSessionRef = useRef<(() => any) | null>(null);
   const challengeModeRef = useRef(challengeMode);
   challengeModeRef.current = challengeMode;
   const activeGameIdRef = useRef(activeGameId);
@@ -3821,13 +3876,29 @@ export default function App() {
   const [winStreak, setWinStreak] = useState<number>(() => {
     return Number(initialVault.stats.winStreak) || 0;
   });
+  const initialRouteParsedRef = useRef<ReturnType<typeof parseDifficultyFromPath> | null>(null);
+  if (initialRouteParsedRef.current === null) {
+    initialRouteParsedRef.current =
+      typeof window !== "undefined" && !Capacitor.isNativePlatform()
+        ? parseDifficultyFromPath(window.location.pathname)
+        : { language: "en", difficulty: "EASY", hasExplicitLanguage: false, hasExplicitDifficulty: false };
+  }
   const initialRouteDifficultyRef = useRef<SeoDifficulty | null | undefined>(undefined);
   if (initialRouteDifficultyRef.current === undefined) {
     initialRouteDifficultyRef.current =
-      typeof window !== "undefined" && !Capacitor.isNativePlatform()
-        ? parseDifficultyFromPath(window.location.pathname)
+      typeof window !== "undefined" &&
+      !Capacitor.isNativePlatform() &&
+      initialRouteParsedRef.current.hasExplicitDifficulty
+        ? initialRouteParsedRef.current.difficulty
         : null;
   }
+  const initialRouteLanguageRef = useRef<SeoLanguage | null>(
+    typeof window !== "undefined" &&
+    !Capacitor.isNativePlatform() &&
+    initialRouteParsedRef.current.hasExplicitLanguage
+      ? initialRouteParsedRef.current.language
+      : null
+  );
   const hasInitialInviteRef = useRef<boolean | null>(null);
   if (hasInitialInviteRef.current === null) {
     let detectedInvite = false;
@@ -3859,6 +3930,8 @@ export default function App() {
     typeof window !== "undefined" ? window.location.pathname : "/"
   );
   const [difficulty, setDifficulty] = useState<Difficulty>(() => initialRouteDifficultyRef.current || "EASY");
+  const difficultyRef = useRef<Difficulty>(difficulty);
+  difficultyRef.current = difficulty;
 
   // Helper to parse times stored as raw numbers, numeric strings, or mm:ss / hh:mm:ss strings
   const parseTimeToSeconds = (val: unknown): number => {
@@ -4735,9 +4808,9 @@ export default function App() {
 
           if (cloudDocData?.settings && typeof cloudDocData.settings === "object") {
             const s = cloudDocData.settings;
-            // Language: prefer cloud setting, then user's scoped local store
+            // Language: prefer explicit URL language route if visited directly; otherwise cloud -> local
             const remoteLang = s.language || userScopedLang;
-            if (typeof remoteLang === "string" && remoteLang) {
+            if (!initialRouteLanguageRef.current && typeof remoteLang === "string" && remoteLang) {
               setGlobalLanguage(remoteLang as Language);
               try { localStorage.setItem(getScopedKey("language", uid), remoteLang); } catch { }
             }
@@ -4846,7 +4919,7 @@ export default function App() {
               try { localStorage.setItem(getScopedKey("privacyEnabled", uid), String(privacyVal)); } catch { }
             }
           } else {
-            if (userScopedLang) {
+            if (!initialRouteLanguageRef.current && userScopedLang) {
               setGlobalLanguage(userScopedLang as Language);
             }
             if (userScopedPrivacy !== null) {
@@ -5377,6 +5450,9 @@ export default function App() {
           return;
         }
 
+        const prevAuthUid = getActiveAuthUid();
+        const isSwitchingUid = prevAuthUid !== user.uid;
+
         setGuestNamespaceLock(false);
         setIsAuthHydrating(true);
         isHydrationCompleteRef.current = false;
@@ -5388,6 +5464,12 @@ export default function App() {
           const uid = user.uid;
           const userHasVault = hasVault(uid);
           const cachedVault = loadVault(uid);
+          const shouldPreserveWebGameBoard =
+            !Capacitor.isNativePlatform() &&
+            currentScreenRef.current === "game" &&
+            !hasInitialInviteRef.current &&
+            !challengeModeRef.current &&
+            !isConnectingRef.current;
 
           // If hasVault(uid) is true, render the saved vault profile name immediately without delay
           const cachedName = cachedVault.profile.displayName;
@@ -5449,16 +5531,48 @@ export default function App() {
                     isMultiplayer: isMultiplayerRoom,
                     roomCode: parsed.roomCode || undefined
                   });
+
+                  if (shouldPreserveWebGameBoard && (isSwitchingUid || !boardStateRef.current)) {
+                    const reqDiff = initialRouteDifficultyRef.current;
+                    if (!reqDiff || parsed.difficulty === reqDiff) {
+                      resumeSavedSessionRef.current?.();
+                    } else {
+                      if (isSwitchingUid) {
+                        setBoardState(null);
+                        setSessionSeconds(0);
+                      }
+                      generateAndSetNewPuzzleRef.current?.(reqDiff || difficultyRef.current || "EASY");
+                    }
+                  }
                 } else {
                   setSavedSessionInfo(null);
+                  if (isSwitchingUid || !shouldPreserveWebGameBoard) {
+                    setBoardState(null);
+                    setSessionSeconds(0);
+                  }
+                  if (shouldPreserveWebGameBoard && (isSwitchingUid || !boardStateRef.current)) {
+                    generateAndSetNewPuzzleRef.current?.(initialRouteDifficultyRef.current || difficultyRef.current || "EASY");
+                  }
                 }
               } catch {
                 setSavedSessionInfo(null);
+                if (shouldPreserveWebGameBoard && (isSwitchingUid || !boardStateRef.current)) {
+                  if (isSwitchingUid) {
+                    setBoardState(null);
+                    setSessionSeconds(0);
+                  }
+                  generateAndSetNewPuzzleRef.current?.(initialRouteDifficultyRef.current || difficultyRef.current || "EASY");
+                }
               }
             } else {
               setSavedSessionInfo(null);
-              setBoardState(null);
-              setSessionSeconds(0);
+              if (isSwitchingUid || !shouldPreserveWebGameBoard || !boardStateRef.current) {
+                setBoardState(null);
+                setSessionSeconds(0);
+              }
+              if (shouldPreserveWebGameBoard && (isSwitchingUid || !boardStateRef.current)) {
+                generateAndSetNewPuzzleRef.current?.(initialRouteDifficultyRef.current || difficultyRef.current || "EASY");
+              }
             }
           } else {
             // Cold-boot protection: Zero out memory states and sanitize guest in-progress games so Guest data does not leak into the authenticated session before cloud hydration finishes
@@ -5472,8 +5586,13 @@ export default function App() {
             setPersonalBestTimes({});
             personalBestTimesRef.current = {};
             setSavedSessionInfo(null);
-            setBoardState(null);
-            setSessionSeconds(0);
+            if (isSwitchingUid || !shouldPreserveWebGameBoard || !boardStateRef.current) {
+              setBoardState(null);
+              setSessionSeconds(0);
+            }
+            if (shouldPreserveWebGameBoard && (isSwitchingUid || !boardStateRef.current)) {
+              generateAndSetNewPuzzleRef.current?.(initialRouteDifficultyRef.current || difficultyRef.current || "EASY");
+            }
           }
 
           // Theme Cache: 0ms synchronous local cache hydration for authenticated user
@@ -5720,11 +5839,54 @@ export default function App() {
   }, [syncSettingsToCloud]);
 
   const handleLanguageChange = useCallback((lang: Language) => {
+    initialRouteLanguageRef.current = null;
     setGlobalLanguage(lang);
     try {
       localStorage.setItem(getScopedKey("language"), lang);
     } catch { }
     syncSettingsToCloud({ language: lang });
+
+    const hasInviteParams = (() => {
+      if (typeof window === "undefined") return false;
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        return Boolean(sp.get("room") || sp.get("challenge") || sp.get("gameId") || sp.get("seed") || sp.get("c"));
+      } catch {
+        return false;
+      }
+    })();
+
+    if (
+      typeof window !== "undefined" &&
+      !Capacitor.isNativePlatform() &&
+      !isCrazyGamesActive() &&
+      !hasInviteParams &&
+      !challengeModeRef.current
+    ) {
+      const candidateDiff = (
+        currentScreenRef.current === "game" && boardStateRef.current?.difficulty
+          ? boardStateRef.current.difficulty
+          : difficultyRef.current
+      ) as SeoDifficulty;
+      const safeDiff: SeoDifficulty =
+        candidateDiff === "EASY" ||
+        candidateDiff === "MEDIUM" ||
+        candidateDiff === "HARD" ||
+        candidateDiff === "EXPERT"
+          ? candidateDiff
+          : "EASY";
+      const nextPath = getSeoPath(lang as SeoLanguage, safeDiff);
+      setRoutePathname(nextPath);
+      if (window.location.pathname !== nextPath) {
+        try {
+          window.history.pushState(
+            { view: currentScreenRef.current, difficulty: safeDiff, language: lang },
+            "",
+            `${nextPath}${window.location.search}${window.location.hash}`
+          );
+        } catch { }
+      }
+    }
   }, [syncSettingsToCloud]);
 
   const handleCancelGoogleLogin = useCallback(() => {
@@ -7029,8 +7191,6 @@ export default function App() {
     showHowToPlayModal
   ]);
 
-  const generateAndSetNewPuzzleRef = useRef<((level: Difficulty) => Promise<void> | void) | null>(null);
-
   // Navigation interceptor using History API and Capacitor Back Button for Android/system swipe-to-back gestures
   useEffect(() => {
     // Initialize initial state if empty to keep history alignment intact
@@ -7057,11 +7217,16 @@ export default function App() {
         }
       }
 
-      const pathDiff = (!Capacitor.isNativePlatform() && !isCrazyGamesActive() && !challengeModeRef.current)
+      const parsedPopRoute = (!Capacitor.isNativePlatform() && !isCrazyGamesActive() && !challengeModeRef.current)
         ? parseDifficultyFromPath(window.location.pathname)
         : null;
+      const pathDiff = parsedPopRoute?.hasExplicitDifficulty ? parsedPopRoute.difficulty : null;
       if (!Capacitor.isNativePlatform()) {
         setRoutePathname(window.location.pathname);
+        if (!isCrazyGamesActive() && parsedPopRoute?.hasExplicitLanguage && parsedPopRoute.language !== getCurrentLanguage()) {
+          initialRouteLanguageRef.current = null;
+          setGlobalLanguage(parsedPopRoute.language as Language);
+        }
       }
 
       // 2. If on a sub-screen or page, navigate back to previous screen
@@ -9771,6 +9936,11 @@ export default function App() {
   const [boardState, setBoardState] = useState<BoardState | null>(null);
   boardStateRef.current = boardState;
 
+  const {
+    badgeView: conversionBadgeView,
+    recordCellTap,
+  } = useConversionBadgeRotation();
+
   // Audio-visual juice states
   const [completionPulse, setCompletionPulse] = useState<CompletionPulse | null>(null);
   const [gameSessionKey, setGameSessionKey] = useState<number>(() => Date.now());
@@ -9976,6 +10146,7 @@ export default function App() {
     }
     return null;
   };
+  resumeSavedSessionRef.current = resumeSavedSession;
 
   // Visual Backtracking visualizer state
   const [visualizingBacktrack, setVisualizingBacktrack] = useState<boolean>(false);
@@ -12709,6 +12880,8 @@ export default function App() {
     showMultiplayerForkModal ||
     showBellInvitesModal ||
     showMidGameInviteModal ||
+    showInviteModal ||
+    showInviteJoinNamePopup ||
     showCreateChallengeModal ||
     showGameOverModal ||
     showAuthModal ||
@@ -13466,12 +13639,13 @@ export default function App() {
       (!challengeMode || Boolean(options?.startNewGame));
 
     if (allowUrlRouteSync && typeof window !== "undefined") {
-      const nextPath = getDifficultyPath(lvl);
+      const activeLang = (getCurrentLanguage() || "en") as SeoLanguage;
+      const nextPath = getDifficultyPath(lvl, activeLang);
       setRoutePathname(nextPath);
       if (window.location.pathname !== nextPath) {
         try {
           window.history.pushState(
-            { view: currentScreenRef.current, difficulty: lvl },
+            { view: currentScreenRef.current, difficulty: lvl, language: activeLang },
             "",
             `${nextPath}${window.location.search}${window.location.hash}`
           );
@@ -13494,12 +13668,17 @@ export default function App() {
     }
   };
 
-  // Sync <head> title, description, canonical, and social metadata with active web difficulty silo
+  // Sync <head> title, description, canonical, html lang, and social metadata with active web silo
   useEffect(() => {
     if (Capacitor.isNativePlatform() || isCrazyGamesActive()) return;
-    const pathDiff = parseDifficultyFromPath(routePathname);
-    const meta = pathDiff ? SEO_SILO_MAP[pathDiff] : SEO_ROOT_META;
+    const parsedRoute = parseDifficultyFromPath(routePathname);
+    const activeHeadLang = ((parsedRoute.hasExplicitLanguage ? parsedRoute.language : (language as SeoLanguage)) || "en") as SeoLanguage;
+    const meta =
+      !parsedRoute.hasExplicitDifficulty && !parsedRoute.hasExplicitLanguage
+        ? getRootSeoMeta(activeHeadLang)
+        : getLocalizedSeoSilo(parsedRoute.difficulty, activeHeadLang);
 
+    document.documentElement.lang = meta.htmlLang;
     document.title = meta.title;
 
     const setMetaTag = (attr: "name" | "property", key: string, value: string) => {
@@ -13518,7 +13697,7 @@ export default function App() {
     if (canonicalEl) {
       canonicalEl.setAttribute("href", meta.canonicalUrl);
     }
-  }, [routePathname]);
+  }, [routePathname, language]);
 
   // Replay / Retry Puzzle: Resets personal board progress without leaving or affecting other room participants
   const handlePersonalReplay = async () => {
@@ -13771,17 +13950,17 @@ export default function App() {
     navigateToScreen("game");
   };
 
-  const desktopAutoStartedRef = useRef<boolean>(false);
+  const webAutoStartedRef = useRef<boolean>(false);
 
-  // Desktop Viewport Auto-Start on initial mount
+  // Web Instant-Play Auto-Start on initial mount (all web viewports, desktop & mobile web)
   useEffect(() => {
-    if (desktopAutoStartedRef.current) return;
+    if (webAutoStartedRef.current) return;
     if (hasInitialInviteRef.current) {
-      desktopAutoStartedRef.current = true;
+      webAutoStartedRef.current = true;
       return;
     }
-    if (typeof window !== "undefined" && window.innerWidth >= 1024) {
-      desktopAutoStartedRef.current = true;
+    if (typeof window !== "undefined" && !Capacitor.isNativePlatform()) {
+      webAutoStartedRef.current = true;
       const requestedRouteDiff = initialRouteDifficultyRef.current;
       const saved = loadCurrentGameFromLocal();
       if (
@@ -14765,11 +14944,12 @@ export default function App() {
       return null;
     }
 
+    const activeLang = (language as SeoLanguage) || "en";
     const activeSiloDiff: SeoDifficulty =
       challengeMode && boardState?.difficulty
         ? (boardState.difficulty as SeoDifficulty)
         : (difficulty as SeoDifficulty);
-    const activeSilo = SEO_SILO_MAP[activeSiloDiff] || SEO_SILO_MAP.EASY;
+    const activeSilo = getLocalizedSeoSilo(activeSiloDiff, activeLang);
 
     const siloCardPalette = darkMode
       ? activeSiloDiff === "EASY"
@@ -14815,11 +14995,11 @@ export default function App() {
         >
           {/* Difficulty Silo Internal Navigation Links */}
           <nav
-            aria-label="Sudoku Difficulty Silos"
+            aria-label={activeSilo.crossLinkLabel}
             className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6"
           >
             {SEO_SILO_ORDER.map((lvl) => {
-              const item = SEO_SILO_MAP[lvl];
+              const item = getLocalizedSeoSilo(lvl, activeLang);
               const isCurrent = lvl === activeSiloDiff;
               const pillTheme = darkMode
                 ? lvl === "EASY"
@@ -14839,7 +15019,7 @@ export default function App() {
 
               return (
                 <a
-                  key={item.slug}
+                  key={item.path}
                   href={item.path}
                   aria-current={isCurrent ? "page" : undefined}
                   onClick={(e) => {
@@ -14926,7 +15106,7 @@ export default function App() {
 
             <div className={`p-5 rounded-2xl border-none shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${siloCardPalette.inner}`}>
               <h2 className="text-xs md:text-sm font-black uppercase tracking-wider mb-3">
-                {activeSilo.crossLinkLabel} Quick Answers
+                {activeSilo.crossLinkLabel} — {t("webQuickAnswers")}
               </h2>
               <div className="space-y-3">
                 {activeSilo.faqs.map((item, idx) => (
@@ -14959,12 +15139,12 @@ export default function App() {
               <Play className="w-4 h-4 fill-current" />
               <span>
                 {context === "game" && boardState?.difficulty === activeSilo.difficulty
-                  ? `Return to ${activeSilo.crossLinkLabel} Board`
-                  : `Play ${activeSilo.crossLinkLabel} (${activeSilo.clueCount} Clues)`}
+                  ? t("webReturnToBoard", { label: activeSilo.crossLinkLabel })
+                  : t("webPlayDiffClues", { label: activeSilo.crossLinkLabel, clues: activeSilo.clueCount })}
               </span>
             </button>
             <span className="text-[11px] font-mono opacity-75">
-              Canonical Silo: {activeSilo.path}
+              {t("webCanonicalUrlLabel")}: {activeSilo.path}
             </span>
           </div>
         </article>
@@ -15058,7 +15238,7 @@ export default function App() {
         <div className="w-full max-w-4xl mx-auto mb-12 flex flex-col gap-4">
           <div className="how-to-play-header rules-heading-container text-center flex flex-col items-center w-full mx-auto">
             <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight text-center w-full ${darkMode ? "text-white" : "text-[#333333]"}`}>{t("howToPlayTitle")}</h2>
-            <p className={`text-xs mt-1 font-mono uppercase tracking-wider text-center w-full ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Fundamental rules & logic guidelines</p>
+            <p className={`text-xs mt-1 font-mono uppercase tracking-wider text-center w-full ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>{t("webFundamentalRulesSub")}</p>
           </div>
           <div className={`p-6 md:p-8 rounded-3xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.02)] text-xs md:text-sm leading-relaxed font-sans ${darkMode ? "bg-zinc-900/60 text-stone-300" : "bg-stone-50 text-[#333333]"}`}>
             <h3 className="font-bold text-sm mb-3 uppercase tracking-wide">{t("classicRulesTitle")}</h3>
@@ -15078,7 +15258,7 @@ export default function App() {
         <div className="w-full max-w-5xl mx-auto mb-12 flex flex-col gap-6">
           <div className="text-center">
             <h2 className={`text-xl md:text-2xl font-black uppercase tracking-tight ${darkMode ? "text-white" : "text-[#333333]"}`}>{t("proTipsTitle")}</h2>
-            <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>Master advanced deduction and pattern recognition</p>
+            <p className={`text-xs mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-[#666666]"}`}>{t("webMasterDeductionSub")}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl mx-auto">
@@ -15193,15 +15373,15 @@ export default function App() {
             </button>
           </div>
 
-          {/* Compliant Static Footer */}
+          {/* Compliant Static Footer + 9-Language Crawl Mesh */}
           {!Capacitor.isNativePlatform() && (
             <footer className="w-full max-w-4xl mx-auto px-4 py-6 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 text-center text-sm font-sans text-stone-600 select-text">
               <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs font-semibold">
                 {SEO_SILO_ORDER.map((lvl) => {
-                  const item = SEO_SILO_MAP[lvl];
+                  const item = getLocalizedSeoSilo(lvl, activeLang);
                   return (
                     <a
-                      key={item.slug}
+                      key={item.path}
                       href={item.path}
                       onClick={(e) => {
                         e.preventDefault();
@@ -15218,6 +15398,48 @@ export default function App() {
                   );
                 })}
               </div>
+
+              {/* 9-Language Crawl Navigation Links */}
+              <nav
+                id="seo-language-footer-nav"
+                aria-label={t("webLanguageEditions")}
+                className="w-full flex flex-wrap items-center justify-center gap-1.5 sm:gap-2"
+              >
+                <span className={`inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider px-2 py-1 ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+                  <Globe className="w-3.5 h-3.5 shrink-0" />
+                  <span>{t("webLanguageEditions")}:</span>
+                </span>
+                {SEO_LANGUAGES.map((langOpt) => {
+                  const isCurrentLang = activeLang === langOpt.code;
+                  const langHref = getSeoPath(langOpt.code, activeSiloDiff);
+                  return (
+                    <a
+                      key={langOpt.code}
+                      href={langHref}
+                      hrefLang={langOpt.htmlLang}
+                      lang={langOpt.htmlLang}
+                      aria-current={isCurrentLang ? "page" : undefined}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        playClickSound();
+                        handleLanguageChange(langOpt.code);
+                      }}
+                      className={`px-2.5 py-1 rounded-xl border-0 no-underline text-xs font-medium transition-colors duration-150 ${
+                        isCurrentLang
+                          ? darkMode
+                            ? "bg-[#0c4a6e]/80 text-[#bae6fd] shadow-[0_2px_10px_rgba(0,0,0,0.3)] font-bold"
+                            : "bg-[#E0F2FE] text-[#0369A1] shadow-[0_2px_10px_rgba(3,105,161,0.06)] font-bold"
+                          : darkMode
+                            ? "bg-zinc-900/50 text-stone-300 hover:bg-zinc-800/80 hover:text-white"
+                            : "bg-white/70 text-stone-600 hover:bg-[#E0F2FE]/60 hover:text-[#0369A1] shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
+                      }`}
+                    >
+                      {langOpt.nativeName}
+                    </a>
+                  );
+                })}
+              </nav>
+
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 max-w-xs sm:max-w-none mx-auto text-center sm:flex sm:flex-row sm:justify-center sm:gap-x-6">
                 <a href="/about.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">{t("aboutUs")}</a>
                 <a href="/contact.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">{t("contactUs")}</a>
@@ -15246,9 +15468,9 @@ export default function App() {
   );
 
   return (
-    <div className={`min-h-screen ${darkMode ? "bg-[#121212] text-[#E5E5E5] selection:bg-[#312E81]" : "bg-[#F3EFE9] text-[#1E1E1E] selection:bg-[#E0F2FE]"} flex flex-col font-sans overflow-hidden pb-[env(safe-area-inset-bottom,0px)]`}>
-      {/* Studio Splash Transition */}
-      <StudioSplash duration={3000} />
+    <div className={`h-[100dvh] max-h-[100dvh] ${darkMode ? "bg-[#121212] text-[#E5E5E5] selection:bg-[#312E81]" : "bg-[#F3EFE9] text-[#1E1E1E] selection:bg-[#E0F2FE]"} flex flex-col font-sans overflow-hidden pb-[env(safe-area-inset-bottom,0px)]`}>
+      {/* Studio Splash Transition (Native APK only — web visitors play at T=0ms) */}
+      {Capacitor.isNativePlatform() && <StudioSplash duration={3000} />}
 
       {/* Branded Pre-Game Splash Overlay ("By Mologic") */}
       <AnimatePresence>
@@ -15326,7 +15548,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* IMMERSIVE 3-PANE SCREEN ROUTER (NO GLOBAL SCROLLBARS) */}
-      <div className={`flex-1 h-screen w-screen relative overflow-hidden flex flex-col justify-start ${darkMode ? "bg-[#121212] paper-pattern-dark text-[#E5E5E5]" : "bg-[#FDFBF7] paper-pattern text-[#1E1E1E]"}`}>
+      <div className={`flex-1 min-h-0 h-full w-screen relative overflow-hidden flex flex-col justify-start ${darkMode ? "bg-[#121212] paper-pattern-dark text-[#E5E5E5]" : "bg-[#FDFBF7] paper-pattern text-[#1E1E1E]"}`}>
 
         {/* PREMIUM TOP-CORNER NAVIGATION FLANKING THE BRAND DATA */}
         {/* ENFORCE GLOBAL ROOT NAVIGATION LAYER (PERMANENT FIXED POSITION) */}
@@ -15480,13 +15702,13 @@ export default function App() {
 
         {/* PANE 1: HOME DASHBOARD */}
         {currentScreen === "home" && (
-          <div className="flex-1 w-full flex flex-col items-center justify-start overflow-y-auto select-none pt-[calc(70px+env(safe-area-inset-top,0px))]">
+          <div id="home-scroll-container" className="flex-1 min-h-0 h-full w-full flex flex-col items-center justify-start overflow-y-auto overscroll-contain touch-pan-y select-none pt-[calc(70px+env(safe-area-inset-top,0px))]">
 
             {/* Inner Wrapper spanning 100vh minus header to center elements vertically and push AdSense below the fold */}
             <div className="w-full min-h-[calc(100vh-70px)] flex flex-col justify-center items-center p-3 md:p-6 shrink-0" id="home-screen-inner-wrapper">
 
               {/* Center column container: combines difficulty selectors and Play Button */}
-              <div className="w-full max-w-sm mx-auto flex flex-col justify-center gap-4 sm:gap-6 py-2 sm:py-6 font-sans shrink-0" id="home-screen-inner-container">
+              <div className="w-full max-w-sm mx-auto flex flex-col justify-center gap-4 sm:gap-6 lg:gap-4 py-2 sm:py-6 lg:py-3 font-sans shrink-0" id="home-screen-inner-container">
 
                 {/* 🔔 PASTEL WEB PUSH ACTIVATION BANNER (Strictly Web only) */}
                 {!Capacitor.isNativePlatform() && showWebPushPrompt && (
@@ -15539,45 +15761,137 @@ export default function App() {
                   <GuestBannerPill onConnectGoogle={handleConnectGoogle} darkMode={darkMode} />
                 )}
 
-                {/* 📌 PREMIUM FLOATING STICKY NOTE (CHIT) */}
-                <div
-                  className={`card w-full p-6 sm:p-8 mb-4 sm:mb-6 relative overflow-hidden rounded-2xl transition-all duration-200 select-none flex flex-col justify-center items-center gap-2 sm:gap-3 transform rotate-[-1.5deg] ${darkMode ? (
-                    difficulty === "EASY" ? "bg-[#022c22] text-[#d1fae5] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
-                      difficulty === "MEDIUM" ? "bg-[#451a03] text-[#fef08a] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
-                        difficulty === "HARD" ? "bg-[#2e1065] text-[#e9d5ff] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
-                          "bg-[#4c0519] text-[#fecdd3] shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
-                  ) : (
-                    difficulty === "EASY" ? "bg-[#D1FAE5] shadow-[0_10px_25px_rgba(6,95,70,0.06)] text-[#065F46]" :
-                      difficulty === "MEDIUM" ? "bg-[#FFF99D] shadow-[0_10px_25px_rgba(133,77,14,0.06)] text-[#854D0E]" :
-                        difficulty === "HARD" ? "bg-[#F3E8FF] shadow-[0_10px_25px_rgba(107,33,168,0.06)] text-[#6B21A8]" :
-                          "bg-[#FFE4E6] shadow-[0_10px_25px_rgba(157,23,77,0.06)] text-[#9D174D]"
-                  )
+                {/* SIDE-BY-SIDE FEATURE BOXES (DAILY CHALLENGE & SUDOKU SOLVER) */}
+                <div className="w-full grid grid-cols-2 gap-3 sm:gap-3.5 shrink-0 select-none" id="home-feature-boxes-container">
+                  <button
+                    type="button"
+                    id="home-daily-challenge-btn"
+                    onClick={() => {
+                      playClickSound();
+                      triggerHapticTap(vibrations);
+                      alert(t("comingSoonMessage"));
+                    }}
+                    className={`w-full border-0 outline-none py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+                      darkMode
+                        ? "bg-[#451a03]/80 hover:bg-[#78350f]/85 text-[#fde68a] shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
+                        : "bg-[#FEF3C7]/90 hover:bg-[#FDE68A]/90 text-[#92400E] shadow-[0_6px_18px_rgba(146,64,14,0.06)]"
                     }`}
-                  style={{ border: 'none' }}
-                >
-                  {/* Subtle top tape aesthetic or fold bar, styled borderless */}
-                  <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 w-16 h-3.5 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] rotate-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none transition-colors duration-200 z-10`} />
-
-                  {/* 3D Isometric Sudoku Perspective Watermark */}
-                  <Sudoku3DWatermark difficulty={difficulty} />
-
-                  <div className="text-center relative z-10">
-                    <span className="text-[10px] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80">
-                      {t('home_record_banner_title')}
+                  >
+                    <Calendar className="w-4 h-4 shrink-0 stroke-[2.2]" />
+                    <span className="font-sans font-bold text-xs tracking-wide truncate leading-none">
+                      {t("dailyChallengeLabel")}
                     </span>
-                    <h2 className="text-xl md:text-3xl uppercase tracking-tight flex items-center justify-center gap-2 font-sans font-black">
-                      <Timer className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3.5] shrink-0" />
-                      <span>{t('home_record_banner_best_time')}:</span>
-                      <span className="font-mono font-black text-2xl md:text-3xl">
-                        {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
-                      </span>
-                    </h2>
-                    <p className="text-xs mt-1 select-none handwriting opacity-95 text-sm font-semibold">
-                      {bestTime && bestTime > 0
-                        ? t('break_your_record')
-                        : t('noRecordPrompt')}
-                    </p>
-                  </div>
+                  </button>
+                  <button
+                    type="button"
+                    id="home-sudoku-solver-btn"
+                    onClick={() => {
+                      playClickSound();
+                      triggerHapticTap(vibrations);
+                      alert(t("comingSoonMessage"));
+                    }}
+                    className={`w-full border-0 outline-none py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+                      darkMode
+                        ? "bg-[#1e1b4b]/80 hover:bg-[#312e81]/85 text-[#c7d2fe] shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
+                        : "bg-[#E0E7FF]/90 hover:bg-[#C7D2FE]/90 text-[#3730A3] shadow-[0_6px_18px_rgba(55,48,163,0.06)]"
+                    }`}
+                  >
+                    <Search className="w-4 h-4 shrink-0 stroke-[2.2]" />
+                    <span className="font-sans font-bold text-xs tracking-wide truncate leading-none">
+                      {t("sudokuSolverLabel")}
+                    </span>
+                  </button>
+                </div>
+
+                {/* 📌 PREMIUM FLOATING STICKY NOTE / CONVERSION CAROUSEL (CHIT, ZERO LAYOUT SHIFT) */}
+                <div className="w-full h-[136px] sm:h-[156px] mb-4 sm:mb-6 lg:mb-2 shrink-0 select-none" id="home-record-badge-container">
+                  <AnimatePresence mode="wait" initial={false}>
+                    {!Capacitor.isNativePlatform() && conversionBadgeView === "playStore" ? (
+                      <motion.a
+                        key="home-badge-playstore"
+                        href={PLAY_STORE_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        id="home-playstore-conversion-badge"
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.22, ease: "easeOut" }}
+                        className={`card w-full h-full px-5 sm:px-7 relative overflow-hidden rounded-2xl border-0 outline-none no-underline transition-colors duration-200 select-none flex flex-col justify-center items-center transform rotate-[-1.5deg] cursor-pointer active:scale-[0.99] ${darkMode
+                          ? "bg-[#0c4a6e] hover:bg-[#075985] text-[#bae6fd] shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
+                          : "bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1] shadow-[0_10px_25px_rgba(3,105,161,0.08)]"
+                          }`}
+                        style={{ border: 'none' }}
+                      >
+                        {/* Subtle top tape aesthetic */}
+                        <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 w-16 h-3.5 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] rotate-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none transition-colors duration-200 z-10`} />
+
+                        {/* 3D Isometric Sudoku Perspective Watermark */}
+                        <Sudoku3DWatermark difficulty={difficulty} />
+
+                        <div className="text-center relative z-10 flex flex-col items-center justify-center gap-1 max-w-full px-1">
+                          <span className="text-[10px] uppercase font-mono tracking-widest block font-bold opacity-75">
+                            SudokuSync
+                          </span>
+                          <div className="text-lg sm:text-2xl uppercase tracking-tight flex items-center justify-center gap-2 font-sans font-black leading-tight max-w-full">
+                            <span className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-white/90 dark:bg-white/95 shadow-[0_2px_6px_rgba(3,105,161,0.08)] shrink-0">
+                              <GooglePlayIcon className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                            </span>
+                            <span className="truncate">{t("getAndroidApp")}</span>
+                            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 opacity-80" />
+                          </div>
+                          <p className="text-xs sm:text-sm select-none opacity-90 font-semibold truncate max-w-full">
+                            {t("getAndroidAppSubtitle")}
+                          </p>
+                        </div>
+                      </motion.a>
+                    ) : (
+                      <motion.div
+                        key="home-badge-record"
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.22, ease: "easeOut" }}
+                        className={`card w-full h-full px-6 sm:px-8 relative overflow-hidden rounded-2xl border-0 transition-colors duration-200 select-none flex flex-col justify-center items-center gap-2 sm:gap-3 transform rotate-[-1.5deg] ${darkMode ? (
+                          difficulty === "EASY" ? "bg-[#022c22] text-[#d1fae5] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
+                            difficulty === "MEDIUM" ? "bg-[#451a03] text-[#fef08a] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
+                              difficulty === "HARD" ? "bg-[#2e1065] text-[#e9d5ff] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
+                                "bg-[#4c0519] text-[#fecdd3] shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
+                        ) : (
+                          difficulty === "EASY" ? "bg-[#D1FAE5] shadow-[0_10px_25px_rgba(6,95,70,0.06)] text-[#065F46]" :
+                            difficulty === "MEDIUM" ? "bg-[#FFF99D] shadow-[0_10px_25px_rgba(133,77,14,0.06)] text-[#854D0E]" :
+                              difficulty === "HARD" ? "bg-[#F3E8FF] shadow-[0_10px_25px_rgba(107,33,168,0.06)] text-[#6B21A8]" :
+                                "bg-[#FFE4E6] shadow-[0_10px_25px_rgba(157,23,77,0.06)] text-[#9D174D]"
+                        )
+                          }`}
+                        style={{ border: 'none' }}
+                      >
+                        {/* Subtle top tape aesthetic or fold bar, styled borderless */}
+                        <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 w-16 h-3.5 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] rotate-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none transition-colors duration-200 z-10`} />
+
+                        {/* 3D Isometric Sudoku Perspective Watermark */}
+                        <Sudoku3DWatermark difficulty={difficulty} />
+
+                        <div className="text-center relative z-10 max-w-full">
+                          <span className="text-[10px] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80">
+                            {t('home_record_banner_title')}
+                          </span>
+                          <h2 className="text-xl md:text-3xl uppercase tracking-tight flex items-center justify-center gap-2 font-sans font-black">
+                            <Timer className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3.5] shrink-0" />
+                            <span>{t('home_record_banner_best_time')}:</span>
+                            <span className="font-mono font-black text-2xl md:text-3xl">
+                              {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
+                            </span>
+                          </h2>
+                          <p className="text-xs mt-1 select-none handwriting opacity-95 text-sm font-semibold truncate max-w-full">
+                            {bestTime && bestTime > 0
+                              ? t('break_your_record')
+                              : t('noRecordPrompt')}
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* Difficulty level selecting buttons - SOLID LOCKED FIXED POSITION CONTAINER */}
@@ -15736,7 +16050,7 @@ export default function App() {
                 {/* 🚀 Play New Game Button styled with Expert theme */}
                 <button
                   onClick={handleStartNewGame}
-                  className="w-full border-none p-5 sm:p-6 md:p-8 mt-4 sm:mt-6 text-center font-black text-xl md:text-2xl tracking-wider uppercase transition-all duration-200 active:scale-[0.98] select-none rounded-[20px] shadow-sm flex items-center justify-center gap-2 cursor-pointer bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:hover:bg-rose-900/70 dark:text-rose-200"
+                  className="w-full border-none p-5 sm:p-6 md:p-8 lg:py-3 lg:px-6 mt-4 sm:mt-6 lg:mt-2 text-center font-black text-xl md:text-2xl tracking-wider uppercase transition-all duration-200 active:scale-[0.98] select-none rounded-[20px] shadow-sm flex items-center justify-center gap-2 cursor-pointer bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:hover:bg-rose-900/70 dark:text-rose-200"
                 >
                   <Play className="w-5 h-5 md:w-6 md:h-6 fill-current stroke-[2.5]" />
                   <span>{t("playNewGame")}</span>
@@ -15750,7 +16064,7 @@ export default function App() {
 
         {/* PANE 2: ACTIVE GAMEPLAY ARENA */}
         {currentScreen === "game" && (
-          <div className={`h-[100dvh] max-h-[100dvh] w-full overflow-y-auto overscroll-contain flex flex-col justify-start select-none p-1 sm:p-3 md:p-6 pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] pb-[clamp(30px,7.5vh,70px)] lg:pb-16 selection:bg-[#E0F2FE] bg-transparent ${Capacitor.isNativePlatform() ? "touch-none lg:touch-auto" : "touch-pan-y"}`}>
+          <div id="game-scroll-container" className={`flex-1 min-h-0 h-full w-full overflow-y-auto overscroll-contain flex flex-col justify-start select-none p-1 sm:p-3 md:p-6 pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] pb-[clamp(30px,7.5vh,70px)] lg:pb-16 selection:bg-[#E0F2FE] bg-transparent ${Capacitor.isNativePlatform() ? "touch-none lg:touch-auto" : "touch-pan-y"}`}>
 
             {/* Main responsive outer layout container - Centers automatically as a unified cohesive block */}
             <div
@@ -16010,6 +16324,9 @@ export default function App() {
                       isVictory={isVictoryActive}
                       onCellClick={(r, c) => {
                         if (visualizingBacktrack || (isTimerPaused && !boardState?.isGameOver)) return;
+                        if (!boardState?.isGameOver) {
+                          recordCellTap();
+                        }
                         if (boardState?.isGameOver) {
                           const cell = boardState.grid[r][c];
                           const isCurrentlySelected = boardState.selectedRow === r && boardState.selectedCol === c;
@@ -16130,6 +16447,79 @@ export default function App() {
                     />
                   </div>
                 </div>
+
+                {/* MOBILE-WEB CONVERSION & RECORD PILL SLOT (< 1024px, Web-only) */}
+                {!Capacitor.isNativePlatform() && (() => {
+                  const activeDiff = ((boardState?.difficulty || difficulty).toUpperCase()) as Difficulty;
+                  const bestSecs = personalBestTimes[activeDiff] || 0;
+                  const mobileRecordPalette = darkMode ? (
+                    activeDiff === "EASY" ? "bg-[#022c22]/90 text-[#d1fae5] shadow-[0_6px_16px_rgba(0,0,0,0.35)]" :
+                      activeDiff === "MEDIUM" ? "bg-[#451a03]/90 text-[#fef08a] shadow-[0_6px_16px_rgba(0,0,0,0.35)]" :
+                        activeDiff === "HARD" ? "bg-[#2e1065]/90 text-[#e9d5ff] shadow-[0_6px_16px_rgba(0,0,0,0.35)]" :
+                          "bg-[#4c0519]/90 text-[#fecdd3] shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
+                  ) : (
+                    activeDiff === "EASY" ? "bg-[#D1FAE5]/85 text-[#065F46] shadow-[0_6px_16px_rgba(6,95,70,0.06)]" :
+                      activeDiff === "MEDIUM" ? "bg-[#FFF99D]/85 text-[#854D0E] shadow-[0_6px_16px_rgba(133,77,14,0.06)]" :
+                        activeDiff === "HARD" ? "bg-[#F3E8FF]/85 text-[#6B21A8] shadow-[0_6px_16px_rgba(107,33,168,0.06)]" :
+                          "bg-[#FFE4E6]/85 text-[#9D174D] shadow-[0_6px_16px_rgba(157,23,77,0.06)]"
+                  );
+
+                  return (
+                    <div
+                      className="flex lg:hidden w-full mt-2 px-0.5 h-[44px] shrink-0 select-none items-center justify-center"
+                      id="mobile-conversion-badge-container"
+                    >
+                      <AnimatePresence mode="wait" initial={false}>
+                        {conversionBadgeView === "playStore" ? (
+                          <motion.a
+                            key="mobile-badge-playstore"
+                            href={PLAY_STORE_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            id="mobile-playstore-conversion-badge"
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.22, ease: "easeOut" }}
+                            className={`w-full h-full px-4 rounded-2xl border-0 outline-none no-underline flex items-center justify-between gap-2 transition-colors duration-200 cursor-pointer active:scale-[0.99] ${darkMode
+                              ? "bg-[#0c4a6e]/90 hover:bg-[#075985] text-[#bae6fd] shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
+                              : "bg-[#E0F2FE]/90 hover:bg-[#BAE6FD]/90 text-[#0369A1] shadow-[0_6px_16px_rgba(3,105,161,0.07)]"
+                              }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-white/90 dark:bg-white/95 shadow-[0_2px_6px_rgba(3,105,161,0.08)] shrink-0">
+                                <GooglePlayIcon className="w-4 h-4 shrink-0" />
+                              </span>
+                              <span className="font-sans font-bold text-xs sm:text-sm uppercase tracking-wider truncate leading-none">
+                                {t("getAndroidApp")}
+                              </span>
+                            </span>
+                            <ChevronRight className="w-4 h-4 shrink-0 opacity-75" />
+                          </motion.a>
+                        ) : (
+                          <motion.div
+                            key="mobile-badge-record"
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.22, ease: "easeOut" }}
+                            className={`w-full h-full px-4 rounded-2xl border-0 flex items-center justify-between gap-2 ${mobileRecordPalette}`}
+                          >
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <Timer className="w-3.5 h-3.5 shrink-0 stroke-[2] opacity-85" />
+                              <span className="font-sans font-bold text-xs uppercase tracking-wider truncate leading-none opacity-90">
+                                {t("home_record_banner_best_time")}:
+                              </span>
+                            </span>
+                            <span className="font-mono font-bold text-sm tabular-nums tracking-wide leading-none shrink-0">
+                              {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
+                            </span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* COLUMN 2: CONTROLS & NUMBERS DECK */}
@@ -16139,7 +16529,7 @@ export default function App() {
               >
 
                 {/* ROW 1: MULTIPLAYER BUTTON (Desktop-only, matches Difficulty selector baseline, label spacing, and height) */}
-                <div className="hidden lg:flex w-full flex-col mb-3 lg:mb-3 shrink-0 select-none pb-0" id="desktop-multiplayer-container">
+                <div className="hidden lg:flex w-full flex-col mb-3 lg:mb-2 shrink-0 select-none pb-0" id="desktop-multiplayer-container">
                   <div className="flex items-center justify-between gap-4 mb-2 invisible pointer-events-none">
                     <span className="block text-xs font-black uppercase tracking-wider font-mono">
                       {t("selectDifficulty")}
@@ -16162,58 +16552,148 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 📌 AUTHENTIC CURRENT RECORD / BEST TIME CARD (Desktop lg: ONLY) */}
-                <div className="hidden lg:flex w-full mb-3 lg:mb-3 shrink-0 select-none" id="desktop-current-record-container">
+                {/* SIDE-BY-SIDE FEATURE BOXES (Desktop lg: strictly above #desktop-current-record-container) */}
+                <div
+                  className="hidden lg:flex w-full items-stretch gap-2 mb-2 shrink-0 select-none"
+                  id="desktop-feature-boxes-container"
+                >
+                  <button
+                    type="button"
+                    id="desktop-daily-challenge-btn"
+                    onClick={() => {
+                      playClickSound();
+                      alert(t("comingSoonMessage"));
+                    }}
+                    className={`flex-1 min-w-0 h-[38px] px-2.5 rounded-xl border-0 outline-none flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+                      darkMode
+                        ? "bg-[#451a03]/85 hover:bg-[#78350f]/90 text-[#fde68a] shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
+                        : "bg-[#FEF3C7]/90 hover:bg-[#FDE68A]/90 text-[#92400E] shadow-[0_6px_16px_rgba(146,64,14,0.06)]"
+                    }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5 shrink-0 stroke-[2.2]" />
+                    <span className="font-sans font-bold text-[11px] tracking-tight truncate leading-none">
+                      {t("dailyChallengeLabel")}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    id="desktop-sudoku-solver-btn"
+                    onClick={() => {
+                      playClickSound();
+                      alert(t("comingSoonMessage"));
+                    }}
+                    className={`flex-1 min-w-0 h-[38px] px-2.5 rounded-xl border-0 outline-none flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+                      darkMode
+                        ? "bg-[#1e1b4b]/85 hover:bg-[#312e81]/90 text-[#c7d2fe] shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
+                        : "bg-[#E0E7FF]/90 hover:bg-[#C7D2FE]/90 text-[#3730A3] shadow-[0_6px_16px_rgba(55,48,163,0.06)]"
+                    }`}
+                  >
+                    <Search className="w-3.5 h-3.5 shrink-0 stroke-[2.2]" />
+                    <span className="font-sans font-bold text-[11px] tracking-tight truncate leading-none">
+                      {t("sudokuSolverLabel")}
+                    </span>
+                  </button>
+                </div>
+
+                {/* AUTHENTIC CURRENT RECORD / PLAY STORE CONVERSION CAROUSEL (Desktop lg: ONLY) */}
+                <div className="hidden lg:flex w-full mb-3 lg:mb-2 shrink-0 select-none h-[76px] lg:h-[58px]" id="desktop-current-record-container">
                   {(() => {
                     const activeDiff = ((boardState?.difficulty || difficulty).toUpperCase()) as Difficulty;
                     const bestSecs = personalBestTimes[activeDiff] || 0;
+                    const showPlayStoreCta = !Capacitor.isNativePlatform() && conversionBadgeView === "playStore";
 
                     return (
-                      <div
-                        className={`card w-full py-2.5 px-4 relative overflow-hidden rounded-2xl transition-all duration-200 select-none flex flex-col justify-center items-center gap-1 ${darkMode ? (
-                          activeDiff === "EASY" ? "bg-[#022c22]/90 text-[#d1fae5] shadow-lg border border-emerald-900/40" :
-                            activeDiff === "MEDIUM" ? "bg-[#451a03]/90 text-[#fef08a] shadow-lg border border-amber-900/40" :
-                              activeDiff === "HARD" ? "bg-[#2e1065]/90 text-[#e9d5ff] shadow-lg border border-purple-900/40" :
-                                "bg-[#4c0519]/90 text-[#fecdd3] shadow-lg border border-rose-900/40"
+                      <AnimatePresence mode="wait" initial={false}>
+                        {showPlayStoreCta ? (
+                          <motion.a
+                            key="desktop-badge-playstore"
+                            href={PLAY_STORE_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            id="desktop-playstore-conversion-badge"
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.22, ease: "easeOut" }}
+                            className={`card w-full h-full py-2.5 px-4 lg:py-1.5 lg:px-3 relative overflow-hidden rounded-2xl border-0 outline-none no-underline transition-colors duration-200 select-none flex items-center justify-center cursor-pointer active:scale-[0.99] ${darkMode
+                              ? "bg-[#0c4a6e]/90 hover:bg-[#075985] text-[#bae6fd] shadow-[0_8px_20px_rgba(0,0,0,0.4)]"
+                              : "bg-[#E0F2FE]/90 hover:bg-[#BAE6FD]/90 text-[#0369A1] shadow-[0_8px_20px_rgba(3,105,161,0.08)]"
+                              }`}
+                          >
+                            {/* Subtle top tape aesthetic */}
+                            <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1.5 w-14 h-3 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none transition-colors duration-200 rounded-xs z-10`} />
+
+                            {/* 3D Isometric Sudoku Perspective Watermark */}
+                            <Sudoku3DWatermark difficulty={activeDiff} />
+
+                            <div className="w-full relative z-10 flex items-center justify-between gap-2.5 px-1">
+                              <div className="w-9 h-9 lg:w-8 lg:h-8 rounded-xl flex items-center justify-center shrink-0 bg-white/90 dark:bg-white/95 shadow-[0_2px_6px_rgba(3,105,161,0.06)]">
+                                <GooglePlayIcon className="w-4 h-4 shrink-0" />
+                              </div>
+                              <div className="min-w-0 flex-1 flex flex-col items-start justify-center text-left gap-0.5 lg:gap-0">
+                                <span className="font-sans font-bold text-xs sm:text-sm uppercase tracking-wider leading-tight truncate w-full">
+                                  {t("getAndroidApp")}
+                                </span>
+                                <span className="text-[10px] font-medium opacity-75 leading-tight truncate w-full">
+                                  {t("getAndroidAppSubtitle")}
+                                </span>
+                              </div>
+                              <ChevronRight className="w-4 h-4 shrink-0 opacity-75" />
+                            </div>
+                          </motion.a>
                         ) : (
-                          activeDiff === "EASY" ? "bg-[#D1FAE5]/80 text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.06)] border border-emerald-200/60" :
-                            activeDiff === "MEDIUM" ? "bg-[#FFF99D]/80 text-[#854D0E] shadow-[0_8px_20px_rgba(133,77,14,0.06)] border border-amber-200/60" :
-                              activeDiff === "HARD" ? "bg-[#F3E8FF]/80 text-[#6B21A8] shadow-[0_8px_20px_rgba(107,33,168,0.06)] border border-purple-200/60" :
-                                "bg-[#FFE4E6]/80 text-[#9D174D] shadow-[0_8px_20px_rgba(157,23,77,0.06)] border border-rose-200/60"
-                        )
-                          }`}
-                      >
-                        {/* Subtle top tape aesthetic */}
-                        <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1.5 w-14 h-3 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none transition-colors duration-200 rounded-xs z-10`} />
+                          <motion.div
+                            key="desktop-badge-record"
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.22, ease: "easeOut" }}
+                            className={`card w-full h-full py-2.5 px-4 lg:py-1.5 lg:px-3 relative overflow-hidden rounded-2xl border-0 transition-colors duration-200 select-none flex flex-col justify-center items-center gap-1 lg:gap-0 ${darkMode ? (
+                              activeDiff === "EASY" ? "bg-[#022c22]/90 text-[#d1fae5] shadow-lg" :
+                                activeDiff === "MEDIUM" ? "bg-[#451a03]/90 text-[#fef08a] shadow-lg" :
+                                  activeDiff === "HARD" ? "bg-[#2e1065]/90 text-[#e9d5ff] shadow-lg" :
+                                    "bg-[#4c0519]/90 text-[#fecdd3] shadow-lg"
+                            ) : (
+                              activeDiff === "EASY" ? "bg-[#D1FAE5]/80 text-[#065F46] shadow-[0_8px_20px_rgba(6,95,70,0.06)]" :
+                                activeDiff === "MEDIUM" ? "bg-[#FFF99D]/80 text-[#854D0E] shadow-[0_8px_20px_rgba(133,77,14,0.06)]" :
+                                  activeDiff === "HARD" ? "bg-[#F3E8FF]/80 text-[#6B21A8] shadow-[0_8px_20px_rgba(107,33,168,0.06)]" :
+                                    "bg-[#FFE4E6]/80 text-[#9D174D] shadow-[0_8px_20px_rgba(157,23,77,0.06)]"
+                            )
+                              }`}
+                          >
+                            {/* Subtle top tape aesthetic */}
+                            <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1.5 w-14 h-3 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none transition-colors duration-200 rounded-xs z-10`} />
 
-                        {/* 3D Isometric Sudoku Perspective Watermark */}
-                        <Sudoku3DWatermark difficulty={activeDiff} />
+                            {/* 3D Isometric Sudoku Perspective Watermark */}
+                            <Sudoku3DWatermark difficulty={activeDiff} />
 
-                        <div className="text-center w-full relative z-10 flex flex-col items-center gap-0.5">
-                          {/* Tier 1: Top Mini Header */}
-                          <span className="text-[9px] uppercase font-mono tracking-widest block font-normal opacity-60 leading-none">
-                            {t("home_record_banner_title")}
-                          </span>
+                            <div className="text-center w-full relative z-10 flex flex-col items-center gap-0.5 lg:gap-0">
+                              {/* Tier 1: Top Mini Header */}
+                              <span className="text-[9px] uppercase font-mono tracking-widest block font-normal opacity-60 leading-none">
+                                {t("home_record_banner_title")}
+                              </span>
 
-                          {/* Tier 2: Center Hero Metric */}
-                          <div className="flex items-center justify-center gap-1.5 my-0.5">
-                            <Timer className="w-4 h-4 stroke-[2] opacity-90 shrink-0" />
-                            <span className="font-sans font-bold text-sm sm:text-base uppercase tracking-wider opacity-90 leading-none">
-                              {t("home_record_banner_best_time")}:
-                            </span>
-                            <span className="font-mono font-bold text-lg sm:text-xl tabular-nums tracking-wide leading-none">
-                              {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
-                            </span>
-                          </div>
+                              {/* Tier 2: Center Hero Metric */}
+                              <div className="flex items-center justify-center gap-1.5 my-0.5 lg:my-0">
+                                <Timer className="w-4 h-4 stroke-[2] opacity-90 shrink-0" />
+                                <span className="font-sans font-bold text-sm sm:text-base uppercase tracking-wider opacity-90 leading-none">
+                                  {t("home_record_banner_best_time")}:
+                                </span>
+                                <span className="font-mono font-bold text-lg sm:text-xl tabular-nums tracking-wide leading-none">
+                                  {bestSecs > 0 ? formatTimer(bestSecs) : "--:--"}
+                                </span>
+                              </div>
 
-                          {/* Tier 3: Bottom Subtitle Prompt */}
-                          <p className="text-[10px] select-none handwriting opacity-60 font-normal leading-none tracking-wide truncate max-w-full">
-                            {bestSecs > 0
-                              ? t("break_your_record")
-                              : t("noRecordPrompt")}
-                          </p>
-                        </div>
-                      </div>
+                              {/* Tier 3: Bottom Subtitle Prompt */}
+                              <p className="text-[10px] select-none handwriting opacity-60 font-normal leading-none tracking-wide truncate max-w-full">
+                                {bestSecs > 0
+                                  ? t("break_your_record")
+                                  : t("noRecordPrompt")}
+                              </p>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     );
                   })()}
                 </div>
