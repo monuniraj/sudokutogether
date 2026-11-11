@@ -131,6 +131,33 @@ export function countGridClues(grid: number[][]): number {
   return count;
 }
 
+const DATE_LOCALE_MAP: Record<string, string> = {
+  en: "en-US",
+  hi: "hi-IN",
+  de: "de-DE",
+  ja: "ja-JP",
+  ko: "ko-KR",
+  es: "es-ES",
+  fr: "fr-FR",
+  it: "it-IT",
+  "pt-BR": "pt-BR",
+};
+
+function resolveDateLocale(locale?: string): string {
+  if (!locale || typeof locale !== "string") return "en-US";
+  return DATE_LOCALE_MAP[locale] || locale;
+}
+
+export function normalizeCustomHistoryDifficulty(
+  raw: unknown
+): "EASY" | "MEDIUM" | "HARD" | "EXPERT" {
+  const clean = String(raw || "").trim().toLowerCase();
+  if (clean === "easy") return "EASY";
+  if (clean === "hard") return "HARD";
+  if (clean === "expert") return "EXPERT";
+  return "MEDIUM";
+}
+
 export function formatCustomHistoryDifficulty(raw: string | undefined | null): string {
   const clean = String(raw || "").trim().toLowerCase();
   if (clean === "easy") return "Easy";
@@ -143,14 +170,30 @@ export function formatCustomHistoryDifficulty(raw: string | undefined | null): s
   return "Medium";
 }
 
-export function formatCustomHistoryDate(rawDate: string | undefined | null): string {
+export function formatCustomHistoryDate(
+  rawDate: string | undefined | null,
+  locale?: string
+): string {
+  const targetLocale = resolveDateLocale(locale);
+  const formatSafe = (d: Date): string => {
+    try {
+      return d.toLocaleDateString(targetLocale, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch {
+      return d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+  };
+
   const trimmed = String(rawDate || "").trim();
   if (!trimmed) {
-    return new Date().toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    return formatSafe(new Date());
   }
 
   // Handle date-only YYYY-MM-DD strings without UTC off-by-one shifts
@@ -161,21 +204,13 @@ export function formatCustomHistoryDate(rawDate: string | undefined | null): str
     const day = Number(dateOnlyMatch[3]);
     const localDate = new Date(year, monthIdx, day);
     if (!Number.isNaN(localDate.getTime())) {
-      return localDate.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
+      return formatSafe(localDate);
     }
   }
 
   const parsed = new Date(trimmed);
   if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    return formatSafe(parsed);
   }
 
   return trimmed;
@@ -474,8 +509,8 @@ export async function getCustomGameHistory(
 }
 
 /**
- * Patches `timeTaken` (seconds) onto an existing "Played in Arena" custom history entry
- * when the player solves the puzzle in the Arena.
+ * Patches `timeTaken` (seconds) onto an existing "Played on Board" custom history entry
+ * when the player solves the puzzle on the main board.
  */
 export async function updateCustomHistoryTime(
   uid: string | null,

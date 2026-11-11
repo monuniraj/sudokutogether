@@ -17,6 +17,8 @@ import {
   Zap,
 } from "lucide-react";
 import {
+  DIFFICULTY_GRID_THEMES,
+  NOTE_BADGE_TEXT,
   SudokuBoard,
   type Difficulty,
   type SudokuBoardState,
@@ -30,6 +32,7 @@ import {
   formatCustomHistoryDifficulty,
   getCustomGameHistory,
   normalizeCustomGrid,
+  normalizeCustomHistoryDifficulty,
   saveCustomGameToHistory,
   type CustomPuzzleHistoryRecord,
 } from "../services/customHistoryService";
@@ -86,7 +89,7 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
   onClose,
   onSelectRecord,
 }) => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [records, setRecords] = useState<CustomPuzzleHistoryRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -160,10 +163,10 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
                 id="custom-history-modal-title"
                 className="font-sans font-black text-sm sm:text-base leading-tight truncate"
               >
-                Custom History
+                {t("solverHistoryTitle")}
               </h2>
               <p className="font-sans text-[11px] font-semibold opacity-65 truncate">
-                {uid ? "Synced to Google Account • Last 100" : "Saved on Device • Last 10"}
+                {uid ? t("solverHistorySyncedSubtitle") : t("solverHistoryDeviceSubtitle")}
               </p>
             </div>
           </div>
@@ -189,7 +192,7 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
             <div className="py-10 flex flex-col items-center justify-center gap-2.5 text-center opacity-75">
               <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
               <span className="font-sans text-xs font-bold">
-                Loading custom puzzles...
+                {t("solverHistoryLoading")}
               </span>
             </div>
           ) : records.length === 0 ? (
@@ -211,14 +214,17 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
                 <Sparkles className="w-5 h-5 stroke-[2.1]" />
               </div>
               <p className="font-sans text-xs sm:text-sm font-bold leading-relaxed max-w-[260px]">
-                No custom puzzles yet. Import one to get started.
+                {t("solverHistoryEmpty")}
               </p>
             </div>
           ) : (
             records.map((record) => {
               const clues = countGridClues(record.grid);
-              const diffLabel = formatCustomHistoryDifficulty(record.difficulty);
-              const dateLabel = formatCustomHistoryDate(record.date);
+              const diffKey = normalizeCustomHistoryDifficulty(record.difficulty);
+              const diffTheme = DIFFICULTY_GRID_THEMES[diffKey] || DIFFICULTY_GRID_THEMES.MEDIUM;
+              const badgeTextColors = NOTE_BADGE_TEXT[diffKey] || NOTE_BADGE_TEXT.MEDIUM;
+              const diffLabel = t(diffKey.toLowerCase());
+              const dateLabel = formatCustomHistoryDate(record.date, language);
               return (
                 <button
                   key={record.id}
@@ -230,9 +236,24 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
                       : "bg-white hover:bg-[#EEF2FF]/65 text-stone-800 shadow-[0_4px_14px_rgba(55,48,163,0.05)]"
                   }`}
                 >
-                  <p className="font-sans font-extrabold text-xs sm:text-sm leading-snug text-stone-800 dark:text-zinc-100 truncate">
-                    {`Newspaper Puzzle • ${diffLabel} • ${dateLabel}`}
-                  </p>
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <p className="font-sans font-extrabold text-xs sm:text-sm leading-snug text-stone-800 dark:text-zinc-100 truncate min-w-0 flex-1">
+                      {t("solverHistoryItemTitle")}{" "}
+                      <span className="opacity-45 font-bold">•</span>{" "}
+                      <span className="font-semibold opacity-75">{dateLabel}</span>
+                    </p>
+                    <span
+                      className="inline-flex items-center shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full border-0 text-[10px] sm:text-[11px] font-extrabold leading-none"
+                      style={{
+                        backgroundColor: darkMode
+                          ? diffTheme.activeCell.dark
+                          : diffTheme.activeCell.light,
+                        color: darkMode ? badgeTextColors.dark : badgeTextColors.light,
+                      }}
+                    >
+                      {diffLabel}
+                    </span>
+                  </div>
 
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-1.5 text-[11px] font-bold text-stone-500 dark:text-zinc-400">
@@ -243,7 +264,7 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
                             : "bg-stone-100 text-stone-600"
                         }`}
                       >
-                        {clues} clues
+                        {t("solverHistoryCluesBadge", { count: clues })}
                       </span>
                       {typeof record.timeTaken === "number" && record.timeTaken > 0 && (
                         <span
@@ -259,7 +280,7 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
                     </div>
 
                     <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border-0 text-[11px] font-extrabold ${
                         record.isAutoSolved
                           ? "bg-[#CCFBF1] text-[#115E59] dark:bg-teal-950/75 dark:text-teal-200"
                           : "bg-[#E0E7FF] text-[#3730A3] dark:bg-indigo-950/75 dark:text-indigo-200"
@@ -271,7 +292,9 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
                         <Play className="w-3 h-3 stroke-[2.3] fill-current shrink-0" />
                       )}
                       <span>
-                        {record.isAutoSolved ? "Auto-Solved" : "Played in Arena"}
+                        {record.isAutoSolved
+                          ? t("solverStatusAutoSolved")
+                          : t("solverStatusPlayedOnBoard")}
                       </span>
                     </span>
                   </div>
@@ -373,38 +396,38 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
   }>(() => {
     if (clueCount < 17) {
       return {
-        difficultyText: "Min 17 clues needed",
+        difficultyText: t("solverMinCluesNeeded"),
         colorClass: "text-amber-500",
         boardDifficulty: "EXPERT",
       };
     }
     if (clueCount >= 41) {
       return {
-        difficultyText: "Easy",
+        difficultyText: t("easy"),
         colorClass: "text-emerald-500",
         boardDifficulty: "EASY",
       };
     }
     if (clueCount >= 33) {
       return {
-        difficultyText: "Medium",
+        difficultyText: t("medium"),
         colorClass: "text-amber-500",
         boardDifficulty: "MEDIUM",
       };
     }
     if (clueCount >= 27) {
       return {
-        difficultyText: "Hard",
+        difficultyText: t("hard"),
         colorClass: "text-purple-500",
         boardDifficulty: "HARD",
       };
     }
     return {
-      difficultyText: "Expert",
+      difficultyText: t("expert"),
       colorClass: "text-rose-500",
       boardDifficulty: "EXPERT",
     };
-  }, [clueCount]);
+  }, [clueCount, t]);
 
   const applyCellValue = useCallback(
     (num: number) => {
@@ -465,7 +488,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       setSolvedGrid(null);
       setSolverBanner({
         type: "error",
-        message: "This puzzle has no valid solution. Tap Edit Clues to double-check your numbers.",
+        message: t("solverBannerUnsolvable"),
       });
       return;
     }
@@ -478,7 +501,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
         id: `custom_${now}_${Math.random().toString(36).slice(2, 6)}`,
         date: new Date(now).toISOString(),
         grid: solverGrid.map((row) => [...row]),
-        difficulty: difficultyMeta.difficultyText,
+        difficulty: formatCustomHistoryDifficulty(difficultyMeta.boardDifficulty),
         isAutoSolved: true,
         createdAtMs: now,
       });
@@ -486,22 +509,22 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     if (result.status === "multiple") {
       setSolverBanner({
         type: "info",
-        message: "Auto-solved! Note: this clue set allows multiple valid solutions.",
+        message: t("solverBannerMultipleSolutions"),
       });
     } else {
       setSolverBanner({
         type: "success",
-        message: "Solved cleanly with a unique Sudoku solution.",
+        message: t("solverBannerUniqueSolution"),
       });
     }
-  }, [solverGrid, uid, difficultyMeta.difficultyText]);
+  }, [solverGrid, uid, difficultyMeta.boardDifficulty, t]);
 
   const handlePlayPuzzle = useCallback(() => {
     const verifiedSolution = solvedGrid ?? solveCustomBoard(solverGrid).solution;
     if (!verifiedSolution) {
       setSolverBanner({
         type: "error",
-        message: "Cannot start: no valid solution exists for these clues. Tap Edit Clues to fix.",
+        message: t("solverBannerPlayInvalid"),
       });
       return;
     }
@@ -517,7 +540,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       id: customRecordId,
       date: new Date(now).toISOString(),
       grid: solverGrid.map((row) => [...row]),
-      difficulty: difficultyMeta.difficultyText,
+      difficulty: formatCustomHistoryDifficulty(difficultyMeta.boardDifficulty),
       isAutoSolved: false,
       createdAtMs: now,
     });
@@ -527,7 +550,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       verifiedSolution.map((row) => [...row]),
       customRecordId
     );
-  }, [solvedGrid, solverGrid, uid, difficultyMeta.difficultyText, difficultyMeta.boardDifficulty, onPlayCustomPuzzle]);
+  }, [solvedGrid, solverGrid, uid, difficultyMeta.boardDifficulty, onPlayCustomPuzzle, t]);
 
   const handleSelectHistoryRecord = useCallback((record: CustomPuzzleHistoryRecord) => {
     const nextGrid = record.grid.map((row) => [...row]);
@@ -540,9 +563,9 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     setIsHistoryOpen(false);
     setSolverBanner({
       type: "info",
-      message: "Loaded saved puzzle. Tap Lock & Play to solve or enter the arena.",
+      message: t("solverBannerHistoryLoaded"),
     });
-  }, []);
+  }, [t]);
 
   // Desktop keyboard support for fast newspaper clue entry (blocked while Locked or History modal open)
   useEffect(() => {
@@ -638,7 +661,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
               {t("sudokuSolverLabel")}
             </h1>
             <p className="font-sans font-medium text-[11px] sm:text-xs text-stone-500 dark:text-zinc-400 mt-0.5 leading-snug">
-              Enter numbers from a newspaper to play or auto-solve.
+              {t("solverSubtitle")}
             </p>
           </div>
 
@@ -656,7 +679,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
         >
           <div className="min-w-0 flex items-center gap-1.5 font-sans text-xs sm:text-sm font-bold text-stone-600 dark:text-zinc-300 truncate">
             <span className="tabular-nums shrink-0">
-              Clues: {clueCount} / 81
+              {t("solverCluesProgress", { count: clueCount })}
             </span>
             <span className="opacity-45 shrink-0">•</span>
             <span className={`truncate font-extrabold ${difficultyMeta.colorClass}`}>
@@ -665,7 +688,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
             {isLocked && (
               <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-[#E0E7FF] text-[#3730A3] dark:bg-indigo-950/80 dark:text-indigo-200 shrink-0">
                 <Lock className="w-2.5 h-2.5 stroke-[2.5]" />
-                <span>Locked</span>
+                <span>{t("solverLockedBadge")}</span>
               </span>
             )}
           </div>
@@ -677,7 +700,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
             className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 outline-none text-xs font-bold cursor-pointer active:scale-95 transition-all duration-150 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#3730A3] dark:bg-indigo-950/60 dark:hover:bg-indigo-900/75 dark:text-[#c7d2fe] shadow-[0_2px_8px_rgba(55,48,163,0.06)]"
           >
             <Clock className="w-3.5 h-3.5 stroke-[2.2] shrink-0" />
-            <span>History</span>
+            <span>{t("historyTabTitle")}</span>
           </button>
         </div>
       </div>
@@ -747,7 +770,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                     className="h-11 px-3 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-xs font-bold tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-150 bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9D174D] dark:bg-rose-950/60 dark:hover:bg-rose-900/70 dark:text-rose-200 shadow-[0_6px_16px_rgba(157,23,77,0.06)] dark:shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
                   >
                     <Trash2 className="w-4 h-4 stroke-[2.2] shrink-0" />
-                    <span>Clear Grid</span>
+                    <span>{t("solverClearGridBtn")}</span>
                   </button>
 
                   <button
@@ -758,7 +781,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                     className="h-11 px-3 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-xs font-bold tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-150 bg-[#FCE7F3] hover:bg-[#FBCFE8] text-[#9D174D] dark:bg-pink-950/60 dark:hover:bg-pink-900/70 dark:text-pink-200 shadow-[0_6px_16px_rgba(157,23,77,0.06)] dark:shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
                   >
                     <Delete className="w-4 h-4 stroke-[2.2] shrink-0" />
-                    <span>Erase</span>
+                    <span>{t("erase")}</span>
                   </button>
                 </div>
 
@@ -799,7 +822,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                   }`}
                 >
                   <Lock className="w-4 h-4 stroke-[2.4] shrink-0" />
-                  <span>Lock &amp; Play</span>
+                  <span>{t("solverLockAndPlayBtn")}</span>
                 </button>
               </>
             ) : (
@@ -810,10 +833,10 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
               >
                 <div className="text-center px-1 pb-1">
                   <p className="font-sans text-xs font-extrabold uppercase tracking-wider text-stone-700 dark:text-zinc-200">
-                    Clues Locked ({clueCount})
+                    {t("solverCluesLockedTitle", { count: clueCount })}
                   </p>
                   <p className="font-sans text-[11px] font-medium text-stone-500 dark:text-zinc-400 mt-0.5 leading-snug">
-                    Reveal the complete grid or launch into timed play mode.
+                    {t("solverLockedDeckDesc")}
                   </p>
                 </div>
 
@@ -825,7 +848,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                   className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-bold tracking-wide cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#3730A3] dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-stone-100 shadow-[0_4px_14px_rgba(55,48,163,0.06)] dark:shadow-[0_4px_14px_rgba(0,0,0,0.3)]"
                 >
                   <Pencil className="w-4 h-4 stroke-[2.2] shrink-0" />
-                  <span>Edit Clues</span>
+                  <span>{t("solverEditCluesBtn")}</span>
                 </button>
 
                 {/* 2. Auto-Solve */}
@@ -836,7 +859,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                   className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-bold tracking-wide cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[#CCFBF1] hover:bg-[#99F6E4] text-[#115E59] dark:bg-teal-950/75 dark:hover:bg-teal-900/85 dark:text-teal-200 shadow-[0_6px_18px_rgba(17,94,89,0.08)] dark:shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
                 >
                   <Zap className="w-4 h-4 stroke-[2.3] shrink-0" />
-                  <span>Auto-Solve</span>
+                  <span>{t("solverAutoSolveBtn")}</span>
                 </button>
 
                 {/* 3. Play Puzzle */}
@@ -847,7 +870,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                   className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-black tracking-wide cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white shadow-[0_8px_22px_rgba(55,48,163,0.14)] dark:shadow-[0_8px_22px_rgba(79,70,229,0.35)]"
                 >
                   <Play className="w-4 h-4 stroke-[2.4] fill-current shrink-0" />
-                  <span>Play Puzzle</span>
+                  <span>{t("solverPlayPuzzleBtn")}</span>
                 </button>
               </div>
             )}
