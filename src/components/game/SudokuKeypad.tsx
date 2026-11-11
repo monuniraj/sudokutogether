@@ -33,6 +33,7 @@ export interface SudokuKeypadProps {
   playEraseSound?: () => void;
   vibrations?: boolean;
   exhaustedNum?: number | null;
+  hideUtilityDeck?: boolean;
 }
 
 export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
@@ -57,7 +58,8 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   playClickSound,
   playEraseSound,
   vibrations = true,
-  exhaustedNum
+  exhaustedNum,
+  hideUtilityDeck = false
 }) => {
   const { t } = useTranslation();
   const isGameOver = boardState?.isGameOver ?? false;
@@ -98,6 +100,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   return (
     <>
       {/* 1. UTILITY BUTTONS: Undo, Erase, Notes, Hint */}
+      {!hideUtilityDeck && (
       <div className="shrink-0 w-full flex flex-col px-0.5 overflow-visible" id="game-utility-buttons-deck">
         <div className="grid grid-cols-4 gap-2 w-full relative z-10 overflow-visible">
           
@@ -274,6 +277,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
           </button>
         </div>
       </div>
+      )}
 
       {/* 2. NUMBER PAD: 1-9 */}
       <div className="shrink-0 w-full mt-1 lg:mt-0 pb-0.5 lg:pb-0 overflow-visible px-1 sm:px-0" id="game-number-pad-deck">

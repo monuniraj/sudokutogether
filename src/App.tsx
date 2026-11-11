@@ -20007,7 +20007,9 @@ export default function App() {
         )}
 
         {/* PANE: SUDOKU SOLVER */}
-        {currentScreen === "solver" && <SudokuSolverScreen navigatorPop={navigatorPop} />}
+        {currentScreen === "solver" && (
+          <SudokuSolverScreen navigatorPop={navigatorPop} darkMode={darkMode} />
+        )}
 
       </div>
 

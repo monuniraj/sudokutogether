@@ -81,6 +81,7 @@ export interface SudokuBoardProps {
   gameSessionKey?: string | number;
   completionPulse?: CompletionPulse | null;
   isVictory?: boolean;
+  errorCells?: Set<string>;
   id?: string;
 }
 
@@ -105,6 +106,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   gameSessionKey,
   completionPulse,
   isVictory,
+  errorCells,
   id = "live-sudoku-board"
 }) => {
   const { t } = useTranslation();
@@ -319,10 +321,11 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
         Array.from({ length: 9 }).map((_, c) => {
           const cell = boardState.grid[r][c];
             
-          const isMistake = cell.value !== 0 && 
+          const isConflict = Boolean(errorCells?.has(`${r},${c}`));
+          const isMistake = isConflict || (cell.value !== 0 && 
             !cell.isOriginalClue && 
             solutionGrid[r] && 
-            cell.value !== solutionGrid[r][c];
+            cell.value !== solutionGrid[r][c]);
 
           const isSelected = boardState.selectedRow === r && boardState.selectedCol === c;
           
@@ -536,15 +539,17 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
               {cell.value !== 0 ? (
                 <div 
                   className={`absolute inset-0 z-2 flex items-center justify-center text-center select-none ${
-                    cell.isOriginalClue 
-                      ? (darkMode 
-                          ? ((isSelected || isIdenticalValue) ? "text-[#F8FAFC] font-sans font-extrabold" : "text-[#F8FAFC] font-sans font-normal")
-                          : "text-stone-900 font-sans font-normal")
-                      : isMistake
-                        ? (darkMode ? "text-rose-300 handwriting font-black animate-pulse" : "text-rose-700 handwriting font-black animate-pulse")
-                        : (darkMode 
-                            ? ((isSelected || isIdenticalValue) ? "text-[#38bdf8] handwriting font-extrabold" : "text-[#38bdf8] handwriting font-normal")
-                            : "text-[#2B6CB0] handwriting font-normal")
+                    isConflict
+                      ? (darkMode ? "text-rose-300 font-sans font-extrabold animate-pulse" : "text-rose-700 font-sans font-extrabold animate-pulse")
+                      : cell.isOriginalClue 
+                        ? (darkMode 
+                            ? ((isSelected || isIdenticalValue) ? "text-[#F8FAFC] font-sans font-extrabold" : "text-[#F8FAFC] font-sans font-normal")
+                            : "text-stone-900 font-sans font-normal")
+                        : isMistake
+                          ? (darkMode ? "text-rose-300 handwriting font-black animate-pulse" : "text-rose-700 handwriting font-black animate-pulse")
+                          : (darkMode 
+                              ? ((isSelected || isIdenticalValue) ? "text-[#38bdf8] handwriting font-extrabold" : "text-[#38bdf8] handwriting font-normal")
+                              : "text-[#2B6CB0] handwriting font-normal")
                   }`}
                   style={{
                     fontSize: cell.isOriginalClue 
