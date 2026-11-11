@@ -289,7 +289,7 @@ html.theme-snapshotting *::after {
     margin: 0 auto !important;
   }
 
-  #home-screen-inner-container > div,
+  #home-screen-inner-container > div:not(#home-record-badge-container),
   #settings-screen-inner-container > div,
   #status-screen-inner-container > div,
   #login-screen-inner-container > div {

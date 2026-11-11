@@ -18098,7 +18098,7 @@ export default function App() {
                 </div>
 
                 {/* 📌 PREMIUM FLOATING STICKY NOTE / CONVERSION CAROUSEL (CHIT, ZERO LAYOUT SHIFT) */}
-                <div className="w-full h-[136px] sm:h-[156px] mb-4 sm:mb-6 lg:mb-2 shrink-0 select-none" id="home-record-badge-container">
+                <div className="w-full max-w-sm mx-auto h-[136px] sm:h-[156px] mb-4 sm:mb-6 lg:mb-2 shrink-0 select-none" id="home-record-badge-container">
                   <AnimatePresence mode="wait" initial={false}>
                     {!Capacitor.isNativePlatform() && conversionBadgeView === "playStore" ? (
                       <motion.a
@@ -18146,7 +18146,7 @@ export default function App() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4 }}
                         transition={{ duration: 0.22, ease: "easeOut" }}
-                        className={`card w-full h-full px-6 sm:px-8 relative overflow-hidden rounded-2xl border-0 transition-colors duration-200 select-none flex flex-col justify-center items-center gap-2 sm:gap-3 transform rotate-[-1.5deg] ${darkMode ? (
+                        className={`card w-full h-full px-4 sm:px-7 relative overflow-hidden rounded-2xl border-0 transition-colors duration-200 select-none flex flex-col justify-center items-center gap-2 sm:gap-3 transform rotate-[-1.5deg] ${darkMode ? (
                           difficulty === "EASY" ? "bg-[#022c22] text-[#d1fae5] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
                             difficulty === "MEDIUM" ? "bg-[#451a03] text-[#fef08a] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
                               difficulty === "HARD" ? "bg-[#2e1065] text-[#e9d5ff] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
@@ -18166,18 +18166,18 @@ export default function App() {
                         {/* 3D Isometric Sudoku Perspective Watermark */}
                         <Sudoku3DWatermark difficulty={difficulty} />
 
-                        <div className="text-center relative z-10 max-w-full">
-                          <span className="text-[10px] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80 truncate max-w-full">
+                        <div className="text-center relative z-10 w-full max-w-full">
+                          <span className="text-[clamp(0.6875rem,2.4vw,0.75rem)] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80 truncate max-w-full">
                             {t('home_record_banner_title')}
                           </span>
-                          <h2 className="text-base sm:text-xl md:text-2xl uppercase tracking-tight flex flex-nowrap items-center justify-center gap-1.5 sm:gap-2 font-sans font-black whitespace-nowrap max-w-full">
-                            <Timer className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3.2] shrink-0" />
-                            <span className="truncate">{t('home_record_banner_best_time')}:</span>
-                            <span className="font-mono font-black text-lg sm:text-2xl whitespace-nowrap shrink-0">
+                          <h2 className="text-[clamp(1.0625rem,4.4vw,1.5rem)] uppercase tracking-tight flex flex-nowrap items-center justify-center gap-1.5 sm:gap-2 font-sans font-black whitespace-nowrap max-w-full">
+                            <Timer className="w-[clamp(1rem,4vw,1.375rem)] h-[clamp(1rem,4vw,1.375rem)] stroke-[3.2] shrink-0" />
+                            <span className="min-w-0 truncate">{t('home_record_banner_best_time')}:</span>
+                            <span className="font-mono font-black text-[clamp(1.1875rem,4.8vw,1.625rem)] tabular-nums whitespace-nowrap shrink-0">
                               {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
                             </span>
                           </h2>
-                          <p className="text-xs mt-1 select-none handwriting opacity-95 text-sm font-semibold truncate max-w-full">
+                          <p className="mt-1 select-none handwriting opacity-95 text-[clamp(0.8125rem,3vw,0.9375rem)] font-semibold truncate max-w-full">
                             {bestTime && bestTime > 0
                               ? t('break_your_record')
                               : t('noRecordPrompt')}
@@ -18565,8 +18565,7 @@ export default function App() {
                             <button
                               type="button"
                               onClick={handleOpenMidGameMultiplayer}
-                              className={`p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${darkMode ? "text-white hover:text-zinc-200" : "text-stone-800 hover:text-stone-900"
-                                }`}
+                              className="p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto text-purple-700 hover:text-purple-800 dark:text-purple-200 dark:hover:text-purple-100"
                               aria-label="Invite Players to Match"
                               title="Invite Players"
                               id="hud-multiplayer-invite-button"
