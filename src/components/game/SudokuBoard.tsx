@@ -39,6 +39,7 @@ export const DIFFICULTY_GRID_THEMES: Record<Difficulty, {
 export interface SudokuCellData {
   value: number;
   isOriginalClue: boolean;
+  isAutoSolved?: boolean;
   notes: Set<number> | number[];
   [key: string]: any;
 }
@@ -399,6 +400,12 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
             } else {
               cellBgClass = "bg-white";
             }
+          } else if (cell.isAutoSolved) {
+            if (darkMode) {
+              cellBgStyle = { backgroundColor: "rgba(13, 148, 136, 0.14)" };
+            } else {
+              cellBgStyle = { backgroundColor: "rgba(20, 184, 166, 0.10)" };
+            }
           } else {
             if (darkMode) {
               cellBgClass = "bg-zinc-900";
@@ -545,14 +552,18 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                         ? (darkMode 
                             ? ((isSelected || isIdenticalValue) ? "text-[#F8FAFC] font-sans font-extrabold" : "text-[#F8FAFC] font-sans font-normal")
                             : "text-stone-900 font-sans font-normal")
-                        : isMistake
-                          ? (darkMode ? "text-rose-300 handwriting font-black animate-pulse" : "text-rose-700 handwriting font-black animate-pulse")
-                          : (darkMode 
-                              ? ((isSelected || isIdenticalValue) ? "text-[#38bdf8] handwriting font-extrabold" : "text-[#38bdf8] handwriting font-normal")
-                              : "text-[#2B6CB0] handwriting font-normal")
+                        : cell.isAutoSolved
+                          ? (darkMode
+                              ? ((isSelected || isIdenticalValue) ? "text-[#5EEAD4] font-sans font-extrabold" : "text-[#2DD4BF] font-sans font-semibold")
+                              : "text-[#0D9488] font-sans font-semibold")
+                          : isMistake
+                            ? (darkMode ? "text-rose-300 handwriting font-black animate-pulse" : "text-rose-700 handwriting font-black animate-pulse")
+                            : (darkMode 
+                                ? ((isSelected || isIdenticalValue) ? "text-[#38bdf8] handwriting font-extrabold" : "text-[#38bdf8] handwriting font-normal")
+                                : "text-[#2B6CB0] handwriting font-normal")
                   }`}
                   style={{
-                    fontSize: cell.isOriginalClue 
+                    fontSize: (cell.isOriginalClue || cell.isAutoSolved)
                       ? "clamp(22px, min(7.5vw, 6.5vh), 42px)" 
                       : "clamp(26px, min(9.5vw, 8.5vh), 50px)",
                     opacity: isUnrevealed ? 0 : 1,

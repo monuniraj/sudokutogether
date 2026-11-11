@@ -333,8 +333,9 @@ export function reconcileBestTimesFromHistory(
     const isWon = Boolean(g.isWon === true || g.result === "win" || g.outcome === "win");
     if (!isWon) return;
 
-    // Strict Mistake Limit Rule Guard:
-    // Disqualify if strictMistakeLimit is false (unlimited mistakes / casual mode)
+    // Strict Mistake Limit & Mode Rule Guard:
+    // Disqualify custom solver boards or casual/unlimited games from mutating Personal Best records
+    if (g.gameMode === "custom") return;
     if (g.strictMistakeLimit === false) return;
     const maxMistakes = Number(g.maxMistakes);
     if (!isNaN(maxMistakes) && maxMistakes > 3) return; // e.g. 999 or custom multiplayer > 3

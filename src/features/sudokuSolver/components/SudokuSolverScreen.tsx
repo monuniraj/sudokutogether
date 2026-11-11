@@ -1,5 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Clock, Delete, Lock, Search, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  Clock,
+  Delete,
+  Lock,
+  Pencil,
+  Play,
+  Search,
+  Sparkles,
+  Trash2,
+  Zap,
+} from "lucide-react";
 import {
   SudokuBoard,
   type Difficulty,
@@ -7,10 +20,16 @@ import {
 } from "../../../components/game/SudokuBoard";
 import { SudokuKeypad } from "../../../components/game/SudokuKeypad";
 import { useTranslation } from "../../../i18n/useTranslation";
+import { solveCustomBoard, validateCustomGrid } from "../services/solverEngine";
 
 export interface SudokuSolverScreenProps {
   navigatorPop: () => void;
   darkMode?: boolean;
+  onPlayCustomPuzzle?: (
+    grid: number[][],
+    difficulty: string,
+    solution?: number[][]
+  ) => void;
 }
 
 const EMPTY_SOLUTION_GRID: number[][] = [];
@@ -18,76 +37,10 @@ const EMPTY_SOLUTION_GRID: number[][] = [];
 const createEmptyGrid = (): number[][] =>
   Array.from({ length: 9 }, () => Array<number>(9).fill(0));
 
-/**
- * Checks rows, columns, and 3x3 boxes for duplicate non-zero digits and returns
- * stringified `"r,c"` coordinates for every conflicting cell.
- */
-function validateGrid(grid: number[][]): Set<string> {
-  const conflicts = new Set<string>();
-
-  // Row duplicates
-  for (let r = 0; r < 9; r++) {
-    const seen = new Map<number, Array<{ r: number; c: number }>>();
-    for (let c = 0; c < 9; c++) {
-      const val = grid[r][c];
-      if (val === 0) continue;
-      const list = seen.get(val) ?? [];
-      list.push({ r, c });
-      seen.set(val, list);
-    }
-    seen.forEach((coords) => {
-      if (coords.length > 1) {
-        coords.forEach(({ r: cr, c: cc }) => conflicts.add(`${cr},${cc}`));
-      }
-    });
-  }
-
-  // Column duplicates
-  for (let c = 0; c < 9; c++) {
-    const seen = new Map<number, Array<{ r: number; c: number }>>();
-    for (let r = 0; r < 9; r++) {
-      const val = grid[r][c];
-      if (val === 0) continue;
-      const list = seen.get(val) ?? [];
-      list.push({ r, c });
-      seen.set(val, list);
-    }
-    seen.forEach((coords) => {
-      if (coords.length > 1) {
-        coords.forEach(({ r: cr, c: cc }) => conflicts.add(`${cr},${cc}`));
-      }
-    });
-  }
-
-  // 3x3 Box duplicates
-  for (let boxRow = 0; boxRow < 9; boxRow += 3) {
-    for (let boxCol = 0; boxCol < 9; boxCol += 3) {
-      const seen = new Map<number, Array<{ r: number; c: number }>>();
-      for (let dr = 0; dr < 3; dr++) {
-        for (let dc = 0; dc < 3; dc++) {
-          const r = boxRow + dr;
-          const c = boxCol + dc;
-          const val = grid[r][c];
-          if (val === 0) continue;
-          const list = seen.get(val) ?? [];
-          list.push({ r, c });
-          seen.set(val, list);
-        }
-      }
-      seen.forEach((coords) => {
-        if (coords.length > 1) {
-          coords.forEach(({ r: cr, c: cc }) => conflicts.add(`${cr},${cc}`));
-        }
-      });
-    }
-  }
-
-  return conflicts;
-}
-
 export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
   navigatorPop,
   darkMode,
+  onPlayCustomPuzzle,
 }) => {
   const { t } = useTranslation();
   const isDarkMode =
@@ -100,8 +53,22 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     null
   );
   const [conflictCells, setConflictCells] = useState<Set<string>>(() => new Set());
+  const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [solvedGrid, setSolvedGrid] = useState<number[][] | null>(null);
+  const [solverBanner, setSolverBanner] = useState<{
+    type: "error" | "info" | "success";
+    message: string;
+  } | null>(null);
 
   const noopSound = useCallback(() => {}, []);
+
+  useEffect(() => {
+    if (!solverBanner) return;
+    const timer = window.setTimeout(() => {
+      setSolverBanner(null);
+    }, 4500);
+    return () => window.clearTimeout(timer);
+  }, [solverBanner]);
 
   const clueCount = useMemo(() => {
     let total = 0;
@@ -155,23 +122,26 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
 
   const applyCellValue = useCallback(
     (num: number) => {
-      if (!selectedCell) return;
+      if (isLocked || !selectedCell) return;
       const { r, c } = selectedCell;
       setSolverGrid((prev) => {
         const nextGrid = prev.map((row) => [...row]);
         nextGrid[r][c] = num;
-        setConflictCells(validateGrid(nextGrid));
+        setConflictCells(validateCustomGrid(nextGrid));
         return nextGrid;
       });
     },
-    [selectedCell]
+    [isLocked, selectedCell]
   );
 
   const handleClearGrid = useCallback(() => {
+    if (isLocked) return;
     setSolverGrid(createEmptyGrid());
     setConflictCells(new Set());
     setSelectedCell(null);
-  }, []);
+    setSolvedGrid(null);
+    setSolverBanner(null);
+  }, [isLocked]);
 
   const handleErase = useCallback(() => {
     applyCellValue(0);
@@ -181,17 +151,65 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     setSelectedCell({ r, c });
   }, []);
 
-  // Desktop keyboard support for fast newspaper clue entry
+  const handleLockAndPlay = useCallback(() => {
+    if (clueCount < 17 || conflictCells.size > 0) return;
+    setSolvedGrid(null);
+    setSolverBanner(null);
+    setIsLocked(true);
+  }, [clueCount, conflictCells.size]);
+
+  const handleEditClues = useCallback(() => {
+    setIsLocked(false);
+    setSolvedGrid(null);
+    setSolverBanner(null);
+  }, []);
+
+  const handleAutoSolve = useCallback(() => {
+    const result = solveCustomBoard(solverGrid);
+    if (result.status === "unsolvable" || !result.solution) {
+      setSolvedGrid(null);
+      setSolverBanner({
+        type: "error",
+        message: "This puzzle has no valid solution. Tap Edit Clues to double-check your numbers.",
+      });
+      return;
+    }
+    setSolvedGrid(result.solution);
+    if (result.status === "multiple") {
+      setSolverBanner({
+        type: "info",
+        message: "Auto-solved! Note: this clue set allows multiple valid solutions.",
+      });
+    } else {
+      setSolverBanner({
+        type: "success",
+        message: "Solved cleanly with a unique Sudoku solution.",
+      });
+    }
+  }, [solverGrid]);
+
+  const handlePlayPuzzle = useCallback(() => {
+    const verifiedSolution = solvedGrid ?? solveCustomBoard(solverGrid).solution;
+    if (!verifiedSolution) {
+      setSolverBanner({
+        type: "error",
+        message: "Cannot start: no valid solution exists for these clues. Tap Edit Clues to fix.",
+      });
+      return;
+    }
+    setSolverBanner(null);
+    onPlayCustomPuzzle?.(
+      solverGrid.map((row) => [...row]),
+      difficultyMeta.boardDifficulty,
+      verifiedSolution.map((row) => [...row])
+    );
+  }, [solvedGrid, solverGrid, onPlayCustomPuzzle, difficultyMeta.boardDifficulty]);
+
+  // Desktop keyboard support for fast newspaper clue entry (blocked while Locked)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!selectedCell) return;
-      if (e.key >= "1" && e.key <= "9") {
-        e.preventDefault();
-        applyCellValue(Number(e.key));
-      } else if (e.key === "0" || e.key === "Backspace" || e.key === "Delete") {
-        e.preventDefault();
-        applyCellValue(0);
-      } else if (e.key === "ArrowUp") {
+      if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedCell((prev) =>
           prev ? { r: (prev.r + 8) % 9, c: prev.c } : { r: 0, c: 0 }
@@ -211,22 +229,36 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
         setSelectedCell((prev) =>
           prev ? { r: prev.r, c: (prev.c + 1) % 9 } : { r: 0, c: 0 }
         );
+      } else if (isLocked) {
+        return;
+      } else if (e.key >= "1" && e.key <= "9") {
+        e.preventDefault();
+        applyCellValue(Number(e.key));
+      } else if (e.key === "0" || e.key === "Backspace" || e.key === "Delete") {
+        e.preventDefault();
+        applyCellValue(0);
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedCell, applyCellValue]);
+  }, [isLocked, selectedCell, applyCellValue]);
 
   const boardState = useMemo<SudokuBoardState>(
     () => ({
-      grid: solverGrid.map((row) =>
-        row.map((cellValue) => ({
-          value: cellValue,
-          isOriginalClue: cellValue !== 0,
-          isGiven: cellValue !== 0,
-          notes: [],
-        }))
+      grid: solverGrid.map((row, rIdx) =>
+        row.map((clueVal, cIdx) => {
+          const isClue = clueVal !== 0;
+          const autoVal =
+            isLocked && !isClue && solvedGrid ? (solvedGrid[rIdx]?.[cIdx] ?? 0) : 0;
+          return {
+            value: isClue ? clueVal : autoVal,
+            isOriginalClue: isClue,
+            isGiven: isClue,
+            isAutoSolved: !isClue && autoVal !== 0,
+            notes: [],
+          };
+        })
       ),
       selectedRow: selectedCell?.r ?? null,
       selectedCol: selectedCell?.c ?? null,
@@ -234,13 +266,12 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       hintsCount: 0,
       isGameOver: false,
     }),
-    [solverGrid, selectedCell, difficultyMeta.boardDifficulty]
+    [solverGrid, isLocked, solvedGrid, selectedCell, difficultyMeta.boardDifficulty]
   );
 
-  const selectedCellValue =
-    selectedCell && solverGrid[selectedCell.r]?.[selectedCell.c] !== 0
-      ? solverGrid[selectedCell.r][selectedCell.c]
-      : null;
+  const activeBoardValue =
+    selectedCell ? (boardState.grid[selectedCell.r]?.[selectedCell.c]?.value ?? 0) : 0;
+  const selectedCellValue = activeBoardValue !== 0 ? activeBoardValue : null;
 
   const isLockDisabled = clueCount < 17 || conflictCells.size > 0;
 
@@ -292,6 +323,12 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
             <span className={`truncate font-extrabold ${difficultyMeta.colorClass}`}>
               {difficultyMeta.difficultyText}
             </span>
+            {isLocked && (
+              <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-[#E0E7FF] text-[#3730A3] dark:bg-indigo-950/80 dark:text-indigo-200 shrink-0">
+                <Lock className="w-2.5 h-2.5 stroke-[2.5]" />
+                <span>Locked</span>
+              </span>
+            )}
           </div>
 
           <button
@@ -308,6 +345,30 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
 
       {/* Main Solver Grid & Control Deck */}
       <main className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain flex flex-col items-center justify-start lg:justify-center px-3 sm:px-6 pt-3 pb-[clamp(24px,6vh,48px)]">
+        {/* Clean Pastel Solver Toast / Status Banner */}
+        {solverBanner && (
+          <div
+            id="solver-status-toast"
+            role="status"
+            className={`w-full max-w-3xl mx-auto mb-3 px-4 py-2.5 rounded-2xl border-0 flex items-center gap-2.5 text-xs sm:text-sm font-bold shadow-[0_6px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.4)] transition-all duration-200 ${
+              solverBanner.type === "error"
+                ? "bg-[#FFE4E6] text-[#9D174D] dark:bg-rose-950/80 dark:text-rose-200"
+                : solverBanner.type === "success"
+                  ? "bg-[#D1FAE5] text-[#065F46] dark:bg-emerald-950/80 dark:text-emerald-200"
+                  : "bg-[#E0F2FE] text-[#0369A1] dark:bg-sky-950/80 dark:text-sky-200"
+            }`}
+          >
+            {solverBanner.type === "error" ? (
+              <AlertCircle className="w-4 h-4 shrink-0 stroke-[2.3]" />
+            ) : solverBanner.type === "success" ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 stroke-[2.3]" />
+            ) : (
+              <Sparkles className="w-4 h-4 shrink-0 stroke-[2.3]" />
+            )}
+            <span className="leading-snug">{solverBanner.message}</span>
+          </div>
+        )}
+
         <div className="w-full max-w-3xl mx-auto flex flex-col lg:flex-row items-center lg:items-stretch justify-center gap-4 lg:gap-7 my-auto">
           {/* 9x9 Puzzle Input Grid */}
           <div className="w-full max-w-[min(92vw,420px)] lg:w-[440px] lg:max-w-[440px] shrink-0 flex items-center justify-center p-0.5 rounded-2xl">
@@ -315,7 +376,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
               id="solver-sudoku-board"
               boardState={boardState}
               difficulty={difficultyMeta.boardDifficulty}
-              solutionGrid={EMPTY_SOLUTION_GRID}
+              solutionGrid={solvedGrid ?? EMPTY_SOLUTION_GRID}
               isTimerPaused={false}
               onResumeSession={noopSound}
               highlightAreas={true}
@@ -330,75 +391,127 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
             />
           </div>
 
-          {/* Control Deck */}
+          {/* Control Deck: Setup Phase vs Locked Action Phase */}
           <div
             id="solver-control-deck"
             className="w-full max-w-[min(92vw,420px)] lg:w-[280px] shrink-0 flex flex-col justify-between gap-3"
           >
-            {/* Top Row: Clear Grid & Erase */}
-            <div className="grid grid-cols-2 gap-2.5 w-full shrink-0">
-              <button
-                type="button"
-                id="solver-clear-grid-btn"
-                onClick={handleClearGrid}
-                disabled={clueCount === 0 && !selectedCell}
-                className="h-11 px-3 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-xs font-bold tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-150 bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9D174D] dark:bg-rose-950/60 dark:hover:bg-rose-900/70 dark:text-rose-200 shadow-[0_6px_16px_rgba(157,23,77,0.06)] dark:shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
+            {!isLocked ? (
+              <>
+                {/* Top Row: Clear Grid & Erase */}
+                <div className="grid grid-cols-2 gap-2.5 w-full shrink-0">
+                  <button
+                    type="button"
+                    id="solver-clear-grid-btn"
+                    onClick={handleClearGrid}
+                    disabled={clueCount === 0 && !selectedCell}
+                    className="h-11 px-3 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-xs font-bold tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-150 bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9D174D] dark:bg-rose-950/60 dark:hover:bg-rose-900/70 dark:text-rose-200 shadow-[0_6px_16px_rgba(157,23,77,0.06)] dark:shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
+                  >
+                    <Trash2 className="w-4 h-4 stroke-[2.2] shrink-0" />
+                    <span>Clear Grid</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="solver-erase-cell-btn"
+                    onClick={handleErase}
+                    disabled={!selectedCell || selectedCellValue === null}
+                    className="h-11 px-3 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-xs font-bold tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-150 bg-[#FCE7F3] hover:bg-[#FBCFE8] text-[#9D174D] dark:bg-pink-950/60 dark:hover:bg-pink-900/70 dark:text-pink-200 shadow-[0_6px_16px_rgba(157,23,77,0.06)] dark:shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
+                  >
+                    <Delete className="w-4 h-4 stroke-[2.2] shrink-0" />
+                    <span>Erase</span>
+                  </button>
+                </div>
+
+                {/* Middle Row: 1-9 Keypad Only */}
+                <div className="w-full shrink-0">
+                  <SudokuKeypad
+                    boardState={boardState}
+                    difficulty={difficultyMeta.boardDifficulty}
+                    historyLength={0}
+                    pencilMode={false}
+                    onTogglePencilMode={noopSound}
+                    onUndo={noopSound}
+                    onErase={handleErase}
+                    onHint={noopSound}
+                    hintInventory={0}
+                    isChallengeMode={true}
+                    onNumberSelect={applyCellValue}
+                    lockedNum={null}
+                    activeKeypadNum={selectedCellValue}
+                    isNumberFirstInputMode={false}
+                    showRemainingNumbers={false}
+                    darkMode={isDarkMode}
+                    playClickSound={noopSound}
+                    hideUtilityDeck={true}
+                  />
+                </div>
+
+                {/* Bottom Row: Lock & Play CTA */}
+                <button
+                  type="button"
+                  id="solver-lock-play-btn"
+                  disabled={isLockDisabled}
+                  onClick={handleLockAndPlay}
+                  className={`w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-sm font-black tracking-wide transition-all duration-150 shrink-0 ${
+                    isLockDisabled
+                      ? "bg-stone-200/80 text-stone-400 dark:bg-zinc-800/70 dark:text-zinc-500 cursor-not-allowed opacity-65 shadow-none"
+                      : "bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white cursor-pointer active:scale-[0.98] shadow-[0_8px_22px_rgba(55,48,163,0.12)] dark:shadow-[0_8px_22px_rgba(79,70,229,0.3)]"
+                  }`}
+                >
+                  <Lock className="w-4 h-4 stroke-[2.4] shrink-0" />
+                  <span>Lock &amp; Play</span>
+                </button>
+              </>
+            ) : (
+              /* Locked Action Deck */
+              <div
+                id="solver-locked-action-deck"
+                className="w-full flex flex-col justify-center gap-3 p-4 rounded-3xl border-0 bg-white/90 dark:bg-zinc-900/90 shadow-[0_8px_28px_rgba(55,48,163,0.07)] dark:shadow-[0_8px_28px_rgba(0,0,0,0.45)] my-auto"
               >
-                <Trash2 className="w-4 h-4 stroke-[2.2] shrink-0" />
-                <span>Clear Grid</span>
-              </button>
+                <div className="text-center px-1 pb-1">
+                  <p className="font-sans text-xs font-extrabold uppercase tracking-wider text-stone-700 dark:text-zinc-200">
+                    Clues Locked ({clueCount})
+                  </p>
+                  <p className="font-sans text-[11px] font-medium text-stone-500 dark:text-zinc-400 mt-0.5 leading-snug">
+                    Reveal the complete grid or launch into timed play mode.
+                  </p>
+                </div>
 
-              <button
-                type="button"
-                id="solver-erase-cell-btn"
-                onClick={handleErase}
-                disabled={!selectedCell || selectedCellValue === null}
-                className="h-11 px-3 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-xs font-bold tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-150 bg-[#FCE7F3] hover:bg-[#FBCFE8] text-[#9D174D] dark:bg-pink-950/60 dark:hover:bg-pink-900/70 dark:text-pink-200 shadow-[0_6px_16px_rgba(157,23,77,0.06)] dark:shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
-              >
-                <Delete className="w-4 h-4 stroke-[2.2] shrink-0" />
-                <span>Erase</span>
-              </button>
-            </div>
+                {/* 1. Edit Clues */}
+                <button
+                  type="button"
+                  id="solver-edit-clues-btn"
+                  onClick={handleEditClues}
+                  className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-bold tracking-wide cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#3730A3] dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-stone-100 shadow-[0_4px_14px_rgba(55,48,163,0.06)] dark:shadow-[0_4px_14px_rgba(0,0,0,0.3)]"
+                >
+                  <Pencil className="w-4 h-4 stroke-[2.2] shrink-0" />
+                  <span>Edit Clues</span>
+                </button>
 
-            {/* Middle Row: 1-9 Keypad Only */}
-            <div className="w-full shrink-0">
-              <SudokuKeypad
-                boardState={boardState}
-                difficulty={difficultyMeta.boardDifficulty}
-                historyLength={0}
-                pencilMode={false}
-                onTogglePencilMode={noopSound}
-                onUndo={noopSound}
-                onErase={handleErase}
-                onHint={noopSound}
-                hintInventory={0}
-                isChallengeMode={true}
-                onNumberSelect={applyCellValue}
-                lockedNum={null}
-                activeKeypadNum={selectedCellValue}
-                isNumberFirstInputMode={false}
-                showRemainingNumbers={false}
-                darkMode={isDarkMode}
-                playClickSound={noopSound}
-                hideUtilityDeck={true}
-              />
-            </div>
+                {/* 2. Auto-Solve */}
+                <button
+                  type="button"
+                  id="solver-auto-solve-btn"
+                  onClick={handleAutoSolve}
+                  className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-bold tracking-wide cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[#CCFBF1] hover:bg-[#99F6E4] text-[#115E59] dark:bg-teal-950/75 dark:hover:bg-teal-900/85 dark:text-teal-200 shadow-[0_6px_18px_rgba(17,94,89,0.08)] dark:shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
+                >
+                  <Zap className="w-4 h-4 stroke-[2.3] shrink-0" />
+                  <span>Auto-Solve</span>
+                </button>
 
-            {/* Bottom Row: Lock & Play CTA */}
-            <button
-              type="button"
-              id="solver-lock-play-btn"
-              disabled={isLockDisabled}
-              onClick={() => alert("Will lock and switch to Play Mode")}
-              className={`w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-sm font-black tracking-wide transition-all duration-150 shrink-0 ${
-                isLockDisabled
-                  ? "bg-stone-200/80 text-stone-400 dark:bg-zinc-800/70 dark:text-zinc-500 cursor-not-allowed opacity-65 shadow-none"
-                  : "bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white cursor-pointer active:scale-[0.98] shadow-[0_8px_22px_rgba(55,48,163,0.12)] dark:shadow-[0_8px_22px_rgba(79,70,229,0.3)]"
-              }`}
-            >
-              <Lock className="w-4 h-4 stroke-[2.4] shrink-0" />
-              <span>Lock &amp; Play</span>
-            </button>
+                {/* 3. Play Puzzle */}
+                <button
+                  type="button"
+                  id="solver-play-puzzle-btn"
+                  onClick={handlePlayPuzzle}
+                  className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-black tracking-wide cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white shadow-[0_8px_22px_rgba(55,48,163,0.14)] dark:shadow-[0_8px_22px_rgba(79,70,229,0.35)]"
+                >
+                  <Play className="w-4 h-4 stroke-[2.4] fill-current shrink-0" />
+                  <span>Play Puzzle</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </main>
