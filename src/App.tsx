@@ -304,12 +304,23 @@ function createInitialBoardGrid(puzzle: number[][], autoPopulateNotes: boolean):
   );
 }
 
+function getCellNotesSet(notes: SudokuCell["notes"] | number[] | undefined | null): Set<number> {
+  if (notes instanceof Set) return notes;
+  if (Array.isArray(notes)) return new Set<number>(notes);
+  return new Set<number>();
+}
+
 /**
  * Populates valid candidate notes on empty cells of a live Sudoku grid
- * in O(81) using row/column/3x3-box bitmasks without overwriting filled cells
- * or cells that already contain user-entered notes.
+ * in O(81) using row/column/3x3-box bitmasks without overwriting filled cells.
+ * When `overwriteExisting` is false (default), cells that already contain
+ * user-entered notes are preserved; when true, empty cells are recalculated
+ * and overwritten cleanly.
  */
-function populateAutoNotesOnGrid(grid: SudokuCell[][]): SudokuCell[][] {
+function populateAutoNotesOnGrid(
+  grid: SudokuCell[][],
+  overwriteExisting = false
+): SudokuCell[][] {
   const rowMask = new Int32Array(9);
   const colMask = new Int32Array(9);
   const boxMask = new Int32Array(9);
@@ -329,7 +340,8 @@ function populateAutoNotesOnGrid(grid: SudokuCell[][]): SudokuCell[][] {
   return grid.map((row, r) =>
     row.map((cell, c) => {
       if (cell.value !== 0) return cell;
-      if (cell.notes && cell.notes.size > 0) return cell;
+      const existingNotes = getCellNotesSet(cell.notes);
+      if (!overwriteExisting && existingNotes.size > 0) return cell;
       const used = rowMask[r] | colMask[c] | boxMask[Math.floor(r / 3) * 3 + Math.floor(c / 3)];
       const notes = new Set<number>();
       for (let d = 1; d <= 9; d++) {
@@ -6503,12 +6515,6 @@ export default function App() {
     } catch { }
     syncSettingsToCloud({ autoNotes: val, isAutoNotesEnabled: val });
 
-    if (!val) {
-      // Non-destructive toggle-off: leave existing candidate notes intact on the board
-      setIsMidGameNotesFadingIn(false);
-      return;
-    }
-
     const curBoard = boardStateRef.current;
     const isMultiplayer = Boolean(challengeModeRef.current || activeGameIdRef.current);
     const isDailyBoard = Boolean(
@@ -6521,29 +6527,70 @@ export default function App() {
     );
     const curDiff = curBoard?.difficulty;
     const isHardOrExpert = curDiff === "HARD" || curDiff === "EXPERT";
+    const isEligibleActiveBoard = Boolean(
+      curBoard && !curBoard.isGameOver && !isMultiplayer && !isDailyBoard && isHardOrExpert
+    );
+
+    if (!val) {
+      setIsMidGameNotesFadingIn(false);
+      if (!isEligibleActiveBoard || !curBoard) return;
+
+      pendingAutoNotesSessionRef.current = null;
+      let didClear = false;
+      const clearedGrid: SudokuCell[][] = curBoard.grid.map((row) =>
+        row.map((cell) => {
+          if (cell.value !== 0) return cell;
+          if (getCellNotesSet(cell.notes).size === 0) return cell;
+          didClear = true;
+          return {
+            ...cell,
+            notes: new Set<number>(),
+          };
+        })
+      );
+
+      if (didClear) {
+        const updatedBoard: BoardState = {
+          ...curBoard,
+          grid: clearedGrid,
+        };
+        boardStateRef.current = updatedBoard;
+        setBoardState(updatedBoard);
+        saveCurrentGameToLocalRef.current?.(
+          updatedBoard,
+          sessionSecondsRef.current,
+          updatedBoard.difficulty || difficultyRef.current
+        );
+        addLog("🧹 Auto-Notes disabled: cleared candidate notes from empty cells.");
+      }
+      return;
+    }
 
     // Eligible: active non-game-over single-player Hard/Expert classic or custom Solver board
-    if (curBoard && !curBoard.isGameOver && !isMultiplayer && !isDailyBoard && isHardOrExpert) {
-      const populatedGrid = populateAutoNotesOnGrid(curBoard.grid);
-      let didPopulate = false;
-      for (let r = 0; r < 9 && !didPopulate; r++) {
+    if (isEligibleActiveBoard && curBoard) {
+      const populatedGrid = populateAutoNotesOnGrid(curBoard.grid, true);
+      let didChangeNotes = false;
+      for (let r = 0; r < 9 && !didChangeNotes; r++) {
         for (let c = 0; c < 9; c++) {
           const prevCell = curBoard.grid[r]?.[c];
           const nextCell = populatedGrid[r]?.[c];
-          if (
-            prevCell &&
-            nextCell &&
-            prevCell.value === 0 &&
-            prevCell.notes.size === 0 &&
-            nextCell.notes.size > 0
-          ) {
-            didPopulate = true;
+          if (!prevCell || !nextCell || prevCell.value !== 0) continue;
+          const prevNotes = getCellNotesSet(prevCell.notes);
+          if (prevNotes.size !== nextCell.notes.size) {
+            didChangeNotes = true;
             break;
           }
+          for (const d of nextCell.notes) {
+            if (!prevNotes.has(d)) {
+              didChangeNotes = true;
+              break;
+            }
+          }
+          if (didChangeNotes) break;
         }
       }
 
-      if (didPopulate) {
+      if (didChangeNotes) {
         const updatedBoard: BoardState = {
           ...curBoard,
           grid: populatedGrid,
@@ -6557,7 +6604,7 @@ export default function App() {
           sessionSecondsRef.current,
           updatedBoard.difficulty || difficultyRef.current
         );
-        addLog("✨ Auto-Notes populated empty candidate cells.");
+        addLog("✨ Auto-Notes recalculated valid candidates across empty cells.");
       }
     }
   }, [syncSettingsToCloud]);
