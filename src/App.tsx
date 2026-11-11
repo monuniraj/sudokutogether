@@ -17829,11 +17829,11 @@ export default function App() {
 
         {/* PANE 2: ACTIVE GAMEPLAY ARENA */}
         {currentScreen === "game" && (
-          <div id="game-scroll-container" className="flex-1 min-h-0 h-full w-full overflow-hidden lg:overflow-y-auto overscroll-none lg:overscroll-contain flex flex-col justify-start select-none p-1 sm:p-3 md:p-6 pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] pb-2 lg:pb-16 selection:bg-[#E0F2FE] bg-transparent touch-none lg:touch-auto">
+          <div id="game-scroll-container" className={`flex-1 min-h-0 h-full w-full overflow-y-auto overscroll-contain flex flex-col justify-start select-none p-1 sm:p-3 md:p-6 pt-[calc(70px+env(safe-area-inset-top,0px))] md:pt-[76px] lg:pt-[85px] pb-[clamp(30px,7.5vh,70px)] lg:pb-16 selection:bg-[#E0F2FE] bg-transparent ${Capacitor.isNativePlatform() ? "touch-none lg:touch-auto" : "touch-pan-y"}`}>
 
             {/* Main responsive outer layout container - Centers automatically as a unified cohesive block */}
             <div
-              className="w-full lg:w-fit flex flex-col lg:flex-row gap-2 sm:gap-3 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto mt-1 sm:mt-2 mb-auto lg:my-auto shrink-0"
+              className="w-full lg:w-fit flex flex-col lg:flex-row gap-4 sm:gap-5 lg:gap-7 justify-center items-center lg:items-stretch select-none mx-auto mt-[clamp(15px,4.5vh,40px)] mb-auto lg:my-auto shrink-0"
               id="main-responsive-game-container"
             >
 
@@ -18296,7 +18296,7 @@ export default function App() {
 
               {/* COLUMN 2: CONTROLS & NUMBERS DECK */}
               <div
-                className="w-full lg:w-[292px] shrink-0 flex flex-col gap-2 sm:gap-3 lg:gap-0 lg:justify-between px-2 py-1.5 sm:py-2 lg:p-0 transition-colors duration-300 border-none select-none mt-1 lg:mt-0"
+                className="w-full lg:w-[292px] shrink-0 flex flex-col gap-3 sm:gap-4 lg:gap-0 lg:justify-between px-2 py-3 sm:px-2 sm:py-4 lg:p-0 transition-colors duration-300 border-none select-none mt-2 lg:mt-0"
                 id="game-controls-column"
               >
 
