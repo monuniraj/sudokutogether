@@ -50,6 +50,8 @@ export interface UseDailyChallengeOptions {
   autoSaveDebounceMs?: number;
   /** Enable internal 1-second gameplay timer & visibility auto-pause (default: false for passive display cards) */
   enableTimer?: boolean;
+  /** Optional external counter to trigger local+cloud daily vault re-sync */
+  refreshTrigger?: number;
 }
 
 export interface UseDailyChallengeReturn {
@@ -57,6 +59,8 @@ export interface UseDailyChallengeReturn {
   date: string;
   /** Switch active Daily Challenge calendar date (YYYY-MM-DD) */
   setDate: (nextDate: string) => void;
+  /** Normalized identity UID this hook's loaded state currently represents (null = guest) */
+  loadedUid: string | null;
   /** Current lifecycle status of the active day's challenge */
   status: DailyChallengeStatus;
   /** Current 81-character board string ('0' = empty, '1'..'9' = digit) */
@@ -249,7 +253,10 @@ export function useDailyChallenge(
       ? { uid: typeof optionsOrUid === "string" ? optionsOrUid : null }
       : optionsOrUid ?? {};
 
-  const uid = normalizedOptions.uid;
+  const uid = isAuthenticatedUid(normalizedOptions.uid)
+    ? normalizedOptions.uid.trim()
+    : null;
+  const refreshTrigger = normalizedOptions.refreshTrigger ?? 0;
   const enableTimer = Boolean(normalizedOptions.enableTimer);
   const autoSaveDebounceMs =
     typeof normalizedOptions.autoSaveDebounceMs === "number" &&
@@ -268,6 +275,7 @@ export function useDailyChallenge(
 
   const initialGenerated = useMemo(() => generateDailyPuzzle(date), []);
 
+  const [loadedUid, setLoadedUid] = useState<string | null>(uid);
   const [status, setStatus] = useState<DailyChallengeStatus>("NOT_STARTED");
   const [board, setBoard] = useState<string>(() =>
     flatToBoardString(initialGenerated.puzzleFlat)
@@ -407,18 +415,79 @@ export function useDailyChallenge(
     setSelectedCell(null);
     setIsPaused(false);
 
-    const initialize = async () => {
-      const todayKey = formatDateKey(new Date());
-      const generated = generateDailyPuzzle(date);
-      const generatedInitialStr = flatToBoardString(generated.puzzleFlat);
-      const generatedSolutionStr = flatToBoardString(generated.solutionFlat);
+    const todayKey = formatDateKey(new Date());
+    const generated = generateDailyPuzzle(date);
+    const generatedInitialStr = flatToBoardString(generated.puzzleFlat);
+    const generatedSolutionStr = flatToBoardString(generated.solutionFlat);
 
-      const localProgress = getDailyProgress(date, uid);
+    // Synchronously isolate & seed state from the target identity's local vault
+    // BEFORE awaiting any async cloud fetches so prior-identity state never leaks.
+    const localProgress = getDailyProgress(date, uid);
+    const localStats = getDailyStats(uid, todayKey);
+    const localRecordForDate = localStats.recordsByDate[date];
+
+    if (localProgress && localProgress.status !== "NOT_STARTED") {
+      const restoredInitial =
+        localProgress.puzzleFlat.length === 81 &&
+        localProgress.puzzleFlat.some((v) => v > 0)
+          ? flatToBoardString(localProgress.puzzleFlat)
+          : generatedInitialStr;
+      const restoredBoard =
+        localProgress.boardFlat.length === 81
+          ? flatToBoardString(localProgress.boardFlat)
+          : restoredInitial;
+
+      startedAtRef.current = localProgress.startedAt || Date.now();
+      setDifficulty(localProgress.difficulty || generated.difficulty);
+      setInitialBoard(restoredInitial);
+      setSolution(generatedSolutionStr);
+      setBoard(restoredBoard);
+      setStatus(localProgress.status);
+      setElapsedTime(Math.max(0, localProgress.elapsedSeconds || 0));
+      setMistakes(Math.max(0, localProgress.mistakesCount || 0));
+      setNotes(cloneNotesMap(localProgress.notesByCell || {}));
+    } else if (
+      localRecordForDate &&
+      (localRecordForDate.status === "COMPLETED" ||
+        localRecordForDate.status === "FAILED")
+    ) {
+      startedAtRef.current = localRecordForDate.completedAt || Date.now();
+      setDifficulty(localRecordForDate.difficulty || generated.difficulty);
+      setInitialBoard(generatedInitialStr);
+      setSolution(generatedSolutionStr);
+      setBoard(
+        localRecordForDate.status === "COMPLETED"
+          ? generatedSolutionStr
+          : generatedInitialStr
+      );
+      setStatus(localRecordForDate.status);
+      setElapsedTime(Math.max(0, localRecordForDate.timeSeconds || 0));
+      setMistakes(Math.max(0, localRecordForDate.mistakes || 0));
+      setNotes({});
+    } else {
+      startedAtRef.current = Date.now();
+      setDifficulty(generated.difficulty);
+      setInitialBoard(generatedInitialStr);
+      setSolution(generatedSolutionStr);
+      setBoard(generatedInitialStr);
+      setStatus("NOT_STARTED");
+      setElapsedTime(0);
+      setMistakes(0);
+      setNotes({});
+    }
+    setStats(localStats);
+    setLoadedUid(uid);
+
+    const initialize = async () => {
       let resolvedProgress: DailyChallengeProgress | null = localProgress;
 
       if (isAuthenticatedUid(uid)) {
-        const cloudProgress = await fetchDailyProgressFromCloud(uid, date);
+        const [cloudProgress, cloudStats] = await Promise.all([
+          fetchDailyProgressFromCloud(uid, date),
+          fetchDailyStatsFromCloud(uid),
+        ]);
         if (cancelled) return;
+
         resolvedProgress = resolveProgressConflict(localProgress, cloudProgress);
 
         // Mirror newer cloud progress into local vault
@@ -429,55 +498,67 @@ export function useDailyChallenge(
         ) {
           saveDailyProgress(resolvedProgress, uid);
         }
-      }
 
-      if (cancelled) return;
-
-      if (resolvedProgress && resolvedProgress.status !== "NOT_STARTED") {
-        const restoredInitial =
-          resolvedProgress.puzzleFlat.length === 81 &&
-          resolvedProgress.puzzleFlat.some((v) => v > 0)
-            ? flatToBoardString(resolvedProgress.puzzleFlat)
-            : generatedInitialStr;
-        const restoredBoard =
-          resolvedProgress.boardFlat.length === 81
-            ? flatToBoardString(resolvedProgress.boardFlat)
-            : restoredInitial;
-
-        startedAtRef.current = resolvedProgress.startedAt || Date.now();
-        setDifficulty(resolvedProgress.difficulty || generated.difficulty);
-        setInitialBoard(restoredInitial);
-        setSolution(generatedSolutionStr);
-        setBoard(restoredBoard);
-        setStatus(resolvedProgress.status);
-        setElapsedTime(Math.max(0, resolvedProgress.elapsedSeconds || 0));
-        setMistakes(Math.max(0, resolvedProgress.mistakesCount || 0));
-        setNotes(cloneNotesMap(resolvedProgress.notesByCell || {}));
-      } else {
-        startedAtRef.current = Date.now();
-        setDifficulty(generated.difficulty);
-        setInitialBoard(generatedInitialStr);
-        setSolution(generatedSolutionStr);
-        setBoard(generatedInitialStr);
-        setStatus("NOT_STARTED");
-        setElapsedTime(0);
-        setMistakes(0);
-        setNotes({});
-      }
-
-      const localStats = getDailyStats(uid, todayKey);
-      if (isAuthenticatedUid(uid)) {
-        const cloudStats = await fetchDailyStatsFromCloud(uid);
-        if (cancelled) return;
         const reconciled = reconcileStatsWithCloud(
           localStats,
           cloudStats,
           uid,
           todayKey
         );
+        const cloudRecordForDate = reconciled.recordsByDate[date];
+
+        if (resolvedProgress && resolvedProgress.status !== "NOT_STARTED") {
+          const restoredInitial =
+            resolvedProgress.puzzleFlat.length === 81 &&
+            resolvedProgress.puzzleFlat.some((v) => v > 0)
+              ? flatToBoardString(resolvedProgress.puzzleFlat)
+              : generatedInitialStr;
+          const restoredBoard =
+            resolvedProgress.boardFlat.length === 81
+              ? flatToBoardString(resolvedProgress.boardFlat)
+              : restoredInitial;
+
+          startedAtRef.current = resolvedProgress.startedAt || Date.now();
+          setDifficulty(resolvedProgress.difficulty || generated.difficulty);
+          setInitialBoard(restoredInitial);
+          setSolution(generatedSolutionStr);
+          setBoard(restoredBoard);
+          setStatus(resolvedProgress.status);
+          setElapsedTime(Math.max(0, resolvedProgress.elapsedSeconds || 0));
+          setMistakes(Math.max(0, resolvedProgress.mistakesCount || 0));
+          setNotes(cloneNotesMap(resolvedProgress.notesByCell || {}));
+        } else if (
+          cloudRecordForDate &&
+          (cloudRecordForDate.status === "COMPLETED" ||
+            cloudRecordForDate.status === "FAILED")
+        ) {
+          startedAtRef.current = cloudRecordForDate.completedAt || Date.now();
+          setDifficulty(cloudRecordForDate.difficulty || generated.difficulty);
+          setInitialBoard(generatedInitialStr);
+          setSolution(generatedSolutionStr);
+          setBoard(
+            cloudRecordForDate.status === "COMPLETED"
+              ? generatedSolutionStr
+              : generatedInitialStr
+          );
+          setStatus(cloudRecordForDate.status);
+          setElapsedTime(Math.max(0, cloudRecordForDate.timeSeconds || 0));
+          setMistakes(Math.max(0, cloudRecordForDate.mistakes || 0));
+          setNotes({});
+        } else {
+          startedAtRef.current = Date.now();
+          setDifficulty(generated.difficulty);
+          setInitialBoard(generatedInitialStr);
+          setSolution(generatedSolutionStr);
+          setBoard(generatedInitialStr);
+          setStatus("NOT_STARTED");
+          setElapsedTime(0);
+          setMistakes(0);
+          setNotes({});
+        }
+
         setStats(reconciled);
-      } else {
-        setStats(localStats);
+        setLoadedUid(uid);
       }
 
       if (!cancelled) {
@@ -491,7 +572,7 @@ export function useDailyChallenge(
       cancelled = true;
       clearScheduledCloudSave();
     };
-  }, [date, uid, clearScheduledCloudSave]);
+  }, [date, uid, refreshTrigger, clearScheduledCloudSave]);
 
   // 1-Second Gameplay Timer Ticker (opt-in via enableTimer, and strictly when IN_PROGRESS and not paused)
   useEffect(() => {
@@ -790,6 +871,7 @@ export function useDailyChallenge(
   return {
     date,
     setDate,
+    loadedUid,
     status,
     board,
     initialBoard,

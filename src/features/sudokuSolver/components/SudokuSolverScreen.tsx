@@ -49,8 +49,29 @@ export interface SudokuSolverScreenProps {
   ) => void;
 }
 
-const CUSTOM_DRAFT_STORAGE_KEY = "sudoku_custom_draft";
 const EMPTY_SOLUTION_GRID: number[][] = [];
+
+function resolveNormalizedSolverUid(uid?: string | null): string | null {
+  if (!uid || typeof uid !== "string") return null;
+  const trimmed = uid.trim();
+  if (!trimmed || trimmed.includes("/")) return null;
+  const lower = trimmed.toLowerCase();
+  if (
+    lower === "guest" ||
+    lower === "guest_anon" ||
+    lower.startsWith("guest_")
+  ) {
+    return null;
+  }
+  return trimmed;
+}
+
+function getCustomDraftStorageKey(uid?: string | null): string {
+  const normalized = resolveNormalizedSolverUid(uid);
+  return normalized
+    ? `sudoku_user_${normalized}_custom_draft`
+    : "sudoku_guest_custom_draft";
+}
 
 const createEmptyGrid = (): number[][] =>
   Array.from({ length: 9 }, () => Array<number>(9).fill(0));
@@ -94,10 +115,15 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setRecords([]);
+      setIsLoading(false);
+      return;
+    }
     let isCancelled = false;
+    setRecords([]);
     setIsLoading(true);
-    getCustomGameHistory(uid)
+    getCustomGameHistory(resolveNormalizedSolverUid(uid))
       .then((items) => {
         if (!isCancelled) {
           setRecords(items);
@@ -139,22 +165,20 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
     >
       <div
         id="custom-history-modal-card"
-        className={`w-full max-w-md max-h-[82dvh] flex flex-col overflow-hidden my-auto rounded-3xl border-0 p-4 sm:p-5 transition-colors ${
-          darkMode
-            ? "bg-[#18181b] text-zinc-100 shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
-            : "bg-[#FDFBF7] text-[#1C1917] shadow-[0_20px_50px_rgba(55,48,163,0.12)]"
-        }`}
+        className={`w-full max-w-md max-h-[82dvh] flex flex-col overflow-hidden my-auto rounded-3xl border-0 p-4 sm:p-5 transition-colors ${darkMode
+          ? "bg-[#18181b] text-zinc-100 shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+          : "bg-[#FDFBF7] text-[#1C1917] shadow-[0_20px_50px_rgba(55,48,163,0.12)]"
+          }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-2 mb-3.5 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div
-              className={`w-9 h-9 rounded-2xl border-0 flex items-center justify-center shrink-0 ${
-                darkMode
-                  ? "bg-indigo-950/70 text-[#c7d2fe]"
-                  : "bg-[#EEF2FF] text-[#3730A3]"
-              }`}
+              className={`w-9 h-9 rounded-2xl border-0 flex items-center justify-center shrink-0 ${darkMode
+                ? "bg-indigo-950/70 text-[#c7d2fe]"
+                : "bg-[#EEF2FF] text-[#3730A3]"
+                }`}
             >
               <Clock className="w-4 h-4 stroke-[2.3]" />
             </div>
@@ -176,11 +200,10 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
             id="custom-history-close-btn"
             onClick={onClose}
             aria-label={t("closeBtn") || "Close"}
-            className={`w-8 h-8 rounded-2xl border-0 flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95 ${
-              darkMode
-                ? "bg-[#222225] hover:bg-[#2c2c30] text-zinc-300"
-                : "bg-[#F4EFE6] hover:bg-[#EAE3D5] text-stone-600"
-            }`}
+            className={`w-8 h-8 rounded-2xl border-0 flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95 ${darkMode
+              ? "bg-[#222225] hover:bg-[#2c2c30] text-zinc-300"
+              : "bg-[#F4EFE6] hover:bg-[#EAE3D5] text-stone-600"
+              }`}
           >
             <X className="w-4 h-4 stroke-[2.2]" />
           </button>
@@ -198,18 +221,16 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
           ) : records.length === 0 ? (
             <div
               id="custom-history-empty-state"
-              className={`rounded-2xl border-0 p-6 flex flex-col items-center justify-center gap-3 text-center ${
-                darkMode
-                  ? "bg-[#222225] text-zinc-300"
-                  : "bg-[#F4EFE6]/85 text-stone-600"
-              }`}
+              className={`rounded-2xl border-0 p-6 flex flex-col items-center justify-center gap-3 text-center ${darkMode
+                ? "bg-[#222225] text-zinc-300"
+                : "bg-[#F4EFE6]/85 text-stone-600"
+                }`}
             >
               <div
-                className={`w-11 h-11 rounded-2xl border-0 flex items-center justify-center ${
-                  darkMode
-                    ? "bg-indigo-950/60 text-indigo-300"
-                    : "bg-[#EEF2FF] text-[#4338CA]"
-                }`}
+                className={`w-11 h-11 rounded-2xl border-0 flex items-center justify-center ${darkMode
+                  ? "bg-indigo-950/60 text-indigo-300"
+                  : "bg-[#EEF2FF] text-[#4338CA]"
+                  }`}
               >
                 <Sparkles className="w-5 h-5 stroke-[2.1]" />
               </div>
@@ -230,11 +251,10 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
                   key={record.id}
                   type="button"
                   onClick={() => onSelectRecord(record)}
-                  className={`w-full text-left rounded-2xl border-0 p-3.5 flex flex-col gap-2 cursor-pointer transition-all duration-150 active:scale-[0.99] ${
-                    darkMode
-                      ? "bg-[#222225] hover:bg-[#2a2a30] text-zinc-100 shadow-[0_4px_14px_rgba(0,0,0,0.3)]"
-                      : "bg-white hover:bg-[#EEF2FF]/65 text-stone-800 shadow-[0_4px_14px_rgba(55,48,163,0.05)]"
-                  }`}
+                  className={`w-full text-left rounded-2xl border-0 p-3.5 flex flex-col gap-2 cursor-pointer transition-all duration-150 active:scale-[0.99] ${darkMode
+                    ? "bg-[#222225] hover:bg-[#2a2a30] text-zinc-100 shadow-[0_4px_14px_rgba(0,0,0,0.3)]"
+                    : "bg-white hover:bg-[#EEF2FF]/65 text-stone-800 shadow-[0_4px_14px_rgba(55,48,163,0.05)]"
+                    }`}
                 >
                   <div className="flex items-center justify-between gap-2 min-w-0">
                     <p className="font-sans font-extrabold text-xs sm:text-sm leading-snug text-stone-800 dark:text-zinc-100 truncate min-w-0 flex-1">
@@ -258,21 +278,19 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-1.5 text-[11px] font-bold text-stone-500 dark:text-zinc-400">
                       <span
-                        className={`px-2 py-0.5 rounded-full ${
-                          darkMode
-                            ? "bg-zinc-800 text-zinc-300"
-                            : "bg-stone-100 text-stone-600"
-                        }`}
+                        className={`px-2 py-0.5 rounded-full ${darkMode
+                          ? "bg-zinc-800 text-zinc-300"
+                          : "bg-stone-100 text-stone-600"
+                          }`}
                       >
                         {t("solverHistoryCluesBadge", { count: clues })}
                       </span>
                       {typeof record.timeTaken === "number" && record.timeTaken > 0 && (
                         <span
-                          className={`px-2 py-0.5 rounded-full font-mono tabular-nums ${
-                            darkMode
-                              ? "bg-zinc-800 text-emerald-300"
-                              : "bg-emerald-50 text-emerald-700"
-                          }`}
+                          className={`px-2 py-0.5 rounded-full font-mono tabular-nums ${darkMode
+                            ? "bg-zinc-800 text-emerald-300"
+                            : "bg-emerald-50 text-emerald-700"
+                            }`}
                         >
                           {formatElapsedShort(record.timeTaken)}
                         </span>
@@ -280,11 +298,10 @@ const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
                     </div>
 
                     <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border-0 text-[11px] font-extrabold ${
-                        record.isAutoSolved
-                          ? "bg-[#CCFBF1] text-[#115E59] dark:bg-teal-950/75 dark:text-teal-200"
-                          : "bg-[#E0E7FF] text-[#3730A3] dark:bg-indigo-950/75 dark:text-indigo-200"
-                      }`}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border-0 text-[11px] font-extrabold ${record.isAutoSolved
+                        ? "bg-[#CCFBF1] text-[#115E59] dark:bg-teal-950/75 dark:text-teal-200"
+                        : "bg-[#E0E7FF] text-[#3730A3] dark:bg-indigo-950/75 dark:text-indigo-200"
+                        }`}
                     >
                       {record.isAutoSolved ? (
                         <Zap className="w-3 h-3 stroke-[2.3] shrink-0" />
@@ -335,41 +352,53 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     message: string;
   } | null>(null);
 
-  const hasHydratedDraftRef = useRef<boolean>(false);
+  const normalizedUid = resolveNormalizedSolverUid(uid);
+  const draftStorageKey = getCustomDraftStorageKey(normalizedUid);
+  const [loadedDraftKey, setLoadedDraftKey] = useState<string | null>(null);
   const lastSavedAutoSolveSigRef = useRef<string | null>(null);
-  const noopSound = useCallback(() => {}, []);
+  const noopSound = useCallback(() => { }, []);
 
-  // Hydrate persisted newspaper draft on initial mount
+  // Reset & hydrate persisted newspaper draft whenever active identity key changes
   useEffect(() => {
+    lastSavedAutoSolveSigRef.current = null;
+    setSelectedCell(null);
+    setSolvedGrid(null);
+    setIsLocked(false);
+    setIsHistoryOpen(false);
+    setSolverBanner(null);
+
+    let restoredGrid = createEmptyGrid();
+    let restoredConflicts = new Set<string>();
     try {
-      const rawDraft = localStorage.getItem(CUSTOM_DRAFT_STORAGE_KEY);
+      const rawDraft = localStorage.getItem(draftStorageKey);
       if (rawDraft) {
         const parsed = normalizeCustomGrid(JSON.parse(rawDraft));
         if (parsed && !isGridCompletelyEmpty(parsed)) {
-          setSolverGrid(parsed);
-          setConflictCells(validateCustomGrid(parsed));
+          restoredGrid = parsed;
+          restoredConflicts = validateCustomGrid(parsed);
         }
       }
     } catch {
       // Ignore corrupt draft cache cleanly
-    } finally {
-      hasHydratedDraftRef.current = true;
     }
-  }, []);
+    setSolverGrid(restoredGrid);
+    setConflictCells(restoredConflicts);
+    setLoadedDraftKey(draftStorageKey);
+  }, [draftStorageKey]);
 
-  // Persist non-empty draft on every clue change
+  // Persist non-empty draft strictly to the verified active identity key
   useEffect(() => {
-    if (!hasHydratedDraftRef.current) return;
+    if (loadedDraftKey !== draftStorageKey) return;
     try {
       if (!isGridCompletelyEmpty(solverGrid)) {
-        localStorage.setItem(CUSTOM_DRAFT_STORAGE_KEY, JSON.stringify(solverGrid));
+        localStorage.setItem(draftStorageKey, JSON.stringify(solverGrid));
       } else {
-        localStorage.removeItem(CUSTOM_DRAFT_STORAGE_KEY);
+        localStorage.removeItem(draftStorageKey);
       }
     } catch {
       // Ignore storage quota issues cleanly
     }
-  }, [solverGrid]);
+  }, [solverGrid, draftStorageKey, loadedDraftKey]);
 
   useEffect(() => {
     if (!solverBanner) return;
@@ -453,11 +482,11 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     setSolvedGrid(null);
     setSolverBanner(null);
     try {
-      localStorage.removeItem(CUSTOM_DRAFT_STORAGE_KEY);
+      localStorage.removeItem(draftStorageKey);
     } catch {
       // Ignore storage error
     }
-  }, [isLocked]);
+  }, [isLocked, draftStorageKey]);
 
   const handleErase = useCallback(() => {
     applyCellValue(0);
@@ -497,7 +526,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     if (lastSavedAutoSolveSigRef.current !== sig) {
       lastSavedAutoSolveSigRef.current = sig;
       const now = Date.now();
-      void saveCustomGameToHistory(uid ?? null, {
+      void saveCustomGameToHistory(normalizedUid, {
         id: `custom_${now}_${Math.random().toString(36).slice(2, 6)}`,
         date: new Date(now).toISOString(),
         grid: solverGrid.map((row) => [...row]),
@@ -517,7 +546,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
         message: t("solverBannerUniqueSolution"),
       });
     }
-  }, [solverGrid, uid, difficultyMeta.boardDifficulty, t]);
+  }, [solverGrid, normalizedUid, difficultyMeta.boardDifficulty, t]);
 
   const handlePlayPuzzle = useCallback(() => {
     const verifiedSolution = solvedGrid ?? solveCustomBoard(solverGrid).solution;
@@ -530,13 +559,13 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     }
     setSolverBanner(null);
     try {
-      localStorage.removeItem(CUSTOM_DRAFT_STORAGE_KEY);
+      localStorage.removeItem(draftStorageKey);
     } catch {
       // Ignore storage error
     }
     const now = Date.now();
     const customRecordId = `custom_${now}_${Math.random().toString(36).slice(2, 6)}`;
-    void saveCustomGameToHistory(uid ?? null, {
+    void saveCustomGameToHistory(normalizedUid, {
       id: customRecordId,
       date: new Date(now).toISOString(),
       grid: solverGrid.map((row) => [...row]),
@@ -550,7 +579,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       verifiedSolution.map((row) => [...row]),
       customRecordId
     );
-  }, [solvedGrid, solverGrid, uid, difficultyMeta.boardDifficulty, onPlayCustomPuzzle, t]);
+  }, [solvedGrid, solverGrid, normalizedUid, draftStorageKey, difficultyMeta.boardDifficulty, onPlayCustomPuzzle, t]);
 
   const handleSelectHistoryRecord = useCallback((record: CustomPuzzleHistoryRecord) => {
     const nextGrid = record.grid.map((row) => [...row]);
@@ -712,13 +741,12 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
           <div
             id="solver-status-toast"
             role="status"
-            className={`w-full max-w-3xl mx-auto mb-3 px-4 py-2.5 rounded-2xl border-0 flex items-center gap-2.5 text-xs sm:text-sm font-bold shadow-[0_6px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.4)] transition-all duration-200 ${
-              solverBanner.type === "error"
-                ? "bg-[#FFE4E6] text-[#9D174D] dark:bg-rose-950/80 dark:text-rose-200"
-                : solverBanner.type === "success"
-                  ? "bg-[#D1FAE5] text-[#065F46] dark:bg-emerald-950/80 dark:text-emerald-200"
-                  : "bg-[#E0F2FE] text-[#0369A1] dark:bg-sky-950/80 dark:text-sky-200"
-            }`}
+            className={`w-full max-w-3xl mx-auto mb-3 px-4 py-2.5 rounded-2xl border-0 flex items-center gap-2.5 text-xs sm:text-sm font-bold shadow-[0_6px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.4)] transition-all duration-200 ${solverBanner.type === "error"
+              ? "bg-[#FFE4E6] text-[#9D174D] dark:bg-rose-950/80 dark:text-rose-200"
+              : solverBanner.type === "success"
+                ? "bg-[#D1FAE5] text-[#065F46] dark:bg-emerald-950/80 dark:text-emerald-200"
+                : "bg-[#E0F2FE] text-[#0369A1] dark:bg-sky-950/80 dark:text-sky-200"
+              }`}
           >
             {solverBanner.type === "error" ? (
               <AlertCircle className="w-4 h-4 shrink-0 stroke-[2.3]" />
@@ -815,11 +843,10 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                   id="solver-lock-play-btn"
                   disabled={isLockDisabled}
                   onClick={handleLockAndPlay}
-                  className={`w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-sm font-black tracking-wide transition-all duration-150 shrink-0 ${
-                    isLockDisabled
-                      ? "bg-stone-200/80 text-stone-400 dark:bg-zinc-800/70 dark:text-zinc-500 cursor-not-allowed opacity-65 shadow-none"
-                      : "bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white cursor-pointer active:scale-[0.98] shadow-[0_8px_22px_rgba(55,48,163,0.12)] dark:shadow-[0_8px_22px_rgba(79,70,229,0.3)]"
-                  }`}
+                  className={`w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-sm font-black tracking-wide transition-all duration-150 shrink-0 ${isLockDisabled
+                    ? "bg-stone-200/80 text-stone-400 dark:bg-zinc-800/70 dark:text-zinc-500 cursor-not-allowed opacity-65 shadow-none"
+                    : "bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white cursor-pointer active:scale-[0.98] shadow-[0_8px_22px_rgba(55,48,163,0.12)] dark:shadow-[0_8px_22px_rgba(79,70,229,0.3)]"
+                    }`}
                 >
                   <Lock className="w-4 h-4 stroke-[2.4] shrink-0" />
                   <span>{t("solverLockAndPlayBtn")}</span>
@@ -881,7 +908,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       <CustomHistoryModal
         isOpen={isHistoryOpen}
         darkMode={isDarkMode}
-        uid={uid ?? null}
+        uid={normalizedUid}
         onClose={() => setIsHistoryOpen(false)}
         onSelectRecord={handleSelectHistoryRecord}
       />

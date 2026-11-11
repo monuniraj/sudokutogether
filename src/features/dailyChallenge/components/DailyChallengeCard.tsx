@@ -121,7 +121,20 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
   onModalOpenChange,
 }) => {
   const { t } = useTranslation();
-  const daily = useDailyChallenge({ uid, enableTimer: false });
+  const normalizedUid =
+    uid &&
+    typeof uid === "string" &&
+    uid.trim() &&
+    uid.trim().toLowerCase() !== "guest" &&
+    uid.trim().toLowerCase() !== "guest_anon" &&
+    !uid.trim().toLowerCase().startsWith("guest_")
+      ? uid.trim()
+      : null;
+  const daily = useDailyChallenge({
+    uid: normalizedUid,
+    enableTimer: false,
+    refreshTrigger,
+  });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [calendarAnchorDate, setCalendarAnchorDate] = useState<string | undefined>(undefined);
   const [inspectedResult, setInspectedResult] = useState<{
@@ -147,28 +160,77 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
     };
   }, []);
 
-  // Sync live local vault snapshot whenever App.tsx updates daily progress/completion
+  // Sync live local vault snapshot strictly for the active identity (`normalizedUid`)
   const [liveSnapshot, setLiveSnapshot] = useState<{
+    uid: string | null;
     progress: DailyChallengeProgress | null;
     stats: DailyStats;
   }>(() => ({
-    progress: getDailyProgress(daily.date, uid),
-    stats: getDailyStats(uid),
+    uid: normalizedUid,
+    progress: getDailyProgress(daily.date, normalizedUid),
+    stats: getDailyStats(normalizedUid),
   }));
 
   useEffect(() => {
+    setIsCalendarOpen(false);
+    setInspectedResult(null);
     setLiveSnapshot({
-      progress: getDailyProgress(daily.date, uid),
-      stats: getDailyStats(uid),
+      uid: normalizedUid,
+      progress: getDailyProgress(daily.date, normalizedUid),
+      stats: getDailyStats(normalizedUid),
     });
-  }, [daily.date, daily.status, daily.elapsedTime, daily.stats, uid, refreshTrigger]);
+  }, [normalizedUid]);
 
-  const effectiveStatus = liveSnapshot.progress?.status ?? daily.status;
-  const effectiveElapsed =
-    liveSnapshot.progress?.elapsedSeconds ?? daily.elapsedTime;
-  const effectiveMistakes =
-    liveSnapshot.progress?.mistakesCount ?? daily.mistakes;
-  const effectiveStats = liveSnapshot.stats;
+  useEffect(() => {
+    setLiveSnapshot({
+      uid: normalizedUid,
+      progress: getDailyProgress(daily.date, normalizedUid),
+      stats: getDailyStats(normalizedUid),
+    });
+  }, [daily.date, daily.status, daily.elapsedTime, daily.mistakes, daily.stats, normalizedUid, refreshTrigger]);
+
+  // Synchronously resolve target-identity vault snapshot on the exact render of an identity switch
+  const currentSnapshot =
+    liveSnapshot.uid === normalizedUid
+      ? liveSnapshot
+      : {
+          uid: normalizedUid,
+          progress: getDailyProgress(daily.date, normalizedUid),
+          stats: getDailyStats(normalizedUid),
+        };
+
+  const isHookSyncedForUid =
+    !daily.isLoading && daily.loadedUid === normalizedUid;
+  const dayRecord = currentSnapshot.stats.recordsByDate[daily.date];
+
+  const effectiveStatus: DailyChallengeStatus =
+    currentSnapshot.progress?.status ??
+    (dayRecord &&
+    (dayRecord.status === "COMPLETED" || dayRecord.status === "FAILED")
+      ? dayRecord.status
+      : isHookSyncedForUid
+        ? daily.status
+        : "NOT_STARTED");
+
+  const effectiveElapsed: number =
+    currentSnapshot.progress?.elapsedSeconds ??
+    (dayRecord &&
+    (dayRecord.status === "COMPLETED" || dayRecord.status === "FAILED")
+      ? dayRecord.timeSeconds
+      : isHookSyncedForUid
+        ? daily.elapsedTime
+        : 0);
+
+  const effectiveMistakes: number =
+    currentSnapshot.progress?.mistakesCount ??
+    (dayRecord &&
+    (dayRecord.status === "COMPLETED" || dayRecord.status === "FAILED")
+      ? dayRecord.mistakes
+      : isHookSyncedForUid
+        ? daily.mistakes
+        : 0);
+
+  const effectiveStats = currentSnapshot.stats;
 
   const launchMasterBoard = useCallback(
     (options?: {
@@ -179,7 +241,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
     }) => {
       const targetDate = options?.date ?? daily.date;
       const generated = generateDailyPuzzle(targetDate);
-      const latestProgress = getDailyProgress(targetDate, uid);
+      const latestProgress = getDailyProgress(targetDate, normalizedUid);
       if (onStartDailyChallenge) {
         onStartDailyChallenge({
           date: generated.date,
@@ -194,7 +256,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
         });
       }
     },
-    [daily.date, uid, onStartDailyChallenge]
+    [daily.date, normalizedUid, onStartDailyChallenge]
   );
 
   const handlePlayOrResume = useCallback(() => {
@@ -262,7 +324,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
               }
             : undefined
         }
-        uid={uid}
+        uid={normalizedUid}
         date={inspectedResult?.date ?? daily.date}
         difficulty={inspectedResult?.difficulty ?? daily.difficulty}
         status={inspectedResult?.status ?? effectiveStatus}
@@ -292,7 +354,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
             fromCalendar: true,
           });
         }}
-        uid={uid}
+        uid={normalizedUid}
         darkMode={darkMode}
         initialDate={calendarAnchorDate || daily.date}
         refreshTrigger={refreshTrigger}

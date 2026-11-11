@@ -2051,6 +2051,8 @@ export default function App() {
     }
   };
   const [sessionSeconds, setSessionSeconds] = useState<number>(0);
+  const sessionSecondsRef = useRef<number>(0);
+  sessionSecondsRef.current = sessionSeconds;
   const [selectedKotlinFile, setSelectedKotlinFile] = useState<"engine" | "board" | "preferences" | "snippets">("snippets");
   const [copiedText, setCopiedText] = useState<string | null>(null);
   const [gridOverlay, setGridOverlay] = useState<boolean>(true);
@@ -2445,7 +2447,11 @@ export default function App() {
   dailyChallengeDifficultyRef.current = dailyChallengeDifficulty;
   const [dailyRefreshCounter, setDailyRefreshCounter] = useState<number>(0);
   const [isDailyReviewSession, setIsDailyReviewSession] = useState<boolean>(false);
+  const isDailyReviewSessionRef = useRef<boolean>(false);
+  isDailyReviewSessionRef.current = isDailyReviewSession;
   const [dailyChallengeLoadedBoardDate, setDailyChallengeLoadedBoardDate] = useState<string | null>(null);
+  const dailyChallengeLoadedBoardDateRef = useRef<string | null>(null);
+  dailyChallengeLoadedBoardDateRef.current = dailyChallengeLoadedBoardDate;
   const [isDailyExhibition, setIsDailyExhibition] = useState<boolean>(false);
   const isDailyExhibitionRef = useRef<boolean>(false);
   const [isDailyRoomActive, setIsDailyRoomActive] = useState<boolean>(false);
@@ -3479,6 +3485,8 @@ export default function App() {
       console.error("Autosave error:", error);
     }
   };
+  const saveCurrentGameToLocalRef = useRef(saveCurrentGameToLocal);
+  saveCurrentGameToLocalRef.current = saveCurrentGameToLocal;
 
   const loadCurrentGameFromLocal = () => {
     try {
@@ -5661,6 +5669,7 @@ export default function App() {
           }
 
           currentHydratedUidRef.current = uid;
+          setDailyRefreshCounter((c) => c + 1);
         } else {
           // Document does not exist in Firestore yet: initialize clean default vault for this new user,
           // preserving any local games played under this same UID if present
@@ -5847,6 +5856,7 @@ export default function App() {
           } catch { }
 
           currentHydratedUidRef.current = uid;
+          setDailyRefreshCounter((c) => c + 1);
         }
       } catch (err) {
         console.warn("[Auth] Hydration error:", err);
@@ -5914,6 +5924,8 @@ export default function App() {
           setIsAutoNotesEnabled(resolvedGuestAutoNotes);
           isAutoNotesEnabledRef.current = resolvedGuestAutoNotes;
         } catch {}
+
+        setDailyRefreshCounter((c) => c + 1);
 
         if (isExplicitLogoutRef.current) {
           isExplicitLogoutRef.current = false;
@@ -6086,6 +6098,47 @@ export default function App() {
         isHydrationCompleteRef.current = false;
         setHydrationWriteLock(user.uid, true);
         setActiveAuthUid(user.uid);
+
+        if (isSwitchingUid) {
+          if (dailyCloudAutoSaveTimerRef.current !== null && typeof window !== "undefined") {
+            window.clearTimeout(dailyCloudAutoSaveTimerRef.current);
+            dailyCloudAutoSaveTimerRef.current = null;
+          }
+          const hadDailyOrCustomBoard = Boolean(
+            isDailyBoardContextRef.current ||
+            isDailyRoomRef.current ||
+            dailyChallengeActiveDateRef.current ||
+            dailyChallengeLoadedBoardDateRef.current ||
+            isDailyReviewSessionRef.current ||
+            boardStateRef.current?.gameMode === "custom"
+          );
+          isDailyBoardContextRef.current = false;
+          isDailyRoomRef.current = false;
+          setIsDailyRoomActive(false);
+          isDailyExhibitionRef.current = false;
+          setIsDailyExhibition(false);
+          dailyChallengeActiveDateRef.current = null;
+          setDailyChallengeActiveDate(null);
+          dailyChallengeDifficultyRef.current = "EASY";
+          setDailyChallengeDifficulty("EASY");
+          setDailyChallengeIsArchive(false);
+          isDailyReviewSessionRef.current = false;
+          setIsDailyReviewSession(false);
+          dailyChallengeLoadedBoardDateRef.current = null;
+          setDailyChallengeLoadedBoardDate(null);
+          setDailyReviewSummaryMeta(null);
+          setDailyResultModalState(null);
+          setIsPostGameDailyCalendarOpen(false);
+          setIsDailyCardModalOpen(false);
+          setIsMidGameNotesFadingIn(false);
+          if (hadDailyOrCustomBoard) {
+            boardStateRef.current = null;
+            setBoardState(null);
+            setHistory([]);
+            setSessionSeconds(0);
+          }
+          setDailyRefreshCounter((c) => c + 1);
+        }
 
         // --- 0ms SYNCHRONOUS LOCAL CACHE HYDRATION (STEP A) FROM CANONICAL VAULT ---
         try {
@@ -6449,6 +6502,64 @@ export default function App() {
       localStorage.setItem(getScopedKey("isAutoNotesEnabled"), String(val));
     } catch { }
     syncSettingsToCloud({ autoNotes: val, isAutoNotesEnabled: val });
+
+    if (!val) {
+      // Non-destructive toggle-off: leave existing candidate notes intact on the board
+      setIsMidGameNotesFadingIn(false);
+      return;
+    }
+
+    const curBoard = boardStateRef.current;
+    const isMultiplayer = Boolean(challengeModeRef.current || activeGameIdRef.current);
+    const isDailyBoard = Boolean(
+      isDailyBoardContextRef.current ||
+      isDailyRoomRef.current ||
+      dailyChallengeActiveDateRef.current ||
+      dailyChallengeLoadedBoardDateRef.current ||
+      isDailyReviewSessionRef.current ||
+      curBoard?.gameMode === "daily"
+    );
+    const curDiff = curBoard?.difficulty;
+    const isHardOrExpert = curDiff === "HARD" || curDiff === "EXPERT";
+
+    // Eligible: active non-game-over single-player Hard/Expert classic or custom Solver board
+    if (curBoard && !curBoard.isGameOver && !isMultiplayer && !isDailyBoard && isHardOrExpert) {
+      const populatedGrid = populateAutoNotesOnGrid(curBoard.grid);
+      let didPopulate = false;
+      for (let r = 0; r < 9 && !didPopulate; r++) {
+        for (let c = 0; c < 9; c++) {
+          const prevCell = curBoard.grid[r]?.[c];
+          const nextCell = populatedGrid[r]?.[c];
+          if (
+            prevCell &&
+            nextCell &&
+            prevCell.value === 0 &&
+            prevCell.notes.size === 0 &&
+            nextCell.notes.size > 0
+          ) {
+            didPopulate = true;
+            break;
+          }
+        }
+      }
+
+      if (didPopulate) {
+        const updatedBoard: BoardState = {
+          ...curBoard,
+          grid: populatedGrid,
+        };
+        pendingAutoNotesSessionRef.current = null;
+        setIsMidGameNotesFadingIn(true);
+        boardStateRef.current = updatedBoard;
+        setBoardState(updatedBoard);
+        saveCurrentGameToLocalRef.current?.(
+          updatedBoard,
+          sessionSecondsRef.current,
+          updatedBoard.difficulty || difficultyRef.current
+        );
+        addLog("✨ Auto-Notes populated empty candidate cells.");
+      }
+    }
   }, [syncSettingsToCloud]);
 
   const handleToggleFastFill = useCallback((val: boolean) => {
@@ -6686,6 +6797,44 @@ export default function App() {
       }
 
       if (finalUser && finalUser.email) {
+        if (dailyCloudAutoSaveTimerRef.current !== null && typeof window !== "undefined") {
+          window.clearTimeout(dailyCloudAutoSaveTimerRef.current);
+          dailyCloudAutoSaveTimerRef.current = null;
+        }
+        const hadGuestDailyOrCustomBoard = Boolean(
+          isDailyBoardContextRef.current ||
+          isDailyRoomRef.current ||
+          dailyChallengeActiveDateRef.current ||
+          dailyChallengeLoadedBoardDateRef.current ||
+          isDailyReviewSessionRef.current ||
+          boardStateRef.current?.gameMode === "custom"
+        );
+        isDailyBoardContextRef.current = false;
+        isDailyRoomRef.current = false;
+        setIsDailyRoomActive(false);
+        isDailyExhibitionRef.current = false;
+        setIsDailyExhibition(false);
+        dailyChallengeActiveDateRef.current = null;
+        setDailyChallengeActiveDate(null);
+        dailyChallengeDifficultyRef.current = "EASY";
+        setDailyChallengeDifficulty("EASY");
+        setDailyChallengeIsArchive(false);
+        isDailyReviewSessionRef.current = false;
+        setIsDailyReviewSession(false);
+        dailyChallengeLoadedBoardDateRef.current = null;
+        setDailyChallengeLoadedBoardDate(null);
+        setDailyReviewSummaryMeta(null);
+        setDailyResultModalState(null);
+        setIsPostGameDailyCalendarOpen(false);
+        setIsDailyCardModalOpen(false);
+        setIsMidGameNotesFadingIn(false);
+        if (hadGuestDailyOrCustomBoard) {
+          boardStateRef.current = null;
+          setBoardState(null);
+          setHistory([]);
+          setSessionSeconds(0);
+        }
+
         // Clean Atomic Cloud Mount: Engage write lock & hydration state BEFORE authUser triggers reactive effects
         isHydrationCompleteRef.current = false;
         setHydrationWriteLock(finalUser.uid, true);
@@ -6698,6 +6847,7 @@ export default function App() {
         try {
           await hydrateUserFromCloudRef.current(finalUser.uid, finalUser, true);
         } catch {}
+        setDailyRefreshCounter((c) => c + 1);
       }
     } catch (err: any) {
       if (loginCancelledRef.current) {
@@ -6860,8 +7010,33 @@ export default function App() {
       setLastCompletedSession(null);
       purgeLegacyKeys();
 
-      // 5. Enforce zero-state for active game; DO NOT generate background puzzle
+      // 5. Enforce zero-state for active game & Daily Challenge; DO NOT generate background puzzle
+      if (dailyCloudAutoSaveTimerRef.current !== null && typeof window !== "undefined") {
+        window.clearTimeout(dailyCloudAutoSaveTimerRef.current);
+        dailyCloudAutoSaveTimerRef.current = null;
+      }
+      isDailyBoardContextRef.current = false;
+      isDailyRoomRef.current = false;
+      setIsDailyRoomActive(false);
+      isDailyExhibitionRef.current = false;
+      setIsDailyExhibition(false);
+      dailyChallengeActiveDateRef.current = null;
+      setDailyChallengeActiveDate(null);
+      dailyChallengeDifficultyRef.current = "EASY";
+      setDailyChallengeDifficulty("EASY");
+      setDailyChallengeIsArchive(false);
+      isDailyReviewSessionRef.current = false;
+      setIsDailyReviewSession(false);
+      dailyChallengeLoadedBoardDateRef.current = null;
+      setDailyChallengeLoadedBoardDate(null);
+      setDailyReviewSummaryMeta(null);
+      setDailyResultModalState(null);
+      setIsPostGameDailyCalendarOpen(false);
+      setIsDailyCardModalOpen(false);
+      setDailyRefreshCounter((c) => c + 1);
+
       pendingAutoNotesSessionRef.current = null;
+      setIsMidGameNotesFadingIn(false);
       setActiveGameId(null);
       setChallengeMode(false);
       setChallengeSeed(null);
@@ -10801,6 +10976,23 @@ export default function App() {
   }, []);
   const [exhaustedKeypadNum, setExhaustedKeypadNum] = useState<number | null>(null);
   const [isVictoryActive, setIsVictoryActive] = useState<boolean>(false);
+  const [isMidGameNotesFadingIn, setIsMidGameNotesFadingIn] = useState<boolean>(false);
+
+  // Smooth post-paint reveal when Auto-Notes populates empty cells mid-game
+  useEffect(() => {
+    if (currentScreen !== "game" || !isMidGameNotesFadingIn) return;
+    let rafId1 = 0;
+    let rafId2 = 0;
+    rafId1 = window.requestAnimationFrame(() => {
+      rafId2 = window.requestAnimationFrame(() => {
+        setIsMidGameNotesFadingIn(false);
+      });
+    });
+    return () => {
+      if (rafId1) window.cancelAnimationFrame(rafId1);
+      if (rafId2) window.cancelAnimationFrame(rafId2);
+    };
+  }, [currentScreen, isMidGameNotesFadingIn]);
 
   // Clear in-game decline guard when match completes
   useEffect(() => {
@@ -14889,13 +15081,16 @@ export default function App() {
     dailyChallengeActiveDateRef.current = null;
     setDailyChallengeActiveDate(null);
     setDailyChallengeIsArchive(false);
+    isDailyReviewSessionRef.current = false;
     setIsDailyReviewSession(false);
     setDailyReviewSummaryMeta(null);
+    dailyChallengeLoadedBoardDateRef.current = null;
     setDailyChallengeLoadedBoardDate(null);
     isDailyRoomRef.current = false;
     setIsDailyRoomActive(false);
     isDailyExhibitionRef.current = false;
     setIsDailyExhibition(false);
+    setIsMidGameNotesFadingIn(false);
     setVisualizingBacktrack(false);
     setGeneratorLogs([]);
     setIsNewRecordAchieved(false);
@@ -15039,6 +15234,7 @@ export default function App() {
     const finishedGrid: SudokuCell[][] = createInitialBoardGrid(puzzle, false);
     const nextSessionKey = getNextGameSessionKey();
     pendingAutoNotesSessionRef.current = shouldAutoPopulateNotes ? nextSessionKey : null;
+    setIsMidGameNotesFadingIn(false);
 
     setBoardState({
       grid: finishedGrid,
@@ -15195,6 +15391,7 @@ export default function App() {
     const resetGrid: SudokuCell[][] = createInitialBoardGrid(basePuzzle, false);
     const nextSessionKey = getNextGameSessionKey();
     pendingAutoNotesSessionRef.current = shouldAutoPopulateNotes ? nextSessionKey : null;
+    setIsMidGameNotesFadingIn(false);
 
     setBoardState(prev => prev ? {
       ...prev,
@@ -15681,6 +15878,7 @@ export default function App() {
     setLockedNum(null);
     setActiveKeypadNum(null);
     pendingAutoNotesSessionRef.current = null;
+    setIsMidGameNotesFadingIn(false);
     setSessionSeconds(restoredElapsed);
     setIsTimerPaused(false);
     setShowGameOverModal(false);
@@ -15692,7 +15890,9 @@ export default function App() {
     setDailyChallengeIsArchive(isArchiveRun);
     dailyChallengeActiveDateRef.current = payload.reviewOnly ? null : payload.date;
     setDailyChallengeActiveDate(payload.reviewOnly ? null : payload.date);
+    isDailyReviewSessionRef.current = Boolean(payload.reviewOnly);
     setIsDailyReviewSession(Boolean(payload.reviewOnly));
+    dailyChallengeLoadedBoardDateRef.current = payload.date;
     setDailyChallengeLoadedBoardDate(payload.date);
     setIsPostGameDailyCalendarOpen(false);
     setDailyResultModalState(null);
@@ -17823,7 +18023,8 @@ export default function App() {
                 {/* DAILY CHALLENGE CARD & SUDOKU SOLVER */}
                 <div className="w-full flex flex-col gap-2.5 shrink-0 select-none" id="home-feature-boxes-container">
                   <DailyChallengeCard
-                    uid={isGuestSession ? null : authUser?.uid}
+                    key={`daily-home-${isGuestSession ? "guest" : (authUser?.uid || "guest")}`}
+                    uid={isGuestSession ? null : (authUser?.uid ?? null)}
                     darkMode={darkMode}
                     onStartDailyChallenge={handleLaunchDailyChallenge}
                     refreshTrigger={dailyRefreshCounter}
@@ -18447,6 +18648,7 @@ export default function App() {
                       gameSessionKey={gameSessionKey}
                       completionPulse={completionPulse}
                       isVictory={isVictoryActive}
+                      hideNotesOverlay={isMidGameNotesFadingIn}
                       onRevealComplete={handleBoardRevealComplete}
                       onCellClick={(r, c) => {
                         if (visualizingBacktrack || (isTimerPaused && !boardState?.isGameOver)) return;
@@ -18614,7 +18816,8 @@ export default function App() {
                   id="desktop-feature-boxes-container"
                 >
                   <DailyChallengeCard
-                    uid={isGuestSession ? null : authUser?.uid}
+                    key={`daily-compact-${isGuestSession ? "guest" : (authUser?.uid || "guest")}`}
+                    uid={isGuestSession ? null : (authUser?.uid ?? null)}
                     darkMode={darkMode}
                     compact
                     onStartDailyChallenge={handleLaunchDailyChallenge}
@@ -20301,6 +20504,7 @@ export default function App() {
         {/* PANE: SUDOKU SOLVER */}
         {currentScreen === "solver" && (
           <SudokuSolverScreen
+            key={`solver-${isGuestSession ? "guest" : (authUser?.uid || "guest")}`}
             navigatorPop={navigatorPop}
             darkMode={darkMode}
             uid={isGuestSession ? null : (authUser?.uid ?? null)}
@@ -21516,8 +21720,9 @@ export default function App() {
       {/* DAILY CHALLENGE RESULT, LEADERBOARD & CALENDAR MODALS */}
       {Boolean(dailyResultModalState?.isOpen) && dailyResultModalState && (
         <DailyResultModal
+          key={`daily-result-${isGuestSession ? "guest" : (authUser?.uid || "guest")}`}
           isOpen={dailyResultModalState.isOpen}
-          uid={isGuestSession ? null : authUser?.uid}
+          uid={isGuestSession ? null : (authUser?.uid ?? null)}
           onClose={() => {
             const shouldCleanupRoom = Boolean(
               isDailyRoomRef.current ||
@@ -21596,8 +21801,9 @@ export default function App() {
 
       {isPostGameDailyCalendarOpen && (
         <DailyCalendarModal
+          key={`daily-calendar-${isGuestSession ? "guest" : (authUser?.uid || "guest")}`}
           isOpen={isPostGameDailyCalendarOpen}
-          uid={isGuestSession ? null : authUser?.uid}
+          uid={isGuestSession ? null : (authUser?.uid ?? null)}
           darkMode={darkMode}
           initialDate={postGameDailyCalendarAnchorDate}
           refreshTrigger={dailyRefreshCounter}

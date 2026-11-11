@@ -90,6 +90,7 @@ export interface SudokuBoardProps {
   completionPulse?: CompletionPulse | null;
   isVictory?: boolean;
   errorCells?: Set<string>;
+  hideNotesOverlay?: boolean;
   onRevealComplete?: (sessionKey: string | number) => void;
   id?: string;
 }
@@ -116,6 +117,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   completionPulse,
   isVictory,
   errorCells,
+  hideNotesOverlay = false,
   onRevealComplete,
   id = "live-sudoku-board"
 }) => {
@@ -615,7 +617,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                 /* High-legibility candidate note digits (thin resting weight, unified pastel highlight badge & post-reveal fade-in) */
                 <div
                   className={`absolute inset-0 z-2 grid grid-cols-3 grid-rows-3 p-[2px] leading-none select-none pointer-events-none transition-opacity duration-300 ease-out ${
-                    !isUnrevealed && !isRevealing && hasNotesSet.size > 0 ? "opacity-100" : "opacity-0"
+                    !isUnrevealed && !isRevealing && !hideNotesOverlay && hasNotesSet.size > 0 ? "opacity-100" : "opacity-0"
                   }`}
                   style={{
                     fontSize: "clamp(8.5px, min(2.45vw, 2.1vh), 13px)",
