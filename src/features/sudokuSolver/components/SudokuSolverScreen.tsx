@@ -1,45 +1,297 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
   Clock,
   Delete,
+  Loader2,
   Lock,
   Pencil,
   Play,
   Search,
   Sparkles,
   Trash2,
+  X,
   Zap,
 } from "lucide-react";
 import {
   SudokuBoard,
   type Difficulty,
   type SudokuBoardState,
+  type SudokuBoardTheme,
 } from "../../../components/game/SudokuBoard";
 import { SudokuKeypad } from "../../../components/game/SudokuKeypad";
 import { useTranslation } from "../../../i18n/useTranslation";
 import { solveCustomBoard, validateCustomGrid } from "../services/solverEngine";
+import {
+  countGridClues,
+  formatCustomHistoryDate,
+  formatCustomHistoryDifficulty,
+  getCustomGameHistory,
+  normalizeCustomGrid,
+  saveCustomGameToHistory,
+  type CustomPuzzleHistoryRecord,
+} from "../services/customHistoryService";
 
 export interface SudokuSolverScreenProps {
   navigatorPop: () => void;
   darkMode?: boolean;
+  uid?: string | null;
   onPlayCustomPuzzle?: (
     grid: number[][],
     difficulty: string,
-    solution?: number[][]
+    solution?: number[][],
+    customHistoryId?: string
   ) => void;
 }
 
+const CUSTOM_DRAFT_STORAGE_KEY = "sudoku_custom_draft";
 const EMPTY_SOLUTION_GRID: number[][] = [];
 
 const createEmptyGrid = (): number[][] =>
   Array.from({ length: 9 }, () => Array<number>(9).fill(0));
 
+const isGridCompletelyEmpty = (grid: number[][]): boolean => {
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if ((grid[r]?.[c] ?? 0) !== 0) return false;
+    }
+  }
+  return true;
+};
+
+const buildGridSignature = (grid: number[][]): string =>
+  grid.map((row) => row.join("")).join("");
+
+const formatElapsedShort = (seconds: number): string => {
+  const clean = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(clean / 60);
+  const secs = clean % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+};
+
+interface CustomHistoryModalProps {
+  isOpen: boolean;
+  darkMode: boolean;
+  uid: string | null;
+  onClose: () => void;
+  onSelectRecord: (record: CustomPuzzleHistoryRecord) => void;
+}
+
+const CustomHistoryModal: React.FC<CustomHistoryModalProps> = ({
+  isOpen,
+  darkMode,
+  uid,
+  onClose,
+  onSelectRecord,
+}) => {
+  const { t } = useTranslation();
+  const [records, setRecords] = useState<CustomPuzzleHistoryRecord[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let isCancelled = false;
+    setIsLoading(true);
+    getCustomGameHistory(uid)
+      .then((items) => {
+        if (!isCancelled) {
+          setRecords(items);
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isOpen, uid]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [isOpen, onClose]);
+
+  if (!isOpen || typeof document === "undefined") return null;
+
+  const modalContent = (
+    <div
+      id="custom-history-modal-backdrop"
+      className="fixed inset-0 z-[10000] overflow-y-auto flex justify-center p-3.5 sm:p-4 pt-[calc(76px+env(safe-area-inset-top,0px))] pb-4 sm:pb-6 bg-black/55 backdrop-blur-sm select-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="custom-history-modal-title"
+      onClick={onClose}
+    >
+      <div
+        id="custom-history-modal-card"
+        className={`w-full max-w-md max-h-[82dvh] flex flex-col overflow-hidden my-auto rounded-3xl border-0 p-4 sm:p-5 transition-colors ${
+          darkMode
+            ? "bg-[#18181b] text-zinc-100 shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+            : "bg-[#FDFBF7] text-[#1C1917] shadow-[0_20px_50px_rgba(55,48,163,0.12)]"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between gap-2 mb-3.5 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className={`w-9 h-9 rounded-2xl border-0 flex items-center justify-center shrink-0 ${
+                darkMode
+                  ? "bg-indigo-950/70 text-[#c7d2fe]"
+                  : "bg-[#EEF2FF] text-[#3730A3]"
+              }`}
+            >
+              <Clock className="w-4 h-4 stroke-[2.3]" />
+            </div>
+            <div className="min-w-0">
+              <h2
+                id="custom-history-modal-title"
+                className="font-sans font-black text-sm sm:text-base leading-tight truncate"
+              >
+                Custom History
+              </h2>
+              <p className="font-sans text-[11px] font-semibold opacity-65 truncate">
+                {uid ? "Synced to Google Account • Last 100" : "Saved on Device • Last 10"}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            id="custom-history-close-btn"
+            onClick={onClose}
+            aria-label={t("closeBtn") || "Close"}
+            className={`w-8 h-8 rounded-2xl border-0 flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-95 ${
+              darkMode
+                ? "bg-[#222225] hover:bg-[#2c2c30] text-zinc-300"
+                : "bg-[#F4EFE6] hover:bg-[#EAE3D5] text-stone-600"
+            }`}
+          >
+            <X className="w-4 h-4 stroke-[2.2]" />
+          </button>
+        </div>
+
+        {/* Scrollable History List */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-2.5 pr-0.5">
+          {isLoading ? (
+            <div className="py-10 flex flex-col items-center justify-center gap-2.5 text-center opacity-75">
+              <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+              <span className="font-sans text-xs font-bold">
+                Loading custom puzzles...
+              </span>
+            </div>
+          ) : records.length === 0 ? (
+            <div
+              id="custom-history-empty-state"
+              className={`rounded-2xl border-0 p-6 flex flex-col items-center justify-center gap-3 text-center ${
+                darkMode
+                  ? "bg-[#222225] text-zinc-300"
+                  : "bg-[#F4EFE6]/85 text-stone-600"
+              }`}
+            >
+              <div
+                className={`w-11 h-11 rounded-2xl border-0 flex items-center justify-center ${
+                  darkMode
+                    ? "bg-indigo-950/60 text-indigo-300"
+                    : "bg-[#EEF2FF] text-[#4338CA]"
+                }`}
+              >
+                <Sparkles className="w-5 h-5 stroke-[2.1]" />
+              </div>
+              <p className="font-sans text-xs sm:text-sm font-bold leading-relaxed max-w-[260px]">
+                No custom puzzles yet. Import one to get started.
+              </p>
+            </div>
+          ) : (
+            records.map((record) => {
+              const clues = countGridClues(record.grid);
+              const diffLabel = formatCustomHistoryDifficulty(record.difficulty);
+              const dateLabel = formatCustomHistoryDate(record.date);
+              return (
+                <button
+                  key={record.id}
+                  type="button"
+                  onClick={() => onSelectRecord(record)}
+                  className={`w-full text-left rounded-2xl border-0 p-3.5 flex flex-col gap-2 cursor-pointer transition-all duration-150 active:scale-[0.99] ${
+                    darkMode
+                      ? "bg-[#222225] hover:bg-[#2a2a30] text-zinc-100 shadow-[0_4px_14px_rgba(0,0,0,0.3)]"
+                      : "bg-white hover:bg-[#EEF2FF]/65 text-stone-800 shadow-[0_4px_14px_rgba(55,48,163,0.05)]"
+                  }`}
+                >
+                  <p className="font-sans font-extrabold text-xs sm:text-sm leading-snug text-stone-800 dark:text-zinc-100 truncate">
+                    {`Newspaper Puzzle • ${diffLabel} • ${dateLabel}`}
+                  </p>
+
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-stone-500 dark:text-zinc-400">
+                      <span
+                        className={`px-2 py-0.5 rounded-full ${
+                          darkMode
+                            ? "bg-zinc-800 text-zinc-300"
+                            : "bg-stone-100 text-stone-600"
+                        }`}
+                      >
+                        {clues} clues
+                      </span>
+                      {typeof record.timeTaken === "number" && record.timeTaken > 0 && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-mono tabular-nums ${
+                            darkMode
+                              ? "bg-zinc-800 text-emerald-300"
+                              : "bg-emerald-50 text-emerald-700"
+                          }`}
+                        >
+                          {formatElapsedShort(record.timeTaken)}
+                        </span>
+                      )}
+                    </div>
+
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
+                        record.isAutoSolved
+                          ? "bg-[#CCFBF1] text-[#115E59] dark:bg-teal-950/75 dark:text-teal-200"
+                          : "bg-[#E0E7FF] text-[#3730A3] dark:bg-indigo-950/75 dark:text-indigo-200"
+                      }`}
+                    >
+                      {record.isAutoSolved ? (
+                        <Zap className="w-3 h-3 stroke-[2.3] shrink-0" />
+                      ) : (
+                        <Play className="w-3 h-3 stroke-[2.3] fill-current shrink-0" />
+                      )}
+                      <span>
+                        {record.isAutoSolved ? "Auto-Solved" : "Played in Arena"}
+                      </span>
+                    </span>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(modalContent, document.body);
+};
+
 export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
   navigatorPop,
   darkMode,
+  uid = null,
   onPlayCustomPuzzle,
 }) => {
   const { t } = useTranslation();
@@ -55,12 +307,47 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
   const [conflictCells, setConflictCells] = useState<Set<string>>(() => new Set());
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [solvedGrid, setSolvedGrid] = useState<number[][] | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [solverBanner, setSolverBanner] = useState<{
     type: "error" | "info" | "success";
     message: string;
   } | null>(null);
 
+  const hasHydratedDraftRef = useRef<boolean>(false);
+  const lastSavedAutoSolveSigRef = useRef<string | null>(null);
   const noopSound = useCallback(() => {}, []);
+
+  // Hydrate persisted newspaper draft on initial mount
+  useEffect(() => {
+    try {
+      const rawDraft = localStorage.getItem(CUSTOM_DRAFT_STORAGE_KEY);
+      if (rawDraft) {
+        const parsed = normalizeCustomGrid(JSON.parse(rawDraft));
+        if (parsed && !isGridCompletelyEmpty(parsed)) {
+          setSolverGrid(parsed);
+          setConflictCells(validateCustomGrid(parsed));
+        }
+      }
+    } catch {
+      // Ignore corrupt draft cache cleanly
+    } finally {
+      hasHydratedDraftRef.current = true;
+    }
+  }, []);
+
+  // Persist non-empty draft on every clue change
+  useEffect(() => {
+    if (!hasHydratedDraftRef.current) return;
+    try {
+      if (!isGridCompletelyEmpty(solverGrid)) {
+        localStorage.setItem(CUSTOM_DRAFT_STORAGE_KEY, JSON.stringify(solverGrid));
+      } else {
+        localStorage.removeItem(CUSTOM_DRAFT_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore storage quota issues cleanly
+    }
+  }, [solverGrid]);
 
   useEffect(() => {
     if (!solverBanner) return;
@@ -80,6 +367,13 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     return total;
   }, [solverGrid]);
 
+  const computedTheme: SudokuBoardTheme = useMemo(() => {
+    if (clueCount >= 41) return "easy";
+    if (clueCount >= 33) return "medium";
+    if (clueCount >= 27) return "hard";
+    return "expert";
+  }, [clueCount]);
+
   const difficultyMeta = useMemo<{
     difficultyText: string;
     colorClass: string;
@@ -89,40 +383,41 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       return {
         difficultyText: "Min 17 clues needed",
         colorClass: "text-amber-500",
-        boardDifficulty: "MEDIUM",
-      };
-    }
-    if (clueCount <= 24) {
-      return {
-        difficultyText: "Expert",
-        colorClass: "text-rose-500",
         boardDifficulty: "EXPERT",
       };
     }
-    if (clueCount <= 29) {
+    if (clueCount >= 41) {
       return {
-        difficultyText: "Hard",
-        colorClass: "text-amber-500",
-        boardDifficulty: "HARD",
+        difficultyText: "Easy",
+        colorClass: "text-emerald-500",
+        boardDifficulty: "EASY",
       };
     }
-    if (clueCount <= 35) {
+    if (clueCount >= 33) {
       return {
         difficultyText: "Medium",
         colorClass: "text-cyan-500",
         boardDifficulty: "MEDIUM",
       };
     }
+    if (clueCount >= 27) {
+      return {
+        difficultyText: "Hard",
+        colorClass: "text-amber-500",
+        boardDifficulty: "HARD",
+      };
+    }
     return {
-      difficultyText: "Easy",
-      colorClass: "text-emerald-500",
-      boardDifficulty: "EASY",
+      difficultyText: "Expert",
+      colorClass: "text-rose-500",
+      boardDifficulty: "EXPERT",
     };
   }, [clueCount]);
 
   const applyCellValue = useCallback(
     (num: number) => {
       if (isLocked || !selectedCell) return;
+      lastSavedAutoSolveSigRef.current = null;
       const { r, c } = selectedCell;
       setSolverGrid((prev) => {
         const nextGrid = prev.map((row) => [...row]);
@@ -136,11 +431,17 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
 
   const handleClearGrid = useCallback(() => {
     if (isLocked) return;
+    lastSavedAutoSolveSigRef.current = null;
     setSolverGrid(createEmptyGrid());
     setConflictCells(new Set());
     setSelectedCell(null);
     setSolvedGrid(null);
     setSolverBanner(null);
+    try {
+      localStorage.removeItem(CUSTOM_DRAFT_STORAGE_KEY);
+    } catch {
+      // Ignore storage error
+    }
   }, [isLocked]);
 
   const handleErase = useCallback(() => {
@@ -153,6 +454,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
 
   const handleLockAndPlay = useCallback(() => {
     if (clueCount < 17 || conflictCells.size > 0) return;
+    setSelectedCell(null);
     setSolvedGrid(null);
     setSolverBanner(null);
     setIsLocked(true);
@@ -165,6 +467,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
   }, []);
 
   const handleAutoSolve = useCallback(() => {
+    setSelectedCell(null);
     const result = solveCustomBoard(solverGrid);
     if (result.status === "unsolvable" || !result.solution) {
       setSolvedGrid(null);
@@ -175,6 +478,19 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       return;
     }
     setSolvedGrid(result.solution);
+    const sig = buildGridSignature(solverGrid);
+    if (lastSavedAutoSolveSigRef.current !== sig) {
+      lastSavedAutoSolveSigRef.current = sig;
+      const now = Date.now();
+      void saveCustomGameToHistory(uid ?? null, {
+        id: `custom_${now}_${Math.random().toString(36).slice(2, 6)}`,
+        date: new Date(now).toISOString(),
+        grid: solverGrid.map((row) => [...row]),
+        difficulty: difficultyMeta.difficultyText,
+        isAutoSolved: true,
+        createdAtMs: now,
+      });
+    }
     if (result.status === "multiple") {
       setSolverBanner({
         type: "info",
@@ -186,7 +502,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
         message: "Solved cleanly with a unique Sudoku solution.",
       });
     }
-  }, [solverGrid]);
+  }, [solverGrid, uid, difficultyMeta.difficultyText]);
 
   const handlePlayPuzzle = useCallback(() => {
     const verifiedSolution = solvedGrid ?? solveCustomBoard(solverGrid).solution;
@@ -198,17 +514,48 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       return;
     }
     setSolverBanner(null);
+    try {
+      localStorage.removeItem(CUSTOM_DRAFT_STORAGE_KEY);
+    } catch {
+      // Ignore storage error
+    }
+    const now = Date.now();
+    const customRecordId = `custom_${now}_${Math.random().toString(36).slice(2, 6)}`;
+    void saveCustomGameToHistory(uid ?? null, {
+      id: customRecordId,
+      date: new Date(now).toISOString(),
+      grid: solverGrid.map((row) => [...row]),
+      difficulty: difficultyMeta.difficultyText,
+      isAutoSolved: false,
+      createdAtMs: now,
+    });
     onPlayCustomPuzzle?.(
       solverGrid.map((row) => [...row]),
       difficultyMeta.boardDifficulty,
-      verifiedSolution.map((row) => [...row])
+      verifiedSolution.map((row) => [...row]),
+      customRecordId
     );
-  }, [solvedGrid, solverGrid, onPlayCustomPuzzle, difficultyMeta.boardDifficulty]);
+  }, [solvedGrid, solverGrid, uid, difficultyMeta.difficultyText, difficultyMeta.boardDifficulty, onPlayCustomPuzzle]);
 
-  // Desktop keyboard support for fast newspaper clue entry (blocked while Locked)
+  const handleSelectHistoryRecord = useCallback((record: CustomPuzzleHistoryRecord) => {
+    const nextGrid = record.grid.map((row) => [...row]);
+    lastSavedAutoSolveSigRef.current = null;
+    setSolverGrid(nextGrid);
+    setConflictCells(validateCustomGrid(nextGrid));
+    setSelectedCell(null);
+    setSolvedGrid(null);
+    setIsLocked(false);
+    setIsHistoryOpen(false);
+    setSolverBanner({
+      type: "info",
+      message: "Loaded saved puzzle. Tap Lock & Play to solve or enter the arena.",
+    });
+  }, []);
+
+  // Desktop keyboard support for fast newspaper clue entry (blocked while Locked or History modal open)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!selectedCell) return;
+      if (!selectedCell || isHistoryOpen) return;
       if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedCell((prev) =>
@@ -242,7 +589,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isLocked, selectedCell, applyCellValue]);
+  }, [isLocked, isHistoryOpen, selectedCell, applyCellValue]);
 
   const boardState = useMemo<SudokuBoardState>(
     () => ({
@@ -334,7 +681,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
           <button
             type="button"
             id="solver-history-btn"
-            onClick={() => alert(t("comingSoonMessage"))}
+            onClick={() => setIsHistoryOpen(true)}
             className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 outline-none text-xs font-bold cursor-pointer active:scale-95 transition-all duration-150 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#3730A3] dark:bg-indigo-950/60 dark:hover:bg-indigo-900/75 dark:text-[#c7d2fe] shadow-[0_2px_8px_rgba(55,48,163,0.06)]"
           >
             <Clock className="w-3.5 h-3.5 stroke-[2.2] shrink-0" />
@@ -376,6 +723,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
               id="solver-sudoku-board"
               boardState={boardState}
               difficulty={difficultyMeta.boardDifficulty}
+              theme={computedTheme}
               solutionGrid={solvedGrid ?? EMPTY_SOLUTION_GRID}
               isTimerPaused={false}
               onResumeSession={noopSound}
@@ -444,6 +792,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                     darkMode={isDarkMode}
                     playClickSound={noopSound}
                     hideUtilityDeck={true}
+                    theme={computedTheme}
                   />
                 </div>
 
@@ -515,6 +864,14 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
           </div>
         </div>
       </main>
+
+      <CustomHistoryModal
+        isOpen={isHistoryOpen}
+        darkMode={isDarkMode}
+        uid={uid ?? null}
+        onClose={() => setIsHistoryOpen(false)}
+        onSelectRecord={handleSelectHistoryRecord}
+      />
     </div>
   );
 };

@@ -25,6 +25,7 @@ import { saveDailyProgressToCloud, recordDailyCompletionToCloud, checkPlayerDail
 import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./features/dailyChallenge/types/daily.types";
 import { SudokuSolverScreen } from "./features/sudokuSolver/components/SudokuSolverScreen";
 import { solveCustomBoard } from "./features/sudokuSolver/services/solverEngine";
+import { updateCustomHistoryTime } from "./features/sudokuSolver/services/customHistoryService";
 import { incrementGuestGameCount } from "./utils/guestTracking";
 import { SudokuBoard, CompletionPulse } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
@@ -252,6 +253,7 @@ interface BoardState {
   difficulty?: Difficulty;
   seed: number;
   gameMode?: "classic" | "custom" | "daily";
+  customHistoryId?: string;
 }
 
 type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
@@ -1806,6 +1808,7 @@ export default function App() {
     grid: number[][];
     difficulty: string;
     solution?: number[][];
+    customHistoryId?: string;
   } | null>(null);
   const currentScreenRef = useRef(currentScreen);
   useEffect(() => {
@@ -3357,6 +3360,7 @@ export default function App() {
         difficulty: diff,
         seed: state.seed,
         ...(state.gameMode ? { gameMode: state.gameMode } : {}),
+        ...(state.customHistoryId ? { customHistoryId: state.customHistoryId } : {}),
         timestamp: Date.now(),
         // Full multiplayer room metadata
         isMultiplayer: isMulti,
@@ -3413,7 +3417,8 @@ export default function App() {
         isGameOver: Boolean(sessionData.isGameOver),
         difficulty: sessionData.difficulty as Difficulty,
         seed: sessionData.seed || (Math.floor(Math.random() * 900000) + 100000),
-        ...(sessionData.gameMode ? { gameMode: sessionData.gameMode } : {})
+        ...(sessionData.gameMode ? { gameMode: sessionData.gameMode } : {}),
+        ...(sessionData.customHistoryId ? { customHistoryId: sessionData.customHistoryId } : {})
       };
 
       // Safeguard: If the saved session concluded via mistake limit, ensure mistakes remain strictly intact at the limit (no extra life/reversion)
@@ -12629,6 +12634,12 @@ export default function App() {
 
     // Continuous stats persistence: Direct Firestore write for authenticated user
     const effectiveCloudUid = authUser?.uid || (targetUid && targetUid !== "guest" && !targetUid.startsWith("GUEST_") ? targetUid : null);
+
+    // Sync solve time onto Solver Custom History record when winning a custom Arena puzzle
+    if (isCustomGame && isWon && activeBoard?.customHistoryId && sessionSeconds > 0) {
+      const historyUid = effectiveCloudUid && !isGuest ? effectiveCloudUid : null;
+      void updateCustomHistoryTime(historyUid, activeBoard.customHistoryId, sessionSeconds);
+    }
     if (effectiveCloudUid && !isGuest) {
       try {
         await setDoc(doc(db, "users", effectiveCloudUid), {
@@ -14703,7 +14714,8 @@ export default function App() {
     hintLimitOverride?: number,
     preloadedBoardData?: { puzzle?: number[][]; solution?: number[][] },
     isChallengeModeOverride?: boolean,
-    gameModeOverride?: "classic" | "custom"
+    gameModeOverride?: "classic" | "custom",
+    customHistoryIdOverride?: string
   ) => {
     isDailyBoardContextRef.current = false;
     dailyChallengeActiveDateRef.current = null;
@@ -14879,7 +14891,8 @@ export default function App() {
       isGameOver: false,
       difficulty: level,
       seed: seed,
-      ...(gameModeOverride ? { gameMode: gameModeOverride } : {})
+      ...(gameModeOverride ? { gameMode: gameModeOverride } : {}),
+      ...(customHistoryIdOverride ? { customHistoryId: customHistoryIdOverride } : {})
     });
 
     setHistory([]);
@@ -15756,10 +15769,18 @@ export default function App() {
     setCustomPuzzlePayload(null);
 
     const cleanPuzzle = payload.grid.map((row) => row.map((v) => Number(v) || 0));
-    const resolvedSolution =
-      Array.isArray(payload.solution) && payload.solution.length === 9
-        ? payload.solution.map((row) => [...row])
-        : solveCustomBoard(cleanPuzzle).solution;
+    const hasValidPayloadSolution =
+      Array.isArray(payload.solution) &&
+      payload.solution.length === 9 &&
+      payload.solution.every(
+        (row) =>
+          Array.isArray(row) &&
+          row.length === 9 &&
+          row.every((v) => Number.isInteger(v) && v >= 1 && v <= 9)
+      );
+    const resolvedSolution = hasValidPayloadSolution
+      ? payload.solution!.map((row) => [...row])
+      : solveCustomBoard(cleanPuzzle).solution;
 
     if (!resolvedSolution) {
       showToast("This custom puzzle has no valid solution.");
@@ -15767,19 +15788,19 @@ export default function App() {
     }
 
     const mappedDiff = normalizeDifficulty(payload.difficulty);
-    const customSeed = Math.floor(100000 + Math.random() * 900000);
 
     hasTriggeredGameOverRef.current = false;
     setDifficulty(mappedDiff);
     generateAndSetNewPuzzle(
       mappedDiff,
-      customSeed,
+      undefined,
       undefined,
       undefined,
       undefined,
       { puzzle: cleanPuzzle, solution: resolvedSolution },
       false,
-      "custom"
+      "custom",
+      payload.customHistoryId
     );
     setIsTimerPaused(false);
     addLog(`Loaded custom Sudoku Solver puzzle (${mappedDiff}). Mode: custom — timer started.`);
@@ -20105,8 +20126,9 @@ export default function App() {
           <SudokuSolverScreen
             navigatorPop={navigatorPop}
             darkMode={darkMode}
-            onPlayCustomPuzzle={(grid, diff, solution) => {
-              setCustomPuzzlePayload({ grid, difficulty: diff, solution });
+            uid={isGuestSession ? null : (authUser?.uid ?? null)}
+            onPlayCustomPuzzle={(grid, diff, solution, customHistoryId) => {
+              setCustomPuzzlePayload({ grid, difficulty: diff, solution, customHistoryId });
               navigateToScreen("game");
             }}
           />

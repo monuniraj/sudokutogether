@@ -2,6 +2,26 @@ import React from "react";
 import { RotateCcw, Trash2, Pencil, Lightbulb, Check, Zap } from "lucide-react";
 import { triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
+import type { SudokuBoardTheme } from "./SudokuBoard";
+
+const SOLVER_KEYPAD_THEME_STYLES: Record<SudokuBoardTheme, { light: string; dark: string }> = {
+  easy: {
+    light: "bg-[#6EE7B7] text-[#065F46] active:bg-[#6EE7B7] border border-emerald-400 shadow-[0_8px_16px_rgba(6,95,70,0.12),_0_2px_4px_rgba(0,0,0,0.02)]",
+    dark: "bg-[#065F46] text-white font-black active:bg-[#065F46] border border-emerald-500/70 shadow-[0_8px_16px_rgba(0,0,0,0.4)]",
+  },
+  medium: {
+    light: "bg-[#67E8F9] text-[#155E75] active:bg-[#67E8F9] border border-cyan-400 shadow-[0_8px_16px_rgba(21,94,117,0.12),_0_2px_4px_rgba(0,0,0,0.02)]",
+    dark: "bg-[#155E75] text-[#cffafe] font-black active:bg-[#155E75] border border-cyan-500/70 shadow-[0_8px_16px_rgba(0,0,0,0.4)]",
+  },
+  hard: {
+    light: "bg-[#FCD34D] text-[#78350F] font-black active:bg-[#FCD34D] border border-amber-500 shadow-[0_8px_16px_rgba(133,77,14,0.16),_0_2px_4px_rgba(0,0,0,0.02)]",
+    dark: "bg-[#78350F] text-[#fef08a] active:bg-[#78350F] border border-amber-700 shadow-[0_8px_16px_rgba(0,0,0,0.4)]",
+  },
+  expert: {
+    light: "bg-[#FDA4AF] text-[#881337] active:bg-[#FDA4AF] border border-rose-400 shadow-[0_8px_16px_rgba(136,19,55,0.12),_0_2px_4px_rgba(0,0,0,0.02)]",
+    dark: "bg-[#881337] text-[#fecdd3] active:bg-[#881337] border border-rose-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]",
+  },
+};
 
 export interface SudokuKeypadProps {
   boardState: {
@@ -34,6 +54,7 @@ export interface SudokuKeypadProps {
   vibrations?: boolean;
   exhaustedNum?: number | null;
   hideUtilityDeck?: boolean;
+  theme?: SudokuBoardTheme;
 }
 
 export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
@@ -59,23 +80,26 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
   playEraseSound,
   vibrations = true,
   exhaustedNum,
-  hideUtilityDeck = false
+  hideUtilityDeck = false,
+  theme
 }) => {
   const { t } = useTranslation();
   const isGameOver = boardState?.isGameOver ?? false;
 
   const currentDiff = (((difficulty || boardState?.difficulty) ?? "MEDIUM").toUpperCase());
-  const activeKeypadTheme = darkMode ? (
-    currentDiff === "EASY" ? "bg-[#0e8365] text-white font-black active:bg-[#0e8365] border border-emerald-500/70 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
-    currentDiff === "MEDIUM" ? "bg-[#713f12] text-[#fef08a] active:bg-[#713f12] border border-yellow-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
-    currentDiff === "HARD" ? "bg-[#581db8] text-white font-black active:bg-[#581db8] border border-purple-500/70 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
-    "bg-[#881337] text-[#fecdd3] active:bg-[#881337] border border-rose-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]"
-  ) : (
-    currentDiff === "EASY" ? "bg-[#86EFAC] text-[#065F46] active:bg-[#86EFAC] border border-emerald-400 shadow-[0_8px_16px_rgba(6,95,70,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
-    currentDiff === "MEDIUM" ? "bg-[#FCD34D] text-[#78350F] font-black active:bg-[#FCD34D] border border-amber-500 shadow-[0_8px_16px_rgba(133,77,14,0.16),_0_2px_4px_rgba(0,0,0,0.02)]" :
-    currentDiff === "HARD" ? "bg-[#D8B4FE] text-[#6B21A8] active:bg-[#D8B4FE] border border-purple-400 shadow-[0_8px_16px_rgba(107,33,168,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
-    "bg-[#F9A8D4] text-[#9D174D] active:bg-[#F9A8D4] border border-rose-400 shadow-[0_8px_16px_rgba(157,23,77,0.12),_0_2px_4px_rgba(0,0,0,0.02)]"
-  );
+  const activeKeypadTheme = theme
+    ? (darkMode ? SOLVER_KEYPAD_THEME_STYLES[theme].dark : SOLVER_KEYPAD_THEME_STYLES[theme].light)
+    : (darkMode ? (
+      currentDiff === "EASY" ? "bg-[#0e8365] text-white font-black active:bg-[#0e8365] border border-emerald-500/70 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
+      currentDiff === "MEDIUM" ? "bg-[#713f12] text-[#fef08a] active:bg-[#713f12] border border-yellow-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
+      currentDiff === "HARD" ? "bg-[#581db8] text-white font-black active:bg-[#581db8] border border-purple-500/70 shadow-[0_8px_16px_rgba(0,0,0,0.4)]" :
+      "bg-[#881337] text-[#fecdd3] active:bg-[#881337] border border-rose-800 shadow-[0_8px_16px_rgba(0,0,0,0.4)]"
+    ) : (
+      currentDiff === "EASY" ? "bg-[#86EFAC] text-[#065F46] active:bg-[#86EFAC] border border-emerald-400 shadow-[0_8px_16px_rgba(6,95,70,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
+      currentDiff === "MEDIUM" ? "bg-[#FCD34D] text-[#78350F] font-black active:bg-[#FCD34D] border border-amber-500 shadow-[0_8px_16px_rgba(133,77,14,0.16),_0_2px_4px_rgba(0,0,0,0.02)]" :
+      currentDiff === "HARD" ? "bg-[#D8B4FE] text-[#6B21A8] active:bg-[#D8B4FE] border border-purple-400 shadow-[0_8px_16px_rgba(107,33,168,0.12),_0_2px_4px_rgba(0,0,0,0.02)]" :
+      "bg-[#F9A8D4] text-[#9D174D] active:bg-[#F9A8D4] border border-rose-400 shadow-[0_8px_16px_rgba(157,23,77,0.12),_0_2px_4px_rgba(0,0,0,0.02)]"
+    ));
 
   // Remaining count per digit 1..9
   const remainingCounts: Record<number, number> = {};
@@ -353,11 +377,21 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                       >
                         <span className={`text-[0.40em] font-mono font-black leading-none select-none flex items-center justify-center -translate-y-[2%] ${
                           isSelected 
-                            ? (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
-                                ? "text-white/95"
-                                : !darkMode && currentDiff === "MEDIUM"
-                                  ? "text-[#78350F]"
-                                  : "text-stone-900 dark:text-white")
+                            ? (theme
+                                ? (darkMode
+                                    ? "text-white/95"
+                                    : theme === "easy"
+                                      ? "text-[#065F46]"
+                                      : theme === "medium"
+                                        ? "text-[#155E75]"
+                                        : theme === "hard"
+                                          ? "text-[#78350F]"
+                                          : "text-[#881337]")
+                                : (darkMode && (currentDiff === "EASY" || currentDiff === "HARD")
+                                    ? "text-white/95"
+                                    : !darkMode && currentDiff === "MEDIUM"
+                                      ? "text-[#78350F]"
+                                      : "text-stone-900 dark:text-white"))
                             : "text-stone-400 dark:text-zinc-500"
                         } ${remainingCount <= 0 ? "opacity-35" : "opacity-90"}`}>
                           {remainingCount > 0 ? remainingCount : <Check className="w-[0.45em] h-[0.45em] stroke-[3]" />}
