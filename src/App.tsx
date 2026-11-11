@@ -304,6 +304,47 @@ function createInitialBoardGrid(puzzle: number[][], autoPopulateNotes: boolean):
   );
 }
 
+/**
+ * Populates valid candidate notes on empty cells of a live Sudoku grid
+ * in O(81) using row/column/3x3-box bitmasks without overwriting filled cells
+ * or cells that already contain user-entered notes.
+ */
+function populateAutoNotesOnGrid(grid: SudokuCell[][]): SudokuCell[][] {
+  const rowMask = new Int32Array(9);
+  const colMask = new Int32Array(9);
+  const boxMask = new Int32Array(9);
+
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const val = grid[r]?.[c]?.value || 0;
+      if (val >= 1 && val <= 9) {
+        const bit = 1 << val;
+        rowMask[r] |= bit;
+        colMask[c] |= bit;
+        boxMask[Math.floor(r / 3) * 3 + Math.floor(c / 3)] |= bit;
+      }
+    }
+  }
+
+  return grid.map((row, r) =>
+    row.map((cell, c) => {
+      if (cell.value !== 0) return cell;
+      if (cell.notes && cell.notes.size > 0) return cell;
+      const used = rowMask[r] | colMask[c] | boxMask[Math.floor(r / 3) * 3 + Math.floor(c / 3)];
+      const notes = new Set<number>();
+      for (let d = 1; d <= 9; d++) {
+        if ((used & (1 << d)) === 0) {
+          notes.add(d);
+        }
+      }
+      return {
+        ...cell,
+        notes,
+      };
+    })
+  );
+}
+
 type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 
 export const DEFAULT_SETTINGS = {
@@ -6820,6 +6861,7 @@ export default function App() {
       purgeLegacyKeys();
 
       // 5. Enforce zero-state for active game; DO NOT generate background puzzle
+      pendingAutoNotesSessionRef.current = null;
       setActiveGameId(null);
       setChallengeMode(false);
       setChallengeSeed(null);
@@ -8498,6 +8540,8 @@ export default function App() {
       setRoomPin(pin);
       setHistory([]);
       setLockedNum(null);
+      setActiveKeypadNum(null);
+      pendingAutoNotesSessionRef.current = null;
       if (!isDailyRoom) {
         updateHintInventory(hintsLimit);
       }
@@ -10747,7 +10791,14 @@ export default function App() {
 
   // Audio-visual juice states
   const [completionPulse, setCompletionPulse] = useState<CompletionPulse | null>(null);
-  const [gameSessionKey, setGameSessionKey] = useState<number>(() => Date.now());
+  const lastSessionKeyRef = useRef<number>(Date.now());
+  const [gameSessionKey, setGameSessionKey] = useState<number>(() => lastSessionKeyRef.current);
+  const pendingAutoNotesSessionRef = useRef<number | null>(null);
+  const getNextGameSessionKey = useCallback(() => {
+    const next = Math.max(Date.now(), lastSessionKeyRef.current + 1);
+    lastSessionKeyRef.current = next;
+    return next;
+  }, []);
   const [exhaustedKeypadNum, setExhaustedKeypadNum] = useState<number | null>(null);
   const [isVictoryActive, setIsVictoryActive] = useState<boolean>(false);
 
@@ -10785,6 +10836,25 @@ export default function App() {
   const hasTriggeredGameOverRef = useRef(false);
   const gameOverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isDailyBoardContextRef = useRef(false);
+
+  const handleBoardRevealComplete = useCallback((completedSessionKey: string | number) => {
+    if (pendingAutoNotesSessionRef.current === null || pendingAutoNotesSessionRef.current !== completedSessionKey) {
+      return;
+    }
+    pendingAutoNotesSessionRef.current = null;
+    if (!isAutoNotesEnabledRef.current) return;
+    if (challengeModeRef.current || isDailyBoardContextRef.current || isDailyRoomRef.current) return;
+
+    setBoardState(prev => {
+      if (!prev || prev.isGameOver) return prev;
+      if (prev.gameMode === "daily") return prev;
+      if (prev.difficulty !== "HARD" && prev.difficulty !== "EXPERT") return prev;
+      return {
+        ...prev,
+        grid: populateAutoNotesOnGrid(prev.grid),
+      };
+    });
+  }, []);
 
   useEffect(() => {
     if (boardState?.isGameOver) {
@@ -10917,6 +10987,7 @@ export default function App() {
         setDailyChallengeLoadedBoardDate(null);
       }
 
+      pendingAutoNotesSessionRef.current = null;
       setBoardState(loaded.state);
       setSessionSeconds(loaded.seconds);
       setDifficulty(loaded.difficulty);
@@ -12128,10 +12199,11 @@ export default function App() {
       setHistory([]);
       setLockedNum(null);
       setActiveKeypadNum(null);
+      pendingAutoNotesSessionRef.current = null;
       setSessionSeconds(0);
       setShowGameOverModal(false);
       setIsVictoryActive(false);
-      setGameSessionKey(Date.now());
+      setGameSessionKey(getNextGameSessionKey());
       setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
 
       setDoc(doc(db, "rooms", activeRoomCode), {
@@ -14959,12 +15031,14 @@ export default function App() {
       }, { merge: true }).catch(() => { });
     }
 
-    // Convert flat array representation to state model data structures (Auto-Notes strictly limited to solo Hard/Expert)
+    // Convert flat array representation to clean initial cells; Auto-Notes (solo Hard/Expert) is deferred until entrance reveal finishes
     const shouldAutoPopulateNotes =
       isAutoNotesEnabledRef.current &&
       (level === "HARD" || level === "EXPERT") &&
       !isChallengeSession;
-    const finishedGrid: SudokuCell[][] = createInitialBoardGrid(puzzle, shouldAutoPopulateNotes);
+    const finishedGrid: SudokuCell[][] = createInitialBoardGrid(puzzle, false);
+    const nextSessionKey = getNextGameSessionKey();
+    pendingAutoNotesSessionRef.current = shouldAutoPopulateNotes ? nextSessionKey : null;
 
     setBoardState({
       grid: finishedGrid,
@@ -14990,7 +15064,7 @@ export default function App() {
     setSessionSeconds(0);
     setShowGameOverModal(false);
     setIsVictoryActive(false);
-    setGameSessionKey(Date.now());
+    setGameSessionKey(nextSessionKey);
     setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
 
     // Also update current active challenge states if this started a challenge
@@ -15102,7 +15176,7 @@ export default function App() {
     if (!boardState) return;
     playClickSound();
 
-    // Reset current player's board inputs and notes while preserving original puzzle clues
+    // Reset current player's board inputs and notes while preserving original puzzle clues; defer Hard/Expert Auto-Notes until reveal completes
     const basePuzzle: number[][] = boardState.grid.map(row =>
       row.map(cell => (cell.isOriginalClue ? cell.value : 0))
     );
@@ -15118,7 +15192,9 @@ export default function App() {
       (replayDifficulty === "HARD" || replayDifficulty === "EXPERT") &&
       !challengeMode &&
       !isDailyBoard;
-    const resetGrid: SudokuCell[][] = createInitialBoardGrid(basePuzzle, shouldAutoPopulateNotes);
+    const resetGrid: SudokuCell[][] = createInitialBoardGrid(basePuzzle, false);
+    const nextSessionKey = getNextGameSessionKey();
+    pendingAutoNotesSessionRef.current = shouldAutoPopulateNotes ? nextSessionKey : null;
 
     setBoardState(prev => prev ? {
       ...prev,
@@ -15140,6 +15216,9 @@ export default function App() {
     setIsTimerPaused(false);
     setShowGameOverModal(false);
     setShowMidGameInviteModal(false);
+    setIsVictoryActive(false);
+    setGameSessionKey(nextSessionKey);
+    setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
 
     // Update room progress in Firestore if active in online challenge mode
     if (challengeMode && isOnline) {
@@ -15601,11 +15680,12 @@ export default function App() {
     setHistory([]);
     setLockedNum(null);
     setActiveKeypadNum(null);
+    pendingAutoNotesSessionRef.current = null;
     setSessionSeconds(restoredElapsed);
     setIsTimerPaused(false);
     setShowGameOverModal(false);
     setIsVictoryActive(false);
-    setGameSessionKey(Date.now());
+    setGameSessionKey(getNextGameSessionKey());
 
     dailyChallengeDifficultyRef.current = payload.difficulty;
     setDailyChallengeDifficulty(payload.difficulty);
@@ -15814,8 +15894,6 @@ export default function App() {
     isDailyExhibitionRef.current = false;
     setIsDailyExhibition(false);
     setIsVictoryActive(false);
-    setGameSessionKey(Date.now());
-    setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
     generateAndSetNewPuzzle(difficulty);
     setIsTimerPaused(false);
     navigateToScreen("game");
@@ -15843,7 +15921,8 @@ export default function App() {
         if (loaded) {
           setDifficulty(loaded.difficulty);
           setIsTimerPaused(false);
-          setGameSessionKey(Date.now());
+          pendingAutoNotesSessionRef.current = null;
+          setGameSessionKey(getNextGameSessionKey());
           setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
           navigateToScreen("game");
           setCurrentScreen("game");
@@ -16027,6 +16106,7 @@ export default function App() {
     } catch { }
 
     // 8. Zero-state: Reset game state and DO NOT call generateAndSetNewPuzzle on factory reset
+    pendingAutoNotesSessionRef.current = null;
     setBoardState(null);
     setSavedSessionInfo(null);
     setLastCompletedSession(null);
@@ -17946,13 +18026,15 @@ export default function App() {
                               if (loaded) {
                                 setDifficulty(loaded.difficulty);
                                 setIsTimerPaused(false);
-                                setGameSessionKey(Date.now());
+                                pendingAutoNotesSessionRef.current = null;
+                                setGameSessionKey(getNextGameSessionKey());
                                 setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
                                 navigateToScreen("game");
                               }
                             } else {
                               setIsTimerPaused(false);
-                              setGameSessionKey(Date.now());
+                              pendingAutoNotesSessionRef.current = null;
+                              setGameSessionKey(getNextGameSessionKey());
                               setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
                               navigateToScreen("game");
                             }
@@ -18365,6 +18447,7 @@ export default function App() {
                       gameSessionKey={gameSessionKey}
                       completionPulse={completionPulse}
                       isVictory={isVictoryActive}
+                      onRevealComplete={handleBoardRevealComplete}
                       onCellClick={(r, c) => {
                         if (visualizingBacktrack || (isTimerPaused && !boardState?.isGameOver)) return;
                         if (!boardState?.isGameOver) {
@@ -19040,8 +19123,9 @@ export default function App() {
                     setHistory([]);
                     setLockedNum(null);
                     setActiveKeypadNum(null);
+                    pendingAutoNotesSessionRef.current = null;
                     setIsVictoryActive(false);
-                    setGameSessionKey(Date.now());
+                    setGameSessionKey(getNextGameSessionKey());
                     setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
 
                     registerChallengeJoin(roomCode, true);
@@ -21396,8 +21480,9 @@ export default function App() {
               setHistory([]);
               setLockedNum(null);
               setActiveKeypadNum(null);
+              pendingAutoNotesSessionRef.current = null;
               setIsVictoryActive(false);
-              setGameSessionKey(Date.now());
+              setGameSessionKey(getNextGameSessionKey());
               setTimeout(() => playKalimbaRevealSound(getAudioCtx(), soundEffects), 150);
 
               registerChallengeJoin(roomCode, true);

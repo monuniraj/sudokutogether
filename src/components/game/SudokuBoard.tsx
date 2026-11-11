@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { RefreshCw, Play } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
 
@@ -34,6 +34,13 @@ export const DIFFICULTY_GRID_THEMES: Record<Difficulty, {
     paintCrosshair: { light: "rgba(244, 63, 94, 0.12)", dark: "#210811" },
     identical: { light: "#F9A8D4", dark: "#881337" },
   },
+};
+
+export const NOTE_BADGE_TEXT: Record<Difficulty, { light: string; dark: string }> = {
+  EASY: { light: "#065F46", dark: "#ECFDF5" },
+  MEDIUM: { light: "#78350F", dark: "#FEF08A" },
+  HARD: { light: "#6B21A8", dark: "#F3E8FF" },
+  EXPERT: { light: "#9D174D", dark: "#FFE4E6" },
 };
 
 export interface SudokuCellData {
@@ -83,6 +90,7 @@ export interface SudokuBoardProps {
   completionPulse?: CompletionPulse | null;
   isVictory?: boolean;
   errorCells?: Set<string>;
+  onRevealComplete?: (sessionKey: string | number) => void;
   id?: string;
 }
 
@@ -108,10 +116,13 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   completionPulse,
   isVictory,
   errorCells,
+  onRevealComplete,
   id = "live-sudoku-board"
 }) => {
   const { t } = useTranslation();
   const [isRevealing, setIsRevealing] = useState<boolean>(false);
+  const onRevealCompleteRef = useRef(onRevealComplete);
+  onRevealCompleteRef.current = onRevealComplete;
 
   const isUnrevealed = Boolean(gameSessionKey && !revealedSessionKeys.has(gameSessionKey));
 
@@ -132,6 +143,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
     const finishTimer = setTimeout(() => {
       revealedSessionKeys.add(gameSessionKey);
       setIsRevealing(false);
+      onRevealCompleteRef.current?.(gameSessionKey);
     }, 150 + 850);
 
     return () => {
@@ -161,6 +173,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
 
   const currentDiff = ((boardState.difficulty || difficulty).toUpperCase()) as Difficulty;
   const diffTheme = DIFFICULTY_GRID_THEMES[currentDiff] || DIFFICULTY_GRID_THEMES.EASY;
+  const noteBadgeColors = NOTE_BADGE_TEXT[currentDiff] || NOTE_BADGE_TEXT.EASY;
 
   const heavyBorderR = darkMode 
     ? (currentDiff === "EASY" ? "border-r-[#0b6b52]" : currentDiff === "MEDIUM" ? "border-r-[#7c3207]" : currentDiff === "HARD" ? "border-r-[#4c1d95]" : "border-r-[#881337]")
@@ -355,6 +368,10 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
             activeSelectedNumber !== 0 && 
             cell.value === activeSelectedNumber && 
             !isSelected;
+
+          const shouldHighlightNotes = highlightIdentical &&
+            !isClearingHighlights &&
+            activeSelectedNumber !== 0;
 
           let cellBgClass = "";
           let cellBgStyle: React.CSSProperties = {};
@@ -595,24 +612,44 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
                   </span>
                 </div>
               ) : (
-                /* High-legibility candidate note digits */
-                <div 
-                  className="absolute inset-0 z-2 grid grid-cols-3 grid-rows-3 p-0.5 leading-none select-none pointer-events-none"
+                /* High-legibility candidate note digits (thin resting weight, unified pastel highlight badge & post-reveal fade-in) */
+                <div
+                  className={`absolute inset-0 z-2 grid grid-cols-3 grid-rows-3 p-[2px] leading-none select-none pointer-events-none transition-opacity duration-300 ease-out ${
+                    !isUnrevealed && !isRevealing && hasNotesSet.size > 0 ? "opacity-100" : "opacity-0"
+                  }`}
                   style={{
-                    fontSize: "clamp(10px, min(2.8vw, 2.4vh), 16px)",
+                    fontSize: "clamp(8.5px, min(2.45vw, 2.1vh), 13px)",
                     lineHeight: 1
                   }}
                 >
-                  {Array.from({ length: 9 }).map((_, id) => {
+                  {hasNotesSet.size > 0 && Array.from({ length: 9 }).map((_, id) => {
                     const cand = id + 1;
                     const hasNote = hasNotesSet.has(cand);
+                    const isCandHighlighted = hasNote && shouldHighlightNotes && cand === activeSelectedNumber;
                     return (
-                      <div key={id} className={`w-full h-full flex items-center justify-center text-center ${
-                        hasNote 
-                          ? (darkMode ? "text-sky-300 font-black font-sans" : "text-blue-800 font-black font-sans") 
-                          : "opacity-0"
-                      }`}>
-                        {cand}
+                      <div key={id} className="w-full h-full flex items-center justify-center text-center">
+                        {hasNote && (
+                          <span
+                            className={`w-[88%] h-[88%] max-w-[18px] max-h-[18px] rounded-[4px] flex items-center justify-center font-sans leading-none transition-colors duration-150 ${
+                              isCandHighlighted
+                                ? "font-semibold"
+                                : isSelected
+                                  ? (darkMode ? "text-white/90 font-normal" : "text-stone-800 font-normal")
+                                  : (darkMode ? "text-sky-200/80 font-normal" : "text-slate-600/90 font-normal")
+                            }`}
+                            style={{
+                              ...(isCandHighlighted
+                                ? {
+                                    backgroundColor: darkMode ? diffTheme.identical.dark : diffTheme.identical.light,
+                                    color: darkMode ? noteBadgeColors.dark : noteBadgeColors.light,
+                                  }
+                                : {}),
+                              lineHeight: 1,
+                            }}
+                          >
+                            {cand}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
