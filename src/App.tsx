@@ -23,6 +23,7 @@ import { formatDateKey, generateDailyPuzzle, parseDateKey } from "./features/dai
 import { saveDailyProgress, recordDailyCompletion, getDailyStats, getDailyProgress } from "./features/dailyChallenge/services/dailyStorage";
 import { saveDailyProgressToCloud, recordDailyCompletionToCloud, checkPlayerDailyEligibility, fetchDailyProgressFromCloud, resolveProgressConflict } from "./features/dailyChallenge/services/dailyCloudService";
 import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./features/dailyChallenge/types/daily.types";
+import { SudokuSolverScreen } from "./features/sudokuSolver/components/SudokuSolverScreen";
 import { incrementGuestGameCount } from "./utils/guestTracking";
 import { SudokuBoard, CompletionPulse } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
@@ -1795,7 +1796,7 @@ export default function App() {
   }, []);
 
   const [activeTab, setActiveTab] = useState<"sudoku" | "sandbox" | "kotlin-code" | "spec-docs">("sudoku");
-  const [currentScreen, setCurrentScreen] = useState<"home" | "status" | "settings" | "game" | "login" | "together">("home");
+  const [currentScreen, setCurrentScreen] = useState<"home" | "status" | "settings" | "game" | "login" | "together" | "solver">("home");
   const currentScreenRef = useRef(currentScreen);
   useEffect(() => {
     currentScreenRef.current = currentScreen;
@@ -1913,7 +1914,7 @@ export default function App() {
   const [navigationHistory, setNavigationHistory] = useState<string[]>(["home"]);
   const isProgrammaticBackRef = useRef<boolean>(false);
 
-  const navigateToScreen = (screen: "home" | "status" | "settings" | "game" | "login" | "together") => {
+  const navigateToScreen = (screen: "home" | "status" | "settings" | "game" | "login" | "together" | "solver") => {
     setCurrentScreen(screen);
     setNavigationHistory(prev => {
       if (prev[prev.length - 1] === screen) return prev;
@@ -1930,7 +1931,7 @@ export default function App() {
         return ["home"];
       }
       const nextStack = prev.slice(0, -1);
-      const lastScreen = nextStack[nextStack.length - 1] as "home" | "status" | "settings" | "game" | "login" | "together";
+      const lastScreen = nextStack[nextStack.length - 1] as "home" | "status" | "settings" | "game" | "login" | "together" | "solver";
 
       if (lastScreen === "game" && (boardState?.isGameOver || !boardState)) {
         setCurrentScreen("home");
@@ -7732,7 +7733,7 @@ export default function App() {
       }
 
       if (state && typeof state === "object" && state.view) {
-        const v = state.view as "home" | "status" | "settings" | "game" | "login" | "together";
+        const v = state.view as "home" | "status" | "settings" | "game" | "login" | "together" | "solver";
         setCurrentScreen(v);
         setNavigationHistory(prev => {
           if (prev[prev.length - 2] === v) {
@@ -17358,6 +17359,10 @@ export default function App() {
                   setCurrentScreen("home");
                   setNavigationHistory(["home"]);
                   window.history.pushState({ view: "home" }, "", window.location.href);
+                } else if (currentScreen === "solver") {
+                  setCurrentScreen("home");
+                  setNavigationHistory(["home"]);
+                  window.history.pushState({ view: "home" }, "", window.location.href);
                 } else if (currentScreen !== "home") {
                   navigatorPop();
                 } else {
@@ -17420,7 +17425,7 @@ export default function App() {
               const activeBadgeDiff = currentScreen === "home" ? difficulty : (boardState?.difficulty || difficulty);
               return (
                 <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? (activeBadgeDiff === "EASY" ? "text-[#d1fae5]" : activeBadgeDiff === "MEDIUM" ? "text-[#fef08a]" : activeBadgeDiff === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : (activeBadgeDiff === "EASY" ? "text-[#065F46]" : activeBadgeDiff === "MEDIUM" ? "text-[#854D0E]" : activeBadgeDiff === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
-                  {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
+                  {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
                 </span>
               );
             })()}
@@ -17553,7 +17558,7 @@ export default function App() {
                     onClick={() => {
                       playClickSound();
                       triggerHapticTap(vibrations);
-                      alert(t("comingSoonMessage"));
+                      navigateToScreen("solver");
                     }}
                     className={`w-full border-0 outline-none py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
                       darkMode
@@ -18342,7 +18347,8 @@ export default function App() {
                     id="desktop-sudoku-solver-btn"
                     onClick={() => {
                       playClickSound();
-                      alert(t("comingSoonMessage"));
+                      triggerHapticTap(vibrations);
+                      navigateToScreen("solver");
                     }}
                     className={`flex-1 min-w-0 h-[38px] px-2.5 rounded-xl border-0 outline-none flex items-center justify-center gap-1.5 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
                       darkMode
@@ -19999,6 +20005,9 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* PANE: SUDOKU SOLVER */}
+        {currentScreen === "solver" && <SudokuSolverScreen navigatorPop={navigatorPop} />}
 
       </div>
 
