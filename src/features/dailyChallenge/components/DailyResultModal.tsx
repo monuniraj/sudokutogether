@@ -25,6 +25,7 @@ import {
   Clock,
   Eye,
   Flame,
+  Globe,
   Loader2,
   Share2,
   Trophy,
@@ -59,6 +60,19 @@ export interface DailyResultModalProps {
   mistakes: number;
   stats: DailyStats;
   darkMode?: boolean;
+  roomRaceData?: {
+    roomCode: string;
+    participants: Array<{
+      uid: string;
+      displayName: string;
+      timeSec: number | null;
+      mistakes: number;
+      isFailed?: boolean;
+      isWon?: boolean;
+      isExhibition?: boolean;
+      isCurrentUser?: boolean;
+    }>;
+  };
 }
 
 function formatDurationMMSS(totalSeconds: number): string {
@@ -131,10 +145,15 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
   mistakes,
   stats,
   darkMode = false,
+  roomRaceData,
 }) => {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(false);
+  const hasRoomRace = Boolean(roomRaceData?.participants?.length);
+  const [activeLeaderboardTab, setActiveLeaderboardTab] = useState<"room" | "global">(
+    roomRaceData?.participants?.length ? "room" : "global"
+  );
   const [leaderboard, setLeaderboard] = useState<DailyLeaderboardResult>({
     entries: [],
     userRank: null,
@@ -146,6 +165,33 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const myRowRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setActiveLeaderboardTab(roomRaceData?.participants?.length ? "room" : "global");
+  }, [isOpen, roomRaceData?.roomCode]);
+
+  const effectiveLeaderboardTab: "room" | "global" =
+    hasRoomRace ? activeLeaderboardTab : "global";
+
+  const sortedRoomParticipants = useMemo(() => {
+    if (!roomRaceData?.participants?.length) return [];
+    return [...roomRaceData.participants].sort((a, b) => {
+      const aWon = Boolean(a.isWon) && !a.isFailed && a.timeSec !== null;
+      const bWon = Boolean(b.isWon) && !b.isFailed && b.timeSec !== null;
+      if (aWon !== bWon) return aWon ? -1 : 1;
+      if (aWon && bWon) {
+        const aTime = Number(a.timeSec ?? 999999);
+        const bTime = Number(b.timeSec ?? 999999);
+        if (aTime !== bTime) return aTime - bTime;
+        return Number(a.mistakes ?? 0) - Number(b.mistakes ?? 0);
+      }
+      const aFailed = Boolean(a.isFailed);
+      const bFailed = Boolean(b.isFailed);
+      if (aFailed !== bFailed) return aFailed ? 1 : -1;
+      return Number(a.mistakes ?? 0) - Number(b.mistakes ?? 0);
+    });
+  }, [roomRaceData?.participants]);
 
   const resolvedUid = useMemo(() => {
     if (uid !== undefined) return uid;
@@ -214,12 +260,12 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || effectiveLeaderboardTab !== "global") return;
     const raf = window.requestAnimationFrame(() => {
       evaluateUserRowVisibility();
     });
     return () => window.cancelAnimationFrame(raf);
-  }, [isOpen, leaderboard, evaluateUserRowVisibility]);
+  }, [isOpen, leaderboard, effectiveLeaderboardTab, evaluateUserRowVisibility]);
 
   const handleShareChallenge = useCallback(async () => {
     const formattedTime = formatDurationMMSS(elapsedTime);
@@ -547,7 +593,7 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
           </div>
         </div>
 
-        {/* Multiplayer-Style Global Daily Leaderboard (Borderless, Top 20 + Pinned 'You') */}
+        {/* Multiplayer-Style Leaderboard Container: Tabbed (Room Race vs Global Top 20) or Pure Global Top 20 */}
         <div
           className={`w-full rounded-2xl border-0 shadow-none overflow-hidden mb-3.5 ${
             darkMode
@@ -556,171 +602,332 @@ export const DailyResultModal: React.FC<DailyResultModalProps> = ({
           }`}
         >
           {/* Leaderboard Section Header */}
-          <div
-            className={`px-3.5 py-2 flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-wider border-0 ${
-              darkMode
-                ? "bg-[#27272a] text-zinc-300"
-                : "bg-[#EDE6DA] text-stone-600"
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5 min-w-0">
-              <Trophy
-                className={`w-3.5 h-3.5 shrink-0 ${
-                  darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
-                }`}
-              />
-              <span className="truncate">
-                {t("dailyGlobalLeaderboardTitle")}
-              </span>
-            </span>
-            <span className="font-mono text-[10px] opacity-75 shrink-0 whitespace-nowrap">
-              {t("dailyTop20Badge")}
-            </span>
-          </div>
-
-          {/* Guest / Offline Fallback Card */}
-          {!leaderboard.isAuthenticated || leaderboard.isOfflineOrError ? (
-            <div className="p-4 text-center flex flex-col items-center justify-center gap-2">
-              <div
-                className={`w-9 h-9 rounded-2xl border-0 shadow-none flex items-center justify-center ${
-                  darkMode
-                    ? "bg-[#2c2c30] text-zinc-200"
-                    : "bg-[#FEF3C7] text-[#92400E]"
+          {hasRoomRace ? (
+            <div
+              className={`p-1.5 flex items-center gap-1.5 border-0 ${
+                darkMode ? "bg-[#27272a]" : "bg-[#EDE6DA]"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => setActiveLeaderboardTab("room")}
+                className={`flex-1 min-w-0 py-1.5 px-2.5 rounded-xl border-0 shadow-none text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                  effectiveLeaderboardTab === "room"
+                    ? darkMode
+                      ? "bg-[#3f3f46] text-zinc-100"
+                      : "bg-white text-[#1C1917]"
+                    : darkMode
+                      ? "bg-transparent text-zinc-400 hover:text-zinc-200"
+                      : "bg-transparent text-stone-600 hover:text-[#1C1917]"
                 }`}
               >
-                <Users className="w-4 h-4 stroke-[2.2]" />
-              </div>
-              <p className="font-sans text-xs font-bold leading-snug max-w-[270px] opacity-80">
-                {t("dailySignInLeaderboardPrompt")}
-              </p>
+                <Users className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">
+                  {t("dailyRoomRaceTab", {
+                    count: roomRaceData?.participants?.length ?? 0,
+                  })}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveLeaderboardTab("global")}
+                className={`flex-1 min-w-0 py-1.5 px-2.5 rounded-xl border-0 shadow-none text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                  effectiveLeaderboardTab === "global"
+                    ? darkMode
+                      ? "bg-[#3f3f46] text-zinc-100"
+                      : "bg-white text-[#1C1917]"
+                    : darkMode
+                      ? "bg-transparent text-zinc-400 hover:text-zinc-200"
+                      : "bg-transparent text-stone-600 hover:text-[#1C1917]"
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{t("dailyGlobalTop20Tab")}</span>
+              </button>
             </div>
-          ) : isLoadingLeaderboard ? (
-            <div className="h-[130px] flex items-center justify-center gap-2 text-xs font-semibold opacity-70">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>{t("dailyLoadingLeaderboard")}</span>
+          ) : (
+            <div
+              className={`px-3.5 py-2 flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-wider border-0 ${
+                darkMode
+                  ? "bg-[#27272a] text-zinc-300"
+                  : "bg-[#EDE6DA] text-stone-600"
+              }`}
+            >
+              <span className="inline-flex items-center gap-1.5 min-w-0">
+                <Trophy
+                  className={`w-3.5 h-3.5 shrink-0 ${
+                    darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
+                  }`}
+                />
+                <span className="truncate">
+                  {t("dailyGlobalLeaderboardTitle")}
+                </span>
+              </span>
+              <span className="font-mono text-[10px] opacity-75 shrink-0 whitespace-nowrap">
+                {t("dailyTop20Badge")}
+              </span>
+            </div>
+          )}
+
+          {effectiveLeaderboardTab === "room" && hasRoomRace ? (
+            <div className="max-h-[190px] overflow-y-auto p-1.5 flex flex-col gap-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-500/35">
+              {sortedRoomParticipants.map((p, idx) => {
+                const isWonRow =
+                  Boolean(p.isWon) && !p.isFailed && p.timeSec !== null;
+                const wonRank = idx + 1;
+                const isTopThree = isWonRow && wonRank <= 3;
+
+                return (
+                  <div
+                    key={p.uid || `${p.displayName}-${idx}`}
+                    className={`min-w-0 flex items-center justify-between gap-1.5 py-2 px-3 rounded-xl border-0 shadow-none text-xs transition-colors ${
+                      p.isCurrentUser
+                        ? darkMode
+                          ? "bg-[#2e2a44] text-zinc-100"
+                          : "bg-[#E0E7FF] text-[#1E1B4B]"
+                        : darkMode
+                          ? "bg-[#1b1b1e] text-zinc-200"
+                          : "bg-white/85 text-[#1C1917]"
+                    }`}
+                  >
+                    {/* Left: Rank + Name + Badges */}
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <span
+                        className={`min-w-[30px] h-6 px-1.5 rounded-lg font-mono font-black text-[11px] inline-flex items-center justify-center gap-0.5 shrink-0 border-0 shadow-none ${
+                          isWonRow
+                            ? getRankBadgeClasses(wonRank, darkMode)
+                            : p.isFailed
+                              ? darkMode
+                                ? "bg-rose-500/20 text-rose-300"
+                                : "bg-rose-100 text-rose-700"
+                              : darkMode
+                                ? "bg-amber-500/20 text-amber-300"
+                                : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {isTopThree && (
+                          <Trophy
+                            className={`w-2.5 h-2.5 shrink-0 stroke-[2.4] ${
+                              darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
+                            }`}
+                          />
+                        )}
+                        <span>{isWonRow ? `#${wonRank}` : "-"}</span>
+                      </span>
+
+                      <span className="truncate font-semibold min-w-0">
+                        {p.displayName}
+                      </span>
+
+                      {p.isCurrentUser && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase shrink-0 border-0 shadow-none ${
+                            darkMode
+                              ? "bg-purple-500/25 text-purple-200"
+                              : "bg-[#EDE9FE] text-[#6B21A8]"
+                          }`}
+                        >
+                          {t("youBadge")}
+                        </span>
+                      )}
+
+                      {p.isExhibition && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold shrink-0 border-0 shadow-none ${
+                            darkMode
+                              ? "bg-[#78350f]/75 text-[#fde68a]"
+                              : "bg-[#FEF3C7] text-[#92400E]"
+                          }`}
+                        >
+                          <span className="sm:hidden">
+                            {t("dailyExhibitionShortBadge")}
+                          </span>
+                          <span className="hidden sm:inline">
+                            {t("dailyExhibitionFullBadge")}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Right: Time / Solving / Failed */}
+                    <div className="shrink-0 font-mono text-[11px] font-bold whitespace-nowrap">
+                      {p.isFailed ? (
+                        <span
+                          className={
+                            darkMode ? "text-rose-400" : "text-rose-600"
+                          }
+                        >
+                          {t("dailyRoomFailedErrors", {
+                            count: p.mistakes ?? 0,
+                          })}
+                        </span>
+                      ) : isWonRow ? (
+                        <span>{formatDurationMMSS(p.timeSec as number)}</span>
+                      ) : (
+                        <span
+                          className={
+                            darkMode ? "text-amber-300" : "text-amber-700"
+                          }
+                        >
+                          {t("statusSolving")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <>
-              {/* Scrollable Top 20 Container */}
-              <div
-                ref={scrollContainerRef}
-                onScroll={evaluateUserRowVisibility}
-                className="max-h-[190px] overflow-y-auto p-1.5 flex flex-col gap-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-500/35"
-              >
-                {leaderboard.entries.length === 0 ? (
-                  <div className="py-7 px-4 text-center text-xs font-semibold opacity-70">
-                    {t("dailyNoCompletionsYet")}
+              {/* Guest / Offline Fallback Card */}
+              {!leaderboard.isAuthenticated || leaderboard.isOfflineOrError ? (
+                <div className="p-4 text-center flex flex-col items-center justify-center gap-2">
+                  <div
+                    className={`w-9 h-9 rounded-2xl border-0 shadow-none flex items-center justify-center ${
+                      darkMode
+                        ? "bg-[#2c2c30] text-zinc-200"
+                        : "bg-[#FEF3C7] text-[#92400E]"
+                    }`}
+                  >
+                    <Users className="w-4 h-4 stroke-[2.2]" />
                   </div>
-                ) : (
-                  leaderboard.entries.map((entry, idx) => {
-                    const rank = idx + 1;
-                    const isMe = Boolean(resolvedUid && entry.uid === resolvedUid);
-                    const isTopThree = rank <= 3;
+                  <p className="font-sans text-xs font-bold leading-snug max-w-[270px] opacity-80">
+                    {t("dailySignInLeaderboardPrompt")}
+                  </p>
+                </div>
+              ) : isLoadingLeaderboard ? (
+                <div className="h-[130px] flex items-center justify-center gap-2 text-xs font-semibold opacity-70">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>{t("dailyLoadingLeaderboard")}</span>
+                </div>
+              ) : (
+                <>
+                  {/* Scrollable Top 20 Container */}
+                  <div
+                    ref={scrollContainerRef}
+                    onScroll={evaluateUserRowVisibility}
+                    className="max-h-[190px] overflow-y-auto p-1.5 flex flex-col gap-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-500/35"
+                  >
+                    {leaderboard.entries.length === 0 ? (
+                      <div className="py-7 px-4 text-center text-xs font-semibold opacity-70">
+                        {t("dailyNoCompletionsYet")}
+                      </div>
+                    ) : (
+                      leaderboard.entries.map((entry, idx) => {
+                        const rank = idx + 1;
+                        const isMe = Boolean(
+                          resolvedUid && entry.uid === resolvedUid
+                        );
+                        const isTopThree = rank <= 3;
 
-                    return (
-                      <div
-                        key={entry.uid}
-                        ref={isMe ? myRowRef : undefined}
-                        className={`px-2.5 py-2 rounded-xl border-0 shadow-none flex items-center justify-between gap-2 text-xs transition-colors ${
-                          isMe
-                            ? darkMode
-                              ? "bg-[#2e2a44] text-zinc-100"
-                              : "bg-[#E0E7FF] text-[#1E1B4B]"
-                            : darkMode
-                              ? "bg-[#1b1b1e] text-zinc-200"
-                              : "bg-white/85 text-[#1C1917]"
-                        }`}
-                      >
-                        {/* Left: Rank Badge + Name */}
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span
-                            className={`min-w-[32px] h-6 px-1.5 rounded-lg font-mono font-black text-[11px] inline-flex items-center justify-center gap-0.5 shrink-0 border-0 shadow-none ${getRankBadgeClasses(
-                              rank,
-                              darkMode
-                            )}`}
+                        return (
+                          <div
+                            key={entry.uid}
+                            ref={isMe ? myRowRef : undefined}
+                            className={`px-2.5 py-2 rounded-xl border-0 shadow-none flex items-center justify-between gap-2 text-xs transition-colors ${
+                              isMe
+                                ? darkMode
+                                  ? "bg-[#2e2a44] text-zinc-100"
+                                  : "bg-[#E0E7FF] text-[#1E1B4B]"
+                                : darkMode
+                                  ? "bg-[#1b1b1e] text-zinc-200"
+                                  : "bg-white/85 text-[#1C1917]"
+                            }`}
                           >
-                            {isTopThree && (
-                              <Trophy
-                                className={`w-2.5 h-2.5 shrink-0 stroke-[2.4] ${
-                                  darkMode ? "text-[#FBBF24]" : "text-[#B45309]"
-                                }`}
-                              />
-                            )}
-                            <span>#{rank}</span>
-                          </span>
+                            {/* Left: Rank Badge + Name */}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span
+                                className={`min-w-[32px] h-6 px-1.5 rounded-lg font-mono font-black text-[11px] inline-flex items-center justify-center gap-0.5 shrink-0 border-0 shadow-none ${getRankBadgeClasses(
+                                  rank,
+                                  darkMode
+                                )}`}
+                              >
+                                {isTopThree && (
+                                  <Trophy
+                                    className={`w-2.5 h-2.5 shrink-0 stroke-[2.4] ${
+                                      darkMode
+                                        ? "text-[#FBBF24]"
+                                        : "text-[#B45309]"
+                                    }`}
+                                  />
+                                )}
+                                <span>#{rank}</span>
+                              </span>
 
-                          <span className="font-sans font-bold truncate">
-                            {isMe
-                              ? `${entry.playerName} (${t("dailyYouLabel")})`
-                              : entry.playerName}
-                          </span>
+                              <span className="font-sans font-bold truncate">
+                                {isMe
+                                  ? `${entry.playerName} (${t("dailyYouLabel")})`
+                                  : entry.playerName}
+                              </span>
 
-                          {entry.isGuest && (
-                            <span
-                              className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase shrink-0 border-0 ${
-                                darkMode
-                                  ? "bg-[#27272a] text-zinc-400"
-                                  : "bg-[#EDE8DE] text-stone-600"
-                              }`}
-                            >
-                              {t("dailyGuestTag")}
-                            </span>
-                          )}
-                        </div>
+                              {entry.isGuest && (
+                                <span
+                                  className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase shrink-0 border-0 ${
+                                    darkMode
+                                      ? "bg-[#27272a] text-zinc-400"
+                                      : "bg-[#EDE8DE] text-stone-600"
+                                  }`}
+                                >
+                                  {t("dailyGuestTag")}
+                                </span>
+                              )}
+                            </div>
 
-                        {/* Right: Time + Mistakes */}
-                        <div className="flex items-center gap-2.5 shrink-0 font-mono text-[11px]">
-                          <span className="font-black">
-                            {formatDurationMMSS(entry.time)}
+                            {/* Right: Time + Mistakes */}
+                            <div className="flex items-center gap-2.5 shrink-0 font-mono text-[11px]">
+                              <span className="font-black">
+                                {formatDurationMMSS(entry.time)}
+                              </span>
+                              <span className="opacity-60">
+                                {entry.mistakes}/3
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Pinned 'You' Footer Card when rank > 3 or scrolled out of view */}
+                  {shouldShowPinnedYouFooter && effectiveUserEntry && (
+                    <div
+                      className={`mx-1.5 mb-1.5 px-3 py-2 rounded-xl border-0 shadow-none flex items-center justify-between gap-2 ${
+                        darkMode
+                          ? "bg-[#2a273c] text-zinc-100"
+                          : "bg-[#E0E7FF] text-[#1E1B4B]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className={`min-w-[44px] h-8 px-2 rounded-xl font-mono text-lg font-black inline-flex items-center justify-center shrink-0 border-0 shadow-none ${
+                            darkMode
+                              ? "bg-[#3b3466] text-[#ddd6fe]"
+                              : "bg-[#C7D2FE] text-[#312E81]"
+                          }`}
+                        >
+                          {myRank !== null ? `#${myRank}` : "#--"}
+                        </span>
+                        <div className="min-w-0">
+                          <span className="font-sans font-black text-xs block leading-tight truncate">
+                            {t("dailyYouLabel")}
                           </span>
-                          <span className="opacity-60">
-                            {entry.mistakes}/3
+                          <span className="font-sans text-[10px] font-semibold opacity-70 block leading-tight truncate">
+                            {t("dailyYourStandingLabel")}
                           </span>
                         </div>
                       </div>
-                    );
-                  })
-                )}
-              </div>
 
-              {/* Pinned 'You' Footer Card when rank > 3 or scrolled out of view */}
-              {shouldShowPinnedYouFooter && effectiveUserEntry && (
-                <div
-                  className={`mx-1.5 mb-1.5 px-3 py-2 rounded-xl border-0 shadow-none flex items-center justify-between gap-2 ${
-                    darkMode
-                      ? "bg-[#2a273c] text-zinc-100"
-                      : "bg-[#E0E7FF] text-[#1E1B4B]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span
-                      className={`min-w-[44px] h-8 px-2 rounded-xl font-mono text-lg font-black inline-flex items-center justify-center shrink-0 border-0 shadow-none ${
-                        darkMode
-                          ? "bg-[#3b3466] text-[#ddd6fe]"
-                          : "bg-[#C7D2FE] text-[#312E81]"
-                      }`}
-                    >
-                      {myRank !== null ? `#${myRank}` : "#--"}
-                    </span>
-                    <div className="min-w-0">
-                      <span className="font-sans font-black text-xs block leading-tight truncate">
-                        {t("dailyYouLabel")}
-                      </span>
-                      <span className="font-sans text-[10px] font-semibold opacity-70 block leading-tight truncate">
-                        {t("dailyYourStandingLabel")}
-                      </span>
+                      <div className="flex items-center gap-2.5 shrink-0 font-mono text-xs">
+                        <span className="font-black">
+                          {formatDurationMMSS(effectiveUserEntry.time)}
+                        </span>
+                        <span className="opacity-70 text-[11px]">
+                          {effectiveUserEntry.mistakes} / 3
+                        </span>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-2.5 shrink-0 font-mono text-xs">
-                    <span className="font-black">
-                      {formatDurationMMSS(effectiveUserEntry.time)}
-                    </span>
-                    <span className="opacity-70 text-[11px]">
-                      {effectiveUserEntry.mistakes} / 3
-                    </span>
-                  </div>
-                </div>
+                  )}
+                </>
               )}
             </>
           )}

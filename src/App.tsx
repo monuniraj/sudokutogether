@@ -18,7 +18,7 @@ import { ShareActionWrapper } from "./components/share/ShareActionWrapper";
 import { GuestBannerPill } from "./components/auth/GuestBannerPill";
 import { DailyChallengeCard, type DailyChallengeLaunchPayload } from "./features/dailyChallenge/components/DailyChallengeCard";
 import { DailyCalendarModal } from "./features/dailyChallenge/components/DailyCalendarModal";
-import { DailyResultModal } from "./features/dailyChallenge/components/DailyResultModal";
+import { DailyResultModal, type DailyResultModalProps } from "./features/dailyChallenge/components/DailyResultModal";
 import { formatDateKey, generateDailyPuzzle, parseDateKey } from "./features/dailyChallenge/services/dailyGenerator";
 import { saveDailyProgress, recordDailyCompletion, getDailyStats, getDailyProgress } from "./features/dailyChallenge/services/dailyStorage";
 import { saveDailyProgressToCloud, recordDailyCompletionToCloud, checkPlayerDailyEligibility, fetchDailyProgressFromCloud, resolveProgressConflict } from "./features/dailyChallenge/services/dailyCloudService";
@@ -2330,6 +2330,7 @@ export default function App() {
     stats: DailyStats;
     fromCalendar?: boolean;
     fallbackSolvedOnReview?: boolean;
+    roomRaceData?: DailyResultModalProps["roomRaceData"];
   } | null>(null);
   const [dailyChallengeActiveDate, setDailyChallengeActiveDate] = useState<string | null>(null);
   const dailyChallengeActiveDateRef = useRef<string | null>(null);
@@ -2358,7 +2359,405 @@ export default function App() {
     stats: DailyStats;
     fromCalendar?: boolean;
     fallbackSolvedOnReview?: boolean;
+    roomRaceData?: DailyResultModalProps["roomRaceData"];
   } | null>(null);
+
+  const buildDailyRoomRaceData = useCallback(
+    (
+      roomCode: string,
+      rawParticipants: any[],
+      selfTerminalFallback?: {
+        uid?: string;
+        displayName?: string;
+        timeSec: number | null;
+        mistakes: number;
+        isWon?: boolean;
+        isFailed?: boolean;
+        isExhibition?: boolean;
+      }
+    ): NonNullable<DailyResultModalProps["roomRaceData"]> => {
+      const myAuthUid = auth.currentUser?.uid || authUser?.uid || null;
+      const myProfileId = userProfile?.id || null;
+      const myGuestId = getOrCreateGuestIdentity().id;
+      const selfIds = new Set(
+        [myAuthUid, myProfileId, myGuestId, getActiveAuthUid()].filter(Boolean) as string[]
+      );
+      const primarySelfUid =
+        selfTerminalFallback?.uid ||
+        myAuthUid ||
+        myProfileId ||
+        myGuestId ||
+        "me";
+      const defaultSelfName =
+        selfTerminalFallback?.displayName ||
+        (userProfile?.name && userProfile.name.trim()) ||
+        getActiveDisplayName();
+
+      type NormalizedRaceParticipant = NonNullable<DailyResultModalProps["roomRaceData"]>["participants"][number];
+      const dedupMap = new Map<string, NormalizedRaceParticipant>();
+
+      (rawParticipants || []).forEach((raw: any) => {
+        if (!raw) return;
+        const rawId = raw.userId || raw.uid || raw.id;
+        const rawAuthUid = raw.authUid || (rawId && !String(rawId).startsWith("GUEST_") ? String(rawId) : undefined);
+        const rawGuestId = raw.guestId ? String(raw.guestId) : undefined;
+        const isCurrentUser = Boolean(
+          raw.isCurrentUser ||
+          (rawId && selfIds.has(String(rawId))) ||
+          (rawAuthUid && selfIds.has(rawAuthUid)) ||
+          (rawGuestId && selfIds.has(rawGuestId))
+        );
+        const mapKey = isCurrentUser
+          ? "__self__"
+          : String(rawId || rawAuthUid || rawGuestId || "");
+        if (!mapKey) return;
+
+        const mistakesNum = Number.isFinite(Number(raw.mistakes)) ? Math.max(0, Number(raw.mistakes)) : 0;
+        const statusStr = String(raw.status || "").toLowerCase();
+        const isAbandoned =
+          statusStr === "left" ||
+          statusStr === "abandoned" ||
+          statusStr === "disconnected" ||
+          statusStr === "forfeited" ||
+          Boolean(raw.isAbandoned);
+        const isFailed =
+          Boolean(raw.isFailed) ||
+          Boolean(raw.failed) ||
+          isAbandoned ||
+          statusStr === "mistake_game_over" ||
+          statusStr === "failed" ||
+          mistakesNum >= 3;
+        const isWon =
+          !isFailed &&
+          (statusStr === "won" ||
+            statusStr === "completed" ||
+            statusStr === "victory" ||
+            Boolean(raw.isWon));
+
+        const rawTimeNum =
+          raw.timeSec !== undefined && raw.timeSec !== null
+            ? Number(raw.timeSec)
+            : raw.elapsedTime !== undefined && raw.elapsedTime !== null
+              ? Number(raw.elapsedTime)
+              : null;
+        const resolvedTimeSec =
+          isWon && rawTimeNum !== null && Number.isFinite(rawTimeNum)
+            ? Math.max(0, Math.floor(rawTimeNum))
+            : null;
+
+        const resolvedUid = isCurrentUser
+          ? String(primarySelfUid)
+          : String(rawId || rawAuthUid || rawGuestId);
+        const resolvedName = isCurrentUser
+          ? (raw.displayName || raw.playerName || raw.name || defaultSelfName)
+          : (raw.displayName || raw.playerName || raw.name || "Player");
+
+        const existing = dedupMap.get(mapKey);
+        if (!existing) {
+          dedupMap.set(mapKey, {
+            uid: resolvedUid,
+            displayName: resolvedName,
+            timeSec: resolvedTimeSec,
+            mistakes: mistakesNum,
+            isFailed,
+            isWon,
+            isExhibition: Boolean(raw.isExhibition),
+            isCurrentUser,
+          });
+        } else {
+          const existingTerminal = Boolean(existing.isWon || existing.isFailed);
+          const nextTerminal = Boolean(isWon || isFailed);
+          const preferNext =
+            (!existingTerminal && nextTerminal) ||
+            (isWon && existing.timeSec === null && resolvedTimeSec !== null);
+          dedupMap.set(mapKey, {
+            uid: existing.uid || resolvedUid,
+            displayName: resolvedName !== "Player" ? resolvedName : existing.displayName,
+            timeSec: preferNext ? resolvedTimeSec : (existing.timeSec ?? resolvedTimeSec),
+            mistakes: preferNext ? mistakesNum : Math.max(existing.mistakes, mistakesNum),
+            isFailed: preferNext ? isFailed : Boolean(existing.isFailed || isFailed),
+            isWon: preferNext ? isWon : Boolean(existing.isWon && !existing.isFailed),
+            isExhibition: Boolean(existing.isExhibition || raw.isExhibition),
+            isCurrentUser: Boolean(existing.isCurrentUser || isCurrentUser),
+          });
+        }
+      });
+
+      if (selfTerminalFallback) {
+        const existingSelf = dedupMap.get("__self__");
+        const fallbackTerminal = Boolean(selfTerminalFallback.isWon || selfTerminalFallback.isFailed);
+        const existingTerminal = Boolean(existingSelf && (existingSelf.isWon || existingSelf.isFailed));
+        if (!existingSelf || (fallbackTerminal && !existingTerminal)) {
+          dedupMap.set("__self__", {
+            uid: String(primarySelfUid),
+            displayName: defaultSelfName,
+            timeSec: selfTerminalFallback.timeSec,
+            mistakes: selfTerminalFallback.mistakes,
+            isFailed: Boolean(selfTerminalFallback.isFailed),
+            isWon: Boolean(selfTerminalFallback.isWon),
+            isExhibition: Boolean(
+              selfTerminalFallback.isExhibition ?? existingSelf?.isExhibition
+            ),
+            isCurrentUser: true,
+          });
+        }
+      }
+
+      return {
+        roomCode,
+        participants: Array.from(dedupMap.values()),
+      };
+    },
+    [authUser?.uid, userProfile?.id, userProfile?.name]
+  );
+
+  // Keep open Daily Result Modal's Room Race standings synced live while inside the room
+  useEffect(() => {
+    const modalRoomCode = dailyResultModalState?.roomRaceData?.roomCode;
+    if (!dailyResultModalState?.isOpen || !modalRoomCode) return;
+    if (!challengeMode || activeGameId !== modalRoomCode) return;
+    if (!Array.isArray(syncedLeaderboard) || syncedLeaderboard.length === 0) return;
+
+    setDailyResultModalState((prev) => {
+      if (!prev || !prev.isOpen || prev.roomRaceData?.roomCode !== modalRoomCode) return prev;
+      const existingSelf = prev.roomRaceData?.participants?.find((p) => p.isCurrentUser);
+      const hasTerminalStatus = prev.status === "COMPLETED" || prev.status === "FAILED";
+      const selfFallback = hasTerminalStatus
+        ? {
+            uid: existingSelf?.uid || auth.currentUser?.uid || authUser?.uid || userProfile?.id,
+            displayName: existingSelf?.displayName || getActiveDisplayName(),
+            timeSec: prev.status === "COMPLETED" ? prev.elapsedTime : null,
+            mistakes: prev.mistakes,
+            isWon: prev.status === "COMPLETED",
+            isFailed: prev.status === "FAILED",
+            isExhibition: Boolean(existingSelf?.isExhibition ?? isDailyExhibitionRef.current),
+          }
+        : undefined;
+      const nextRoomRace = buildDailyRoomRaceData(modalRoomCode, syncedLeaderboard, selfFallback);
+      if (
+        prev.roomRaceData &&
+        JSON.stringify(prev.roomRaceData.participants) === JSON.stringify(nextRoomRace.participants)
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        roomRaceData: nextRoomRace,
+      };
+    });
+  }, [
+    syncedLeaderboard,
+    activeGameId,
+    challengeMode,
+    dailyResultModalState?.isOpen,
+    dailyResultModalState?.roomRaceData?.roomCode,
+    buildDailyRoomRaceData,
+    authUser?.uid,
+    userProfile?.id,
+  ]);
+
+  // Scoped real-time listener when Daily Result Modal was opened for a room outside the active room session
+  useEffect(() => {
+    const roomCode = dailyResultModalState?.roomRaceData?.roomCode;
+    if (!dailyResultModalState?.isOpen || !roomCode || !isOnline) return;
+    if (challengeMode && activeGameId === roomCode) return;
+
+    const docId = getSeedDocId(roomCode);
+    const roomPlayersCol = collection(db, "rooms", roomCode, "players");
+    const participantsCol = collection(db, "challenge_results", docId, "participants");
+
+    let latestRoomPlayers: any[] = [];
+    let latestResults: any[] = [];
+
+    const reconcileDailyRoomStandings = () => {
+      const mergedMap = new Map<string, any>();
+
+      latestRoomPlayers.forEach((p) => {
+        const pId = p.id || p.userId;
+        if (!pId) return;
+        const isLeft =
+          p.status === "left" ||
+          p.status === "abandoned" ||
+          p.status === "disconnected" ||
+          p.status === "forfeited";
+        const isFinished =
+          p.status === "completed" ||
+          p.status === "won" ||
+          p.status === "victory" ||
+          p.status === "mistake_game_over" ||
+          p.status === "failed";
+        const isWon =
+          p.status === "won" ||
+          p.status === "completed" ||
+          p.status === "victory" ||
+          Boolean(p.isWon);
+        mergedMap.set(pId, {
+          userId: pId,
+          authUid: p.authUid || (!String(pId).startsWith("GUEST_") ? pId : undefined),
+          guestId: p.guestId,
+          playerName: p.name || p.playerName || "Player",
+          timeSec:
+            p.timeSec !== undefined
+              ? Number(p.timeSec)
+              : p.elapsedTime !== undefined
+                ? Number(p.elapsedTime)
+                : 0,
+          mistakes: p.mistakes !== undefined ? Number(p.mistakes) : 0,
+          hints:
+            p.hints !== undefined
+              ? Number(p.hints)
+              : p.hintsUsed !== undefined
+                ? Number(p.hintsUsed)
+                : 0,
+          isWon,
+          ...(typeof p.isExhibition === "boolean" ? { isExhibition: p.isExhibition } : {}),
+          status: p.status || (isWon ? "completed" : "active"),
+          isPending: !isLeft && !isFinished,
+        });
+      });
+
+      latestResults.forEach((r) => {
+        const rId = r.userId || r.authUid || r.id;
+        if (!rId) return;
+        const existing = mergedMap.get(rId);
+        const rFinished =
+          r.status === "completed" ||
+          r.status === "won" ||
+          r.status === "victory" ||
+          r.status === "mistake_game_over" ||
+          r.status === "failed" ||
+          (!r.isPending && (r.isWon !== undefined || r.timeSec !== undefined));
+        const rWon =
+          r.status === "won" ||
+          r.status === "completed" ||
+          r.status === "victory" ||
+          Boolean(r.isWon) ||
+          Boolean(existing?.isWon);
+        mergedMap.set(rId, {
+          ...existing,
+          ...r,
+          userId: rId,
+          authUid:
+            r.authUid ||
+            existing?.authUid ||
+            (!String(rId).startsWith("GUEST_") ? rId : undefined),
+          guestId: r.guestId || existing?.guestId,
+          playerName: r.playerName || existing?.playerName || "Player",
+          timeSec: r.timeSec !== undefined ? Number(r.timeSec) : existing?.timeSec || 0,
+          mistakes: r.mistakes !== undefined ? Number(r.mistakes) : existing?.mistakes || 0,
+          hints:
+            r.hints !== undefined
+              ? Number(r.hints)
+              : r.hintsUsed !== undefined
+                ? Number(r.hintsUsed)
+                : existing?.hints ?? 0,
+          isWon: rWon,
+          ...(typeof (r.isExhibition ?? existing?.isExhibition) === "boolean"
+            ? { isExhibition: Boolean(r.isExhibition ?? existing?.isExhibition) }
+            : {}),
+          status:
+            r.status ||
+            existing?.status ||
+            (rWon ? "completed" : rFinished ? "mistake_game_over" : "active"),
+          isPending: rFinished
+            ? false
+            : r.isPending !== undefined
+              ? Boolean(r.isPending)
+              : existing
+                ? existing.isPending
+                : false,
+        });
+      });
+
+      const mergedList = Array.from(mergedMap.values());
+      if (mergedList.length === 0) return;
+
+      setDailyResultModalState((prev) => {
+        if (!prev || !prev.isOpen || prev.roomRaceData?.roomCode !== roomCode) return prev;
+        const existingSelf = prev.roomRaceData?.participants?.find((p) => p.isCurrentUser);
+        const hasTerminalStatus = prev.status === "COMPLETED" || prev.status === "FAILED";
+        const selfFallback = hasTerminalStatus
+          ? {
+              uid: existingSelf?.uid || auth.currentUser?.uid || authUser?.uid || userProfile?.id,
+              displayName: existingSelf?.displayName || getActiveDisplayName(),
+              timeSec: prev.status === "COMPLETED" ? prev.elapsedTime : null,
+              mistakes: prev.mistakes,
+              isWon: prev.status === "COMPLETED",
+              isFailed: prev.status === "FAILED",
+              isExhibition: Boolean(existingSelf?.isExhibition),
+            }
+          : undefined;
+        const nextRoomRace = buildDailyRoomRaceData(roomCode, mergedList, selfFallback);
+        if (
+          prev.roomRaceData &&
+          JSON.stringify(prev.roomRaceData.participants) === JSON.stringify(nextRoomRace.participants)
+        ) {
+          return prev;
+        }
+        return {
+          ...prev,
+          roomRaceData: nextRoomRace,
+        };
+      });
+    };
+
+    const unsubPlayers = onSnapshot(
+      roomPlayersCol,
+      (snapshot) => {
+        latestRoomPlayers = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
+        reconcileDailyRoomStandings();
+      },
+      (err) => {
+        console.warn("[Daily Results Realtime] Room players listener notice:", err);
+      }
+    );
+
+    let participantsQuery = query(participantsCol, limit(20));
+    try {
+      participantsQuery = query(
+        participantsCol,
+        orderBy("isWon", "desc"),
+        orderBy("timeSec", "asc"),
+        orderBy("mistakes", "asc"),
+        limit(20)
+      );
+    } catch { }
+
+    let unsubParticipants: () => void = () => {};
+    let fallbackUnsub: () => void = () => {};
+    try {
+      unsubParticipants = onSnapshot(
+        participantsQuery,
+        (snapshot) => {
+          latestResults = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
+          reconcileDailyRoomStandings();
+        },
+        () => {
+          try {
+            fallbackUnsub = onSnapshot(query(participantsCol, limit(20)), (fbSnap) => {
+              latestResults = fbSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
+              reconcileDailyRoomStandings();
+            });
+          } catch { }
+        }
+      );
+    } catch { }
+
+    return () => {
+      unsubPlayers();
+      unsubParticipants();
+      fallbackUnsub();
+    };
+  }, [
+    dailyResultModalState?.isOpen,
+    dailyResultModalState?.roomRaceData?.roomCode,
+    challengeMode,
+    activeGameId,
+    isOnline,
+    buildDailyRoomRaceData,
+    authUser?.uid,
+    userProfile?.id,
+  ]);
   const dailyCloudAutoSaveTimerRef = useRef<number | null>(null);
   const [joinRoomCodeInput, setJoinRoomCodeInput] = useState<string>("");
   const [joinRoomPinInput, setJoinRoomPinInput] = useState<string>("");
@@ -7901,7 +8300,7 @@ export default function App() {
           isExhibition = false;
         }
 
-        isDailyBoardContextRef.current = false; // Allow GameOverModal room standings on multiplayer completion
+        isDailyBoardContextRef.current = true; // Daily Challenge rooms route end-game standings to DailyResultModal
         isDailyRoomRef.current = true;
         setIsDailyRoomActive(true);
         isDailyExhibitionRef.current = isExhibition;
@@ -8071,8 +8470,12 @@ export default function App() {
 
   const isViewingResultsRef = useRef<boolean>(false);
   useEffect(() => {
-    isViewingResultsRef.current = showGameOverModal || Boolean(viewingRankingsGame) || Boolean(notificationResultModal);
-  }, [showGameOverModal, viewingRankingsGame, notificationResultModal]);
+    isViewingResultsRef.current =
+      showGameOverModal ||
+      Boolean(viewingRankingsGame) ||
+      Boolean(notificationResultModal) ||
+      Boolean(dailyResultModalState?.isOpen);
+  }, [showGameOverModal, viewingRankingsGame, notificationResultModal, dailyResultModalState?.isOpen]);
 
   const handleViewChallengeResults = async (roomCode: string, forceOpenModal = false) => {
     const rawCode = String(roomCode || "").trim();
@@ -8110,8 +8513,12 @@ export default function App() {
     }
 
     // If results modal is already active for this room, skip redundant room fetch cascade
-    if ((showGameOverModal && activeGameId === cleanRoomCode) || (notificationResultModal && notificationResultModal.roomCode === cleanRoomCode)) {
-      console.log(`[Results] GameOverModal already active for room ${cleanRoomCode}. Skipped redundant fetch cascade.`);
+    if (
+      (showGameOverModal && activeGameId === cleanRoomCode) ||
+      (notificationResultModal && notificationResultModal.roomCode === cleanRoomCode) ||
+      (dailyResultModalState?.isOpen && dailyResultModalState.roomRaceData?.roomCode === cleanRoomCode)
+    ) {
+      console.log(`[Results] Results modal already active for room ${cleanRoomCode}. Skipped redundant fetch cascade.`);
       return;
     }
 
@@ -8243,6 +8650,7 @@ export default function App() {
           mergedMap.set(pId, {
             userId: pId,
             authUid: pData.authUid || (!pId.startsWith("GUEST_") ? pId : undefined),
+            guestId: pData.guestId,
             playerName: pData.name || pData.playerName || "Player",
             timeSec: pData.timeSec !== undefined ? Number(pData.timeSec) : (pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : 0),
             elapsedTime: pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : (pData.timeSec !== undefined ? Number(pData.timeSec) : 0),
@@ -8269,6 +8677,7 @@ export default function App() {
                 ...rData,
                 userId: rId,
                 authUid: rData.authUid || existing?.authUid || (!rId.startsWith("GUEST_") ? rId : undefined),
+                guestId: rData.guestId || existing?.guestId,
                 playerName: rData.playerName || existing?.playerName || "Player",
                 timeSec: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.timeSec || 0),
                 elapsedTime: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.elapsedTime || 0),
@@ -8284,6 +8693,88 @@ export default function App() {
         }
 
         const resultsList = Array.from(mergedMap.values());
+        if (roomData?.gameMode === "daily" && roomData?.dailyDate) {
+          setNotificationResultModal(null);
+          let dDate = String(roomData.dailyDate).trim();
+          try {
+            parseDateKey(dDate);
+          } catch {
+            dDate = formatDateKey(new Date());
+          }
+          const dGen = generateDailyPuzzle(dDate);
+          const curAuth = auth.currentUser;
+          const dailyUid = (!curAuth || curAuth.isAnonymous) ? null : (authUser?.uid || curAuth.uid);
+          const stats = getDailyStats(dailyUid);
+          const progress = getDailyProgress(dDate, dailyUid);
+          const dayRec = stats.recordsByDate?.[dDate];
+
+          const selfIds = new Set(
+            [
+              curAuth?.uid,
+              authUser?.uid,
+              userProfile?.id,
+              getOrCreateGuestIdentity().id,
+              getActiveAuthUid(),
+            ].filter(Boolean) as string[]
+          );
+          const selfRow = resultsList.find((r: any) => {
+            const ids = [r.userId, r.uid, r.id, r.authUid, r.guestId]
+              .filter(Boolean)
+              .map(String);
+            return ids.some((id) => selfIds.has(id));
+          });
+          const selfStatusStr = String(selfRow?.status || "").toLowerCase();
+          const selfFailed = Boolean(
+            selfRow &&
+              (selfRow.isFailed ||
+                selfRow.failed ||
+                selfStatusStr === "mistake_game_over" ||
+                selfStatusStr === "failed" ||
+                selfStatusStr === "left" ||
+                selfStatusStr === "abandoned" ||
+                selfStatusStr === "disconnected" ||
+                selfStatusStr === "forfeited" ||
+                Number(selfRow.mistakes ?? 0) >= 3)
+          );
+          const selfWon = Boolean(
+            selfRow &&
+              !selfFailed &&
+              (selfRow.isWon ||
+                selfStatusStr === "won" ||
+                selfStatusStr === "completed" ||
+                selfStatusStr === "victory")
+          );
+          const resolvedStatus: DailyChallengeStatus = selfWon
+            ? "COMPLETED"
+            : selfFailed
+              ? "FAILED"
+              : dayRec?.status ??
+                (progress?.status === "COMPLETED" || progress?.status === "FAILED"
+                  ? progress.status
+                  : "IN_PROGRESS");
+          const resolvedElapsed =
+            selfRow && selfWon && Number(selfRow.timeSec ?? selfRow.elapsedTime ?? 0) > 0
+              ? Number(selfRow.timeSec ?? selfRow.elapsedTime)
+              : dayRec?.timeSeconds ?? progress?.elapsedSeconds ?? 0;
+          const resolvedMistakes = selfRow
+            ? Number(selfRow.mistakes ?? 0)
+            : dayRec?.mistakes ?? progress?.mistakesCount ?? 0;
+
+          setDailyResultModalState({
+            isOpen: true,
+            date: dDate,
+            difficulty: dGen.difficulty,
+            status: resolvedStatus,
+            elapsedTime: resolvedElapsed,
+            mistakes: resolvedMistakes,
+            stats,
+            fromCalendar: false,
+            fallbackSolvedOnReview: resolvedStatus === "COMPLETED",
+            roomRaceData: buildDailyRoomRaceData(cleanRoomCode, resultsList),
+          });
+          return;
+        }
+
         setNotificationResultModal(prev => {
           if (!prev || prev.roomCode !== cleanRoomCode) return prev;
           return {
@@ -10164,7 +10655,7 @@ export default function App() {
     if (boardState?.isGameOver) {
       if (!hasTriggeredGameOverRef.current) {
         hasTriggeredGameOverRef.current = true;
-        if (isDailyBoardContextRef.current) {
+        if (isDailyBoardContextRef.current || isDailyRoomRef.current) {
           setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
           setActiveKeypadNum(null);
           setLockedNum(null);
@@ -10187,7 +10678,7 @@ export default function App() {
         }
 
         gameOverTimeoutRef.current = setTimeout(() => {
-          if (!isDailyBoardContextRef.current && !(isDailyRoomRef.current && !isOnline)) {
+          if (!isDailyBoardContextRef.current && !isDailyRoomRef.current) {
             setShowGameOverModal(true);
           }
           setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
@@ -10256,7 +10747,7 @@ export default function App() {
         try {
           parseDateKey(loaded.dailyDate);
           const dailyGen = generateDailyPuzzle(loaded.dailyDate);
-          isDailyBoardContextRef.current = false; // Multiplayer daily room uses GameOverModal standings
+          isDailyBoardContextRef.current = true; // Daily Challenge rooms route end-game standings to DailyResultModal
           isDailyRoomRef.current = true;
           setIsDailyRoomActive(true);
           isDailyExhibitionRef.current = Boolean(loaded.isDailyExhibition);
@@ -11036,7 +11527,7 @@ export default function App() {
       const masterBoardDifficulty: Difficulty = dailyGen.difficulty === "MASTER" ? "EXPERT" : dailyGen.difficulty;
       const roomCode = String(Math.floor(100000 + Math.random() * 900000));
 
-      isDailyBoardContextRef.current = false;
+      isDailyBoardContextRef.current = true;
       isDailyRoomRef.current = true;
       setIsDailyRoomActive(true);
       isDailyExhibitionRef.current = false;
@@ -11468,7 +11959,7 @@ export default function App() {
         })
       );
 
-      isDailyBoardContextRef.current = false;
+      isDailyBoardContextRef.current = true;
       setOpenedCreateFromMultiplayerResult(false);
       setActiveGameId(activeRoomCode);
       setRematchGameId(activeRoomCode);
@@ -12145,14 +12636,34 @@ export default function App() {
         });
       });
 
-      if (!isDailyMultiplayerSession) {
-        isDailyBoardContextRef.current = true;
-        setShowGameOverModal(false);
-        setIsDailyReviewSession(true);
-        setDailyChallengeLoadedBoardDate(activeDailyDateKey);
-      } else {
-        isDailyBoardContextRef.current = false;
-      }
+      isDailyBoardContextRef.current = true;
+      setShowGameOverModal(false);
+      setIsDailyReviewSession(true);
+      setDailyChallengeLoadedBoardDate(activeDailyDateKey);
+
+      const liveRoomCode =
+        (activeGameId && /^\d{6}$/.test(activeGameId) ? activeGameId : null) ||
+        (rematchGameId && /^\d{6}$/.test(rematchGameId) ? rematchGameId : null) ||
+        cleanRoomCode ||
+        String(gameSeed).padStart(6, "0").slice(-6);
+      const roomParticipantsSnapshot =
+        (resolvedParts && resolvedParts.length > 0 ? resolvedParts : null) ||
+        (syncedLeaderboardRef.current && syncedLeaderboardRef.current.length > 0
+          ? syncedLeaderboardRef.current
+          : syncedLeaderboard) ||
+        [];
+      const dailyRoomRacePayload =
+        isDailyMultiplayerSession && isOnline
+          ? buildDailyRoomRaceData(liveRoomCode, roomParticipantsSnapshot, {
+              uid: authUser?.uid || userProfile?.id || getOrCreateGuestIdentity().id,
+              displayName: pName,
+              timeSec: isWon ? sessionSeconds : null,
+              mistakes: finalMistakes,
+              isWon,
+              isFailed: !isWon,
+              isExhibition: isExhibitionSession,
+            })
+          : undefined;
 
       if (isWon) {
         const updatedDailyStats = recordDailyCompletion(
@@ -12219,21 +12730,20 @@ export default function App() {
           setDailyRefreshCounter((c) => c + 1);
         }
 
-        if (!isDailyMultiplayerSession || !isOnline) {
-          const completedModalPayload = {
-            isOpen: true,
-            date: activeDailyDateKey,
-            difficulty: activeDailyDifficulty,
-            status: "COMPLETED" as DailyChallengeStatus,
-            elapsedTime: sessionSeconds,
-            mistakes: finalMistakes,
-            stats: updatedDailyStats,
-            fromCalendar: false,
-            fallbackSolvedOnReview: true,
-          };
-          setDailyReviewSummaryMeta(completedModalPayload);
-          setDailyResultModalState(completedModalPayload);
-        }
+        const completedModalPayload = {
+          isOpen: true,
+          date: activeDailyDateKey,
+          difficulty: activeDailyDifficulty,
+          status: "COMPLETED" as DailyChallengeStatus,
+          elapsedTime: sessionSeconds,
+          mistakes: finalMistakes,
+          stats: updatedDailyStats,
+          fromCalendar: false,
+          fallbackSolvedOnReview: true,
+          ...(dailyRoomRacePayload ? { roomRaceData: dailyRoomRacePayload } : {}),
+        };
+        setDailyReviewSummaryMeta(completedModalPayload);
+        setDailyResultModalState(completedModalPayload);
       } else {
         const failedProgress = saveDailyProgress(
           {
@@ -12264,21 +12774,20 @@ export default function App() {
           setDailyRefreshCounter((c) => c + 1);
         }
 
-        if (!isDailyMultiplayerSession || !isOnline) {
-          const failedModalPayload = {
-            isOpen: true,
-            date: activeDailyDateKey,
-            difficulty: activeDailyDifficulty,
-            status: "FAILED" as DailyChallengeStatus,
-            elapsedTime: sessionSeconds,
-            mistakes: finalMistakes,
-            stats: updatedDailyStats,
-            fromCalendar: false,
-            fallbackSolvedOnReview: false,
-          };
-          setDailyReviewSummaryMeta(failedModalPayload);
-          setDailyResultModalState(failedModalPayload);
-        }
+        const failedModalPayload = {
+          isOpen: true,
+          date: activeDailyDateKey,
+          difficulty: activeDailyDifficulty,
+          status: "FAILED" as DailyChallengeStatus,
+          elapsedTime: sessionSeconds,
+          mistakes: finalMistakes,
+          stats: updatedDailyStats,
+          fromCalendar: false,
+          fallbackSolvedOnReview: false,
+          ...(dailyRoomRacePayload ? { roomRaceData: dailyRoomRacePayload } : {}),
+        };
+        setDailyReviewSummaryMeta(failedModalPayload);
+        setDailyResultModalState(failedModalPayload);
       }
     }
 
@@ -12895,7 +13404,7 @@ export default function App() {
     if (!challengeId) return;
 
     // TARGET ROSTER GUARD: Skip only when passively triggered while viewing results, but allow explicit join
-    if (!forceJoin && (isViewingResultsRef.current || showGameOverModal || Boolean(viewingRankingsGame))) {
+    if (!forceJoin && (isViewingResultsRef.current || showGameOverModal || Boolean(viewingRankingsGame) || Boolean(dailyResultModalState?.isOpen))) {
       console.log(`[RosterGuard] Skipped registerChallengeJoin for ${challengeId}: currently viewing results.`);
       return;
     }
@@ -12964,10 +13473,10 @@ export default function App() {
 
   // Automatically register a join slot when starting/accepting any challenge
   useEffect(() => {
-    if (challengeMode && activeGameId && !isViewingResultsRef.current && !showGameOverModal && !viewingRankingsGame && boardState && !boardState.isGameOver) {
+    if (challengeMode && activeGameId && !isViewingResultsRef.current && !showGameOverModal && !viewingRankingsGame && !dailyResultModalState?.isOpen && boardState && !boardState.isGameOver) {
       registerChallengeJoin(activeGameId);
     }
-  }, [challengeMode, activeGameId, showGameOverModal, viewingRankingsGame, boardState?.isGameOver]);
+  }, [challengeMode, activeGameId, showGameOverModal, viewingRankingsGame, dailyResultModalState?.isOpen, boardState?.isGameOver]);
 
   // Real-time Firestore listener: auto-updates syncedLeaderboard whenever any player submits/joins
   useEffect(() => {
@@ -14525,8 +15034,80 @@ export default function App() {
     // Guard: Prevent inviting players into an already-completed/solved game session
     if (boardState?.isGameOver) {
       if (challengeMode) {
-        setEndGameStep(1);
-        setShowGameOverModal(true);
+        if (isDailyRoomRef.current || dailyChallengeActiveDateRef.current) {
+          const targetDate =
+            dailyChallengeActiveDateRef.current ||
+            dailyChallengeActiveDate ||
+            dailyChallengeLoadedBoardDate ||
+            dailyReviewSummaryMeta?.date ||
+            formatDateKey(new Date());
+          const dailyUid = isGuestSession ? null : authUser?.uid;
+          const stats = getDailyStats(dailyUid);
+          const progress = getDailyProgress(targetDate, dailyUid);
+          const dayRecord = stats.recordsByDate[targetDate];
+          const resolvedStatus: DailyChallengeStatus =
+            dailyReviewSummaryMeta?.status ??
+            dayRecord?.status ??
+            (progress?.status === "COMPLETED" || progress?.status === "FAILED"
+              ? progress.status
+              : (boardState?.currentMistakesCount ?? 0) >= 3
+                ? "FAILED"
+                : "COMPLETED");
+          const liveRoomCode =
+            (activeGameId && /^\d{6}$/.test(activeGameId) ? activeGameId : null) ||
+            dailyReviewSummaryMeta?.roomRaceData?.roomCode ||
+            (boardState?.seed ? String(boardState.seed).padStart(6, "0").slice(-6) : null);
+          const resolvedRoomRaceData =
+            isOnline && liveRoomCode
+              ? (syncedLeaderboard && syncedLeaderboard.length > 0
+                  ? buildDailyRoomRaceData(liveRoomCode, syncedLeaderboard, {
+                      uid: auth.currentUser?.uid || authUser?.uid || userProfile?.id || getOrCreateGuestIdentity().id,
+                      displayName: getActiveDisplayName(),
+                      timeSec:
+                        resolvedStatus === "COMPLETED"
+                          ? (dailyReviewSummaryMeta?.elapsedTime ?? dayRecord?.timeSeconds ?? progress?.elapsedSeconds ?? sessionSeconds)
+                          : null,
+                      mistakes: boardState?.currentMistakesCount ?? dayRecord?.mistakes ?? progress?.mistakesCount ?? 0,
+                      isWon: resolvedStatus === "COMPLETED",
+                      isFailed: resolvedStatus === "FAILED",
+                      isExhibition: Boolean(
+                        isDailyExhibitionRef.current ||
+                        dailyReviewSummaryMeta?.roomRaceData?.participants?.find((p) => p.isCurrentUser)?.isExhibition
+                      ),
+                    })
+                  : dailyReviewSummaryMeta?.roomRaceData)
+              : undefined;
+          setDailyResultModalState({
+            isOpen: true,
+            date: targetDate,
+            difficulty:
+              dailyReviewSummaryMeta?.difficulty ??
+              dayRecord?.difficulty ??
+              dailyChallengeDifficulty ??
+              "MEDIUM",
+            status: resolvedStatus,
+            elapsedTime:
+              dailyReviewSummaryMeta?.elapsedTime ??
+              dayRecord?.timeSeconds ??
+              progress?.elapsedSeconds ??
+              sessionSeconds,
+            mistakes:
+              boardState?.currentMistakesCount ??
+              dayRecord?.mistakes ??
+              progress?.mistakesCount ??
+              0,
+            stats,
+            fromCalendar: false,
+            fallbackSolvedOnReview: Boolean(
+              dailyReviewSummaryMeta?.fallbackSolvedOnReview ??
+              resolvedStatus === "COMPLETED"
+            ),
+            ...(resolvedRoomRaceData ? { roomRaceData: resolvedRoomRaceData } : {}),
+          });
+        } else {
+          setEndGameStep(1);
+          setShowGameOverModal(true);
+        }
       } else {
         if (!isOnline) {
           setShowMultiplayerForkModal(true);
@@ -14571,7 +15152,7 @@ export default function App() {
         isExhibition = false;
       }
 
-      isDailyBoardContextRef.current = false;
+      isDailyBoardContextRef.current = true;
       isDailyRoomRef.current = true;
       setIsDailyRoomActive(true);
       isDailyExhibitionRef.current = isExhibition;
@@ -16642,7 +17223,11 @@ export default function App() {
   );
   const isMultiplayerGame = Boolean(challengeMode || activeGameId || rematchGameId || challengeSeed);
   const isTrueMultiplayer = Boolean(
-    isMultiplayerGame && isOnline && (participantCount >= 2 || hasJoinedOpponents || endGameStep === 2 || isDailyRoomActive)
+    isMultiplayerGame &&
+      isOnline &&
+      !isDailyRoomActive &&
+      !dailyChallengeActiveDate &&
+      (participantCount >= 2 || hasJoinedOpponents || endGameStep === 2)
   );
 
   return (
@@ -17349,7 +17934,7 @@ export default function App() {
                               type="button"
                               onClick={() => {
                                 playClickSound();
-                                if (((!challengeMode && !isDailyRoomActive) || (isDailyRoomActive && !isOnline)) && Boolean(dailyChallengeActiveDate || isDailyReviewSession || dailyChallengeLoadedBoardDate)) {
+                                if (Boolean(isDailyRoomActive || dailyChallengeActiveDate || isDailyReviewSession || dailyChallengeLoadedBoardDate)) {
                                   const targetDate =
                                     dailyChallengeActiveDate ||
                                     dailyChallengeLoadedBoardDate ||
@@ -17367,6 +17952,34 @@ export default function App() {
                                       : (boardState?.currentMistakesCount ?? 0) >= 3
                                         ? "FAILED"
                                         : "COMPLETED");
+                                  const liveRoomCode =
+                                    (activeGameId && /^\d{6}$/.test(activeGameId) ? activeGameId : null) ||
+                                    dailyReviewSummaryMeta?.roomRaceData?.roomCode ||
+                                    (boardState?.seed ? String(boardState.seed).padStart(6, "0").slice(-6) : null);
+                                  const resolvedRoomRaceData =
+                                    (isDailyRoomActive || Boolean(dailyReviewSummaryMeta?.roomRaceData)) && isOnline && liveRoomCode
+                                      ? (syncedLeaderboard && syncedLeaderboard.length > 0
+                                          ? buildDailyRoomRaceData(liveRoomCode, syncedLeaderboard, {
+                                              uid: auth.currentUser?.uid || authUser?.uid || userProfile?.id || getOrCreateGuestIdentity().id,
+                                              displayName: getActiveDisplayName(),
+                                              timeSec:
+                                                resolvedStatus === "COMPLETED"
+                                                  ? (dailyReviewSummaryMeta?.elapsedTime ?? dayRecord?.timeSeconds ?? progress?.elapsedSeconds ?? sessionSeconds)
+                                                  : null,
+                                              mistakes:
+                                                boardState?.currentMistakesCount ??
+                                                dayRecord?.mistakes ??
+                                                progress?.mistakesCount ??
+                                                0,
+                                              isWon: resolvedStatus === "COMPLETED",
+                                              isFailed: resolvedStatus === "FAILED",
+                                              isExhibition: Boolean(
+                                                isDailyExhibitionRef.current ||
+                                                dailyReviewSummaryMeta?.roomRaceData?.participants?.find((p) => p.isCurrentUser)?.isExhibition
+                                              ),
+                                            })
+                                          : dailyReviewSummaryMeta?.roomRaceData)
+                                      : undefined;
 
                                   setDailyResultModalState({
                                     isOpen: true,
@@ -17393,6 +18006,7 @@ export default function App() {
                                       dailyReviewSummaryMeta?.fallbackSolvedOnReview ??
                                       resolvedStatus === "COMPLETED"
                                     ),
+                                    ...(resolvedRoomRaceData ? { roomRaceData: resolvedRoomRaceData } : {}),
                                   });
                                 } else {
                                   // PRESERVE 100% UNTOUCHED for Classic Solo and Multiplayer
@@ -17996,10 +18610,10 @@ export default function App() {
 
             {/* GAME OVER AND VICTORY OVERLAYS */}
 
-            {/* 1. MULTIPLAYER LEADERBOARD MODAL (when isTrueMultiplayer is true) */}
-            {Boolean(isTrueMultiplayer) && (
+            {/* 1. MULTIPLAYER LEADERBOARD MODAL (when isTrueMultiplayer is true and NOT a Daily Room) */}
+            {Boolean(isTrueMultiplayer && !isDailyRoomActive && !dailyChallengeActiveDate && !dailyResultModalState?.isOpen) && (
               <GameOverModal
-                isOpen={Boolean(showGameOverModal && isTrueMultiplayer)}
+                isOpen={Boolean(showGameOverModal && isTrueMultiplayer && !isDailyRoomActive && !dailyChallengeActiveDate && !dailyResultModalState?.isOpen)}
                 isMultiplayer={Boolean(challengeMode)}
                 completedGames={completedGames}
                 onClose={() => {
@@ -18195,7 +18809,7 @@ export default function App() {
                       })
                     );
 
-                    isDailyBoardContextRef.current = false;
+                    isDailyBoardContextRef.current = true;
                     isDailyRoomRef.current = true;
                     setIsDailyRoomActive(true);
                     isDailyExhibitionRef.current = isExhibition;
@@ -18267,7 +18881,7 @@ export default function App() {
             )}
 
             {/* 2. SOLO GAME OVER AND VICTORY OVERLAY (when challengeMode is false OR offline fallback) */}
-            {boardState && showGameOverModal && (!isTrueMultiplayer) && !dailyChallengeActiveDate && !isDailyReviewSession && !dailyResultModalState?.isOpen && !isPostGameDailyCalendarOpen && (
+            {boardState && showGameOverModal && (!isTrueMultiplayer) && !isDailyRoomActive && !dailyChallengeActiveDate && !isDailyReviewSession && !dailyResultModalState?.isOpen && !isPostGameDailyCalendarOpen && (
               <div className="fixed inset-0 z-50 bg-[#FDFBF7]/80 dark:bg-[#1A1A1A]/80 backdrop-blur-sm flex items-center justify-center p-6" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
                 {/* Backdrop click dismisser — closes overlay and reveals the completed board */}
                 <div
@@ -20522,7 +21136,7 @@ export default function App() {
                 })
               );
 
-              isDailyBoardContextRef.current = false;
+              isDailyBoardContextRef.current = true;
               isDailyRoomRef.current = true;
               setIsDailyRoomActive(true);
               isDailyExhibitionRef.current = isExhibition;
@@ -20605,11 +21219,18 @@ export default function App() {
           isOpen={dailyResultModalState.isOpen}
           uid={isGuestSession ? null : authUser?.uid}
           onClose={() => {
+            const shouldCleanupRoom = Boolean(
+              isDailyRoomRef.current ||
+              isDailyRoomActive ||
+              (dailyResultModalState?.roomRaceData?.roomCode &&
+                activeGameId === dailyResultModalState.roomRaceData.roomCode)
+            );
             setDailyResultModalState(null);
             dailyChallengeActiveDateRef.current = null;
             setDailyChallengeActiveDate(null);
             setDailyChallengeIsArchive(false);
             setIsDailyReviewSession(false);
+            setDailyReviewSummaryMeta(null);
             isDailyBoardContextRef.current = false;
             isDailyRoomRef.current = false;
             setIsDailyRoomActive(false);
@@ -20617,11 +21238,15 @@ export default function App() {
             setIsDailyExhibition(false);
             setShowGameOverModal(false);
             setShowCelebrationConfetti(false);
+            if (shouldCleanupRoom) {
+              cleanupRoomSession();
+            }
             navigateToScreen("home");
           }}
           onReviewBoard={() => {
             const targetDate = dailyResultModalState.date;
             const isComp = dailyResultModalState.status === "COMPLETED";
+            setDailyReviewSummaryMeta(dailyResultModalState);
             setShowCelebrationConfetti(false);
             if (targetDate === dailyChallengeLoadedBoardDate && boardState) {
               setDailyResultModalState(null);
@@ -20665,6 +21290,7 @@ export default function App() {
           mistakes={dailyResultModalState.mistakes}
           stats={dailyResultModalState.stats}
           darkMode={darkMode}
+          roomRaceData={dailyResultModalState.roomRaceData}
         />
       )}
 
@@ -20676,11 +21302,18 @@ export default function App() {
           initialDate={postGameDailyCalendarAnchorDate}
           refreshTrigger={dailyRefreshCounter}
           onClose={() => {
+            const shouldCleanupRoom = Boolean(
+              isDailyRoomRef.current ||
+              isDailyRoomActive ||
+              (dailyReviewSummaryMeta?.roomRaceData?.roomCode &&
+                activeGameId === dailyReviewSummaryMeta.roomRaceData.roomCode)
+            );
             setIsPostGameDailyCalendarOpen(false);
             dailyChallengeActiveDateRef.current = null;
             setDailyChallengeActiveDate(null);
             setDailyChallengeIsArchive(false);
             setIsDailyReviewSession(false);
+            setDailyReviewSummaryMeta(null);
             isDailyBoardContextRef.current = false;
             isDailyRoomRef.current = false;
             setIsDailyRoomActive(false);
@@ -20688,6 +21321,9 @@ export default function App() {
             setIsDailyExhibition(false);
             setShowGameOverModal(false);
             setShowCelebrationConfetti(false);
+            if (shouldCleanupRoom) {
+              cleanupRoomSession();
+            }
             navigateToScreen("home");
           }}
           onLaunchDayPuzzle={(payload) => {

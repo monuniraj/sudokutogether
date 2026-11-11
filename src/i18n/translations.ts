@@ -521,7 +521,12 @@ export type TranslationKey =
   | "dailyReviewBoardBtn"
   | "dailyCalendarHistoryBtn"
   | "hudViewMatchResultsTooltip"
-  | "hudViewGameSummaryTooltip";
+  | "hudViewGameSummaryTooltip"
+  | "dailyRoomRaceTab"
+  | "dailyGlobalTop20Tab"
+  | "dailyExhibitionShortBadge"
+  | "dailyExhibitionFullBadge"
+  | "dailyRoomFailedErrors";
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -1027,6 +1032,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyCalendarHistoryBtn: "View Calendar & History",
     hudViewMatchResultsTooltip: "View Match Results & Rematch",
     hudViewGameSummaryTooltip: "View Game Summary",
+    dailyRoomRaceTab: "Room Race ({count})",
+    dailyGlobalTop20Tab: "Global Top 20",
+    dailyExhibitionShortBadge: "Exh.",
+    dailyExhibitionFullBadge: "Exhibition",
+    dailyRoomFailedErrors: "Failed ({count} errors)",
   },
   hi: {
     playerInsights: "खिलाड़ी अंतर्दृष्टि",
@@ -1531,6 +1541,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyCalendarHistoryBtn: "कैलेंडर और इतिहास देखें",
     hudViewMatchResultsTooltip: "मैच परिणाम और रीमैच देखें",
     hudViewGameSummaryTooltip: "गेम सारांश देखें",
+    dailyRoomRaceTab: "रूम रेस ({count})",
+    dailyGlobalTop20Tab: "ग्लोबल टॉप 20",
+    dailyExhibitionShortBadge: "प्रद.",
+    dailyExhibitionFullBadge: "प्रदर्शनी",
+    dailyRoomFailedErrors: "विफल ({count} गलतियाँ)",
   },
   de: {
     playerInsights: "Spieler-Einblicke",
@@ -2035,6 +2050,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyCalendarHistoryBtn: "Kalender & Verlauf ansehen",
     hudViewMatchResultsTooltip: "Ergebnisse & Revanche",
     hudViewGameSummaryTooltip: "Spielzusammenfassung",
+    dailyRoomRaceTab: "Raum-Duell ({count})",
+    dailyGlobalTop20Tab: "Global Top 20",
+    dailyExhibitionShortBadge: "Frei",
+    dailyExhibitionFullBadge: "Freundschaft",
+    dailyRoomFailedErrors: "Fehlgeschl. ({count} Fehler)",
   },
   ja: {
     playerInsights: "プレイヤーデータ",
@@ -2539,6 +2559,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyCalendarHistoryBtn: "カレンダーと履歴を見る",
     hudViewMatchResultsTooltip: "試合結果と再戦を見る",
     hudViewGameSummaryTooltip: "ゲーム結果を見る",
+    dailyRoomRaceTab: "ルーム対戦 ({count})",
+    dailyGlobalTop20Tab: "世界トップ20",
+    dailyExhibitionShortBadge: "練習",
+    dailyExhibitionFullBadge: "エキシビション",
+    dailyRoomFailedErrors: "失敗 ({count}ミス)",
   },
   ko: {
     playerInsights: "플레이어 통계",
@@ -3043,6 +3068,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyCalendarHistoryBtn: "캘린더 및 기록 보기",
     hudViewMatchResultsTooltip: "경기 결과 및 재대결 보기",
     hudViewGameSummaryTooltip: "게임 요약 보기",
+    dailyRoomRaceTab: "방 대결 ({count})",
+    dailyGlobalTop20Tab: "글로벌 Top 20",
+    dailyExhibitionShortBadge: "친선",
+    dailyExhibitionFullBadge: "친선전",
+    dailyRoomFailedErrors: "실패 ({count}회 실수)",
   },
   es: {
     playerInsights: "Estadísticas",
@@ -3547,6 +3577,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyCalendarHistoryBtn: "Ver calendario e historial",
     hudViewMatchResultsTooltip: "Ver resultados y revancha",
     hudViewGameSummaryTooltip: "Ver resumen del juego",
+    dailyRoomRaceTab: "Sala ({count})",
+    dailyGlobalTop20Tab: "Top 20 Global",
+    dailyExhibitionShortBadge: "Exh.",
+    dailyExhibitionFullBadge: "Exhibición",
+    dailyRoomFailedErrors: "Fallido ({count} errores)",
   },
   fr: {
     playerInsights: "Statistiques Joueur",
@@ -4051,6 +4086,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyCalendarHistoryBtn: "Voir calendrier et historique",
     hudViewMatchResultsTooltip: "Voir résultats et revanche",
     hudViewGameSummaryTooltip: "Résumé de la partie",
+    dailyRoomRaceTab: "Salon ({count})",
+    dailyGlobalTop20Tab: "Top 20 Mondial",
+    dailyExhibitionShortBadge: "Exh.",
+    dailyExhibitionFullBadge: "Exhibition",
+    dailyRoomFailedErrors: "Échec ({count} erreurs)",
   },
   it: {
     playerInsights: "Statistiche Giocatore",
@@ -4555,6 +4595,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyCalendarHistoryBtn: "Vedi calendario e cronologia",
     hudViewMatchResultsTooltip: "Vedi risultati e rivincita",
     hudViewGameSummaryTooltip: "Riepilogo partita",
+    dailyRoomRaceTab: "Stanza ({count})",
+    dailyGlobalTop20Tab: "Top 20 Globale",
+    dailyExhibitionShortBadge: "Esib.",
+    dailyExhibitionFullBadge: "Esibizione",
+    dailyRoomFailedErrors: "Fallito ({count} errori)",
   },
   "pt-BR": {
     playerInsights: "Estatísticas",
@@ -5059,5 +5104,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyCalendarHistoryBtn: "Ver calendário e histórico",
     hudViewMatchResultsTooltip: "Ver resultados e revanche",
     hudViewGameSummaryTooltip: "Ver resumo do jogo",
+    dailyRoomRaceTab: "Sala ({count})",
+    dailyGlobalTop20Tab: "Top 20 Global",
+    dailyExhibitionShortBadge: "Exib.",
+    dailyExhibitionFullBadge: "Exibição",
+    dailyRoomFailedErrors: "Falhou ({count} erros)",
   },
 };
