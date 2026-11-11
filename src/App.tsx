@@ -13,6 +13,7 @@ import { CreateChallengeModal } from "./components/modals/CreateChallengeModal";
 import { GameOverModal } from "./components/modals/GameOverModal";
 import { IncomingInviteModal } from "./components/modals/IncomingInviteModal";
 import { HintRewardModal } from "./components/modals/HintRewardModal";
+import { DifficultyBottomSheet } from "./components/modals/DifficultyBottomSheet";
 import { initAdMob, showInterstitialBetweenMatches, showRewardedHintAd, isDailyAdCapReached } from "./services/adMobService";
 import { ShareActionWrapper } from "./components/share/ShareActionWrapper";
 import { GuestBannerPill } from "./components/auth/GuestBannerPill";
@@ -3210,6 +3211,7 @@ export default function App() {
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState<boolean>(false);
   const [showResetSettingsModal, setShowResetSettingsModal] = useState<boolean>(false);
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
+  const [showDifficultySheet, setShowDifficultySheet] = useState<boolean>(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
   const [isConfirmingFactoryReset, setIsConfirmingFactoryReset] = useState<boolean>(false);
@@ -3381,12 +3383,14 @@ export default function App() {
 
 
   // --- DYNAMIC RESUME GAME STATE LOOP ---
-  const [savedSessionInfo, setSavedSessionInfo] = useState<{ difficulty: Difficulty; seconds: number; isMultiplayer?: boolean; roomCode?: string } | null>(null);
+  const [savedSessionInfo, setSavedSessionInfo] = useState<{ difficulty: Difficulty; seconds: number; isMultiplayer?: boolean; roomCode?: string; isDailyRoom?: boolean } | null>(null);
   const [lastCompletedSession, setLastCompletedSession] = useState<{
     state: BoardState;
     seconds: number;
     difficulty: Difficulty;
     isChallenge?: boolean;
+    isDaily?: boolean;
+    gameMode?: "classic" | "custom" | "daily";
     challengeSeed?: number | null;
     solutionGrid?: number[][];
   } | null>(() => {
@@ -3422,11 +3426,14 @@ export default function App() {
           hintsCount: data.hintsCount ?? 0,
           isGameOver: true,
           difficulty: data.difficulty as Difficulty,
-          seed: data.seed
+          seed: data.seed,
+          ...(data.gameMode ? { gameMode: data.gameMode } : {})
         },
         seconds: data.sessionSeconds ?? 0,
         difficulty: data.difficulty as Difficulty,
         isChallenge: data.challengeMode ?? false,
+        isDaily: Boolean(data.isDaily || data.gameMode === "daily"),
+        gameMode: data.gameMode,
         challengeSeed: data.challengeSeed ?? null,
         solutionGrid: restoredSolution
       };
@@ -3491,7 +3498,8 @@ export default function App() {
         difficulty: diff,
         seconds: seconds,
         isMultiplayer: isMulti,
-        roomCode: effectiveRoomCode || undefined
+        roomCode: effectiveRoomCode || undefined,
+        isDailyRoom: Boolean(isMulti && isDailyRoomRef.current && dailyChallengeActiveDateRef.current)
       });
     } catch (error) {
       console.error("Autosave error:", error);
@@ -3588,7 +3596,8 @@ export default function App() {
               difficulty: parsed.difficulty,
               seconds: baseSecs + (isMultiplayerRoom ? elapsed : 0),
               isMultiplayer: isMultiplayerRoom,
-              roomCode: parsed.roomCode || undefined
+              roomCode: parsed.roomCode || undefined,
+              isDailyRoom: Boolean(parsed.isDailyRoom)
             });
           } else {
             try { localStorage.removeItem(getScopedKey("savedSession")); } catch { }
@@ -5583,7 +5592,8 @@ export default function App() {
                   difficulty: parsed.difficulty,
                   seconds: baseSecs + (isMultiplayerRoom ? elapsed : 0),
                   isMultiplayer: isMultiplayerRoom,
-                  roomCode: parsed.roomCode || undefined
+                  roomCode: parsed.roomCode || undefined,
+                  isDailyRoom: Boolean(parsed.isDailyRoom)
                 });
               } else {
                 setSavedSessionInfo(null);
@@ -5627,11 +5637,14 @@ export default function App() {
                     hintsCount: data.hintsCount ?? 0,
                     isGameOver: true,
                     difficulty: data.difficulty as Difficulty,
-                    seed: data.seed
+                    seed: data.seed,
+                    ...(data.gameMode ? { gameMode: data.gameMode } : {})
                   },
                   seconds: data.sessionSeconds ?? 0,
                   difficulty: data.difficulty as Difficulty,
                   isChallenge: data.challengeMode ?? false,
+                  isDaily: Boolean(data.isDaily || data.gameMode === "daily"),
+                  gameMode: data.gameMode,
                   challengeSeed: data.challengeSeed ?? null,
                   solutionGrid: restoredSolution
                 });
@@ -6227,7 +6240,8 @@ export default function App() {
                     difficulty: parsed.difficulty,
                     seconds: baseSecs + (isMultiplayerRoom ? elapsed : 0),
                     isMultiplayer: isMultiplayerRoom,
-                    roomCode: parsed.roomCode || undefined
+                    roomCode: parsed.roomCode || undefined,
+                    isDailyRoom: Boolean(parsed.isDailyRoom)
                   });
 
                   if (shouldPreserveWebGameBoard && (isSwitchingUid || !boardStateRef.current)) {
@@ -7113,6 +7127,7 @@ export default function App() {
       setUnreadNotificationsCount(0);
       setCurrentScreen("home");
       setShowSettingsModal(false);
+      setShowDifficultySheet(false);
 
       // 7. Revoke Firebase Auth session (after all state and storage is reset to guest)
       currentHydratedUidRef.current = null;
@@ -7981,6 +7996,7 @@ export default function App() {
     if (showCreateChallengeModal) { setShowCreateChallengeModal(false); return true; }
     if (showJoinRoomModal) { setShowJoinRoomModal(false); return true; }
     if (showMultiplayerForkModal) { setShowMultiplayerForkModal(false); return true; }
+    if (showDifficultySheet) { setShowDifficultySheet(false); return true; }
     if (showHintRewardModal) {
       setShowHintRewardModal(false);
       if (currentScreen === "game" && !boardState?.isGameOver) {
@@ -8017,6 +8033,7 @@ export default function App() {
     if (showCreateChallengeModal) count++;
     if (showJoinRoomModal) count++;
     if (showMultiplayerForkModal) count++;
+    if (showDifficultySheet) count++;
     if (showHintRewardModal) count++;
     if (showHowToPlayModal) count++;
     return count;
@@ -11006,6 +11023,45 @@ export default function App() {
   const [boardState, setBoardState] = useState<BoardState | null>(null);
   boardStateRef.current = boardState;
 
+  const homeContextDifficulty = useMemo<Difficulty>(() => {
+    if (savedSessionInfo && !savedSessionInfo.isMultiplayer && !savedSessionInfo.isDailyRoom) {
+      return normalizeDifficulty(savedSessionInfo.difficulty);
+    }
+    const isInMemoryBoardDailyOrMulti = Boolean(
+      challengeMode ||
+      isDailyRoomActive ||
+      dailyChallengeActiveDate ||
+      isDailyReviewSession ||
+      boardState?.gameMode === "daily"
+    );
+    if (boardState && !boardState.isGameOver && !isInMemoryBoardDailyOrMulti) {
+      return normalizeDifficulty(boardState.difficulty || difficulty);
+    }
+    if (boardState?.isGameOver && !isInMemoryBoardDailyOrMulti) {
+      return normalizeDifficulty(boardState.difficulty || difficulty);
+    }
+    if (
+      lastCompletedSession &&
+      !lastCompletedSession.isChallenge &&
+      !lastCompletedSession.isDaily &&
+      lastCompletedSession.gameMode !== "daily" &&
+      lastCompletedSession.state?.gameMode !== "daily"
+    ) {
+      return normalizeDifficulty(lastCompletedSession.difficulty);
+    }
+    return "EASY";
+  }, [
+    savedSessionInfo,
+    boardState,
+    difficulty,
+    challengeMode,
+    isDailyRoomActive,
+    dailyChallengeActiveDate,
+    isDailyReviewSession,
+    lastCompletedSession,
+  ]);
+  const homeBestTime = bestTimes[homeContextDifficulty];
+
   const {
     badgeView: conversionBadgeView,
     recordCellTap,
@@ -12995,10 +13051,21 @@ export default function App() {
 
     // Save completed session for post-game Review on Home Screen synchronously before any network await
     if (activeBoard) {
+      const isDailySessionForHistory = Boolean(
+        dailyChallengeActiveDateRef.current ||
+        dailyChallengeActiveDate ||
+        isDailyBoardContextRef.current ||
+        isDailyRoomRef.current ||
+        activeBoard.gameMode === "daily"
+      );
+      const resolvedSessionGameMode = isDailySessionForHistory
+        ? ("daily" as const)
+        : activeBoard.gameMode;
       const terminalBoardState: BoardState = {
         ...activeBoard,
         currentMistakesCount: finalMistakes,
-        isGameOver: true
+        isGameOver: true,
+        ...(resolvedSessionGameMode ? { gameMode: resolvedSessionGameMode } : {})
       };
       let activeSolution: number[][] =
         Array.isArray(solutionGrid) && solutionGrid.length === 9
@@ -13016,6 +13083,8 @@ export default function App() {
         seconds: sessionSeconds,
         difficulty: difficulty,
         isChallenge: challengeMode,
+        isDaily: isDailySessionForHistory,
+        ...(resolvedSessionGameMode ? { gameMode: resolvedSessionGameMode } : {}),
         challengeSeed: challengeSeed,
         solutionGrid: activeSolution
       };
@@ -13033,6 +13102,8 @@ export default function App() {
           difficulty: difficulty,
           seed: terminalBoardState.seed,
           challengeMode: challengeMode,
+          isDaily: isDailySessionForHistory,
+          ...(resolvedSessionGameMode ? { gameMode: resolvedSessionGameMode } : {}),
           challengeSeed: challengeSeed,
           solutionGrid: activeSolution
         }));
@@ -14528,6 +14599,7 @@ export default function App() {
   const isPauseModalOpen = Boolean(
     showHowToPlayModal ||
     showSettingsModal ||
+    showDifficultySheet ||
     showMultiplayerForkModal ||
     showBellInvitesModal ||
     showMidGameInviteModal ||
@@ -15919,6 +15991,7 @@ export default function App() {
       isGameOver: Boolean(payload.reviewOnly),
       difficulty: mappedUiDifficulty,
       seed: payload.seed,
+      gameMode: "daily",
     });
 
     setHistory([]);
@@ -16373,6 +16446,7 @@ export default function App() {
     setCurrentScreen("home");
     setIsConfirmingFactoryReset(false);
     setShowResetSettingsModal(false);
+    setShowDifficultySheet(false);
     showToast(t("factoryResetCompleteToast"));
   };
 
@@ -17945,7 +18019,7 @@ export default function App() {
               <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
             </div>
             {(() => {
-              const activeBadgeDiff = currentScreen === "home" ? difficulty : (boardState?.difficulty || difficulty);
+              const activeBadgeDiff = currentScreen === "home" ? homeContextDifficulty : (boardState?.difficulty || difficulty);
               return (
                 <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? (activeBadgeDiff === "EASY" ? "text-[#d1fae5]" : activeBadgeDiff === "MEDIUM" ? "text-[#fef08a]" : activeBadgeDiff === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : (activeBadgeDiff === "EASY" ? "text-[#065F46]" : activeBadgeDiff === "MEDIUM" ? "text-[#854D0E]" : activeBadgeDiff === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
                   {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
@@ -18067,7 +18141,7 @@ export default function App() {
                   <GuestBannerPill onConnectGoogle={handleConnectGoogle} darkMode={darkMode} />
                 )}
 
-                {/* DAILY CHALLENGE CARD & SUDOKU SOLVER */}
+                {/* DAILY CHALLENGE CARD */}
                 <div className="w-full flex flex-col gap-2.5 shrink-0 select-none" id="home-feature-boxes-container">
                   <DailyChallengeCard
                     key={`daily-home-${isGuestSession ? "guest" : (authUser?.uid || "guest")}`}
@@ -18076,29 +18150,10 @@ export default function App() {
                     onStartDailyChallenge={handleLaunchDailyChallenge}
                     refreshTrigger={dailyRefreshCounter}
                   />
-                  <button
-                    type="button"
-                    id="home-sudoku-solver-btn"
-                    onClick={() => {
-                      playClickSound();
-                      triggerHapticTap(vibrations);
-                      navigateToScreen("solver");
-                    }}
-                    className={`w-full border-0 outline-none py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
-                      darkMode
-                        ? "bg-[#1e1b4b]/80 hover:bg-[#312e81]/85 text-[#c7d2fe] shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
-                        : "bg-[#E0E7FF]/90 hover:bg-[#C7D2FE]/90 text-[#3730A3] shadow-[0_6px_18px_rgba(55,48,163,0.06)]"
-                    }`}
-                  >
-                    <Search className="w-4 h-4 shrink-0 stroke-[2.2]" />
-                    <span className="font-sans font-bold text-xs tracking-wide truncate leading-none">
-                      {t("sudokuSolverLabel")}
-                    </span>
-                  </button>
                 </div>
 
                 {/* 📌 PREMIUM FLOATING STICKY NOTE / CONVERSION CAROUSEL (CHIT, ZERO LAYOUT SHIFT) */}
-                <div className="w-full max-w-sm mx-auto h-[136px] sm:h-[156px] mb-4 sm:mb-6 lg:mb-2 shrink-0 select-none" id="home-record-badge-container">
+                <div className="w-full max-w-sm mx-auto h-[108px] sm:h-[124px] mb-4 sm:mb-6 lg:mb-2 shrink-0 select-none" id="home-record-badge-container">
                   <AnimatePresence mode="wait" initial={false}>
                     {!Capacitor.isNativePlatform() && conversionBadgeView === "playStore" ? (
                       <motion.a
@@ -18111,7 +18166,7 @@ export default function App() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4 }}
                         transition={{ duration: 0.22, ease: "easeOut" }}
-                        className={`card w-full h-full px-5 sm:px-7 relative overflow-hidden rounded-2xl border-0 outline-none no-underline transition-colors duration-200 select-none flex flex-col justify-center items-center transform rotate-[-1.5deg] cursor-pointer active:scale-[0.99] ${darkMode
+                        className={`card w-full h-full py-2 sm:py-3 px-5 sm:px-7 relative overflow-hidden rounded-2xl border-0 outline-none no-underline transition-colors duration-200 select-none flex flex-col justify-center items-center transform rotate-[-1.5deg] cursor-pointer active:scale-[0.99] ${darkMode
                           ? "bg-[#0c4a6e] hover:bg-[#075985] text-[#bae6fd] shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
                           : "bg-[#E0F2FE] hover:bg-[#BAE6FD] text-[#0369A1] shadow-[0_10px_25px_rgba(3,105,161,0.08)]"
                           }`}
@@ -18121,9 +18176,9 @@ export default function App() {
                         <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 w-16 h-3.5 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] rotate-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none transition-colors duration-200 z-10`} />
 
                         {/* 3D Isometric Sudoku Perspective Watermark */}
-                        <Sudoku3DWatermark difficulty={difficulty} />
+                        <Sudoku3DWatermark difficulty={homeContextDifficulty} />
 
-                        <div className="text-center relative z-10 flex flex-col items-center justify-center gap-1 max-w-full px-1">
+                        <div className="text-center relative z-10 flex flex-col items-center justify-center gap-0.5 max-w-full px-1">
                           <span className="text-[10px] uppercase font-mono tracking-widest block font-bold opacity-75">
                             SudokuSync
                           </span>
@@ -18146,15 +18201,15 @@ export default function App() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4 }}
                         transition={{ duration: 0.22, ease: "easeOut" }}
-                        className={`card w-full h-full px-4 sm:px-7 relative overflow-hidden rounded-2xl border-0 transition-colors duration-200 select-none flex flex-col justify-center items-center gap-2 sm:gap-3 transform rotate-[-1.5deg] ${darkMode ? (
-                          difficulty === "EASY" ? "bg-[#022c22] text-[#d1fae5] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
-                            difficulty === "MEDIUM" ? "bg-[#451a03] text-[#fef08a] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
-                              difficulty === "HARD" ? "bg-[#2e1065] text-[#e9d5ff] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
+                        className={`card w-full h-full py-2 sm:py-3 px-4 sm:px-7 relative overflow-hidden rounded-2xl border-0 transition-colors duration-200 select-none flex flex-col justify-center items-center gap-1 sm:gap-1.5 transform rotate-[-1.5deg] ${darkMode ? (
+                          homeContextDifficulty === "EASY" ? "bg-[#022c22] text-[#d1fae5] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
+                            homeContextDifficulty === "MEDIUM" ? "bg-[#451a03] text-[#fef08a] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
+                              homeContextDifficulty === "HARD" ? "bg-[#2e1065] text-[#e9d5ff] shadow-[0_10px_25px_rgba(0,0,0,0.5)]" :
                                 "bg-[#4c0519] text-[#fecdd3] shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
                         ) : (
-                          difficulty === "EASY" ? "bg-[#D1FAE5] shadow-[0_10px_25px_rgba(6,95,70,0.06)] text-[#065F46]" :
-                            difficulty === "MEDIUM" ? "bg-[#FFF99D] shadow-[0_10px_25px_rgba(133,77,14,0.06)] text-[#854D0E]" :
-                              difficulty === "HARD" ? "bg-[#F3E8FF] shadow-[0_10px_25px_rgba(107,33,168,0.06)] text-[#6B21A8]" :
+                          homeContextDifficulty === "EASY" ? "bg-[#D1FAE5] shadow-[0_10px_25px_rgba(6,95,70,0.06)] text-[#065F46]" :
+                            homeContextDifficulty === "MEDIUM" ? "bg-[#FFF99D] shadow-[0_10px_25px_rgba(133,77,14,0.06)] text-[#854D0E]" :
+                              homeContextDifficulty === "HARD" ? "bg-[#F3E8FF] shadow-[0_10px_25px_rgba(107,33,168,0.06)] text-[#6B21A8]" :
                                 "bg-[#FFE4E6] shadow-[0_10px_25px_rgba(157,23,77,0.06)] text-[#9D174D]"
                         )
                           }`}
@@ -18164,7 +18219,7 @@ export default function App() {
                         <div className={`absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 w-16 h-3.5 ${darkMode ? "bg-white/15" : "bg-white/60"} backdrop-blur-[1px] rotate-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] pointer-events-none transition-colors duration-200 z-10`} />
 
                         {/* 3D Isometric Sudoku Perspective Watermark */}
-                        <Sudoku3DWatermark difficulty={difficulty} />
+                        <Sudoku3DWatermark difficulty={homeContextDifficulty} />
 
                         <div className="text-center relative z-10 w-full max-w-full">
                           <span className="text-[clamp(0.6875rem,2.4vw,0.75rem)] uppercase font-mono tracking-widest block mb-0.5 font-bold opacity-80 truncate max-w-full">
@@ -18174,11 +18229,11 @@ export default function App() {
                             <Timer className="w-[clamp(1rem,4vw,1.375rem)] h-[clamp(1rem,4vw,1.375rem)] stroke-[3.2] shrink-0" />
                             <span className="min-w-0 truncate">{t('home_record_banner_best_time')}:</span>
                             <span className="font-mono font-black text-[clamp(1.1875rem,4.8vw,1.625rem)] tabular-nums whitespace-nowrap shrink-0">
-                              {bestTime && bestTime > 0 ? formatTimer(bestTime) : "--:--"}
+                              {homeBestTime && homeBestTime > 0 ? formatTimer(homeBestTime) : "--:--"}
                             </span>
                           </h2>
-                          <p className="mt-1 select-none handwriting opacity-95 text-[clamp(0.8125rem,3vw,0.9375rem)] font-semibold truncate max-w-full">
-                            {bestTime && bestTime > 0
+                          <p className="mt-0.5 select-none handwriting opacity-95 text-[clamp(0.8125rem,3vw,0.9375rem)] font-semibold truncate max-w-full">
+                            {homeBestTime && homeBestTime > 0
                               ? t('break_your_record')
                               : t('noRecordPrompt')}
                           </p>
@@ -18186,47 +18241,6 @@ export default function App() {
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </div>
-
-                {/* Difficulty level selecting buttons - SOLID LOCKED FIXED POSITION CONTAINER */}
-                <div className="w-full shrink-0 select-none pb-1" id="difficulty-level-container">
-                  <span className={`block text-center text-[11px] font-black uppercase tracking-wider mb-3 font-mono ${darkMode ? "text-zinc-400" : "text-stone-650"}`}>
-                    {t("selectDifficulty")}
-                  </span>
-                  <div className="h-[38px] flex flex-row justify-between items-stretch gap-2 min-w-full font-mono text-2xs md:text-xs">
-                    {(["EASY", "MEDIUM", "HARD", "EXPERT"] as Difficulty[]).map((lvl) => {
-                      const isSelected = difficulty === lvl;
-
-                      // Pastel color scheme mapping matching the global designer guidelines with precise active pressed values
-                      const scheme = darkMode ? (
-                        lvl === "EASY" ? { active: "bg-[#022c22] text-[#d1fae5] font-black shadow-[0_8px_16px_rgba(0,0,0,0.4)] scale-102 active:bg-[#064e3b]", inactive: "bg-zinc-900/60 hover:bg-[#022c22]/40 text-[#d1fae5]/70 active:bg-zinc-800" } :
-                          lvl === "MEDIUM" ? { active: "bg-[#451a03] text-[#fef08a] font-black shadow-[0_8px_16px_rgba(0,0,0,0.4)] scale-102 active:bg-[#713f12]", inactive: "bg-zinc-900/60 hover:bg-[#451a03]/40 text-[#fef08a]/70 active:bg-zinc-800" } :
-                            lvl === "HARD" ? { active: "bg-[#2e1065] text-[#e9d5ff] font-black shadow-[0_8px_16px_rgba(0,0,0,0.4)] scale-102 active:bg-[#3b0764]", inactive: "bg-zinc-900/60 hover:bg-[#2e1065]/40 text-[#e9d5ff]/70 active:bg-zinc-800" } :
-                              { active: "bg-[#4c0519] text-[#fecdd3] font-black shadow-[0_8px_16px_rgba(0,0,0,0.4)] scale-102 active:bg-[#881337]", inactive: "bg-zinc-900/60 hover:bg-[#4c0519]/40 text-[#fecdd3]/70 active:bg-zinc-800" }
-                      ) : (
-                        lvl === "EASY" ? { active: "bg-[#D1FAE5] text-[#065F46] font-black shadow-[0_8px_16px_rgba(6,95,70,0.06),_0_2px_4px_rgba(0,0,0,0.02)] scale-102 active:bg-[#A7F3D0] active:scale-98 active:shadow-none", inactive: "bg-white/60 hover:bg-[#D1FAE5]/30 text-stone-500 shadow-sm active:bg-stone-150 active:shadow-none" } :
-                          lvl === "MEDIUM" ? { active: "bg-[#FFF99D] text-[#854D0E] font-black shadow-[0_8px_16px_rgba(133,77,14,0.06),_0_2px_4px_rgba(0,0,0,0.02)] scale-102 active:bg-[#FDE047] active:scale-98 active:shadow-none", inactive: "bg-white/60 hover:bg-[#FFF99D]/30 text-stone-500 shadow-sm active:bg-stone-150 active:shadow-none" } :
-                            lvl === "HARD" ? { active: "bg-[#F3E8FF] text-[#6B21A8] font-black shadow-[0_8px_16px_rgba(107,33_168,0.06),_0_2px_4px_rgba(0,0,0,0.02)] scale-102 active:bg-[#D8B4FE] active:scale-98 active:shadow-none", inactive: "bg-white/60 hover:bg-[#F3E8FF]/30 text-stone-500 shadow-sm active:bg-stone-150 active:shadow-none" } :
-                              { active: "bg-[#FFE4E6] text-[#9D174D] font-black shadow-[0_8px_16px_rgba(157,23,77,0.06),_0_2px_4px_rgba(0,0,0,0.02)] scale-102 active:bg-[#FBCFE8] active:scale-98 active:shadow-none", inactive: "bg-white/60 hover:bg-[#FFE4E6]/30 text-stone-500 shadow-sm active:bg-stone-150 active:shadow-none" }
-                      );
-
-                      const btnClass = isSelected ? scheme.active : scheme.inactive;
-
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => {
-                            playClickSound();
-                            handleSelectDifficultySilo(lvl);
-                            addLog(`⚙️ Difficulty changed to: ${lvl}`);
-                          }}
-                          className={`flex-1 h-full flex items-center justify-center text-xs uppercase tracking-wider transition-all duration-150 cursor-pointer select-none rounded-xl border-none outline-none ${btnClass}`}
-                        >
-                          {t(lvl.toLowerCase() as any)}
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
 
                 {/* 🔄 RESUME SOLO & MULTIPLAYER SIDE-BY-SIDE GRID - Adhering to the 'Zen' Design System */}
@@ -18345,7 +18359,13 @@ export default function App() {
 
                 {/* 🚀 Play New Game Button styled with Expert theme */}
                 <button
-                  onClick={handleStartNewGame}
+                  type="button"
+                  id="home-play-new-game-button"
+                  onClick={() => {
+                    playClickSound();
+                    triggerHapticTap(vibrations);
+                    setShowDifficultySheet(true);
+                  }}
                   className="w-full border-none p-5 sm:p-6 md:p-8 lg:py-3 lg:px-6 mt-4 sm:mt-6 lg:mt-2 text-center font-black text-xl md:text-2xl tracking-wider uppercase transition-all duration-200 active:scale-[0.98] select-none rounded-[20px] shadow-sm flex items-center justify-center gap-2 cursor-pointer bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:hover:bg-rose-900/70 dark:text-rose-200"
                 >
                   <Play className="w-5 h-5 md:w-6 md:h-6 fill-current stroke-[2.5]" />
@@ -19851,6 +19871,16 @@ export default function App() {
             isSyncingCloudData={isSyncingCloudData}
             onCancelConnectGoogle={handleCancelGoogleLogin}
             onLogout={handleLogout}
+            onOpenSudokuSolver={() => {
+              if (fromGameplaySettings && boardState && !boardState.isGameOver) {
+                if ((!dailyChallengeActiveDate && !isDailyBoardContextRef.current) || isDailyRoomRef.current || challengeMode) {
+                  saveCurrentGameToLocal(boardState, sessionSeconds, difficulty);
+                }
+              }
+              setFromGameplaySettings(false);
+              setShowSettingsModal(false);
+              navigateToScreen("solver");
+            }}
             isOnline={isOnline}
           />
         )}
@@ -21725,7 +21755,8 @@ export default function App() {
                 maxHintsLimit: 3,
                 isGameOver: false,
                 difficulty: mappedDiff,
-                seed: dailyGen.seed
+                seed: dailyGen.seed,
+                gameMode: "daily"
               });
               setHistory([]);
               setLockedNum(null);
@@ -24675,6 +24706,31 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* 🎯 LUXURY MINIMAL DIFFICULTY BOTTOM SHEET */}
+      <DifficultyBottomSheet
+        isOpen={showDifficultySheet}
+        darkMode={darkMode}
+        bestTimes={bestTimes}
+        formatTimer={formatTimer}
+        onClose={() => {
+          playClickSound();
+          setShowDifficultySheet(false);
+        }}
+        onSelectDifficulty={(selectedDiff) => {
+          playClickSound();
+          triggerHapticTap(vibrations);
+          setShowDifficultySheet(false);
+          dailyChallengeActiveDateRef.current = null;
+          setDailyChallengeActiveDate(null);
+          isDailyRoomRef.current = false;
+          setIsDailyRoomActive(false);
+          isDailyExhibitionRef.current = false;
+          setIsDailyExhibition(false);
+          setIsVictoryActive(false);
+          handleSelectDifficultySilo(selectedDiff, { startNewGame: true });
+        }}
+      />
 
       {/* 💡 REWARDED AD HINT MODAL */}
       <HintRewardModal

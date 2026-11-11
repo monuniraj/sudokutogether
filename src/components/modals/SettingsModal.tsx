@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown, WifiOff, Check, RefreshCw } from "lucide-react";
+import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown, WifiOff, Check, RefreshCw, Search } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -61,6 +61,7 @@ export interface SettingsModalProps {
   onCancelConnectGoogle?: () => void;
   onLogout?: () => void;
   onLanguageChange?: (lang: Language) => void;
+  onOpenSudokuSolver?: () => void;
   isOnline?: boolean;
 }
 
@@ -111,6 +112,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onCancelConnectGoogle,
   onLogout,
   onLanguageChange,
+  onOpenSudokuSolver,
   isOnline = true
 }) => {
   const isConnecting = isSyncingCloudData ?? isConnectingGoogle;
@@ -438,6 +440,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
         </div>
+
+        {/* SUDOKU SOLVER UTILITY ENTRY */}
+        {onOpenSudokuSolver && (
+          <button
+            type="button"
+            id="settings-sudoku-solver-btn"
+            onClick={() => {
+              playClickSound();
+              triggerHapticTap(vibrations);
+              onOpenSudokuSolver();
+            }}
+            className={`w-full lg:col-span-2 border-0 outline-none py-3 px-4 rounded-2xl flex items-center justify-center gap-2 transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+              darkMode
+                ? "bg-[#1e1b4b]/80 hover:bg-[#312e81]/85 text-[#c7d2fe] shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
+                : "bg-[#E0E7FF]/90 hover:bg-[#C7D2FE]/90 text-[#3730A3] shadow-[0_6px_18px_rgba(55,48,163,0.06)]"
+            }`}
+          >
+            <Search className="w-4 h-4 shrink-0 stroke-[2.2]" />
+            <span className="font-sans font-bold text-xs sm:text-sm tracking-wide truncate leading-none">
+              {t("sudokuSolverLabel")}
+            </span>
+          </button>
+        )}
 
         <div className="flex flex-col gap-5 lg:gap-6">
           {/* CATEGORY 1: GENERAL PREFERENCES */}
