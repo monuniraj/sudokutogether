@@ -172,10 +172,13 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   const lightBorderR = darkMode
     ? (currentDiff === "EASY" ? "border-r-[#054031]" : currentDiff === "MEDIUM" ? "border-r-[#532004]" : currentDiff === "HARD" ? "border-r-[#31126b]" : "border-r-[#58061d]")
     : (currentDiff === "EASY" ? "border-r-[#065f46]/20" : currentDiff === "MEDIUM" ? "border-r-[#854d0e]/20" : currentDiff === "HARD" ? "border-r-[#6b21a8]/20" : "border-r-[#9d174d]/20");
-    
   const lightBorderB = darkMode
     ? (currentDiff === "EASY" ? "border-b-[#054031]" : currentDiff === "MEDIUM" ? "border-b-[#532004]" : currentDiff === "HARD" ? "border-b-[#31126b]" : "border-b-[#58061d]")
     : (currentDiff === "EASY" ? "border-b-[#065f46]/20" : currentDiff === "MEDIUM" ? "border-b-[#854d0e]/20" : currentDiff === "HARD" ? "border-b-[#6b21a8]/20" : "border-b-[#9d174d]/20");
+
+  const outerBoardBorderClass = darkMode
+    ? (currentDiff === "EASY" ? "border-[#0b6b52]" : currentDiff === "MEDIUM" ? "border-[#7c3207]" : currentDiff === "HARD" ? "border-[#4c1d95]" : "border-[#881337]")
+    : (currentDiff === "EASY" ? "border-[#065f46]/55" : currentDiff === "MEDIUM" ? "border-[#854d0e]/55" : currentDiff === "HARD" ? "border-[#6b21a8]/55" : "border-[#9d174d]/55");
 
   // In Number-First mode with locked brush digit, apply ultra-soft crosshair background
   const isPaintModeActiveWithNumber = isNumberFirstInputMode && lockedNum !== null;
@@ -223,7 +226,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
   return (
     <div 
       id={id}
-      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-xl sudoku-board transition-colors duration-200 ${darkMode ? "bg-zinc-900 border-[2.4px]" : "bg-white border-[2.4px]"} ${darkMode ? (currentDiff === "EASY" ? "border-[#0b6b52]" : currentDiff === "MEDIUM" ? "border-[#7c3207]" : currentDiff === "HARD" ? "border-[#4c1d95]" : "border-[#881337]") : (currentDiff === "EASY" ? "border-[#065f46]/55" : currentDiff === "MEDIUM" ? "border-[#854d0e]/55" : currentDiff === "HARD" ? "border-[#6b21a8]/55" : "border-[#9d174d]/55")}`}
+      className={`relative w-full aspect-square grid grid-cols-9 p-0 overflow-hidden box-border rounded-xl sudoku-board transition-colors duration-200 ${darkMode ? "bg-zinc-900 border-[2.4px]" : "bg-white border-[2.4px]"} ${outerBoardBorderClass}`}
       style={{ 
         boxShadow: darkMode ? "0 4px 20px rgba(0,0,0,0.6)" : "0 4px 20px rgba(43,108,176,0.03)",
         width: "100%",

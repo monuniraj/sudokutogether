@@ -20,7 +20,6 @@ import {
   SudokuBoard,
   type Difficulty,
   type SudokuBoardState,
-  type SudokuBoardTheme,
 } from "../../../components/game/SudokuBoard";
 import { SudokuKeypad } from "../../../components/game/SudokuKeypad";
 import { useTranslation } from "../../../i18n/useTranslation";
@@ -367,13 +366,6 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     return total;
   }, [solverGrid]);
 
-  const computedTheme: SudokuBoardTheme = useMemo(() => {
-    if (clueCount >= 41) return "easy";
-    if (clueCount >= 33) return "medium";
-    if (clueCount >= 27) return "hard";
-    return "expert";
-  }, [clueCount]);
-
   const difficultyMeta = useMemo<{
     difficultyText: string;
     colorClass: string;
@@ -396,14 +388,14 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     if (clueCount >= 33) {
       return {
         difficultyText: "Medium",
-        colorClass: "text-cyan-500",
+        colorClass: "text-amber-500",
         boardDifficulty: "MEDIUM",
       };
     }
     if (clueCount >= 27) {
       return {
         difficultyText: "Hard",
-        colorClass: "text-amber-500",
+        colorClass: "text-purple-500",
         boardDifficulty: "HARD",
       };
     }
@@ -723,7 +715,6 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
               id="solver-sudoku-board"
               boardState={boardState}
               difficulty={difficultyMeta.boardDifficulty}
-              theme={computedTheme}
               solutionGrid={solvedGrid ?? EMPTY_SOLUTION_GRID}
               isTimerPaused={false}
               onResumeSession={noopSound}
@@ -792,7 +783,6 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                     darkMode={isDarkMode}
                     playClickSound={noopSound}
                     hideUtilityDeck={true}
-                    theme={computedTheme}
                   />
                 </div>
 

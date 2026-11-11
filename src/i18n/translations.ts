@@ -89,6 +89,8 @@ export type TranslationKey =
   | "autoSwitchCompletedInfo"
   | "autoRemoveNotes"
   | "autoRemoveNotesInfo"
+  | "autoNotes"
+  | "autoNotesInfo"
   | "fastFill"
   | "fastFillInfo"
   | "activeTimerClock"
@@ -600,6 +602,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     autoSwitchCompletedInfo: "Automatically advances your active number brush when all 9 digits are placed.",
     autoRemoveNotes: "Auto-Remove Notes",
     autoRemoveNotesInfo: "Clears candidate notes from connected cells whenever a final digit is set.",
+    autoNotes: "Auto-Notes",
+    autoNotesInfo: "Automatically fills candidate notes in empty cells (Hard/Expert only).",
     fastFill: "Fast Fill (Number-First)",
     fastFillInfo: "Locks a number on the keypad so you can tap multiple cells to fill rapidly.",
     activeTimerClock: "Active Timer Clock",
@@ -1109,6 +1113,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     autoSwitchCompletedInfo: "जब सभी 9 अंक रख दिए जाते हैं तो स्वतः अगले अंक पर चला जाता है।",
     autoRemoveNotes: "नोट्स स्वतः हटाएं",
     autoRemoveNotesInfo: "अंतिम अंक सेट होने पर संबंधित सेलों से उम्मीदवार नोट्स साफ़ कर देता है।",
+    autoNotes: "ऑटो-नोट्स",
+    autoNotesInfo: "खाली सेलों में उम्मीदवार नोट्स स्वतः भरता है (केवल कठिन/विशेषज्ञ)।",
     fastFill: "फास्ट फिल (अंक-पहले)",
     fastFillInfo: "नंबर पैड पर अंक लॉक करता है ताकि आप तेज़ी से भरने के लिए कई सेलों पर टैप कर सकें।",
     activeTimerClock: "सक्रिय टाइमर घड़ी",
@@ -1618,6 +1624,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     autoSwitchCompletedInfo: "Wechselt automatisch zur nächsten Zahl, sobald alle 9 platziert wurden.",
     autoRemoveNotes: "Notizen auto-löschen",
     autoRemoveNotesInfo: "Entfernt Notizen aus verbundenen Feldern, sobald eine Zahl platziert wird.",
+    autoNotes: "Auto-Notizen",
+    autoNotesInfo: "Füllt Kandidatennotizen in leere Felder (nur Schwer/Experte).",
     fastFill: "Schnellausfüllen (Zahl zuerst)",
     fastFillInfo: "Sperrt eine Zahl auf dem Ziffernblock, um mehrere Felder schnell zu füllen.",
     activeTimerClock: "Timer-Uhr anzeigen",
@@ -2127,6 +2135,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     autoSwitchCompletedInfo: "ある数字を9個全て配置し終えると、自動的に次の数字に切り替わります。",
     autoRemoveNotes: "メモの自動削除",
     autoRemoveNotesInfo: "確定した数字が配置されると、関連するマスのメモを自動で消去します。",
+    autoNotes: "自動メモ入力",
+    autoNotesInfo: "空きマスに候補メモを自動入力します（ハード／エキスパート限定）。",
     fastFill: "高速入力（数字優先）",
     fastFillInfo: "数字を固定し、マスを連続でタップして素早く入力できるようにします。",
     activeTimerClock: "タイマー表示",
@@ -2636,6 +2646,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     autoSwitchCompletedInfo: "숫자 9개가 모두 채워지면 다음 숫자로 자동으로 전환됩니다.",
     autoRemoveNotes: "메모 자동 삭제",
     autoRemoveNotesInfo: "숫자가 확정되면 연결된 칸들의 메모를 자동으로 삭제합니다.",
+    autoNotes: "자동 메모",
+    autoNotesInfo: "빈 칸에 후보 메모를 자동으로 채웁니다 (어려움/전문가 전용).",
     fastFill: "빠른 입력 (숫자 먼저)",
     fastFillInfo: "숫자를 고정하여 여러 칸을 빠르게 터치해 채울 수 있습니다.",
     activeTimerClock: "타이머 시계 표시",
@@ -3145,6 +3157,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     autoSwitchCompletedInfo: "Avanza automáticamente al siguiente número cuando se han colocado los 9 iguales.",
     autoRemoveNotes: "Eliminar notas automáticamente",
     autoRemoveNotesInfo: "Borra las notas en las casillas conectadas cuando se confirma un número.",
+    autoNotes: "Notas automáticas",
+    autoNotesInfo: "Rellena notas candidatas en casillas vacías (solo Difícil/Experto).",
     fastFill: "Relleno rápido (Número primero)",
     fastFillInfo: "Bloquea un número en el teclado para colocarlo rápidamente en varias casillas.",
     activeTimerClock: "Temporizador activo",
@@ -3654,6 +3668,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     autoSwitchCompletedInfo: "Passe automatiquement au chiffre suivant lorsque les 9 exemplaires sont placés.",
     autoRemoveNotes: "Effacer auto les notes",
     autoRemoveNotesInfo: "Efface les notes des cases liées dès qu'un chiffre définitif est placé.",
+    autoNotes: "Notes automatiques",
+    autoNotesInfo: "Remplit les notes candidates dans les cases vides (Difficile/Expert).",
     fastFill: "Saisie Rapide (Chiffre d'abord)",
     fastFillInfo: "Verrouille un chiffre sur le pavé numérique pour remplir plusieurs cases rapidement.",
     activeTimerClock: "Horloge Chronomètre",
@@ -4163,6 +4179,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     autoSwitchCompletedInfo: "Passa automaticamente al numero successivo quando tutti e 9 sono inseriti.",
     autoRemoveNotes: "Rimuovi note automaticamente",
     autoRemoveNotesInfo: "Rimuove le note dalle caselle collegate quando viene inserito un numero definitivo.",
+    autoNotes: "Note automatiche",
+    autoNotesInfo: "Inserisce le note candidate nelle caselle vuote (solo Difficile/Esperto).",
     fastFill: "Inserimento Rapido (Prima numero)",
     fastFillInfo: "Blocca un numero sul tastierino per inserirlo rapidamente in più caselle.",
     activeTimerClock: "Cronometro Attivo",
@@ -4672,6 +4690,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     autoSwitchCompletedInfo: "Avança automaticamente para o próximo número quando os 9 forem colocados.",
     autoRemoveNotes: "Remover notas automaticamente",
     autoRemoveNotesInfo: "Remove as anotações das células conectadas ao definir um número.",
+    autoNotes: "Notas automáticas",
+    autoNotesInfo: "Preenche notas candidatas nas células vazias (apenas Difícil/Especialista).",
     fastFill: "Preenchimento Rápido (Número primeiro)",
     fastFillInfo: "Bloqueia um número no teclado para preencher várias células rapidamente.",
     activeTimerClock: "Cronômetro Ativo",

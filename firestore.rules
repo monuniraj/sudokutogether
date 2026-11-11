@@ -142,6 +142,11 @@ service cloud.firestore {
       match /daily_stats/{docId} {
         allow read, write: if isOwner(userId);
       }
+
+      // Custom Sudoku Solver puzzle history: strictly isolated to the profile owner
+      match /custom_history/{recordId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // =========================================================================

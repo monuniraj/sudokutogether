@@ -256,6 +256,54 @@ interface BoardState {
   customHistoryId?: string;
 }
 
+/**
+ * Builds a 9x9 Sudoku cell matrix from an initial puzzle grid.
+ * When `autoPopulateNotes` is enabled, empty cells are populated in O(81)
+ * using row/column/3x3-box bitmasks of valid remaining digits.
+ */
+function createInitialBoardGrid(puzzle: number[][], autoPopulateNotes: boolean): SudokuCell[][] {
+  const rowMask = new Int32Array(9);
+  const colMask = new Int32Array(9);
+  const boxMask = new Int32Array(9);
+
+  if (autoPopulateNotes) {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const val = puzzle[r]?.[c] || 0;
+        if (val >= 1 && val <= 9) {
+          const bit = 1 << val;
+          rowMask[r] |= bit;
+          colMask[c] |= bit;
+          boxMask[Math.floor(r / 3) * 3 + Math.floor(c / 3)] |= bit;
+        }
+      }
+    }
+  }
+
+  return Array.from({ length: 9 }, (_, r) =>
+    Array.from({ length: 9 }, (__, c) => {
+      const val = puzzle[r]?.[c] || 0;
+      const notes = new Set<number>();
+      if (val === 0 && autoPopulateNotes) {
+        const used = rowMask[r] | colMask[c] | boxMask[Math.floor(r / 3) * 3 + Math.floor(c / 3)];
+        for (let d = 1; d <= 9; d++) {
+          if ((used & (1 << d)) === 0) {
+            notes.add(d);
+          }
+        }
+      }
+      return {
+        row: r,
+        col: c,
+        value: val,
+        isOriginalClue: val !== 0,
+        isUserInput: false,
+        notes,
+      };
+    })
+  );
+}
+
 type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 
 export const DEFAULT_SETTINGS = {
@@ -270,6 +318,7 @@ export const DEFAULT_SETTINGS = {
   showRemainingNumbers: true,
   highlightRelatedArea: true,
   autoRemoveNotes: true,
+  autoNotes: false,
   fastFill: false,
   autoSwitchCompletedNumbers: false,
   // Gameplay Rules
@@ -3758,6 +3807,16 @@ export default function App() {
       return DEFAULT_SETTINGS.autoRemoveNotes;
     }
   });
+  const [isAutoNotesEnabled, setIsAutoNotesEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(getScopedKey("isAutoNotesEnabled")) ?? localStorage.getItem("sudoku_isAutoNotesEnabled");
+      return saved !== null ? saved === "true" : DEFAULT_SETTINGS.autoNotes;
+    } catch {
+      return DEFAULT_SETTINGS.autoNotes;
+    }
+  });
+  const isAutoNotesEnabledRef = useRef<boolean>(isAutoNotesEnabled);
+  isAutoNotesEnabledRef.current = isAutoNotesEnabled;
   const [isPreventMistakeNotesEnabled, setIsPreventMistakeNotesEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem(getScopedKey("isPreventMistakeNotesEnabled")) ?? localStorage.getItem("sudoku_isPreventMistakeNotesEnabled");
@@ -3809,6 +3868,14 @@ export default function App() {
       console.error(e);
     }
   }, [isAutoRemoveNotesEnabled, userProfile?.id]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(getScopedKey("isAutoNotesEnabled"), String(isAutoNotesEnabled));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [isAutoNotesEnabled, userProfile?.id]);
 
   useEffect(() => {
     try {
@@ -4836,6 +4903,7 @@ export default function App() {
     showRemainingNumbers,
     highlightRelatedArea: highlightAreas,
     autoRemoveNotes: isAutoRemoveNotesEnabled,
+    autoNotes: isAutoNotesEnabled,
     fastFill: isNumberFirstInputMode,
     autoSwitchCompletedNumbers: autoSwitchCompletedNumber,
     activeTimerClock: timerEnabled,
@@ -4856,6 +4924,7 @@ export default function App() {
       showRemainingNumbers,
       highlightRelatedArea: highlightAreas,
       autoRemoveNotes: isAutoRemoveNotesEnabled,
+      autoNotes: isAutoNotesEnabled,
       fastFill: isNumberFirstInputMode,
       autoSwitchCompletedNumbers: autoSwitchCompletedNumber,
       activeTimerClock: timerEnabled,
@@ -4873,6 +4942,7 @@ export default function App() {
     showRemainingNumbers,
     highlightAreas,
     isAutoRemoveNotesEnabled,
+    isAutoNotesEnabled,
     isNumberFirstInputMode,
     autoSwitchCompletedNumber,
     timerEnabled,
@@ -5320,6 +5390,18 @@ export default function App() {
               setIsAutoRemoveNotesEnabled(autoRemoveVal);
               try { localStorage.setItem(getScopedKey("isAutoRemoveNotesEnabled", uid), String(autoRemoveVal)); } catch { }
             }
+            // Auto-Notes
+            const autoNotesVal = s.autoNotes ?? s.isAutoNotesEnabled;
+            if (typeof autoNotesVal === "boolean") {
+              setIsAutoNotesEnabled(autoNotesVal);
+              isAutoNotesEnabledRef.current = autoNotesVal;
+              try { localStorage.setItem(getScopedKey("isAutoNotesEnabled", uid), String(autoNotesVal)); } catch { }
+            } else {
+              const userScopedAutoNotes = localStorage.getItem(getScopedKey("isAutoNotesEnabled", uid));
+              const resolvedAutoNotes = userScopedAutoNotes !== null ? userScopedAutoNotes === "true" : DEFAULT_SETTINGS.autoNotes;
+              setIsAutoNotesEnabled(resolvedAutoNotes);
+              isAutoNotesEnabledRef.current = resolvedAutoNotes;
+            }
             // Sound (Device-global per strict exception rule)
             if (typeof s.soundEffects === "boolean") {
               setSoundEffects(s.soundEffects);
@@ -5419,6 +5501,10 @@ export default function App() {
             if (userScopedPrivacy !== null) {
               setPrivacyEnabled(userScopedPrivacy === "true");
             }
+            const userScopedAutoNotes = localStorage.getItem(getScopedKey("isAutoNotesEnabled", uid));
+            const resolvedAutoNotes = userScopedAutoNotes !== null ? userScopedAutoNotes === "true" : DEFAULT_SETTINGS.autoNotes;
+            setIsAutoNotesEnabled(resolvedAutoNotes);
+            isAutoNotesEnabledRef.current = resolvedAutoNotes;
           }
 
           // Hydrate user's scoped in-progress game and review session (if any)
@@ -5664,6 +5750,7 @@ export default function App() {
             showRemainingNumbers: currentSettings.showRemainingNumbers,
             highlightRelatedArea: currentSettings.highlightRelatedArea,
             autoRemoveNotes: currentSettings.autoRemoveNotes,
+            autoNotes: currentSettings.autoNotes,
             fastFill: currentSettings.fastFill,
             autoSwitchCompletedNumbers: currentSettings.autoSwitchCompletedNumbers,
             activeTimerClock: currentSettings.activeTimerClock,
@@ -5674,6 +5761,7 @@ export default function App() {
             highlightIdentical: currentSettings.highlightIdenticalNumbers,
             highlightAreas: currentSettings.highlightRelatedArea,
             isAutoRemoveNotesEnabled: currentSettings.autoRemoveNotes,
+            isAutoNotesEnabled: currentSettings.autoNotes,
             isNumberFirstInputMode: currentSettings.fastFill,
             autoSwitchCompletedNumber: currentSettings.autoSwitchCompletedNumbers,
             timerEnabled: currentSettings.activeTimerClock,
@@ -5779,6 +5867,11 @@ export default function App() {
           savedGamesRef.current = guestVault.savedGames;
           setPersonalBestTimes(guestVault.bestTimes);
           personalBestTimesRef.current = guestVault.bestTimes;
+
+          const guestAutoNotes = localStorage.getItem(getScopedKey("isAutoNotesEnabled", "guest"));
+          const resolvedGuestAutoNotes = guestAutoNotes !== null ? guestAutoNotes === "true" : DEFAULT_SETTINGS.autoNotes;
+          setIsAutoNotesEnabled(resolvedGuestAutoNotes);
+          isAutoNotesEnabledRef.current = resolvedGuestAutoNotes;
         } catch {}
 
         if (isExplicitLogoutRef.current) {
@@ -6008,6 +6101,11 @@ export default function App() {
             setPersonalBestTimes(cachedVault.bestTimes);
             personalBestTimesRef.current = cachedVault.bestTimes;
 
+            const cachedAutoNotes = localStorage.getItem(getScopedKey("isAutoNotesEnabled", uid));
+            const resolvedCachedAutoNotes = cachedAutoNotes !== null ? cachedAutoNotes === "true" : DEFAULT_SETTINGS.autoNotes;
+            setIsAutoNotesEnabled(resolvedCachedAutoNotes);
+            isAutoNotesEnabledRef.current = resolvedCachedAutoNotes;
+
             // Load authenticated user's own scoped in-progress game (if any)
             const userSaved = localStorage.getItem(getScopedKey("savedSession", uid));
             if (userSaved) {
@@ -6080,6 +6178,8 @@ export default function App() {
             setPersonalBestTimes({});
             personalBestTimesRef.current = {};
             setSavedSessionInfo(null);
+            setIsAutoNotesEnabled(DEFAULT_SETTINGS.autoNotes);
+            isAutoNotesEnabledRef.current = DEFAULT_SETTINGS.autoNotes;
             if ((isSwitchingUid || !shouldPreserveWebGameBoard || !boardStateRef.current) && !isDailyBoardContextRef.current) {
               setBoardState(null);
               setSessionSeconds(0);
@@ -6158,6 +6258,7 @@ export default function App() {
       isNumberFirstInputMode: mergedSettings.fastFill,
       autoSwitchCompletedNumber: mergedSettings.autoSwitchCompletedNumbers,
       isAutoRemoveNotesEnabled: mergedSettings.autoRemoveNotes,
+      isAutoNotesEnabled: mergedSettings.autoNotes,
       vibrations: mergedSettings.hapticVibrations,
       timerEnabled: mergedSettings.activeTimerClock,
       mistakeLimitEnabled: mergedSettings.strictMistakeLimit,
@@ -6298,6 +6399,15 @@ export default function App() {
       localStorage.setItem(getScopedKey("isAutoRemoveNotesEnabled"), String(val));
     } catch { }
     syncSettingsToCloud({ autoRemoveNotes: val, isAutoRemoveNotesEnabled: val });
+  }, [syncSettingsToCloud]);
+
+  const handleToggleAutoNotes = useCallback((val: boolean) => {
+    isAutoNotesEnabledRef.current = val;
+    setIsAutoNotesEnabled(val);
+    try {
+      localStorage.setItem(getScopedKey("isAutoNotesEnabled"), String(val));
+    } catch { }
+    syncSettingsToCloud({ autoNotes: val, isAutoNotesEnabled: val });
   }, [syncSettingsToCloud]);
 
   const handleToggleFastFill = useCallback((val: boolean) => {
@@ -6677,6 +6787,16 @@ export default function App() {
       savedGamesRef.current = restoredVault.savedGames;
       setPersonalBestTimes(restoredVault.bestTimes);
       personalBestTimesRef.current = restoredVault.bestTimes;
+
+      try {
+        const guestAutoNotes = localStorage.getItem(getScopedKey("isAutoNotesEnabled", "guest"));
+        const resolvedGuestAutoNotes = guestAutoNotes !== null ? guestAutoNotes === "true" : DEFAULT_SETTINGS.autoNotes;
+        setIsAutoNotesEnabled(resolvedGuestAutoNotes);
+        isAutoNotesEnabledRef.current = resolvedGuestAutoNotes;
+      } catch {
+        setIsAutoNotesEnabled(DEFAULT_SETTINGS.autoNotes);
+        isAutoNotesEnabledRef.current = DEFAULT_SETTINGS.autoNotes;
+      }
 
       const restoredPlayers = Array.isArray(restoredVault.pastPlayers) ? restoredVault.pastPlayers : [];
       const restoredFriends = Array.isArray(restoredVault.friends) ? restoredVault.friends : restoredPlayers.filter((p: any) => p && p.isFriend);
@@ -8291,20 +8411,8 @@ export default function App() {
         solution2D = fallbackBoard.solved;
       }
 
-      // Convert to SudokuCell[][] with original clues locked
-      const finishedGrid: SudokuCell[][] = Array(9).fill(null).map((_, r) => {
-        return Array(9).fill(null).map((_, c) => {
-          const val = puzzle2D[r][c];
-          return {
-            row: r,
-            col: c,
-            value: val,
-            isOriginalClue: val !== 0,
-            isUserInput: false,
-            notes: new Set<number>()
-          };
-        });
-      });
+      // Convert to SudokuCell[][] with original clues locked (Auto-Notes disabled in Multiplayer/Daily rooms)
+      const finishedGrid: SudokuCell[][] = createInitialBoardGrid(puzzle2D, false);
 
       if (!isDailyRoom) {
         // Prime cache for instant reloads in classic rooms only
@@ -11979,19 +12087,7 @@ export default function App() {
       const dailyDateKey = dailyChallengeActiveDateRef.current;
       const dailyGen = generateDailyPuzzle(dailyDateKey);
       const masterBoardDifficulty: Difficulty = dailyGen.difficulty === "MASTER" ? "EXPERT" : dailyGen.difficulty;
-      const finishedGrid: SudokuCell[][] = Array(9).fill(null).map((_, r) =>
-        Array(9).fill(null).map((__, c) => {
-          const val = dailyGen.puzzle[r][c];
-          return {
-            row: r,
-            col: c,
-            value: val,
-            isOriginalClue: val !== 0,
-            isUserInput: false,
-            notes: new Set<number>()
-          };
-        })
-      );
+      const finishedGrid: SudokuCell[][] = createInitialBoardGrid(dailyGen.puzzle, false);
 
       isDailyBoardContextRef.current = true;
       setOpenedCreateFromMultiplayerResult(false);
@@ -14863,20 +14959,12 @@ export default function App() {
       }, { merge: true }).catch(() => { });
     }
 
-    // Convert flat array representation to state model data structures
-    const finishedGrid: SudokuCell[][] = Array(9).fill(null).map((_, r) => {
-      return Array(9).fill(null).map((_, c) => {
-        const hasVal = puzzle[r][c] !== 0;
-        return {
-          row: r,
-          col: c,
-          value: puzzle[r][c],
-          isOriginalClue: hasVal,
-          isUserInput: false,
-          notes: new Set<number>()
-        };
-      });
-    });
+    // Convert flat array representation to state model data structures (Auto-Notes strictly limited to solo Hard/Expert)
+    const shouldAutoPopulateNotes =
+      isAutoNotesEnabledRef.current &&
+      (level === "HARD" || level === "EXPERT") &&
+      !isChallengeSession;
+    const finishedGrid: SudokuCell[][] = createInitialBoardGrid(puzzle, shouldAutoPopulateNotes);
 
     setBoardState({
       grid: finishedGrid,
@@ -15015,12 +15103,22 @@ export default function App() {
     playClickSound();
 
     // Reset current player's board inputs and notes while preserving original puzzle clues
-    const resetGrid: SudokuCell[][] = boardState.grid.map(row => row.map(cell => ({
-      ...cell,
-      value: cell.isOriginalClue ? cell.value : 0,
-      isUserInput: false,
-      notes: new Set<number>()
-    })));
+    const basePuzzle: number[][] = boardState.grid.map(row =>
+      row.map(cell => (cell.isOriginalClue ? cell.value : 0))
+    );
+    const isDailyBoard = Boolean(
+      dailyChallengeActiveDateRef.current ||
+      isDailyRoomRef.current ||
+      isDailyBoardContextRef.current ||
+      boardState.gameMode === "daily"
+    );
+    const replayDifficulty = boardState.difficulty || difficulty;
+    const shouldAutoPopulateNotes =
+      isAutoNotesEnabledRef.current &&
+      (replayDifficulty === "HARD" || replayDifficulty === "EXPERT") &&
+      !challengeMode &&
+      !isDailyBoard;
+    const resetGrid: SudokuCell[][] = createInitialBoardGrid(basePuzzle, shouldAutoPopulateNotes);
 
     setBoardState(prev => prev ? {
       ...prev,
@@ -15440,31 +15538,33 @@ export default function App() {
     const restoredMistakes = hasRestorableProgress ? Math.max(0, saved!.mistakesCount || 0) : 0;
     const restoredHints = hasRestorableProgress ? Math.max(0, saved!.hintsCount || 0) : 0;
 
-    const finishedGrid: SudokuCell[][] = Array(9)
-      .fill(null)
-      .map((_, r) =>
-        Array(9)
+    const finishedGrid: SudokuCell[][] = (!hasRestorableProgress && !payload.reviewOnly)
+      ? createInitialBoardGrid(payload.puzzle, false)
+      : Array(9)
           .fill(null)
-          .map((__, c) => {
-            const idx = r * 9 + c;
-            const clueVal = payload.puzzle[r][c];
-            const isOriginalClue = clueVal !== 0;
-            const restoredVal = restoredFlat ? Number(restoredFlat[idx]) || 0 : 0;
-            const finalVal = isOriginalClue ? clueVal : restoredVal;
-            const cellNotes =
-              !isOriginalClue && finalVal === 0 && Array.isArray(restoredNotes[idx])
-                ? new Set<number>(restoredNotes[idx])
-                : new Set<number>();
-            return {
-              row: r,
-              col: c,
-              value: finalVal,
-              isOriginalClue,
-              isUserInput: !isOriginalClue && finalVal !== 0,
-              notes: cellNotes,
-            };
-          })
-      );
+          .map((_, r) =>
+            Array(9)
+              .fill(null)
+              .map((__, c) => {
+                const idx = r * 9 + c;
+                const clueVal = payload.puzzle[r][c];
+                const isOriginalClue = clueVal !== 0;
+                const restoredVal = restoredFlat ? Number(restoredFlat[idx]) || 0 : 0;
+                const finalVal = isOriginalClue ? clueVal : restoredVal;
+                const cellNotes =
+                  !isOriginalClue && finalVal === 0 && Array.isArray(restoredNotes[idx])
+                    ? new Set<number>(restoredNotes[idx])
+                    : new Set<number>();
+                return {
+                  row: r,
+                  col: c,
+                  value: finalVal,
+                  isOriginalClue,
+                  isUserInput: !isOriginalClue && finalVal !== 0,
+                  notes: cellNotes,
+                };
+              })
+          );
 
     isDailyBoardContextRef.current = true;
     isDailyRoomRef.current = false;
@@ -15649,7 +15749,7 @@ export default function App() {
       sessionSeconds > 0 ||
       boardState.currentMistakesCount > 0 ||
       boardState.hintsCount > 0 ||
-      Object.keys(notesByCell).length > 0 ||
+      history.length > 0 ||
       boardState.grid.some((row) => row.some((cell) => cell.isUserInput));
 
     if (!hasAnyUserAction) return;
@@ -15697,6 +15797,7 @@ export default function App() {
     dailyChallengeActiveDate,
     dailyChallengeDifficulty,
     boardState,
+    history.length,
     sessionSeconds,
     isGuestSession,
     authUser?.uid,
@@ -15895,6 +15996,8 @@ export default function App() {
     setHideUsedNumber(false);
     setNotificationsEnabled(true);
     setIsAutoRemoveNotesEnabled(true);
+    setIsAutoNotesEnabled(DEFAULT_SETTINGS.autoNotes);
+    isAutoNotesEnabledRef.current = DEFAULT_SETTINGS.autoNotes;
     setIsPreventMistakeNotesEnabled(true);
     setIsNumberFirstInputMode(false);
     setAutoSwitchCompletedNumber(true);
@@ -18896,19 +18999,7 @@ export default function App() {
                       isExhibition = isDailyExhibitionRef.current;
                     }
 
-                    const finishedGrid: SudokuCell[][] = Array(9).fill(null).map((_, r) =>
-                      Array(9).fill(null).map((__, c) => {
-                        const val = dailyGen.puzzle[r][c];
-                        return {
-                          row: r,
-                          col: c,
-                          value: val,
-                          isOriginalClue: val !== 0,
-                          isUserInput: false,
-                          notes: new Set<number>()
-                        };
-                      })
-                    );
+                    const finishedGrid: SudokuCell[][] = createInitialBoardGrid(dailyGen.puzzle, false);
 
                     isDailyBoardContextRef.current = true;
                     isDailyRoomRef.current = true;
@@ -19390,6 +19481,8 @@ export default function App() {
             setHighlightAreas={handleToggleHighlightAreas}
             isAutoRemoveNotesEnabled={isAutoRemoveNotesEnabled}
             setIsAutoRemoveNotesEnabled={handleToggleAutoRemoveNotes}
+            isAutoNotesEnabled={isAutoNotesEnabled}
+            setIsAutoNotesEnabled={handleToggleAutoNotes}
             isNumberFirstInputMode={isNumberFirstInputMode}
             setIsNumberFirstInputMode={handleToggleFastFill}
             autoSwitchCompletedNumber={autoSwitchCompletedNumber}
@@ -21256,19 +21349,7 @@ export default function App() {
                 isExhibition = false;
               }
 
-              const finishedGrid: SudokuCell[][] = Array(9).fill(null).map((_, r) =>
-                Array(9).fill(null).map((__, c) => {
-                  const val = dailyGen.puzzle[r][c];
-                  return {
-                    row: r,
-                    col: c,
-                    value: val,
-                    isOriginalClue: val !== 0,
-                    isUserInput: false,
-                    notes: new Set<number>()
-                  };
-                })
-              );
+              const finishedGrid: SudokuCell[][] = createInitialBoardGrid(dailyGen.puzzle, false);
 
               isDailyBoardContextRef.current = true;
               isDailyRoomRef.current = true;
@@ -22322,6 +22403,7 @@ export default function App() {
                         handleToggleShowRemainingNumbers(DEFAULT_SETTINGS.showRemainingNumbers);
                         handleToggleHighlightAreas(DEFAULT_SETTINGS.highlightRelatedArea);
                         handleToggleAutoRemoveNotes(DEFAULT_SETTINGS.autoRemoveNotes);
+                        handleToggleAutoNotes(DEFAULT_SETTINGS.autoNotes);
                         handleToggleFastFill(DEFAULT_SETTINGS.fastFill);
                         handleToggleAutoSwitchCompleted(DEFAULT_SETTINGS.autoSwitchCompletedNumbers);
                         handleToggleTimer(DEFAULT_SETTINGS.activeTimerClock);

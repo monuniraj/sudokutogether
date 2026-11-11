@@ -25,6 +25,8 @@ export interface SettingsModalProps {
   setHighlightAreas: (val: boolean) => void;
   isAutoRemoveNotesEnabled: boolean;
   setIsAutoRemoveNotesEnabled: (val: boolean) => void;
+  isAutoNotesEnabled: boolean;
+  setIsAutoNotesEnabled: (val: boolean) => void;
   isNumberFirstInputMode: boolean;
   setIsNumberFirstInputMode: (val: boolean) => void;
   autoSwitchCompletedNumber: boolean;
@@ -80,6 +82,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   setHighlightAreas,
   isAutoRemoveNotesEnabled,
   setIsAutoRemoveNotesEnabled,
+  isAutoNotesEnabled,
+  setIsAutoNotesEnabled,
   isNumberFirstInputMode,
   setIsNumberFirstInputMode,
   autoSwitchCompletedNumber,
@@ -882,6 +886,59 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {expandedInfo["auto-remove-notes"] && (
                 <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
                   {t("autoRemoveNotesInfo")}
+                </div>
+              )}
+            </div>
+
+            {/* Auto-Notes */}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-sm font-medium ${darkMode ? "text-[#fecdd3]/90" : "text-pink-950"}`}>
+                    {t("autoNotes")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playClickSound();
+                      toggleInfo("auto-notes");
+                    }}
+                    className={`w-4 h-4 text-[10px] rounded-full border-none flex items-center justify-center text-stone-500 hover:text-stone-800 dark:hover:text-stone-300 transition-colors cursor-pointer shrink-0 ml-1.5 ${
+                      expandedInfo["auto-notes"] ? (darkMode ? "bg-white/10 text-stone-200" : "bg-black/5 text-stone-900") : "bg-black/5 dark:bg-white/5"
+                    }`}
+                    aria-label={t("autoNotes")}
+                    title="Toggle explanation"
+                  >
+                    <span className="font-serif italic font-bold leading-none select-none -translate-y-px">i</span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playClickSound();
+                    setIsAutoNotesEnabled(!isAutoNotesEnabled);
+                  }}
+                  aria-label={t("autoNotes")}
+                  aria-pressed={isAutoNotesEnabled}
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-200 border-none cursor-pointer active:scale-95 ${
+                    isAutoNotesEnabled
+                      ? darkMode
+                        ? "bg-pink-500"
+                        : "bg-[#9D174D] active:bg-[#7e123d] shadow-none"
+                      : "bg-[#FBCFE8] active:bg-[#f9a8d4] shadow-sm active:shadow-none"
+                  }`}
+                >
+                  <div
+                    className={`w-[16px] h-[16px] bg-white rounded-full shadow-md transform transition-all duration-200 border-none ${
+                      isAutoNotesEnabled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              {expandedInfo["auto-notes"] && (
+                <div className="text-[11px] text-stone-500 dark:text-zinc-400 mt-1.5 leading-snug bg-black/5 dark:bg-white/5 p-2 rounded-md font-sans">
+                  {t("autoNotesInfo")}
                 </div>
               )}
             </div>
