@@ -18452,16 +18452,16 @@ export default function App() {
                     {/* Center: Balanced 4-Icon Micro-Bar [Zap, Users, HelpCircle, Volume] */}
                     {(() => {
                       const activeDiff = ((boardState?.difficulty || difficulty).toUpperCase()) as Difficulty;
-                      const headerThemeColor = darkMode ? (
-                        activeDiff === "EASY" ? "text-[#059669] hover:text-[#059669]/80" :
-                          activeDiff === "MEDIUM" ? "text-[#d97706] hover:text-[#d97706]/80" :
-                            activeDiff === "HARD" ? "text-[#7e22ce] hover:text-[#7e22ce]/80" :
-                              "text-[#be185d] hover:text-[#be185d]/80"
+                      const multiplayerHudTileTheme = darkMode ? (
+                        activeDiff === "EASY" ? "bg-[#0e8365] text-[#ECFDF5]" :
+                          activeDiff === "MEDIUM" ? "bg-[#713f12] text-[#FEF08A]" :
+                            activeDiff === "HARD" ? "bg-[#581db8] text-[#F3E8FF]" :
+                              "bg-[#881337] text-[#FFE4E6]"
                       ) : (
-                        activeDiff === "EASY" ? "text-[#065F46] hover:text-[#065F46]/80" :
-                          activeDiff === "MEDIUM" ? "text-[#854D0E] hover:text-[#854D0E]/80" :
-                            activeDiff === "HARD" ? "text-[#6B21A8] hover:text-[#6B21A8]/80" :
-                              "text-[#9D174D] hover:text-[#9D174D]/80"
+                        activeDiff === "EASY" ? "bg-[#86EFAC] text-[#065F46]" :
+                          activeDiff === "MEDIUM" ? "bg-[#FCD34D] text-[#78350F]" :
+                            activeDiff === "HARD" ? "bg-[#D8B4FE] text-[#6B21A8]" :
+                              "bg-[#F9A8D4] text-[#9D174D]"
                       );
 
                       return (
@@ -18585,7 +18585,7 @@ export default function App() {
                             <button
                               type="button"
                               onClick={handleOpenMidGameMultiplayer}
-                              className="p-1 sm:p-1.5 border-none bg-transparent transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto text-purple-700 hover:text-purple-800 dark:text-purple-200 dark:hover:text-purple-100"
+                              className={`p-1 sm:p-1.5 rounded-lg border-none transition-all cursor-pointer hover:scale-110 active:scale-90 flex items-center justify-center pointer-events-auto ${multiplayerHudTileTheme}`}
                               aria-label="Invite Players to Match"
                               title="Invite Players"
                               id="hud-multiplayer-invite-button"
