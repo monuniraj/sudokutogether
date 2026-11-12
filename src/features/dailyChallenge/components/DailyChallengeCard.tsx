@@ -382,7 +382,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
         : `bg-white hover:bg-white/95 shadow-sm ${completedLightTextClass}`
       : effectiveStatus === "FAILED"
         ? darkMode
-          ? "bg-[#881337] hover:bg-[#9f1239] shadow-none text-[#fecdd3]"
+          ? "bg-rose-950 hover:bg-rose-900 shadow-none text-rose-200"
           : "bg-[#FECDD3] hover:bg-[#FDA4AF] shadow-none text-[#9F1239]"
         : darkMode
           ? "bg-[#b45309] hover:bg-[#d97706] shadow-none text-[#fef3c7]"

@@ -18304,14 +18304,14 @@ export default function App() {
                         }}
                         className={`border-none outline-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 shadow-md ${isActionDisabled
                           ? (darkMode
-                            ? "bg-zinc-800/40 text-zinc-600 opacity-40 cursor-not-allowed pointer-events-none shadow-none"
+                            ? "bg-zinc-800 text-zinc-600 cursor-not-allowed pointer-events-none shadow-none"
                             : "bg-stone-200/50 text-stone-400 opacity-40 cursor-not-allowed pointer-events-none shadow-none")
                           : hasReviewGame
                             ? (darkMode
-                              ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 cursor-pointer active:scale-[0.98] active:translate-y-px"
+                              ? "bg-[#451a03] hover:bg-[#78350f] text-amber-400 cursor-pointer active:scale-[0.98] active:translate-y-px"
                               : "bg-[#FFF99D] hover:bg-[#FDE047] active:bg-[#FDE047] text-[#854D0E] shadow-[0_8px_30px_rgba(133,77,14,0.06)] cursor-pointer active:scale-[0.98] active:translate-y-px")
                             : (darkMode
-                              ? "bg-[#0c4a6e]/20 hover:bg-[#0c4a6e]/40 text-[#7dd3fc] cursor-pointer active:scale-[0.98] active:translate-y-px"
+                              ? "bg-[#0c4a6e] hover:bg-[#075985] text-[#7dd3fc] cursor-pointer active:scale-[0.98] active:translate-y-px"
                               : "bg-[#E0F2FE]/60 hover:bg-[#E0F2FE]/80 active:bg-[#bae6fd]/60 text-[#0369a1] shadow-[0_8px_30px_rgba(3,105,161,0.04)] cursor-pointer active:scale-[0.98] active:translate-y-px")
                           }`}
                       >
@@ -18347,7 +18347,7 @@ export default function App() {
                       playClickSound();
                       setShowMultiplayerForkModal(true);
                     }}
-                    className={`border-none outline-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${darkMode ? "border-none bg-[#3b0764]/20 hover:bg-[#3b0764]/40 text-[#d8b4fe]" : "border-none bg-[#f3e8ff]/60 hover:bg-[#e9d5ff]/60 active:bg-[#d8b4fe]/60 shadow-[0_8px_30px_rgba(107,33,168,0.04)] text-[#6B21A8]"
+                    className={`border-none outline-none py-3 px-4 text-center transition-all duration-150 select-none rounded-2xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-[0.98] active:translate-y-px ${darkMode ? "border-none bg-[#3b0764] hover:bg-[#4c1d95] text-[#d8b4fe]" : "border-none bg-[#f3e8ff]/60 hover:bg-[#e9d5ff]/60 active:bg-[#d8b4fe]/60 shadow-[0_8px_30px_rgba(107,33,168,0.04)] text-[#6B21A8]"
                       }`}
                   >
                     <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3] shrink-0" />
@@ -18366,7 +18366,7 @@ export default function App() {
                     triggerHapticTap(vibrations);
                     setShowDifficultySheet(true);
                   }}
-                  className="w-full border-none p-5 sm:p-6 md:p-8 lg:py-3 lg:px-6 mt-4 sm:mt-6 lg:mt-2 text-center font-black text-xl md:text-2xl tracking-wider uppercase transition-all duration-200 active:scale-[0.98] select-none rounded-[20px] shadow-sm flex items-center justify-center gap-2 cursor-pointer bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:hover:bg-rose-900/70 dark:text-rose-200"
+                  className="w-full border-none p-5 sm:p-6 md:p-8 lg:py-3 lg:px-6 mt-4 sm:mt-6 lg:mt-2 text-center font-black text-xl md:text-2xl tracking-wider uppercase transition-all duration-200 active:scale-[0.98] select-none rounded-[20px] shadow-sm flex items-center justify-center gap-2 cursor-pointer bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950 dark:hover:bg-rose-900 dark:text-rose-200"
                 >
                   <Play className="w-5 h-5 md:w-6 md:h-6 fill-current stroke-[2.5]" />
                   <span>{t("playNewGame")}</span>
