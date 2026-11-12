@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import {
   AlertCircle,
-  ArrowLeft,
   CheckCircle2,
   Clock,
   Delete,
@@ -671,32 +670,16 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       id="sudoku-solver-screen"
       className="h-[100dvh] max-h-full flex-1 min-h-0 w-full flex flex-col overflow-hidden select-none pt-[calc(70px+env(safe-area-inset-top,0px))] bg-slate-50 dark:bg-[#121212] text-stone-800 dark:text-stone-100 transition-colors duration-200"
     >
-      {/* Sticky Header */}
+      {/* Sticky Instruction Banner */}
       <header className="sticky top-0 z-20 shrink-0 w-full px-3 sm:px-6 pt-2 sm:pt-3">
         <div className="max-w-3xl mx-auto rounded-2xl border-0 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md shadow-[0_6px_22px_rgba(55,48,163,0.06)] dark:shadow-[0_6px_22px_rgba(0,0,0,0.4)] px-3.5 py-2.5 sm:px-5 sm:py-3 flex items-center gap-3">
-          <button
-            type="button"
-            id="solver-header-back-btn"
-            onClick={navigatorPop}
-            aria-label={t("back") || "Back"}
-            title={t("back") || "Back"}
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-0 outline-none shrink-0 flex items-center justify-center cursor-pointer active:scale-95 transition-all duration-150 bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-950/70 dark:hover:bg-indigo-900/80 dark:text-[#c7d2fe] shadow-[0_2px_10px_rgba(55,48,163,0.08)]"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-4.5 sm:h-4.5 stroke-[2.2]" />
-          </button>
-
-          <div className="min-w-0 flex-1 flex flex-col">
-            <h1 className="font-sans font-black text-base sm:text-lg tracking-tight text-stone-800 dark:text-stone-100 truncate leading-tight">
-              {t("sudokuSolverLabel")}
-            </h1>
-            <p className="font-sans font-medium text-[11px] sm:text-xs text-stone-500 dark:text-zinc-400 mt-0.5 leading-snug">
-              {t("solverSubtitle")}
-            </p>
-          </div>
-
           <div className="w-9 h-9 rounded-2xl border-0 shrink-0 flex items-center justify-center bg-[#EEF2FF] text-[#4338CA] dark:bg-indigo-950/60 dark:text-[#c7d2fe]">
             <Search className="w-4 h-4 stroke-[2.2]" />
           </div>
+
+          <p className="min-w-0 flex-1 font-sans font-medium text-xs sm:text-sm text-stone-600 dark:text-zinc-300 leading-snug">
+            {t("solverSubtitle")}
+          </p>
         </div>
       </header>
 
@@ -845,7 +828,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                   onClick={handleLockAndPlay}
                   className={`w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-sm font-black tracking-wide transition-all duration-150 shrink-0 ${isLockDisabled
                     ? "bg-stone-200/80 text-stone-400 dark:bg-zinc-800/70 dark:text-zinc-500 cursor-not-allowed opacity-65 shadow-none"
-                    : "bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white cursor-pointer active:scale-[0.98] shadow-[0_8px_22px_rgba(55,48,163,0.12)] dark:shadow-[0_8px_22px_rgba(79,70,229,0.3)]"
+                    : "bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-950 dark:hover:bg-indigo-900 dark:text-indigo-200 cursor-pointer active:scale-[0.98] shadow-[0_8px_22px_rgba(55,48,163,0.12)] dark:shadow-[0_4px_14px_rgba(0,0,0,0.45)]"
                     }`}
                 >
                   <Lock className="w-4 h-4 stroke-[2.4] shrink-0" />
@@ -894,7 +877,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                   type="button"
                   id="solver-play-puzzle-btn"
                   onClick={handlePlayPuzzle}
-                  className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-black tracking-wide cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white shadow-[0_8px_22px_rgba(55,48,163,0.14)] dark:shadow-[0_8px_22px_rgba(79,70,229,0.35)]"
+                  className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-black tracking-wide cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-950 dark:hover:bg-indigo-900 dark:text-indigo-200 shadow-[0_8px_22px_rgba(55,48,163,0.14)] dark:shadow-[0_4px_14px_rgba(0,0,0,0.45)]"
                 >
                   <Play className="w-4 h-4 stroke-[2.4] fill-current shrink-0" />
                   <span>{t("solverPlayPuzzleBtn")}</span>
