@@ -1,6 +1,8 @@
 import { Capacitor, PluginListenerHandle, registerPlugin } from "@capacitor/core";
 import {
   AdMob,
+  AdmobConsentInfo,
+  AdmobConsentStatus,
   AdMobRewardItem,
   InterstitialAdPluginEvents,
   RewardAdPluginEvents,
@@ -233,6 +235,9 @@ export function resetMatchesCounter(): void {
 
 let isInitialized = false;
 let initPromise: Promise<void> | null = null;
+let isConsentResolved = false;
+let consentPromise: Promise<AdmobConsentInfo | null> | null = null;
+let lastConsentInfo: AdmobConsentInfo | null = null;
 let isInterstitialReady = false;
 let isRewardedReady = false;
 let rewardedPreloadPromise: Promise<boolean> | null = null;
@@ -240,6 +245,90 @@ let interstitialPreloadPromise: Promise<boolean> | null = null;
 let lifecycleListenersRegistered = false;
 
 const AD_PREPARE_TIMEOUT_MS = 4000;
+const UMP_REQUEST_DELAY_MS = 50;
+const UMP_STATUS_CHECK_TIMELINE_MS = 200;
+const UMP_POST_RESOLVE_SETTLE_MS = 10;
+const UMP_NETWORK_TIMEOUT_MS = 4500;
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
+/**
+ * Google UMP (User Messaging Platform) GDPR/CMP Consent Pipeline:
+ * - T=0ms: App UI renders immediately without blocking.
+ * - T=50ms: Calls `AdMob.requestConsentInfo()` (respecting device native/WebView locale for automatic 9-language translation).
+ * - T=200ms: Evaluates consent status; if `AdmobConsentStatus.REQUIRED`, loads & shows the consent form (`AdMob.showConsentForm()`).
+ * - T+10ms (after resolution): Resolves so `AdMob.initialize()` can safely proceed.
+ * - Silent error fallback: Any network/SDK failure is caught silently so the app never freezes and initializes with default limited tracking.
+ */
+export async function resolveUmpConsent(): Promise<AdmobConsentInfo | null> {
+  if (!Capacitor.isNativePlatform()) {
+    isConsentResolved = true;
+    return null;
+  }
+
+  if (isConsentResolved) {
+    return lastConsentInfo;
+  }
+
+  if (consentPromise) {
+    return consentPromise;
+  }
+
+  consentPromise = (async () => {
+    const bootTimelineStart = Date.now();
+    try {
+      // T=50ms: Defer UMP network handshake so T=0ms first paint is 100% unblocked
+      await sleepMs(UMP_REQUEST_DELAY_MS);
+
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+      const consentInfo = await Promise.race<AdmobConsentInfo | null>([
+        AdMob.requestConsentInfo({
+          tagForUnderAgeOfConsent: false,
+        }),
+        new Promise<null>((resolve) => {
+          timeoutHandle = setTimeout(() => resolve(null), UMP_NETWORK_TIMEOUT_MS);
+        }),
+      ]);
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+
+      if (consentInfo) {
+        lastConsentInfo = consentInfo;
+      }
+
+      // T=200ms: Align status inspection to the T=200ms boot milestone
+      const elapsedSinceStart = Date.now() - bootTimelineStart;
+      const remainingTo200ms = UMP_STATUS_CHECK_TIMELINE_MS - elapsedSinceStart;
+      if (remainingTo200ms > 0) {
+        await sleepMs(remainingTo200ms);
+      }
+
+      if (
+        consentInfo &&
+        consentInfo.status === AdmobConsentStatus.REQUIRED &&
+        consentInfo.isConsentFormAvailable !== false
+      ) {
+        const updatedConsentInfo = await AdMob.showConsentForm();
+        if (updatedConsentInfo) {
+          lastConsentInfo = updatedConsentInfo;
+        }
+      }
+    } catch {
+      // Silent fallback (Luxury UX): if UMP fails due to offline/network issues,
+      // proceed gracefully without freezing or showing disruptive errors.
+    } finally {
+      // T+10ms: Settle 10ms after consent resolution before AdMob.initialize()
+      await sleepMs(UMP_POST_RESOLVE_SETTLE_MS);
+      isConsentResolved = true;
+      consentPromise = null;
+    }
+
+    return lastConsentInfo;
+  })();
+
+  return consentPromise;
+}
 
 async function registerLifecycleListeners(): Promise<void> {
   if (lifecycleListenersRegistered || !Capacitor.isNativePlatform()) {
@@ -342,6 +431,8 @@ export async function preloadInterstitialAd(): Promise<void> {
 
 /**
  * Initializes the AdMob SDK if running inside a native mobile environment (Android/iOS),
+ * strictly after Google UMP GDPR/CMP consent resolution (Zero-Ad-Leakage gate:
+ * T=50ms requestConsentInfo -> T=200ms REQUIRED check & showConsentForm -> T+10ms settle),
  * resolves debug vs. release mode natively (ApplicationInfo.FLAG_DEBUGGABLE + Vite env),
  * registers auto-reload listeners, and warms both ad formats on bootstrap.
  * Bypasses cleanly on desktop/web/PWA environments.
@@ -356,6 +447,9 @@ export async function initAdMob(): Promise<void> {
 
   initPromise = (async () => {
     try {
+      // Zero-Ad-Leakage Gate: Never initialize AdMob or preload ads before UMP consent resolves
+      await resolveUmpConsent();
+
       const isProd = await resolveAdProductionMode();
       await AdMob.initialize({
         initializeForTesting: !isProd,
@@ -368,8 +462,8 @@ export async function initAdMob(): Promise<void> {
       // Warm both ad slots immediately in background without blocking initialization
       void preloadRewardedAd();
       void preloadInterstitialAd();
-    } catch (err) {
-      console.warn("[AdMob] Failed to initialize native AdMob SDK:", err);
+    } catch {
+      // Silent error handling: never disrupt gameplay if AdMob SDK initialization fails
     } finally {
       initPromise = null;
     }

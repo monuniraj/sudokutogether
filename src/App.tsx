@@ -1898,11 +1898,9 @@ export default function App() {
     }
   }, []);
 
-  // Initialize native AdMob SDK on boot (bypasses cleanly on web/desktop)
+  // Initialize native AdMob SDK after Google UMP GDPR/CMP consent flow (T=50ms request -> T=200ms REQUIRED form -> T+10ms init; bypasses on web/desktop)
   useEffect(() => {
-    initAdMob().catch((err) => {
-      console.warn("[AdMob] Early initialization failed:", err);
-    });
+    initAdMob().catch(() => {});
   }, []);
 
   const [activeTab, setActiveTab] = useState<"sudoku" | "sandbox" | "kotlin-code" | "spec-docs">("sudoku");
