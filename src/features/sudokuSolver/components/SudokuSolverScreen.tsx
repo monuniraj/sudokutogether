@@ -14,6 +14,7 @@ import {
   Trash2,
   X,
   Zap,
+  PlaySquare // <-- NEW ICON FOR AD
 } from "lucide-react";
 import {
   DIFFICULTY_GRID_THEMES,
@@ -35,6 +36,8 @@ import {
   saveCustomGameToHistory,
   type CustomPuzzleHistoryRecord,
 } from "../services/customHistoryService";
+// --- NEW IMPORT ---
+import { showRewardedHintAd } from "../../../services/adMobService";
 
 export interface SudokuSolverScreenProps {
   navigatorPop: () => void;
@@ -351,6 +354,9 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     message: string;
   } | null>(null);
 
+  // --- NEW STATE FOR AD LOADING ---
+  const [isAdLoading, setIsAdLoading] = useState<boolean>(false);
+
   const normalizedUid = resolveNormalizedSolverUid(uid);
   const draftStorageKey = getCustomDraftStorageKey(normalizedUid);
   const [loadedDraftKey, setLoadedDraftKey] = useState<string | null>(null);
@@ -365,6 +371,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     setIsLocked(false);
     setIsHistoryOpen(false);
     setSolverBanner(null);
+    setIsAdLoading(false);
 
     let restoredGrid = createEmptyGrid();
     let restoredConflicts = new Set<string>();
@@ -459,7 +466,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
 
   const applyCellValue = useCallback(
     (num: number) => {
-      if (isLocked || !selectedCell) return;
+      if (isLocked || !selectedCell || isAdLoading) return;
       lastSavedAutoSolveSigRef.current = null;
       const { r, c } = selectedCell;
       setSolverGrid((prev) => {
@@ -469,11 +476,11 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
         return nextGrid;
       });
     },
-    [isLocked, selectedCell]
+    [isLocked, selectedCell, isAdLoading]
   );
 
   const handleClearGrid = useCallback(() => {
-    if (isLocked) return;
+    if (isLocked || isAdLoading) return;
     lastSavedAutoSolveSigRef.current = null;
     setSolverGrid(createEmptyGrid());
     setConflictCells(new Set());
@@ -485,69 +492,108 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
     } catch {
       // Ignore storage error
     }
-  }, [isLocked, draftStorageKey]);
+  }, [isLocked, draftStorageKey, isAdLoading]);
 
   const handleErase = useCallback(() => {
     applyCellValue(0);
   }, [applyCellValue]);
 
   const handleCellClick = useCallback((r: number, c: number) => {
+    if (isAdLoading) return;
     setSelectedCell({ r, c });
-  }, []);
+  }, [isAdLoading]);
 
   const handleLockAndPlay = useCallback(() => {
-    if (clueCount < 17 || conflictCells.size > 0) return;
+    if (clueCount < 17 || conflictCells.size > 0 || isAdLoading) return;
     setSelectedCell(null);
     setSolvedGrid(null);
     setSolverBanner(null);
     setIsLocked(true);
-  }, [clueCount, conflictCells.size]);
+  }, [clueCount, conflictCells.size, isAdLoading]);
 
   const handleEditClues = useCallback(() => {
+    if (isAdLoading) return;
     setIsLocked(false);
     setSolvedGrid(null);
     setSolverBanner(null);
-  }, []);
+  }, [isAdLoading]);
 
-  const handleAutoSolve = useCallback(() => {
+  // --- REFACTORED: ASYNC AUTO-SOLVE WITH REWARDED AD ---
+  const handleAutoSolve = useCallback(async () => {
+    if (isAdLoading) return;
     setSelectedCell(null);
-    const result = solveCustomBoard(solverGrid);
-    if (result.status === "unsolvable" || !result.solution) {
-      setSolvedGrid(null);
-      setSolverBanner({
-        type: "error",
-        message: t("solverBannerUnsolvable"),
-      });
-      return;
+    setIsAdLoading(true);
+
+    try {
+      const adResult = await showRewardedHintAd();
+
+      // IF USER EXPLICITLY DISMISSED THE AD: Stop and do nothing.
+      if (!adResult.success && adResult.reason === "DISMISSED") {
+        setSolverBanner({
+          type: "error",
+          message: t("solverBannerAdDismissed") || "Auto-solve cancelled.",
+        });
+        return;
+      }
+
+      // IF OFFLINE, NOT LOADED, OR NO NATIVE PLUGIN: Graceful Fallback (Solve for free)
+      if (!adResult.success && adResult.reason !== "DISMISSED") {
+        console.warn("[Auto-Solve] Ad failed/offline. Executing graceful fallback solve.");
+        setSolverBanner({
+          type: "info",
+          message: t("solverBannerAdOfflineFallback") || "Offline Mode: Solved instantly!",
+        });
+      }
+
+      // PROCEED WITH SOLVING (Either Ad was watched successfully OR graceful fallback)
+      const result = solveCustomBoard(solverGrid);
+      if (result.status === "unsolvable" || !result.solution) {
+        setSolvedGrid(null);
+        setSolverBanner({
+          type: "error",
+          message: t("solverBannerUnsolvable"),
+        });
+        return;
+      }
+
+      setSolvedGrid(result.solution);
+      const sig = buildGridSignature(solverGrid);
+
+      if (lastSavedAutoSolveSigRef.current !== sig) {
+        lastSavedAutoSolveSigRef.current = sig;
+        const now = Date.now();
+        void saveCustomGameToHistory(normalizedUid, {
+          id: `custom_${now}_${Math.random().toString(36).slice(2, 6)}`,
+          date: new Date(now).toISOString(),
+          grid: solverGrid.map((row) => [...row]),
+          difficulty: formatCustomHistoryDifficulty(difficultyMeta.boardDifficulty),
+          isAutoSolved: true,
+          createdAtMs: now,
+        });
+      }
+
+      // Only overwrite the banner if it wasn't already set by the offline fallback
+      if (adResult.success) {
+        if (result.status === "multiple") {
+          setSolverBanner({
+            type: "info",
+            message: t("solverBannerMultipleSolutions"),
+          });
+        } else {
+          setSolverBanner({
+            type: "success",
+            message: t("solverBannerUniqueSolution"),
+          });
+        }
+      }
+
+    } finally {
+      setIsAdLoading(false);
     }
-    setSolvedGrid(result.solution);
-    const sig = buildGridSignature(solverGrid);
-    if (lastSavedAutoSolveSigRef.current !== sig) {
-      lastSavedAutoSolveSigRef.current = sig;
-      const now = Date.now();
-      void saveCustomGameToHistory(normalizedUid, {
-        id: `custom_${now}_${Math.random().toString(36).slice(2, 6)}`,
-        date: new Date(now).toISOString(),
-        grid: solverGrid.map((row) => [...row]),
-        difficulty: formatCustomHistoryDifficulty(difficultyMeta.boardDifficulty),
-        isAutoSolved: true,
-        createdAtMs: now,
-      });
-    }
-    if (result.status === "multiple") {
-      setSolverBanner({
-        type: "info",
-        message: t("solverBannerMultipleSolutions"),
-      });
-    } else {
-      setSolverBanner({
-        type: "success",
-        message: t("solverBannerUniqueSolution"),
-      });
-    }
-  }, [solverGrid, normalizedUid, difficultyMeta.boardDifficulty, t]);
+  }, [solverGrid, normalizedUid, difficultyMeta.boardDifficulty, t, isAdLoading]);
 
   const handlePlayPuzzle = useCallback(() => {
+    if (isAdLoading) return;
     const verifiedSolution = solvedGrid ?? solveCustomBoard(solverGrid).solution;
     if (!verifiedSolution) {
       setSolverBanner({
@@ -578,7 +624,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       verifiedSolution.map((row) => [...row]),
       customRecordId
     );
-  }, [solvedGrid, solverGrid, normalizedUid, draftStorageKey, difficultyMeta.boardDifficulty, onPlayCustomPuzzle, t]);
+  }, [solvedGrid, solverGrid, normalizedUid, draftStorageKey, difficultyMeta.boardDifficulty, onPlayCustomPuzzle, t, isAdLoading]);
 
   const handleSelectHistoryRecord = useCallback((record: CustomPuzzleHistoryRecord) => {
     const nextGrid = record.grid.map((row) => [...row]);
@@ -598,7 +644,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
   // Desktop keyboard support for fast newspaper clue entry (blocked while Locked or History modal open)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!selectedCell || isHistoryOpen) return;
+      if (!selectedCell || isHistoryOpen || isAdLoading) return;
       if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedCell((prev) =>
@@ -632,7 +678,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isLocked, isHistoryOpen, selectedCell, applyCellValue]);
+  }, [isLocked, isHistoryOpen, selectedCell, applyCellValue, isAdLoading]);
 
   const boardState = useMemo<SudokuBoardState>(
     () => ({
@@ -708,8 +754,9 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
           <button
             type="button"
             id="solver-history-btn"
+            disabled={isAdLoading}
             onClick={() => setIsHistoryOpen(true)}
-            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 outline-none text-xs font-bold cursor-pointer active:scale-95 transition-all duration-150 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#3730A3] dark:bg-indigo-950/60 dark:hover:bg-indigo-900/75 dark:text-[#c7d2fe] shadow-[0_2px_8px_rgba(55,48,163,0.06)]"
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 outline-none text-xs font-bold cursor-pointer disabled:opacity-50 active:scale-95 transition-all duration-150 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#3730A3] dark:bg-indigo-950/60 dark:hover:bg-indigo-900/75 dark:text-[#c7d2fe] shadow-[0_2px_8px_rgba(55,48,163,0.06)]"
           >
             <Clock className="w-3.5 h-3.5 stroke-[2.2] shrink-0" />
             <span>{t("historyTabTitle")}</span>
@@ -744,7 +791,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
 
         <div className="w-full max-w-3xl mx-auto flex flex-col lg:flex-row items-center lg:items-stretch justify-center gap-4 lg:gap-7 my-auto">
           {/* 9x9 Puzzle Input Grid */}
-          <div className="w-full max-w-[min(92vw,420px)] lg:w-[440px] lg:max-w-[440px] shrink-0 flex items-center justify-center p-0.5 rounded-2xl">
+          <div className={`w-full max-w-[min(92vw,420px)] lg:w-[440px] lg:max-w-[440px] shrink-0 flex items-center justify-center p-0.5 rounded-2xl transition-opacity duration-200 ${isAdLoading ? "opacity-50 pointer-events-none" : ""}`}>
             <SudokuBoard
               id="solver-sudoku-board"
               boardState={boardState}
@@ -777,7 +824,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                     type="button"
                     id="solver-clear-grid-btn"
                     onClick={handleClearGrid}
-                    disabled={clueCount === 0 && !selectedCell}
+                    disabled={isAdLoading || (clueCount === 0 && !selectedCell)}
                     className="h-11 px-3 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-xs font-bold tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-150 bg-[#FFE4E6] hover:bg-[#FECDD3] text-[#9D174D] dark:bg-rose-950/60 dark:hover:bg-rose-900/70 dark:text-rose-200 shadow-[0_6px_16px_rgba(157,23,77,0.06)] dark:shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
                   >
                     <Trash2 className="w-4 h-4 stroke-[2.2] shrink-0" />
@@ -788,7 +835,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                     type="button"
                     id="solver-erase-cell-btn"
                     onClick={handleErase}
-                    disabled={!selectedCell || selectedCellValue === null}
+                    disabled={isAdLoading || (!selectedCell || selectedCellValue === null)}
                     className="h-11 px-3 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-xs font-bold tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-150 bg-[#FCE7F3] hover:bg-[#FBCFE8] text-[#9D174D] dark:bg-pink-950/60 dark:hover:bg-pink-900/70 dark:text-pink-200 shadow-[0_6px_16px_rgba(157,23,77,0.06)] dark:shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
                   >
                     <Delete className="w-4 h-4 stroke-[2.2] shrink-0" />
@@ -797,7 +844,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                 </div>
 
                 {/* Middle Row: 1-9 Keypad Only */}
-                <div className="w-full shrink-0">
+                <div className={`w-full shrink-0 transition-opacity duration-200 ${isAdLoading ? "opacity-50 pointer-events-none" : ""}`}>
                   <SudokuKeypad
                     boardState={boardState}
                     difficulty={difficultyMeta.boardDifficulty}
@@ -824,9 +871,9 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                 <button
                   type="button"
                   id="solver-lock-play-btn"
-                  disabled={isLockDisabled}
+                  disabled={isLockDisabled || isAdLoading}
                   onClick={handleLockAndPlay}
-                  className={`w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-sm font-black tracking-wide transition-all duration-150 shrink-0 ${isLockDisabled
+                  className={`w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2 text-sm font-black tracking-wide transition-all duration-150 shrink-0 ${isLockDisabled || isAdLoading
                     ? "bg-stone-200/80 text-stone-400 dark:bg-zinc-800/70 dark:text-zinc-500 cursor-not-allowed opacity-65 shadow-none"
                     : "bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-950 dark:hover:bg-indigo-900 dark:text-indigo-200 cursor-pointer active:scale-[0.98] shadow-[0_8px_22px_rgba(55,48,163,0.12)] dark:shadow-[0_4px_14px_rgba(0,0,0,0.45)]"
                     }`}
@@ -854,30 +901,37 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
                 <button
                   type="button"
                   id="solver-edit-clues-btn"
+                  disabled={isAdLoading}
                   onClick={handleEditClues}
-                  className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-bold tracking-wide cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#3730A3] dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-stone-100 shadow-[0_4px_14px_rgba(55,48,163,0.06)] dark:shadow-[0_4px_14px_rgba(0,0,0,0.3)]"
+                  className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-bold tracking-wide cursor-pointer disabled:opacity-50 active:scale-[0.98] transition-all duration-150 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#3730A3] dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-stone-100 shadow-[0_4px_14px_rgba(55,48,163,0.06)] dark:shadow-[0_4px_14px_rgba(0,0,0,0.3)]"
                 >
                   <Pencil className="w-4 h-4 stroke-[2.2] shrink-0" />
                   <span>{t("solverEditCluesBtn")}</span>
                 </button>
 
-                {/* 2. Auto-Solve */}
+                {/* 2. Auto-Solve (Ad-Gated with Fallback) */}
                 <button
                   type="button"
                   id="solver-auto-solve-btn"
+                  disabled={isAdLoading}
                   onClick={handleAutoSolve}
-                  className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-bold tracking-wide cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[#CCFBF1] hover:bg-[#99F6E4] text-[#115E59] dark:bg-teal-950/75 dark:hover:bg-teal-900/85 dark:text-teal-200 shadow-[0_6px_18px_rgba(17,94,89,0.08)] dark:shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
+                  className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-bold tracking-wide cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-150 bg-[#CCFBF1] hover:bg-[#99F6E4] text-[#115E59] dark:bg-teal-950/75 dark:hover:bg-teal-900/85 dark:text-teal-200 shadow-[0_6px_18px_rgba(17,94,89,0.08)] dark:shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
                 >
-                  <Zap className="w-4 h-4 stroke-[2.3] shrink-0" />
-                  <span>{t("solverAutoSolveBtn")}</span>
+                  {isAdLoading ? (
+                    <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                  ) : (
+                    <PlaySquare className="w-4 h-4 stroke-[2.3] shrink-0" />
+                  )}
+                  <span>{isAdLoading ? t("solverBannerAdLoading") || "Loading Ad..." : t("solverAutoSolveBtn")}</span>
                 </button>
 
                 {/* 3. Play Puzzle */}
                 <button
                   type="button"
                   id="solver-play-puzzle-btn"
+                  disabled={isAdLoading}
                   onClick={handlePlayPuzzle}
-                  className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-black tracking-wide cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-950 dark:hover:bg-indigo-900 dark:text-indigo-200 shadow-[0_8px_22px_rgba(55,48,163,0.14)] dark:shadow-[0_4px_14px_rgba(0,0,0,0.45)]"
+                  className="w-full h-12 px-4 rounded-2xl border-0 outline-none flex items-center justify-center gap-2.5 text-sm font-black tracking-wide cursor-pointer disabled:opacity-50 active:scale-[0.98] transition-all duration-150 bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#3730A3] dark:bg-indigo-950 dark:hover:bg-indigo-900 dark:text-indigo-200 shadow-[0_8px_22px_rgba(55,48,163,0.14)] dark:shadow-[0_4px_14px_rgba(0,0,0,0.45)]"
                 >
                   <Play className="w-4 h-4 stroke-[2.4] fill-current shrink-0" />
                   <span>{t("solverPlayPuzzleBtn")}</span>
