@@ -97,6 +97,18 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
     ? Math.max(0, boardState.maxHintsLimit - boardState.hintsCount)
     : hintInventory;
 
+  const hintBadgeTheme = darkMode ? (
+    currentDiff === "EASY" ? "bg-[#0e8365] text-[#ECFDF5]" :
+    currentDiff === "MEDIUM" ? "bg-[#713f12] text-[#FEF08A]" :
+    currentDiff === "HARD" ? "bg-[#581db8] text-[#F3E8FF]" :
+    "bg-[#881337] text-[#FFE4E6]"
+  ) : (
+    currentDiff === "EASY" ? "bg-[#86EFAC] text-[#065F46]" :
+    currentDiff === "MEDIUM" ? "bg-[#FCD34D] text-[#78350F]" :
+    currentDiff === "HARD" ? "bg-[#D8B4FE] text-[#6B21A8]" :
+    "bg-[#F9A8D4] text-[#9D174D]"
+  );
+
   return (
     <>
       {/* 1. UTILITY BUTTONS: Undo, Erase, Notes, Hint */}
@@ -262,7 +274,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
             </div>
 
             {effectiveHintCount > 0 ? (
-              <span className="absolute -top-1 -right-1 z-10 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center border-0 shadow-none pointer-events-none select-none">
+              <span className={`absolute -top-1 -right-1 z-10 min-w-[22px] h-[22px] sm:min-w-[24px] sm:h-[24px] px-1.5 rounded-full text-[11px] sm:text-xs font-black leading-none tabular-nums ${hintBadgeTheme} flex items-center justify-center border-0 shadow-xs pointer-events-none select-none`}>
                 {effectiveHintCount}
               </span>
             ) : !isChallengeMode ? (
@@ -270,7 +282,7 @@ export const SudokuKeypad: React.FC<SudokuKeypadProps> = React.memo(({
                 AD
               </span>
             ) : (
-              <span className="absolute -top-1 -right-1 z-10 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-400 flex items-center justify-center border-0 shadow-none pointer-events-none select-none">
+              <span className={`absolute -top-1 -right-1 z-10 min-w-[22px] h-[22px] sm:min-w-[24px] sm:h-[24px] px-1.5 rounded-full text-[11px] sm:text-xs font-black leading-none tabular-nums ${hintBadgeTheme} opacity-60 flex items-center justify-center border-0 shadow-none pointer-events-none select-none`}>
                 0
               </span>
             )}
