@@ -10,6 +10,13 @@ import {
   ExternalLink,
   ArrowLeft,
   SlidersHorizontal,
+  Award,
+  Cpu,
+  Users,
+  BookOpen,
+  Calculator,
+  Calendar,
+  Sparkles,
 } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
 import {
@@ -38,11 +45,14 @@ export function parseComplianceRoute(pathname?: string | null): CompliancePageTy
 
 const SUPPORT_EMAIL = "sudokutogethermode@gmail.com";
 
+export type ComplianceToolRoute = "rules" | "solver" | "daily-challenge";
+
 export interface ComplianceDocumentBodyProps {
   page: CompliancePageType;
   darkMode: boolean;
   compact?: boolean;
   onNavigatePage?: (page: CompliancePageType) => void;
+  onNavigateRoute?: (route: ComplianceToolRoute) => void;
   onOpenSettings?: () => void;
   onCopyEmail?: (email: string) => Promise<boolean> | boolean;
 }
@@ -52,6 +62,7 @@ export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
   darkMode,
   compact = false,
   onNavigatePage,
+  onNavigateRoute,
   onOpenSettings,
   onCopyEmail,
 }) => {
@@ -160,30 +171,94 @@ export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
     <div className="space-y-4 select-text">
       {page === "about" && (
         <div className="space-y-4">
-          <div className="space-y-1">
-            <h2 className={headingCls}>{t("aboutUsTitle")}</h2>
-            <p className="text-[11px] font-mono text-stone-500 dark:text-stone-400">
-              {t("versionLabel")}: <span className="font-semibold text-sky-600 dark:text-sky-400">v1.0.3</span>
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-1">
+              <h2 className={headingCls}>{t("aboutUsTitle")}</h2>
+              <p className="text-[11px] font-mono text-stone-500 dark:text-stone-400">
+                {t("versionLabel")}: <span className="font-semibold text-sky-600 dark:text-sky-400">v1.0.3</span>
+              </p>
+            </div>
+            <span
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-0 text-[11px] font-bold ${
+                darkMode
+                  ? "bg-sky-500/15 text-sky-200 shadow-[0_4px_12px_rgba(0,0,0,0.2)]"
+                  : "bg-sky-100/80 text-sky-900 shadow-[0_4px_12px_rgba(14,116,144,0.08)]"
+              }`}
+            >
+              <Award className="w-3.5 h-3.5 shrink-0" />
+              <span>{legal.about.publisherBadge}</span>
+            </span>
           </div>
 
-          <p className={`${textSize} leading-relaxed text-stone-700 dark:text-stone-300`}>
-            <strong>SudokuSync</strong> — {t("aboutUsDesc")}
-          </p>
-          <p className={`${textSize} leading-relaxed text-stone-700 dark:text-stone-300`}>
-            {t("aboutMission")}
-          </p>
-          <p className="text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-            {t("aboutTechArchDesc")}
-          </p>
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2 ${softCardCls}`}>
+            <h3 className={`${sectionHeadingCls} flex items-center gap-1.5`}>
+              <Sparkles className="w-3.5 h-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
+              <span>{legal.about.publisherHeader}</span>
+            </h3>
+            <p className={`${textSize} leading-relaxed`}>
+              <strong>SudokuSync</strong> — {t("aboutUsDesc")}
+            </p>
+            <p className="text-xs leading-relaxed opacity-90">{legal.about.publisherText}</p>
+            <p className="text-xs leading-relaxed opacity-90">{t("aboutMission")}</p>
+          </div>
 
-          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-1.5 ${softCardCls}`}>
-            <p className="text-xs font-bold text-stone-800 dark:text-stone-200">
-              {t("versionLabel")}: <span className="font-mono text-sky-600 dark:text-sky-400">v1.0.3</span>
-            </p>
-            <p className="text-xs text-stone-600 dark:text-stone-400">
-              {t("creditsLabel")}
-            </p>
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-3 ${emeraldPastelCls}`}>
+            <h3 className={`${sectionHeadingCls} flex items-center gap-1.5`}>
+              <Cpu className="w-3.5 h-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
+              <span>{legal.about.engineHeader}</span>
+            </h3>
+            <p className="text-xs leading-relaxed">{legal.about.engineIntro}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {legal.about.difficultySpecs.map((spec) => {
+                const badgeTone =
+                  spec.level === "EASY"
+                    ? darkMode
+                      ? "bg-sky-500/20 text-sky-200"
+                      : "bg-sky-100/90 text-sky-900"
+                    : spec.level === "MEDIUM"
+                      ? darkMode
+                        ? "bg-emerald-500/20 text-emerald-200"
+                        : "bg-emerald-100/90 text-emerald-900"
+                      : spec.level === "HARD"
+                        ? darkMode
+                          ? "bg-amber-500/20 text-amber-200"
+                          : "bg-amber-100/90 text-amber-900"
+                        : darkMode
+                          ? "bg-rose-500/20 text-rose-200"
+                          : "bg-rose-100/90 text-rose-900";
+                return (
+                  <div
+                    key={spec.level}
+                    className={`p-3 rounded-2xl border-0 space-y-1 ${
+                      darkMode
+                        ? "bg-zinc-900/65 shadow-[0_4px_14px_rgba(0,0,0,0.2)]"
+                        : "bg-white/90 shadow-[0_4px_14px_rgba(15,23,42,0.04)]"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-stone-800 dark:text-stone-100">
+                        {spec.label}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full border-0 text-[10px] font-bold ${badgeTone}`}>
+                        {spec.cluesBadge}
+                      </span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-stone-600 dark:text-stone-300">
+                      {spec.summary}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2 ${lavenderPastelCls}`}>
+            <h3 className={`${sectionHeadingCls} flex items-center gap-1.5`}>
+              <Users className="w-3.5 h-3.5 shrink-0 text-violet-700 dark:text-violet-300" />
+              <span>{legal.about.multiplayerHeader}</span>
+            </h3>
+            <p className="text-xs leading-relaxed">{legal.about.multiplayerText}</p>
+            <p className="text-xs leading-relaxed opacity-90">{legal.about.assistantsText}</p>
           </div>
 
           <div className="space-y-2">
@@ -208,8 +283,82 @@ export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
             </ul>
           </div>
 
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2.5 ${softCardCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.about.exploreHeader}</h3>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href="/rules"
+                onClick={(e) => {
+                  if (onNavigateRoute) {
+                    e.preventDefault();
+                    onNavigateRoute("rules");
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                  darkMode
+                    ? "bg-sky-500/20 text-sky-200 hover:bg-sky-500/30"
+                    : "bg-white text-sky-900 hover:bg-sky-100/80 shadow-[0_2px_8px_rgba(14,116,144,0.08)]"
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                <span>{legal.about.exploreRulesLabel}</span>
+              </a>
+              <a
+                href="/solver"
+                onClick={(e) => {
+                  if (onNavigateRoute) {
+                    e.preventDefault();
+                    onNavigateRoute("solver");
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                  darkMode
+                    ? "bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
+                    : "bg-white text-emerald-900 hover:bg-emerald-100/80 shadow-[0_2px_8px_rgba(5,150,105,0.08)]"
+                }`}
+              >
+                <Calculator className="w-3.5 h-3.5 shrink-0" />
+                <span>{legal.about.exploreSolverLabel}</span>
+              </a>
+              <a
+                href="/daily-challenge"
+                onClick={(e) => {
+                  if (onNavigateRoute) {
+                    e.preventDefault();
+                    onNavigateRoute("daily-challenge");
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                  darkMode
+                    ? "bg-amber-500/20 text-amber-200 hover:bg-amber-500/30"
+                    : "bg-white text-amber-900 hover:bg-amber-100/80 shadow-[0_2px_8px_rgba(217,119,6,0.08)]"
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5 shrink-0" />
+                <span>{legal.about.exploreDailyLabel}</span>
+              </a>
+              <a
+                href="/contact"
+                onClick={(e) => {
+                  if (onNavigatePage) {
+                    e.preventDefault();
+                    onNavigatePage("contact");
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                  darkMode
+                    ? "bg-violet-500/20 text-violet-200 hover:bg-violet-500/30"
+                    : "bg-white text-violet-900 hover:bg-violet-100/80 shadow-[0_2px_8px_rgba(124,58,237,0.08)]"
+                }`}
+              >
+                <Mail className="w-3.5 h-3.5 shrink-0" />
+                <span>{legal.about.exploreContactLabel}</span>
+              </a>
+            </div>
+          </div>
+
           <p className="pt-1 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-            {t("aboutAdNotice")}
+            {t("aboutAdNotice")} — {t("creditsLabel")}
           </p>
         </div>
       )}
@@ -700,6 +849,7 @@ export interface ComplianceScreenProps {
   page: CompliancePageType;
   darkMode: boolean;
   onNavigatePage: (page: CompliancePageType) => void;
+  onNavigateRoute?: (route: ComplianceToolRoute) => void;
   onBackHome: () => void;
   onOpenSettings: () => void;
   onCopyEmail?: (email: string) => Promise<boolean> | boolean;
@@ -709,6 +859,7 @@ export const ComplianceScreen: React.FC<ComplianceScreenProps> = ({
   page,
   darkMode,
   onNavigatePage,
+  onNavigateRoute,
   onBackHome,
   onOpenSettings,
   onCopyEmail,
@@ -729,6 +880,7 @@ export const ComplianceScreen: React.FC<ComplianceScreenProps> = ({
             page={page}
             darkMode={darkMode}
             onNavigatePage={onNavigatePage}
+            onNavigateRoute={onNavigateRoute}
             onOpenSettings={onOpenSettings}
             onCopyEmail={onCopyEmail}
           />

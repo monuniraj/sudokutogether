@@ -91,6 +91,27 @@ export interface LegalDocumentLocaleContent {
     openDeleteSettingsBtn: string;
     topics: Record<ContactTopicId, { label: string; subject: string; body: string }>;
   };
+  about: {
+    publisherBadge: string;
+    publisherHeader: string;
+    publisherText: string;
+    engineHeader: string;
+    engineIntro: string;
+    difficultySpecs: Array<{
+      level: "EASY" | "MEDIUM" | "HARD" | "EXPERT";
+      label: string;
+      cluesBadge: string;
+      summary: string;
+    }>;
+    multiplayerHeader: string;
+    multiplayerText: string;
+    assistantsText: string;
+    exploreHeader: string;
+    exploreRulesLabel: string;
+    exploreSolverLabel: string;
+    exploreDailyLabel: string;
+    exploreContactLabel: string;
+  };
 }
 
 const OPT_OUT_PORTALS: Array<{ name: string; url: string }> = [
@@ -305,6 +326,51 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         },
       },
     },
+    about: {
+      publisherBadge: "Published by Mo Logic",
+      publisherHeader: "Independent Puzzle Studio & Editorial Standards",
+      publisherText:
+        "SudokuSync is developed and published independently by Mo Logic across Web (https://sudokusync.com) and Google Play Android (com.mologic.sudokusync). Every puzzle, interactive diagram, and logic guide is crafted for distraction-free solving with a borderless pastel design system, Light/Dark themes, offline persistence, and transparent ad-supported free access.",
+      engineHeader: "Deterministic 9x9 Puzzle Engine & Verified Clue Tiers",
+      engineIntro:
+        "Every classic 9x9 board is produced by our seeded Mulberry32 PRNG generator and checked by our human-logic difficulty engine plus bitmask MRV solver verification to guarantee a mathematically unique single solution before play begins:",
+      difficultySpecs: [
+        {
+          level: "EASY",
+          label: "Easy",
+          cluesBadge: "51 Clues",
+          summary: "Row, column, and 3x3 box Singles designed for relaxed warm-up solving.",
+        },
+        {
+          level: "MEDIUM",
+          label: "Medium",
+          cluesBadge: "39 Clues",
+          summary: "Balanced multi-step scanning across intersecting rows, columns, and boxes.",
+        },
+        {
+          level: "HARD",
+          label: "Hard",
+          cluesBadge: "30 Clues",
+          summary: "Pairs, pointing intersections, and candidate note workflows with Auto-Notes support.",
+        },
+        {
+          level: "EXPERT",
+          label: "Expert",
+          cluesBadge: "25 Clues",
+          summary: "Deep candidate deduction chains, X-Wing patterns, and minimal starting clues.",
+        },
+      ],
+      multiplayerHeader: "Same-Board Live & Asynchronous Multiplayer",
+      multiplayerText:
+        "Play live or asynchronously on the exact same 9x9 seed using 6-digit numeric Room Codes, optional PIN protection, and direct ?room= browser share links. Signed-in Google players can sync stats, manage persistent Friends alongside Recent Players, challenge opponents asynchronously, and toggle Ghost Mode visibility at any time.",
+      assistantsText:
+        "Seven verified Smart Assistants tailor the board to your style: Highlight Identical Numbers, Show Remaining Numbers, Highlight Related Area, Auto-Switch Completed Numbers, Auto-Remove Notes, Auto-Notes (Hard and Expert modes), and Fast Fill (Number-First), paired with configurable mistake limits and timer toggles.",
+      exploreHeader: "Explore Rules, Tools & Support",
+      exploreRulesLabel: "Rules & Strategies Hub",
+      exploreSolverLabel: "Interactive Sudoku Solver",
+      exploreDailyLabel: "Daily Challenge",
+      exploreContactLabel: "Contact & Data Support",
+    },
   },
 
   hi: {
@@ -511,6 +577,51 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         },
       },
     },
+    about: {
+      publisherBadge: "Mo Logic dwara prakashit",
+      publisherHeader: "Independent Puzzle Studio aur Quality Standards",
+      publisherText:
+        "SudokuSync ko Mo Logic ne Web (https://sudokusync.com) aur Google Play Android (com.mologic.sudokusync) ke liye banaya aur publish kiya hai. Har puzzle, diagram aur guide ko saaf borderless pastel UI, Light/Dark modes, offline support aur transparent muft access ke saath tayyar kiya gaya hai.",
+      engineHeader: "Deterministic 9x9 Puzzle Engine aur Verified Clues",
+      engineIntro:
+        "Har classic 9x9 board humare seeded Mulberry32 PRNG generator se banta hai aur human-logic difficulty engine tatha bitmask MRV solver se check hota hai taaki har puzzle ka sirf ek hi sahi solution ho:",
+      difficultySpecs: [
+        {
+          level: "EASY",
+          label: "Easy",
+          cluesBadge: "51 Clues",
+          summary: "Aasan row, column aur 3x3 box Singles ke saath smooth warm-up solving.",
+        },
+        {
+          level: "MEDIUM",
+          label: "Medium",
+          cluesBadge: "39 Clues",
+          summary: "Intersecting rows, columns aur boxes mein balanced logical deductions.",
+        },
+        {
+          level: "HARD",
+          label: "Hard",
+          cluesBadge: "30 Clues",
+          summary: "Pairs, pointing patterns aur candidate notes — Auto-Notes option ke saath.",
+        },
+        {
+          level: "EXPERT",
+          label: "Expert",
+          cluesBadge: "25 Clues",
+          summary: "Gehre candidate elimination chains, X-Wing patterns aur kam clues.",
+        },
+      ],
+      multiplayerHeader: "Same-Board Live aur Asynchronous Multiplayer",
+      multiplayerText:
+        "6-digit Room Codes, optional PIN lock, aur direct ?room= share links ke zariye Web aur Android par doston ke saath bilkul ek hi 9x9 grid par live ya async duel khelein. Google Sign-In ke saath aapke stats, persistent Friends aur Recent Players cloud mein sync rehte hain, aur Ghost Mode kabhi bhi on/off ho sakta hai.",
+      assistantsText:
+        "Board par 7 Smart Assistants milte hain: Highlight Identical Numbers, Show Remaining Numbers, Highlight Related Area, Auto-Switch Completed Numbers, Auto-Remove Notes, Auto-Notes (sirf Hard/Expert), aur Fast Fill (Number-First).",
+      exploreHeader: "Rules, Tools aur Support Dekhein",
+      exploreRulesLabel: "Rules & Strategies Hub",
+      exploreSolverLabel: "Interactive Sudoku Solver",
+      exploreDailyLabel: "Daily Challenge",
+      exploreContactLabel: "Contact & Privacy Support",
+    },
   },
 
   de: {
@@ -675,6 +786,51 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         },
       },
     },
+    about: {
+      publisherBadge: "Veroeffentlicht von Mo Logic",
+      publisherHeader: "Unabhaengiges Puzzle-Studio & Qualitaetsstandards",
+      publisherText:
+        "SudokuSync wird unabhaengig von Mo Logic fuer das Web (https://sudokusync.com) und Google Play Android (com.mologic.sudokusync) entwickelt. Jedes Raetsel und jeder Leitfaden setzt auf eine ruhige, randlose Pastell-Oberflaeche mit Hell-/Dunkelmodus, Offline-Speicher und transparentem kostenlosem Zugang.",
+      engineHeader: "Deterministische 9x9-Engine & Verifizierte Hinweise",
+      engineIntro:
+        "Jedes klassische 9x9-Brett wird per Mulberry32-PRNG erzeugt und durch unsere Human-Logic-Bewertung sowie Bitmask-MRV-Verifikation auf genau eine eindeutige Loesung geprueft:",
+      difficultySpecs: [
+        {
+          level: "EASY",
+          label: "Leicht",
+          cluesBadge: "51 Hinweise",
+          summary: "Klarer Einstieg ueber Zeilen-, Spalten- und 3x3-Block-Singles.",
+        },
+        {
+          level: "MEDIUM",
+          label: "Mittel",
+          cluesBadge: "39 Hinweise",
+          summary: "Ausgewogene logische Kombinationen ueber sich kreuzende Einheiten.",
+        },
+        {
+          level: "HARD",
+          label: "Schwer",
+          cluesBadge: "30 Hinweise",
+          summary: "Paare, Pointing-Muster und strukturierte Notizen mit Auto-Notizen.",
+        },
+        {
+          level: "EXPERT",
+          label: "Experte",
+          cluesBadge: "25 Hinweise",
+          summary: "Tiefe Kandidatenketten, X-Wing-Techniken und wenige Startziffern.",
+        },
+      ],
+      multiplayerHeader: "Same-Board Live- & Async-Mehrspielermodus",
+      multiplayerText:
+        "Spiele live oder asynchron auf exakt demselben 9x9-Seed per 6-stelligem Raumcode, optionaler PIN-Sperre und direktem ?room=-Link. Mit Google-Anmeldung synchronisierst du Statistiken, gespeicherte Freunde neben den letzten Mitspielern und den Geistmodus plattformuebergreifend.",
+      assistantsText:
+        "Sieben verifizierte Smart-Assistenten unterstuetzen dein Spiel: Gleiche Zahlen markieren, Verbleibende Zahlen anzeigen, Zugehoerige Bereiche markieren, Vollstaendige Zahlen automatisch wechseln, Notizen automatisch entfernen, Auto-Notizen (nur Schwer/Experte) und Schnelleingabe.",
+      exploreHeader: "Regeln, Werkzeuge & Kontakt entdecken",
+      exploreRulesLabel: "Regeln & Strategien",
+      exploreSolverLabel: "Interaktiver Sudoku-Loeser",
+      exploreDailyLabel: "Tages-Challenge",
+      exploreContactLabel: "Kontakt & Datenschutz",
+    },
   },
 
   ja: {
@@ -835,6 +991,51 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         },
       },
     },
+    about: {
+      publisherBadge: "開発・公開: Mo Logic",
+      publisherHeader: "独立パズルスタジオと品質方針",
+      publisherText:
+        "SudokuSync は Mo Logic が Web（https://sudokusync.com）および Google Play Android（com.mologic.sudokusync）向けに独立開発・公開している論理パズルプラットフォームです。ボーダーレスなパステルUI、ライト/ダーク対応、オフライン保存、透明性の高い広告モデルで快適に遊べます。",
+      engineHeader: "決定的9x9エンジンと難易度別ヒント数",
+      engineIntro:
+        "すべてのクラシック9x9盤面は Mulberry32 PRNG により生成され、人間向けロジック評価と MRV ビットマスク検証によって「唯一解」であることが数学的に確認されています。",
+      difficultySpecs: [
+        {
+          level: "EASY",
+          label: "初級 (Easy)",
+          cluesBadge: "ヒント 51",
+          summary: "行・列・3x3ブロックの基本スキャンで気持ちよく解ける入門レベル。",
+        },
+        {
+          level: "MEDIUM",
+          label: "中級 (Medium)",
+          cluesBadge: "ヒント 39",
+          summary: "交差する候補の絞り込みを練習できるバランスの良い難易度。",
+        },
+        {
+          level: "HARD",
+          label: "上級 (Hard)",
+          cluesBadge: "ヒント 30",
+          summary: "ペアやポインティング、上級/達人限定の自動メモを活用する論理勝負。",
+        },
+        {
+          level: "EXPERT",
+          label: "達人 (Expert)",
+          cluesBadge: "ヒント 25",
+          summary: "X-Wing などの連鎖消去が鍵になる最小限の初期配置。",
+        },
+      ],
+      multiplayerHeader: "同盤面ライブ＆非同期マルチプレイ",
+      multiplayerText:
+        "6桁のルーム番号、任意のPIN保護、?room= 共有リンクを使って、Web と Android の垣根なくまったく同じ9x9盤面でライブまたは非同期対戦が楽しめます。Google ログインで戦績やフレンドリスト、最近のプレイヤー履歴を同期でき、ゴーストモードでオンライン表示も切り替え可能です。",
+      assistantsText:
+        "同一数字の強調、残り数字の表示、関連エリア強調、完了数字の自動切替、メモの自動削除、自動メモ（上級・達人限定）、ファストフィルの7つのスマートアシストを搭載しています。",
+      exploreHeader: "ルール・ツール・サポートを見る",
+      exploreRulesLabel: "ルール＆戦略ハブ",
+      exploreSolverLabel: "インタラクティブ・ソルバー",
+      exploreDailyLabel: "デイリーチャレンジ",
+      exploreContactLabel: "お問い合わせ",
+    },
   },
 
   ko: {
@@ -994,6 +1195,51 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           body: "앱 버전: v1.0.3\n플레이어 닉네임 / 이메일: \n요청 내용: SudokuSync Firestore 프로필, 순위/매치 기록 및 푸시 알림 토큰의 영구 삭제를 요청합니다.",
         },
       },
+    },
+    about: {
+      publisherBadge: "Mo Logic 제작 · 퍼블리싱",
+      publisherHeader: "독립 퍼즐 스튜디오 및 품질 기준",
+      publisherText:
+        "SudokuSync는 독립 퍼즐 스튜디오 Mo Logic이 웹(https://sudokusync.com)과 Google Play Android(com.mologic.sudokusync)용으로 제작·배포합니다. 테두리 없는 파스텔 인터페이스, 라이트/다크 테마, 오프라인 저장, 투명한 광고 기반 무료 플레이를 제공합니다.",
+      engineHeader: "결정론적 9x9 퍼즐 엔진 및 단서 수 검증",
+      engineIntro:
+        "모든 클래식 9x9 퍼즐은 시드 기반 Mulberry32 PRNG 생성기와 휴먼 로직 난이도 엔진, MRV 비트마스크 솔버 검증을 거쳐 단 하나의 유일한 정답이 보장됩니다:",
+      difficultySpecs: [
+        {
+          level: "EASY",
+          label: "쉬움 (Easy)",
+          cluesBadge: "단서 51개",
+          summary: "가로줄, 세로줄, 3x3 박스 스캔 중심의 가벼운 워밍업 퍼즐.",
+        },
+        {
+          level: "MEDIUM",
+          label: "보통 (Medium)",
+          cluesBadge: "단서 39개",
+          summary: "교차 추론과 기본 후보 소거를 연습하는 균형 잡힌 난이도.",
+        },
+        {
+          level: "HARD",
+          label: "어려움 (Hard)",
+          cluesBadge: "단서 30개",
+          summary: "페어, 포인팅 기법과 어려움/전문가 전용 자동 메모 활용 모드.",
+        },
+        {
+          level: "EXPERT",
+          label: "전문가 (Expert)",
+          cluesBadge: "단서 25개",
+          summary: "고급 연쇄 소거와 X-Wing 패턴을 요구하는 최소 단서 보드.",
+        },
+      ],
+      multiplayerHeader: "동일 보드 실시간 & 비동기 멀티플레이어",
+      multiplayerText:
+        "6자리 숫자 방 코드, 선택적 PIN 잠금, ?room= 직접 공유 링크를 통해 웹과 Android에서 완전히 동일한 9x9 시드로 실시간 또는 비동기 대결을 즐길 수 있습니다. Google 로그인 시 기록, 친구 목록, 최근 플레이어 동기화와 고스트 모드를 지원합니다.",
+      assistantsText:
+        "동일 숫자 강조, 남은 숫자 표시, 관련 영역 강조, 완료 숫자 자동 전환, 메모 자동 삭제, 자동 메모(어려움/전문가 전용), 빠른 채우기의 7가지 검증된 스마트 어시스턴트를 제공합니다.",
+      exploreHeader: "규칙, 도구 및 지원 바로가기",
+      exploreRulesLabel: "규칙 및 전략 허브",
+      exploreSolverLabel: "스도쿠 솔버",
+      exploreDailyLabel: "일일 챌린지",
+      exploreContactLabel: "문의 및 데이터 지원",
     },
   },
 
@@ -1156,6 +1402,51 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         },
       },
     },
+    about: {
+      publisherBadge: "Publicado por Mo Logic",
+      publisherHeader: "Estudio Independiente de Rompecabezas",
+      publisherText:
+        "SudokuSync es desarrollado y publicado de forma independiente por Mo Logic para Web (https://sudokusync.com) y Android en Google Play (com.mologic.sudokusync). Ofrece una interfaz pastel sin bordes, temas claro/oscuro, guardado sin conexion y acceso gratuito transparente.",
+      engineHeader: "Motor Determinista 9x9 y Pistas Verificadas",
+      engineIntro:
+        "Cada tablero clasico de 9x9 se genera con Mulberry32 PRNG y pasa por nuestro evaluador de logica humana y verificacion MRV para garantizar matematicamente una solucion unica:",
+      difficultySpecs: [
+        {
+          level: "EASY",
+          label: "Facil",
+          cluesBadge: "51 Pistas",
+          summary: "Escaneo directo de filas, columnas y cajas 3x3 ideal para calentar.",
+        },
+        {
+          level: "MEDIUM",
+          label: "Medio",
+          cluesBadge: "39 Pistas",
+          summary: "Deducciones equilibradas de varios pasos entre intersecciones.",
+        },
+        {
+          level: "HARD",
+          label: "Dificil",
+          cluesBadge: "30 Pistas",
+          summary: "Pares, apuntadores y notas de candidatos con Notas Automaticas.",
+        },
+        {
+          level: "EXPERT",
+          label: "Experto",
+          cluesBadge: "25 Pistas",
+          summary: "Cadenas profundas de eliminacion, patrones X-Wing y pistas minimas.",
+        },
+      ],
+      multiplayerHeader: "Multijugador en Vivo y Asincrono en el Mismo Tablero",
+      multiplayerText:
+        "Comparte codigos de sala de 6 digitos, PIN opcional o enlaces directos ?room= para competir en la misma semilla 9x9 entre Web y Android. Al iniciar sesion con Google sincronizas estadisticas, lista de Amigos persistente, Jugadores Recientes y Modo Fantasma.",
+      assistantsText:
+        "Incluye 7 Asistentes Inteligentes reales: Resaltar Numeros Identicos, Mostrar Numeros Restantes, Resaltar Area Relacionada, Cambio Automatico al Completar, Eliminar Notas Automaticamente, Notas Automaticas (Dificil/Experto) y Relleno Rapido.",
+      exploreHeader: "Explorar Reglas, Herramientas y Soporte",
+      exploreRulesLabel: "Guia de Reglas y Estrategias",
+      exploreSolverLabel: "Solucionador de Sudoku",
+      exploreDailyLabel: "Desafio Diario",
+      exploreContactLabel: "Contacto y Privacidad",
+    },
   },
 
   fr: {
@@ -1316,6 +1607,51 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           body: "Version : v1.0.3\nPseudo joueur / E-mail : \nDemande : Merci de supprimer definitivement mon profil Firestore, mes classements/matchs et mes jetons de notification SudokuSync.",
         },
       },
+    },
+    about: {
+      publisherBadge: "Publie par Mo Logic",
+      publisherHeader: "Studio Independant & Exigence Editoriale",
+      publisherText:
+        "SudokuSync est concu et publie independamment par Mo Logic sur le Web (https://sudokusync.com) et Google Play Android (com.mologic.sudokusync). Chaque grille et guide s'appuie sur une interface pastel sans bordures, themes Clair/Sombre, jeu hors ligne et acces gratuit transparent.",
+      engineHeader: "Moteur Deterministe 9x9 & Calibrage des Indices",
+      engineIntro:
+        "Chaque grille 9x9 est generee par Mulberry32 PRNG et controlee par notre moteur de difficulte humaine et notre solveur MRV pour garantir une solution unique mathematiquement verifiee :",
+      difficultySpecs: [
+        {
+          level: "EASY",
+          label: "Facile",
+          cluesBadge: "51 Indices",
+          summary: "Balayage fluide par lignes, colonnes et blocs 3x3 pour s'echauffer.",
+        },
+        {
+          level: "MEDIUM",
+          label: "Moyen",
+          cluesBadge: "39 Indices",
+          summary: "Deductions logiques equilibrees a travers plusieurs unites.",
+        },
+        {
+          level: "HARD",
+          label: "Difficile",
+          cluesBadge: "30 Indices",
+          summary: "Paires, alignements et prise de notes avec Notes Auto.",
+        },
+        {
+          level: "EXPERT",
+          label: "Expert",
+          cluesBadge: "25 Indices",
+          summary: "Chaines d'elimination avancees, X-Wing et tres peu d'indices initiaux.",
+        },
+      ],
+      multiplayerHeader: "Multijoueur sur Meme Grille en Direct et Asynchrone",
+      multiplayerText:
+        "Partagez un code de salon a 6 chiffres, un code PIN optionnel ou un lien direct ?room= pour jouer exactement la meme grille 9x9 sur Web et Android. Avec Google, synchronisez vos statistiques, Amis persistants, Joueurs Recents et Mode Fantome.",
+      assistantsText:
+        "Sept Assistants Intelligents verifies sont disponibles : Surbrillance des chiffres identiques, Chiffres restants, Zone associee, Changement auto des chiffres termines, Suppression auto des notes, Notes Auto (Difficile/Expert) et Remplissage rapide.",
+      exploreHeader: "Explorer Regles, Outils & Support",
+      exploreRulesLabel: "Hub Regles & Strategies",
+      exploreSolverLabel: "Solveur de Sudoku",
+      exploreDailyLabel: "Defi Quotidien",
+      exploreContactLabel: "Contact & Confidentialite",
     },
   },
 
@@ -1478,6 +1814,51 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         },
       },
     },
+    about: {
+      publisherBadge: "Pubblicato da Mo Logic",
+      publisherHeader: "Studio Indipendente & Standard Qualitativi",
+      publisherText:
+        "SudokuSync e sviluppato e pubblicato in modo indipendente da Mo Logic su Web (https://sudokusync.com) e Google Play Android (com.mologic.sudokusync). Offre un design pastello senza bordi con tema Chiaro/Scuro, supporto offline e accesso gratuito trasparente.",
+      engineHeader: "Motore Deterministico 9x9 e Calibrazione Indizi",
+      engineIntro:
+        "Ogni griglia 9x9 nasce dal generatore Mulberry32 PRNG ed e verificata dal nostro motore logico umano e risolutore bitmask MRV per garantire matematicamente un'unica soluzione valida:",
+      difficultySpecs: [
+        {
+          level: "EASY",
+          label: "Facile",
+          cluesBadge: "51 Indizi",
+          summary: "Scansione rapida di righe, colonne e riquadri 3x3 ideale per iniziare.",
+        },
+        {
+          level: "MEDIUM",
+          label: "Medio",
+          cluesBadge: "39 Indizi",
+          summary: "Deduzioni bilanciate a piu passaggi tra settori intersecati.",
+        },
+        {
+          level: "HARD",
+          label: "Difficile",
+          cluesBadge: "30 Indizi",
+          summary: "Coppie, puntatori e gestione candidati con Note Automatiche.",
+        },
+        {
+          level: "EXPERT",
+          label: "Esperto",
+          cluesBadge: "25 Indizi",
+          summary: "Catene logiche profonde, schemi X-Wing e pochi indizi iniziali.",
+        },
+      ],
+      multiplayerHeader: "Multigiocatore Live e Asincrono sulla Stessa Griglia",
+      multiplayerText:
+        "Condividi codici stanza a 6 cifre, PIN opzionale o link diretti ?room= per sfidarti sullo stesso schema 9x9 tra Web e Android. Con Google sincronizzi statistiche, lista Amici persistente, Giocatori Recenti e Modalita Fantasma.",
+      assistantsText:
+        "Sette Assistenti Intelligenti verificati personalizzano la partita: Evidenzia Numeri Identici, Mostra Numeri Rimanenti, Evidenzia Area Correlata, Cambio Automatico Numeri Completati, Rimozione Automatica Note, Note Automatiche (Difficile/Esperto) e Inserimento Rapido.",
+      exploreHeader: "Esplora Regole, Strumenti & Supporto",
+      exploreRulesLabel: "Hub Regole & Strategie",
+      exploreSolverLabel: "Risolutore Sudoku",
+      exploreDailyLabel: "Sfida Giornaliera",
+      exploreContactLabel: "Contatti & Supporto",
+    },
   },
 
   "pt-BR": {
@@ -1638,6 +2019,51 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           body: "Versao do App: v1.0.3\nApelido / E-mail: \nSolicitacao: Por favor, excluam permanentemente meu perfil Firestore, registros de partidas/ranking e tokens de notificacao do SudokuSync.",
         },
       },
+    },
+    about: {
+      publisherBadge: "Publicado por Mo Logic",
+      publisherHeader: "Estudio Independente de Quebra-Cabecas",
+      publisherText:
+        "SudokuSync e desenvolvido e publicado de forma independente pela Mo Logic na Web (https://sudokusync.com) e no Google Play Android (com.mologic.sudokusync). Traz visual pastel sem bordas, temas Claro/Escuro, suporte offline e acesso gratuito transparente.",
+      engineHeader: "Motor Deterministico 9x9 e Pistas Verificadas",
+      engineIntro:
+        "Todo tabuleiro 9x9 e criado com Mulberry32 PRNG e validado por nosso motor de logica humana e solver MRV para garantir matematicamente uma solucao unica antes da partida:",
+      difficultySpecs: [
+        {
+          level: "EASY",
+          label: "Facil",
+          cluesBadge: "51 Pistas",
+          summary: "Varredura direta em linhas, colunas e blocos 3x3 para aquecimento.",
+        },
+        {
+          level: "MEDIUM",
+          label: "Medio",
+          cluesBadge: "39 Pistas",
+          summary: "Deducoes logicas equilibradas em etapas por interseccoes.",
+        },
+        {
+          level: "HARD",
+          label: "Dificil",
+          cluesBadge: "30 Pistas",
+          summary: "Pares, ponteiros e anotacoes com Notas Automaticas integradas.",
+        },
+        {
+          level: "EXPERT",
+          label: "Especialista",
+          cluesBadge: "25 Pistas",
+          summary: "Cadeias profundas de eliminacao, X-Wing e poucas pistas iniciais.",
+        },
+      ],
+      multiplayerHeader: "Multijogador Ao Vivo e Assincrono no Mesmo Tabuleiro",
+      multiplayerText:
+        "Jogue ao vivo ou de forma assincrona na mesma semente 9x9 usando codigos de sala de 6 digitos, PIN opcional e links ?room= entre Web e Android. Com Login Google, sincronize estatisticas, lista persistente de Amigos, Jogadores Recentes e Modo Fantasma.",
+      assistantsText:
+        "Sete Assistentes Inteligentes verificados auxiliam a resolucao: Destacar Numeros Identicos, Mostrar Numeros Restantes, Destacar Area Relacionada, Troca Automatica de Numeros Concluidos, Remover Notas Automaticamente, Notas Automaticas (Dificil/Especialista) e Preenchimento Rapido.",
+      exploreHeader: "Explorar Regras, Ferramentas e Suporte",
+      exploreRulesLabel: "Guia de Regras e Estrategias",
+      exploreSolverLabel: "Solucionador de Sudoku",
+      exploreDailyLabel: "Desafio Diario",
+      exploreContactLabel: "Contato e Suporte",
     },
   },
 };

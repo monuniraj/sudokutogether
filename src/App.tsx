@@ -21402,6 +21402,7 @@ export default function App() {
             page={currentScreen}
             darkMode={darkMode}
             onNavigatePage={(nextPage) => navigateToScreen(nextPage)}
+            onNavigateRoute={(nextRoute) => navigateToScreen(nextRoute)}
             onBackHome={() => {
               playClickSound();
               setCurrentScreen("home");
@@ -25412,6 +25413,10 @@ export default function App() {
                   darkMode={darkMode}
                   compact
                   onNavigatePage={(nextPage) => setActiveCompliancePage(nextPage)}
+                  onNavigateRoute={(nextRoute) => {
+                    setActiveCompliancePage(null);
+                    navigateToScreen(nextRoute);
+                  }}
                   onOpenSettings={handleOpenSettingsFromCompliance}
                   onCopyEmail={async (email) => {
                     const ok = await copyToClipboard(email);

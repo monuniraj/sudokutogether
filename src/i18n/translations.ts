@@ -555,7 +555,13 @@ export type TranslationKey =
   | "solverHistoryItemTitle"
   | "solverHistoryCluesBadge"
   | "solverStatusAutoSolved"
-  | "solverStatusPlayedOnBoard";
+  | "solverStatusPlayedOnBoard"
+  | "adPrivacyPreferences"
+  | "adPrivacyChecking"
+  | "adPrivacyOpened"
+  | "adPrivacyNotRequired"
+  | "adPrivacyUnavailable"
+  | "viewPrivacyPolicyLink";
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -1095,6 +1101,12 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     solverHistoryCluesBadge: "{count} clues",
     solverStatusAutoSolved: "Auto-Solved",
     solverStatusPlayedOnBoard: "Played on Board",
+    adPrivacyPreferences: "Ad Privacy & Consent Preferences",
+    adPrivacyChecking: "Checking consent options...",
+    adPrivacyOpened: "Ad privacy & consent preferences updated.",
+    adPrivacyNotRequired: "Ad consent dialogs are not required in your region. You can still review AAID and cookie opt-out steps in our Privacy Policy.",
+    adPrivacyUnavailable: "Ad consent options are currently unavailable offline. Check our Privacy Policy for AAID and cookie controls.",
+    viewPrivacyPolicyLink: "Open Privacy Policy",
   },
   hi: {
     playerInsights: "खिलाड़ी अंतर्दृष्टि",
@@ -1633,6 +1645,12 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     solverHistoryCluesBadge: "{count} संकेत",
     solverStatusAutoSolved: "ऑटो-सॉल्व",
     solverStatusPlayedOnBoard: "बोर्ड पर खेला",
+    adPrivacyPreferences: "Ad Privacy aur Consent Preferences",
+    adPrivacyChecking: "Consent options check ho rahe hain...",
+    adPrivacyOpened: "Ad privacy aur consent preferences update ho gaye.",
+    adPrivacyNotRequired: "Aapke region mein alag ad consent dialog ki zaroorat nahi hai. AAID aur cookie controls ke liye humari Privacy Policy dekhein.",
+    adPrivacyUnavailable: "Offline hone ki wajah se ad consent form abhi uplabdh nahi hai. Privacy Policy mein AAID aur opt-out steps dekhein.",
+    viewPrivacyPolicyLink: "Privacy Policy Kholen",
   },
   de: {
     playerInsights: "Spieler-Einblicke",
@@ -2171,6 +2189,12 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     solverHistoryCluesBadge: "{count} Vorgaben",
     solverStatusAutoSolved: "Auto-Gelöst",
     solverStatusPlayedOnBoard: "Auf Brett gespielt",
+    adPrivacyPreferences: "Anzeigen-Datenschutz & Einwilligung",
+    adPrivacyChecking: "Einwilligungsoptionen werden geprueft...",
+    adPrivacyOpened: "Datenschutz- und Anzeigeneinstellungen aktualisiert.",
+    adPrivacyNotRequired: "In Ihrer Region ist kein separates Einwilligungsformular erforderlich. AAID- und Cookie-Hinweise finden Sie in der Datenschutzerklaerung.",
+    adPrivacyUnavailable: "Einwilligungsformular derzeit offline oder nicht verfuegbar. Hinweise zu AAID und Opt-Out stehen in der Datenschutzerklaerung.",
+    viewPrivacyPolicyLink: "Datenschutzerklaerung oeffnen",
   },
   ja: {
     playerInsights: "プレイヤーデータ",
@@ -2709,6 +2733,12 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     solverHistoryCluesBadge: "ヒント{count}個",
     solverStatusAutoSolved: "自動解答",
     solverStatusPlayedOnBoard: "ボードでプレイ",
+    adPrivacyPreferences: "広告プライバシーと同意設定",
+    adPrivacyChecking: "同意オプションを確認中...",
+    adPrivacyOpened: "広告プライバシーと同意設定を更新しました。",
+    adPrivacyNotRequired: "お住まいの地域では個別の広告同意ダイアログは不要です。AAIDやCookieの管理手順はプライバシーポリシーで確認できます。",
+    adPrivacyUnavailable: "現在オフラインなどのため同意フォームを開けません。プライバシーポリシーでオプトアウト方法をご確認いただけます。",
+    viewPrivacyPolicyLink: "プライバシーポリシーを開く",
   },
   ko: {
     playerInsights: "플레이어 통계",
@@ -3247,6 +3277,12 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     solverHistoryCluesBadge: "힌트 {count}개",
     solverStatusAutoSolved: "자동 풀이",
     solverStatusPlayedOnBoard: "보드에서 플레이",
+    adPrivacyPreferences: "광고 개인정보 및 동의 설정",
+    adPrivacyChecking: "동의 옵션 확인 중...",
+    adPrivacyOpened: "광고 개인정보 및 동의 설정이 업데이트되었습니다.",
+    adPrivacyNotRequired: "현재 지역에서는 별도의 광고 동의 창이 필요하지 않습니다. AAID 및 쿠키 설정은 개인정보 처리방침에서 확인할 수 있습니다.",
+    adPrivacyUnavailable: "현재 오프라인 등의 사유로 동의 양식을 열 수 없습니다. 개인정보 처리방침에서 AAID 및 수신 거부 방법을 확인하세요.",
+    viewPrivacyPolicyLink: "개인정보 처리방침 열기",
   },
   es: {
     playerInsights: "Estadísticas",
@@ -3785,6 +3821,12 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     solverHistoryCluesBadge: "{count} pistas",
     solverStatusAutoSolved: "Autoresuelto",
     solverStatusPlayedOnBoard: "Jugado en tablero",
+    adPrivacyPreferences: "Privacidad de Anuncios y Consentimiento",
+    adPrivacyChecking: "Comprobando opciones de consentimiento...",
+    adPrivacyOpened: "Preferencias de privacidad y consentimiento actualizadas.",
+    adPrivacyNotRequired: "Tu region no requiere un dialogo adicional de consentimiento. Consulta las opciones de AAID y cookies en la Politica de Privacidad.",
+    adPrivacyUnavailable: "El formulario de consentimiento no esta disponible sin conexion. Revisa la Politica de Privacidad para controles de AAID y cookies.",
+    viewPrivacyPolicyLink: "Abrir Politica de Privacidad",
   },
   fr: {
     playerInsights: "Statistiques Joueur",
@@ -4323,6 +4365,12 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     solverHistoryCluesBadge: "{count} indices",
     solverStatusAutoSolved: "Auto-résolue",
     solverStatusPlayedOnBoard: "Jouée sur plateau",
+    adPrivacyPreferences: "Confidentialite & Consentement Pub",
+    adPrivacyChecking: "Verification des options de consentement...",
+    adPrivacyOpened: "Preferences de confidentialite et consentement mises a jour.",
+    adPrivacyNotRequired: "Aucun formulaire de consentement publicitaire n'est requis dans votre region. Consultez notre Politique de Confidentialite pour les controles AAID et cookies.",
+    adPrivacyUnavailable: "Formulaire indisponible hors ligne ou bloque. Consultez la Politique de Confidentialite pour gerer vos choix AAID et cookies.",
+    viewPrivacyPolicyLink: "Ouvrir la Politique de Confidentialite",
   },
   it: {
     playerInsights: "Statistiche Giocatore",
@@ -4861,6 +4909,12 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     solverHistoryCluesBadge: "{count} indizi",
     solverStatusAutoSolved: "Autorisolto",
     solverStatusPlayedOnBoard: "Giocato su griglia",
+    adPrivacyPreferences: "Privacy Annunci e Consenso",
+    adPrivacyChecking: "Verifica delle opzioni di consenso...",
+    adPrivacyOpened: "Preferenze di privacy e consenso aggiornate.",
+    adPrivacyNotRequired: "Nella tua area non e richiesto un modulo di consenso aggiuntivo. Puoi consultare i controlli AAID e cookie nella nostra Informativa sulla Privacy.",
+    adPrivacyUnavailable: "Modulo di consenso al momento non disponibile offline. Consulta l'Informativa sulla Privacy per gestire AAID e preferenze.",
+    viewPrivacyPolicyLink: "Apri Informativa sulla Privacy",
   },
   "pt-BR": {
     playerInsights: "Estatísticas",
@@ -5399,5 +5453,11 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     solverHistoryCluesBadge: "{count} pistas",
     solverStatusAutoSolved: "Resolvido",
     solverStatusPlayedOnBoard: "Jogado no tabuleiro",
+    adPrivacyPreferences: "Privacidade de Anuncios e Consentimento",
+    adPrivacyChecking: "Verificando opcoes de consentimento...",
+    adPrivacyOpened: "Preferencias de privacidade e consentimento atualizadas.",
+    adPrivacyNotRequired: "Sua regiao nao exige um dialogo separado de consentimento. Veja como gerenciar o AAID e cookies em nossa Politica de Privacidade.",
+    adPrivacyUnavailable: "Formulario indisponivel offline no momento. Consulte a Politica de Privacidade para gerenciar controles de AAID e anuncios.",
+    viewPrivacyPolicyLink: "Abrir Politica de Privacidade",
   },
 };

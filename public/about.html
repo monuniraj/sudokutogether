@@ -2,28 +2,32 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>About Us - SudokuSync</title>
+    <title>About Us - SudokuSync | Published by Mo Logic</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="canonical" href="https://sudokusync.com/about.html" />
-    <meta name="description" content="About SudokuSync - Modern, high-performance logic puzzle and multiplayer brain-training platform." />
+    <link rel="canonical" href="https://sudokusync.com/about" />
+    <meta name="description" content="About SudokuSync by Mo Logic — classic 9x9 Sudoku across 51, 39, 30, and 25 clue tiers, single-solution verification, and Same-Board Live & Asynchronous Multiplayer." />
     <style>
       :root {
-        --bg-color: #fdfbf7;
-        --text-color: #1e1e1e;
+        --bg-color: #f8fafc;
+        --text-color: #1e293b;
+        --muted-color: #64748b;
         --card-bg: #ffffff;
-        --border-color: #e5e7eb;
+        --pastel-sky: #f0f9ff;
+        --pastel-mint: #ecfdf5;
         --primary-color: #0369a1;
         --accent-color: #0284c7;
       }
       @media (prefers-color-scheme: dark) {
         :root {
           --bg-color: #18181b;
-          --text-color: #e5e5e5;
+          --text-color: #e4e4e7;
+          --muted-color: #a1a1aa;
           --card-bg: #27272a;
-          --border-color: #3f3f46;
+          --pastel-sky: rgba(56, 189, 248, 0.12);
+          --pastel-mint: rgba(16, 185, 129, 0.12);
           --primary-color: #38bdf8;
           --accent-color: #7dd3fc;
         }
@@ -32,76 +36,110 @@
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         background-color: var(--bg-color);
         color: var(--text-color);
-        line-height: 1.6;
+        line-height: 1.65;
         margin: 0;
         padding: 24px 16px;
       }
       .container {
-        max-width: 800px;
+        max-width: 820px;
         margin: 0 auto;
         background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 20px;
+        border: none;
+        border-radius: 24px;
         padding: 32px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        box-shadow: 0 12px 36px rgba(15, 23, 42, 0.06);
       }
-      h1 { font-size: 1.75rem; color: var(--primary-color); margin-top: 0; }
-      h2 { font-size: 1.25rem; color: var(--primary-color); margin-top: 28px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
+      h1 { font-size: 1.75rem; color: var(--primary-color); margin: 0 0 8px 0; }
+      h2 { font-size: 1.15rem; color: var(--primary-color); margin: 28px 0 10px 0; }
       p, li { font-size: 0.95rem; }
-      a { color: var(--primary-color); text-decoration: underline; word-break: break-all; }
-      a:hover { color: var(--accent-color); }
-      .meta { font-size: 0.85rem; color: #71717a; margin-bottom: 20px; }
-      .highlight-box {
-        background-color: rgba(2, 132, 199, 0.08);
-        border-left: 4px solid var(--primary-color);
-        padding: 14px 18px;
-        border-radius: 0 10px 10px 0;
+      a { color: var(--primary-color); text-decoration: none; font-weight: 600; }
+      a:hover { text-decoration: underline; color: var(--accent-color); }
+      .meta { font-size: 0.85rem; color: var(--muted-color); margin-bottom: 18px; }
+      .pastel-box {
+        background-color: var(--pastel-sky);
+        border: none;
+        padding: 16px 20px;
+        border-radius: 18px;
         margin: 16px 0;
-        font-size: 0.9rem;
+        box-shadow: 0 4px 14px rgba(14, 116, 144, 0.05);
       }
-      ul { padding-left: 20px; }
-      li { margin-bottom: 6px; }
+      .pastel-mint {
+        background-color: var(--pastel-mint);
+        border: none;
+        padding: 16px 20px;
+        border-radius: 18px;
+        margin: 16px 0;
+        box-shadow: 0 4px 14px rgba(5, 150, 105, 0.05);
+      }
+      .pill-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+      .pill {
+        display: inline-block;
+        padding: 8px 14px;
+        border-radius: 12px;
+        background: var(--pastel-sky);
+        color: var(--primary-color);
+        font-size: 0.85rem;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+      }
+      ul { padding-left: 20px; margin: 10px 0; }
+      li { margin-bottom: 8px; }
       .footer {
-        margin-top: 36px;
+        margin-top: 32px;
         padding-top: 16px;
-        border-top: 1px solid var(--border-color);
         font-size: 0.85rem;
         text-align: center;
-        color: #71717a;
+        color: var(--muted-color);
       }
     </style>
   </head>
   <body>
     <div class="container">
       <h1>About SudokuSync</h1>
-      <div class="meta"><strong>Platform:</strong> Web & Android App | <strong>Status:</strong> Active & Free to Play</div>
+      <div class="meta"><strong>Publisher:</strong> Mo Logic | <strong>Version:</strong> 1.0.3 | <strong>Platform:</strong> Web &amp; Google Play Android (com.mologic.sudokusync)</div>
 
       <p>
-        <strong>SudokuSync</strong> (<a href="https://sudokusync.com">https://sudokusync.com</a>) is a modern, high-performance logic puzzle and brain-training platform designed for solo solvers and competitive friends alike.
-      </p>
-      <p>
-        Our mission is to elevate classic paper-and-pencil Sudoku into an engaging digital multiplayer experience. Powered by deterministic seed generation (Mulberry32 PRNG), custom mistake limits, real-time board synchronization, and procedural sound synthesis, our platform brings players together on identical, mathematically verified 1-solution puzzles without heavy data transmission.
+        <strong>SudokuSync</strong> (<a href="https://sudokusync.com">https://sudokusync.com</a>) is developed and published independently by <strong>Mo Logic</strong> as a calm, fast-loading classic 9x9 logic puzzle platform built for solo solvers and same-board multiplayer rivals.
       </p>
 
-      <h2>Key Features & Architecture</h2>
+      <div class="pastel-mint">
+        <strong>Deterministic 9x9 Puzzle Engine &amp; Verified Clue Calibration</strong>
+        <p style="margin: 6px 0 0 0;">
+          Every puzzle is deterministically seeded with Mulberry32 PRNG and validated by our human-logic difficulty grader and MRV bitmask solver so every classic 9x9 grid guarantees a single mathematical solution:
+        </p>
+        <ul>
+          <li><strong>Easy (51 clues):</strong> Clean row, column, and 3x3 box Singles for smooth daily warm-ups.</li>
+          <li><strong>Medium (39 clues):</strong> Balanced multi-step logical intersections.</li>
+          <li><strong>Hard (30 clues):</strong> Candidate notes, pairs, pointing reductions, and optional Auto-Notes support.</li>
+          <li><strong>Expert (25 clues):</strong> Deep candidate chains, X-Wing patterns, and minimal given digits.</li>
+        </ul>
+      </div>
+
+      <h2>Key Features &amp; Architecture</h2>
       <ul>
-        <li><strong>Deterministic Seeded Generation:</strong> Play identical puzzles with friends across web and Android mobile by simply sharing a room link or numeric seed.</li>
-        <li><strong>Scrapbook Design Aesthetic:</strong> Premium paper-and-ink visual theme with customizable sticky notes, washi tape, and clean tactile controls.</li>
-        <li><strong>Procedural Web Audio Engine:</strong> Dynamic, zero-latency synthesizer sounds created natively via the browser Web Audio API.</li>
-        <li><strong>Offline-First Resilience:</strong> Full gameplay capability offline with automatic Firestore synchronization when back online.</li>
+        <li><strong>Same-Board Live &amp; Asynchronous Multiplayer:</strong> Compete on the exact same 9x9 board using 6-digit numeric Room Codes, optional PIN protection, and direct <code>?room=</code> browser share links, alongside Recent Players and persistent Google Sign-In Friends lists.</li>
+        <li><strong>Borderless Pastel UI with Light &amp; Dark Themes:</strong> Smooth curved cards, soft visual hierarchy, distraction-free grid clarity, and full accessibility across desktop, mobile web, and Android.</li>
+        <li><strong>7 Verified Smart Assistants:</strong> Customize solving with Highlight Identical Numbers, Show Remaining Numbers, Highlight Related Area, Auto-Switch Completed Numbers, Auto-Remove Notes, Auto-Notes (Hard and Expert only), and Fast Fill (Number-First).</li>
+        <li><strong>Procedural Web Audio &amp; Offline Persistence:</strong> Zero-latency synthesized sound feedback plus isolated offline storage that syncs seamlessly with Cloud Firestore when signed in.</li>
       </ul>
 
-      <div class="highlight-box">
-        <strong>100% Free & Transparent:</strong>
+      <div class="pastel-box">
+        <strong>100% Free &amp; Privacy-First:</strong>
         <p style="margin: 6px 0 0 0;">
-          This application is completely free to play, supported by Google AdSense advertisements, and built with user privacy, speed, and accessibility at its core.
+          SudokuSync is free to play across Web and Android, supported transparently by Google AdSense and Google AdMob (with Google UMP privacy controls in applicable regions).
         </p>
       </div>
 
+      <div class="pill-row">
+        <a class="pill" href="/rules">Rules &amp; Strategies Hub</a>
+        <a class="pill" href="/solver">Interactive Sudoku Solver</a>
+        <a class="pill" href="/daily-challenge">Daily Challenge</a>
+        <a class="pill" href="/contact">Contact Support</a>
+      </div>
+
       <div class="footer">
-        <a href="/">← Return to SudokuSync</a> | <a href="/privacy.html">Privacy Policy</a> | <a href="/terms.html">Terms of Service</a>
+        <a href="/">Return to SudokuSync</a> | <a href="/privacy">Privacy Policy</a> | <a href="/terms">Terms of Service</a> | <a href="/contact">Contact</a>
         <br /><br />
-        © 2026 SudokuSync. All rights reserved.
+        &copy; 2026 Mo Logic &middot; SudokuSync. All rights reserved.
       </div>
     </div>
   </body>

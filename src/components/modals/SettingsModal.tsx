@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown, WifiOff, Check, RefreshCw, Search } from "lucide-react";
+import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown, ChevronRight, WifiOff, Check, RefreshCw, Search, Shield, Info, Loader2 } from "lucide-react";
+import { openAdPrivacyOptions, AdPrivacyOptionsResult } from "../../services/adMobService";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -126,9 +127,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
   const [highlightDeleteAccount, setHighlightDeleteAccount] = useState<boolean>(false);
+  const [isCheckingAdPrivacy, setIsCheckingAdPrivacy] = useState<boolean>(false);
+  const [adPrivacyNotice, setAdPrivacyNotice] = useState<AdPrivacyOptionsResult | null>(null);
   const langTriggerRef = useRef<HTMLButtonElement | null>(null);
   const langMenuRef = useRef<HTMLDivElement | null>(null);
   const deleteAccountButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleOpenAdPrivacyPreferences = async () => {
+    if (isCheckingAdPrivacy) return;
+    playClickSound();
+    setIsCheckingAdPrivacy(true);
+    setAdPrivacyNotice(null);
+    try {
+      const result = await openAdPrivacyOptions();
+      setAdPrivacyNotice(result);
+    } finally {
+      setIsCheckingAdPrivacy(false);
+    }
+  };
 
   useEffect(() => {
     if (scrollToSection !== "delete-account") return;
@@ -1416,6 +1432,77 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
               </button>
+
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  id="settings-ad-privacy-btn"
+                  onClick={handleOpenAdPrivacyPreferences}
+                  disabled={isCheckingAdPrivacy}
+                  className={`w-full py-2.5 px-4 text-sm font-medium text-left rounded-xl border-0 active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-70 ${
+                    darkMode
+                      ? "bg-sky-950/40 hover:bg-sky-950/60 text-sky-100 shadow-[0_4px_14px_rgba(0,0,0,0.22)]"
+                      : "bg-sky-50/90 hover:bg-sky-100/80 text-sky-950 shadow-[0_4px_14px_rgba(14,116,144,0.06)]"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-2 min-w-0">
+                    <Shield className="w-4 h-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                    <span className="truncate">
+                      {isCheckingAdPrivacy ? t("adPrivacyChecking") : t("adPrivacyPreferences")}
+                    </span>
+                  </span>
+                  {isCheckingAdPrivacy ? (
+                    <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin opacity-75" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5 shrink-0 opacity-60" />
+                  )}
+                </button>
+
+                {adPrivacyNotice && (
+                  <div
+                    role="status"
+                    className={`p-3 rounded-2xl border-0 text-xs leading-relaxed space-y-2 ${
+                      adPrivacyNotice === "opened"
+                        ? darkMode
+                          ? "bg-emerald-500/15 text-emerald-100 shadow-[0_4px_14px_rgba(0,0,0,0.2)]"
+                          : "bg-emerald-50/90 text-emerald-950 shadow-[0_4px_14px_rgba(5,150,105,0.06)]"
+                        : darkMode
+                          ? "bg-zinc-800/80 text-zinc-200 shadow-[0_4px_14px_rgba(0,0,0,0.22)]"
+                          : "bg-sky-50/85 text-stone-700 shadow-[0_4px_14px_rgba(14,116,144,0.05)]"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-sky-600 dark:text-sky-400" />
+                      <p className="m-0">
+                        {adPrivacyNotice === "opened"
+                          ? t("adPrivacyOpened")
+                          : adPrivacyNotice === "not_required"
+                            ? t("adPrivacyNotRequired")
+                            : t("adPrivacyUnavailable")}
+                      </p>
+                    </div>
+                    {adPrivacyNotice !== "opened" && (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playClickSound();
+                            onOpenCompliancePage("privacy");
+                          }}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border-0 text-[11px] font-bold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                            darkMode
+                              ? "bg-sky-500/20 text-sky-200 hover:bg-sky-500/30"
+                              : "bg-white text-sky-900 hover:bg-sky-100 shadow-[0_2px_8px_rgba(14,116,144,0.08)]"
+                          }`}
+                        >
+                          <Shield className="w-3 h-3 shrink-0" />
+                          <span>{t("viewPrivacyPolicyLink")}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <button
                 ref={deleteAccountButtonRef}

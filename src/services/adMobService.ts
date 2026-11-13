@@ -254,6 +254,96 @@ function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 }
 
+export type AdPrivacyOptionsResult = "opened" | "not_required" | "unavailable";
+
+/**
+ * Opens the Google UMP / Web CMP Ad Privacy & Consent Preferences form when required in the user's region.
+ * Never throws outside EEA/UK or offline environments.
+ */
+export async function openAdPrivacyOptions(): Promise<AdPrivacyOptionsResult> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await resolveUmpConsent();
+      let info = lastConsentInfo;
+      if (!info) {
+        let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+        info = await Promise.race<AdmobConsentInfo | null>([
+          AdMob.requestConsentInfo({ tagForUnderAgeOfConsent: false }),
+          new Promise<null>((resolve) => {
+            timeoutHandle = setTimeout(() => resolve(null), UMP_NETWORK_TIMEOUT_MS);
+          }),
+        ]);
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+        if (info) lastConsentInfo = info;
+      }
+
+      const requirementStatus = String(info?.privacyOptionsRequirementStatus ?? "");
+      if (requirementStatus === "REQUIRED") {
+        await AdMob.showPrivacyOptionsForm();
+        try {
+          const refreshed = await AdMob.requestConsentInfo({ tagForUnderAgeOfConsent: false });
+          if (refreshed) lastConsentInfo = refreshed;
+        } catch {}
+        return "opened";
+      }
+
+      if (requirementStatus === "NOT_REQUIRED") {
+        return "not_required";
+      }
+
+      return "unavailable";
+    } catch {
+      return "unavailable";
+    }
+  }
+
+  if (typeof window === "undefined") {
+    return "unavailable";
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "unavailable";
+  }
+
+  try {
+    const w = window as Window & {
+      googlefc?: {
+        callbackQueue?: Array<() => void>;
+        showRevocationMessage?: () => void;
+      };
+    };
+
+    if (!w.googlefc) {
+      return "not_required";
+    }
+
+    if (typeof w.googlefc.showRevocationMessage === "function") {
+      w.googlefc.showRevocationMessage();
+      return "opened";
+    }
+
+    if (Array.isArray(w.googlefc.callbackQueue)) {
+      const openedViaQueue = await new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => resolve(false), 600);
+        w.googlefc!.callbackQueue!.push(() => {
+          clearTimeout(timer);
+          if (typeof w.googlefc?.showRevocationMessage === "function") {
+            w.googlefc.showRevocationMessage();
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        });
+      });
+      return openedViaQueue ? "opened" : "not_required";
+    }
+
+    return "not_required";
+  } catch {
+    return "unavailable";
+  }
+}
+
 /**
  * Google UMP (User Messaging Platform) GDPR/CMP Consent Pipeline:
  * - T=0ms: App UI renders immediately without blocking.
