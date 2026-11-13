@@ -17,6 +17,7 @@ import {
 interface DailySEOArticleProps {
   darkMode: boolean;
   onNavigateSolver?: () => void;
+  onNavigateRules?: () => void;
 }
 
 function renderDailyRichText(segments: DailyRichText): React.ReactNode {
@@ -39,6 +40,7 @@ function renderDailyRichText(segments: DailyRichText): React.ReactNode {
 export const DailySEOArticle: React.FC<DailySEOArticleProps> = ({
   darkMode,
   onNavigateSolver,
+  onNavigateRules,
 }) => {
   const { language } = useTranslation();
   const copy = getDailyArticleCopy(language);
@@ -48,6 +50,13 @@ export const DailySEOArticle: React.FC<DailySEOArticleProps> = ({
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
     e.preventDefault();
     onNavigateSolver();
+  };
+
+  const handleRulesClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!onNavigateRules) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    onNavigateRules();
   };
 
   const cardSurface = darkMode
@@ -175,6 +184,18 @@ export const DailySEOArticle: React.FC<DailySEOArticleProps> = ({
             {copy.crossLinkLabel}
           </a>
           {copy.crossLinkSuffix}
+        </p>
+
+        <p className="mt-3 text-sm sm:text-[15px] leading-relaxed">
+          {copy.crossLinkRulesPrefix}
+          <a
+            href="/rules"
+            onClick={handleRulesClick}
+            className="inline-block rounded-md px-0.5 text-purple-700 dark:text-purple-300 hover:underline font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+          >
+            {copy.crossLinkRulesLabel}
+          </a>
+          {copy.crossLinkRulesSuffix}
         </p>
       </section>
 

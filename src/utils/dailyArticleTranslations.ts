@@ -40,6 +40,9 @@ export interface DailyArticleCopy {
   crossLinkPrefix: string;
   crossLinkLabel: string;
   crossLinkSuffix: string;
+  crossLinkRulesPrefix: string;
+  crossLinkRulesLabel: string;
+  crossLinkRulesSuffix: string;
   streakHeading: string;
   streakP1: DailyRichText;
   streakP2: DailyRichText;
@@ -200,6 +203,9 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Free Sudoku Solver",
     crossLinkSuffix:
       " to inspect conflicts in real time, verify uniqueness, or play through the grid interactively.",
+    crossLinkRulesPrefix: "Want illustrated SVG walkthroughs for Naked Pairs, Pointing Pairs, X-Wing, and all 7 Smart Assistants (including Auto-Notes on Hard and Expert)? Visit our ",
+    crossLinkRulesLabel: "Sudoku Rules & Strategies Hub",
+    crossLinkRulesSuffix: ".",
     streakHeading: "Building a Daily Streak & Brain-Training Habit",
     streakP1: [
       {
@@ -465,6 +471,9 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "फ्री सुडोकू सॉल्वर (Sudoku Solver)",
     crossLinkSuffix:
       " में डालकर तुरंत कन्फ्लिक्ट देख सकते हैं, यूनिकनेस कन्फर्म कर सकते हैं या बोर्ड को इंटरैक्टिव तरीके से खेल सकते हैं।",
+    crossLinkRulesPrefix: "Naked Pairs, Pointing Pairs, X-Wing के SVG डायग्राम और Hard/Expert में Auto-Notes सहित सभी 7 Smart Assistants को समझने के लिए ",
+    crossLinkRulesLabel: "Sudoku नियम और रणनीतियाँ (Rules Hub)",
+    crossLinkRulesSuffix: " पढ़ें।",
     streakHeading: "Daily Streak बनाना और ब्रेन-ट्रेनिंग की आदत",
     streakP1: [
       {
@@ -730,6 +739,9 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "kostenlosen Sudoku-Löser",
     crossLinkSuffix:
       ", um Konflikte live zu erkennen, die Eindeutigkeit zu testen oder interaktiv weiterzuspielen.",
+    crossLinkRulesPrefix: "Möchtest du anschauliche Diagramme zu Naked Pairs, Pointing Pairs, X-Wing sowie allen 7 Smart-Assistenten (inkl. Auto-Notizen für Hard & Expert)? Sieh dir den ",
+    crossLinkRulesLabel: "Sudoku-Regel- & Strategieführer",
+    crossLinkRulesSuffix: " an.",
     streakHeading: "Tägliche Serie (Streak) & Gehirntraining aufbauen",
     streakP1: [
       {
@@ -996,6 +1008,9 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "無料数独ソルバー",
     crossLinkSuffix:
       " に盤面を入力して、リアルタイムの重複チェック・唯一解検証・インタラクティブ練習をご活用ください。",
+    crossLinkRulesPrefix: "Naked Pair・Pointing Pair・X-Wingの図解や、Hard/Expert専用Auto-Notesを含む7つのスマート補助機能の活用法は ",
+    crossLinkRulesLabel: "数独ルール・解法＆機能ガイド",
+    crossLinkRulesSuffix: " をご覧ください。",
     streakHeading: "毎日の連続記録（Streak）と脳トレ習慣",
     streakP1: [
       {
@@ -1261,6 +1276,9 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "무료 스도쿠 풀이기",
     crossLinkSuffix:
       " 에 입력해 실시간 충돌 확인, 유일해 검증, 인터랙티브 연습을 바로 이용해 보세요.",
+    crossLinkRulesPrefix: "Naked Pairs, Pointing Pairs, X-Wing 시각 다이어그램과 Hard/Expert 전용 자동 메모를 포함한 7가지 스마트 도우미 설명은 ",
+    crossLinkRulesLabel: "스도쿠 규칙 및 전략 허브",
+    crossLinkRulesSuffix: " 에서 확인할 수 있습니다.",
     streakHeading: "연속 기록(Streak) 쌓기와 매일 두뇌 트레이닝",
     streakP1: [
       {
@@ -1526,6 +1544,9 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Solucionador de Sudoku gratis",
     crossLinkSuffix:
       " para detectar conflictos al instante, verificar su unicidad o jugarlo de forma interactiva.",
+    crossLinkRulesPrefix: "¿Quieres diagramas visuales de Pares Desnudos, Pointing Pairs, X-Wing y los 7 Asistentes Inteligentes (incluido Auto-Notas en Difícil y Experto)? Visita el ",
+    crossLinkRulesLabel: "Centro de Reglas y Estrategias de Sudoku",
+    crossLinkRulesSuffix: ".",
     streakHeading: "Construir una racha diaria y entrenar la mente",
     streakP1: [
       {
@@ -1791,6 +1812,9 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Solveur de Sudoku gratuit",
     crossLinkSuffix:
       " pour repérer les conflits en direct, prouver l'unicité ou jouer la grille de façon interactive.",
+    crossLinkRulesPrefix: "Vous souhaitez voir nos schémas SVG pour les Paires Nues, Paires Pointantes, X-Wing et nos 7 Assistants Intelligents (dont Notes Auto en Difficile et Expert) ? Consultez le ",
+    crossLinkRulesLabel: "Guide des Règles et Stratégies Sudoku",
+    crossLinkRulesSuffix: ".",
     streakHeading: "Construire une série quotidienne et entretenir son esprit",
     streakP1: [
       {
@@ -2056,6 +2080,9 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Risolutore Sudoku gratuito",
     crossLinkSuffix:
       " per individuare conflitti in tempo reale, certificare l'unicità o giocarla in modo interattivo.",
+    crossLinkRulesPrefix: "Vuoi vedere schemi illustrati di Coppie Nude, Pointing Pairs, X-Wing e scoprire tutti i 7 Assistenti Smart (tra cui Note Automatiche su Difficile ed Esperto)? Apri l'",
+    crossLinkRulesLabel: "Hub Regole e Strategie Sudoku",
+    crossLinkRulesSuffix: ".",
     streakHeading: "Costruire una serie quotidiana e allenare la mente",
     streakP1: [
       {
@@ -2321,6 +2348,9 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Solucionador de Sudoku grátis",
     crossLinkSuffix:
       " para checar conflitos na hora, confirmar a unicidade ou jogar de modo interativo.",
+    crossLinkRulesPrefix: "Quer ver diagramas ilustrados de Pares Nus, Pares Apontadores, X-Wing e conhecer os 7 Assistentes Inteligentes (incluindo Auto-Notas em Difícil e Expert)? Acesse o ",
+    crossLinkRulesLabel: "Guia de Regras e Estratégias do Sudoku",
+    crossLinkRulesSuffix: ".",
     streakHeading: "Construir sequência diária e hábito de treino mental",
     streakP1: [
       {

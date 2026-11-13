@@ -26,6 +26,8 @@ import { saveDailyProgress, recordDailyCompletion, getDailyStats, getDailyProgre
 import { saveDailyProgressToCloud, recordDailyCompletionToCloud, checkPlayerDailyEligibility, fetchDailyProgressFromCloud, resolveProgressConflict } from "./features/dailyChallenge/services/dailyCloudService";
 import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./features/dailyChallenge/types/daily.types";
 import { SudokuSolverScreen } from "./features/sudokuSolver/components/SudokuSolverScreen";
+import { SudokuRulesScreen } from "./features/sudokuRules/components/SudokuRulesScreen";
+import { getRulesArticleCopy } from "./utils/rulesArticleTranslations";
 import {
   ComplianceScreen,
   ComplianceDocumentBody,
@@ -39,6 +41,9 @@ const isDailyChallengePath = (pathname?: string | null): boolean =>
 
 const isSolverPath = (pathname?: string | null): boolean =>
   Boolean(pathname && pathname.trim().replace(/\/+$/, "").toLowerCase() === "/solver");
+
+const isRulesPath = (pathname?: string | null): boolean =>
+  Boolean(pathname && pathname.trim().replace(/\/+$/, "").toLowerCase() === "/rules");
 import { solveCustomBoard } from "./features/sudokuSolver/services/solverEngine";
 import { updateCustomHistoryTime } from "./features/sudokuSolver/services/customHistoryService";
 import { countSolutionsBitmaskMRV, generateHumanGradedBoard } from "./services/humanDifficultyEngine";
@@ -1904,7 +1909,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<"sudoku" | "sandbox" | "kotlin-code" | "spec-docs">("sudoku");
   const [currentScreen, setCurrentScreen] = useState<
-    "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | CompliancePageType
+    "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | "rules" | CompliancePageType
   >(() => {
     if (
       typeof window !== "undefined" &&
@@ -1913,6 +1918,7 @@ export default function App() {
     ) {
       if (isDailyChallengePath(window.location.pathname)) return "daily-challenge";
       if (isSolverPath(window.location.pathname)) return "solver";
+      if (isRulesPath(window.location.pathname)) return "rules";
       const legalRoute = parseComplianceRoute(window.location.pathname);
       if (legalRoute) return legalRoute;
     }
@@ -2046,6 +2052,7 @@ export default function App() {
     ) {
       if (isDailyChallengePath(window.location.pathname)) return ["daily-challenge"];
       if (isSolverPath(window.location.pathname)) return ["solver"];
+      if (isRulesPath(window.location.pathname)) return ["rules"];
       const legalRoute = parseComplianceRoute(window.location.pathname);
       if (legalRoute) return [legalRoute];
     }
@@ -2054,7 +2061,7 @@ export default function App() {
   const isProgrammaticBackRef = useRef<boolean>(false);
 
   const navigateToScreen = (
-    screen: "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | CompliancePageType
+    screen: "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | "rules" | CompliancePageType
   ) => {
     setCurrentScreen(screen);
     setNavigationHistory(prev => {
@@ -2070,12 +2077,16 @@ export default function App() {
         } else if (screen === "solver") {
           nextUrl = "/solver";
           setRoutePathname("/solver");
+        } else if (screen === "rules") {
+          nextUrl = "/rules";
+          setRoutePathname("/rules");
         } else if (screen === "privacy" || screen === "terms" || screen === "contact" || screen === "about") {
           nextUrl = COMPLIANCE_PATHS[screen];
           setRoutePathname(nextUrl);
         } else if (
           isDailyChallengePath(window.location.pathname) ||
           isSolverPath(window.location.pathname) ||
+          isRulesPath(window.location.pathname) ||
           Boolean(parseComplianceRoute(window.location.pathname))
         ) {
           nextUrl = "/";
@@ -2097,6 +2108,7 @@ export default function App() {
           !isCrazyGamesActive() &&
           (isDailyChallengePath(window.location.pathname) ||
             isSolverPath(window.location.pathname) ||
+            isRulesPath(window.location.pathname) ||
             Boolean(parseComplianceRoute(window.location.pathname)))
         ) {
           setRoutePathname("/");
@@ -2116,6 +2128,7 @@ export default function App() {
         | "together"
         | "solver"
         | "daily-challenge"
+        | "rules"
         | CompliancePageType;
 
       if (lastScreen === "game" && (boardState?.isGameOver || !boardState)) {
@@ -6790,12 +6803,27 @@ export default function App() {
       }
     })();
 
+    const isStandaloneRoute =
+      typeof window !== "undefined" &&
+      (currentScreenRef.current === "rules" ||
+        currentScreenRef.current === "solver" ||
+        currentScreenRef.current === "daily-challenge" ||
+        currentScreenRef.current === "privacy" ||
+        currentScreenRef.current === "terms" ||
+        currentScreenRef.current === "contact" ||
+        currentScreenRef.current === "about" ||
+        isRulesPath(window.location.pathname) ||
+        isSolverPath(window.location.pathname) ||
+        isDailyChallengePath(window.location.pathname) ||
+        Boolean(parseComplianceRoute(window.location.pathname)));
+
     if (
       typeof window !== "undefined" &&
       !Capacitor.isNativePlatform() &&
       !isCrazyGamesActive() &&
       !hasInviteParams &&
-      !challengeModeRef.current
+      !challengeModeRef.current &&
+      !isStandaloneRoute
     ) {
       const candidateDiff = (
         currentScreenRef.current === "game" && boardStateRef.current?.difficulty
@@ -8325,6 +8353,13 @@ export default function App() {
       ) {
         setCurrentScreen("solver");
         setRoutePathname("/solver");
+      } else if (
+        !Capacitor.isNativePlatform() &&
+        !isCrazyGamesActive() &&
+        isRulesPath(window.location.pathname)
+      ) {
+        setCurrentScreen("rules");
+        setRoutePathname("/rules");
       } else {
         if (!Capacitor.isNativePlatform() && !isCrazyGamesActive()) {
           setRoutePathname(window.location.pathname || "/");
@@ -15193,6 +15228,8 @@ export default function App() {
           const legalRoute = parseComplianceRoute(customSchemePath) || parseComplianceRoute(urlObj.pathname);
           if (legalRoute) {
             navigateToScreen(legalRoute);
+          } else if (isRulesPath(customSchemePath) || isRulesPath(urlObj.pathname)) {
+            navigateToScreen("rules");
           }
         }
       } catch (e) {
@@ -15210,6 +15247,8 @@ export default function App() {
             const coldLegalRoute = parseComplianceRoute(launchPath) || parseComplianceRoute(launchObj.pathname);
             if (coldLegalRoute) {
               navigateToScreen(coldLegalRoute);
+            } else if (isRulesPath(launchPath) || isRulesPath(launchObj.pathname)) {
+              navigateToScreen("rules");
             }
           }
         } catch { }
@@ -15774,6 +15813,25 @@ export default function App() {
       setMetaTag("name", "twitter:description", solverDesc);
       const canonicalEl = document.querySelector('link[rel="canonical"]');
       if (canonicalEl) canonicalEl.setAttribute("href", solverCanonical);
+      clearHreflangLinks();
+      return;
+    }
+
+    if (currentScreen === "rules" || isRulesPath(routePathname)) {
+      const rulesTitle = "Sudoku Rules, Strategies & Smart Assistants Guide | Sudoku Sync";
+      const rulesDesc =
+        "Learn classic 9x9 Sudoku rules, Pencil Notes workflow, X-Wing & Y-Wing elimination techniques with SVG diagrams, keyboard shortcuts, and all 7 Sudoku Sync Smart Assistants.";
+      const rulesCanonical = "https://sudokusync.com/rules";
+      document.documentElement.lang = "en";
+      document.title = rulesTitle;
+      setMetaTag("name", "description", rulesDesc);
+      setMetaTag("property", "og:title", rulesTitle);
+      setMetaTag("property", "og:description", rulesDesc);
+      setMetaTag("property", "og:url", rulesCanonical);
+      setMetaTag("name", "twitter:title", rulesTitle);
+      setMetaTag("name", "twitter:description", rulesDesc);
+      const canonicalEl = document.querySelector('link[rel="canonical"]');
+      if (canonicalEl) canonicalEl.setAttribute("href", rulesCanonical);
       clearHreflangLinks();
       return;
     }
@@ -16604,6 +16662,7 @@ export default function App() {
       (typeof window !== "undefined" &&
         (isDailyChallengePath(window.location.pathname) ||
           isSolverPath(window.location.pathname) ||
+          isRulesPath(window.location.pathname) ||
           Boolean(parseComplianceRoute(window.location.pathname))))
     ) {
       webAutoStartedRef.current = true;
@@ -18040,6 +18099,71 @@ export default function App() {
               </p>
             </div>
           </div>
+
+          {(() => {
+            const rulesCopy = getRulesArticleCopy(language);
+            return (
+              <div
+                id="home-smart-assistants-callout"
+                className={`w-full max-w-5xl mx-auto mt-6 p-6 md:p-7 rounded-3xl border-0 shadow-[0_8px_28px_rgba(0,0,0,0.03)] flex flex-col gap-4 ${
+                  darkMode ? "bg-[#2e1065]/45 text-purple-100" : "bg-[#FAF5FF] text-[#3B0764]"
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-start gap-3.5">
+                    <div
+                      className={`w-11 h-11 rounded-2xl border-0 flex items-center justify-center shrink-0 ${
+                        darkMode ? "bg-purple-900/60 text-purple-200" : "bg-[#F3E8FF] text-[#6B21A8]"
+                      }`}
+                    >
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base md:text-lg font-black tracking-tight">
+                        {rulesCopy.assistants.heading}
+                      </h3>
+                      <p className={`mt-1 text-xs md:text-sm leading-relaxed ${darkMode ? "text-purple-200/85" : "text-[#581C87]/90"}`}>
+                        {rulesCopy.assistants.intro}
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href="/rules"
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                      e.preventDefault();
+                      playClickSound();
+                      navigateToScreen("rules");
+                    }}
+                    className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl border-0 font-bold text-xs md:text-sm whitespace-nowrap shrink-0 no-underline transition-all duration-150 shadow-[0_4px_14px_rgba(107,33,168,0.1)] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
+                      darkMode
+                        ? "bg-purple-800/75 hover:bg-purple-700/80 text-purple-100"
+                        : "bg-[#EDE9FE] hover:bg-[#DDD6FE] text-[#5B21B6]"
+                    }`}
+                  >
+                    <BookOpen className="w-4 h-4 shrink-0" />
+                    <span>{t("exploreRulesCtaLabel")}</span>
+                    <ChevronRight className="w-4 h-4 shrink-0" />
+                  </a>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {rulesCopy.assistants.items.map((item) => (
+                    <span
+                      key={item.id}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 text-[11px] font-bold ${
+                        darkMode
+                          ? "bg-black/25 text-purple-200"
+                          : "bg-white/85 text-[#581C87] shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
+                      }`}
+                    >
+                      <span>{item.name}</span>
+                      <span className="opacity-65 font-mono text-[10px]">· {item.badge}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* SECTION 2.5: DESKTOP & KEYBOARD SHORTCUTS GUIDE */}
@@ -18243,6 +18367,18 @@ export default function App() {
                   className="py-1.5 px-3 rounded-xl text-[#0F766E] hover:bg-teal-50/80 dark:text-[#5EEAD4] dark:hover:bg-teal-950/40 transition-colors no-underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
                 >
                   {t("sudokuSolverLabel")}
+                </a>
+                <a
+                  href="/rules"
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                    e.preventDefault();
+                    playClickSound();
+                    navigateToScreen("rules");
+                  }}
+                  className="py-1.5 px-3 rounded-xl text-[#7E22CE] hover:bg-purple-50/80 dark:text-[#D8B4FE] dark:hover:bg-purple-950/40 transition-colors no-underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+                >
+                  {t("sudokuRulesLabel")}
                 </a>
 
                 {/* Compact Borderless Pastel Language Dropdown */}
@@ -18552,6 +18688,7 @@ export default function App() {
                 } else if (
                   currentScreen === "solver" ||
                   currentScreen === "daily-challenge" ||
+                  currentScreen === "rules" ||
                   currentScreen === "privacy" ||
                   currentScreen === "terms" ||
                   currentScreen === "contact" ||
@@ -18565,6 +18702,7 @@ export default function App() {
                       !isCrazyGamesActive() &&
                       (isDailyChallengePath(window.location.pathname) ||
                         isSolverPath(window.location.pathname) ||
+                        isRulesPath(window.location.pathname) ||
                         Boolean(parseComplianceRoute(window.location.pathname)))
                         ? "/"
                         : window.location.href;
@@ -18646,7 +18784,7 @@ export default function App() {
                 const activeBadgeDiff = currentScreen === "home" ? homeContextDifficulty : (boardState?.difficulty || difficulty);
                 return (
                   <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? (activeBadgeDiff === "EASY" ? "text-[#d1fae5]" : activeBadgeDiff === "MEDIUM" ? "text-[#fef08a]" : activeBadgeDiff === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : (activeBadgeDiff === "EASY" ? "text-[#065F46]" : activeBadgeDiff === "MEDIUM" ? "text-[#854D0E]" : activeBadgeDiff === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
-                    {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : currentScreen === "daily-challenge" ? t("dailyChallengeLabel") : currentScreen === "privacy" ? t("privacyPolicy") : currentScreen === "terms" ? t("termsOfService") : currentScreen === "contact" ? t("contactUs") : currentScreen === "about" ? t("aboutUs") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
+                    {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : currentScreen === "daily-challenge" ? t("dailyChallengeLabel") : currentScreen === "rules" ? t("sudokuRulesLabel") : currentScreen === "privacy" ? t("privacyPolicy") : currentScreen === "terms" ? t("termsOfService") : currentScreen === "contact" ? t("contactUs") : currentScreen === "about" ? t("aboutUs") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
                   </span>
                 );
               })()}
@@ -21225,6 +21363,7 @@ export default function App() {
               navigateToScreen("game");
             }}
             onOpenDailyChallenge={() => navigateToScreen("daily-challenge")}
+            onOpenRules={() => navigateToScreen("rules")}
           />
         )}
 
@@ -21237,6 +21376,20 @@ export default function App() {
             refreshTrigger={dailyRefreshCounter}
             onStartDailyChallenge={handleLaunchDailyChallenge}
             onOpenSolver={() => navigateToScreen("solver")}
+            onOpenRules={() => navigateToScreen("rules")}
+          />
+        )}
+
+        {/* PANE: SUDOKU RULES & STRATEGIES HUB (/rules) */}
+        {currentScreen === "rules" && (
+          <SudokuRulesScreen
+            darkMode={darkMode}
+            onStartDifficulty={(diff) =>
+              handleSelectDifficultySilo(diff, { startNewGame: true, scrollToBoard: true })
+            }
+            onOpenDailyChallenge={() => navigateToScreen("daily-challenge")}
+            onOpenSolver={() => navigateToScreen("solver")}
+            onBackHome={() => handleNavigateHome()}
           />
         )}
 

@@ -46,6 +46,9 @@ export interface SolverArticleCopy {
   crossLinkPrefix: string;
   crossLinkLabel: string;
   crossLinkSuffix: string;
+  crossLinkRulesPrefix: string;
+  crossLinkRulesLabel: string;
+  crossLinkRulesSuffix: string;
   keyboardHeading: string;
   keyboardIntro: RichText;
   keyboardCards: readonly [
@@ -262,6 +265,9 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Daily Sudoku Challenge",
     crossLinkSuffix:
       ". Every player worldwide receives the exact same deterministically seeded grid each day, letting you benchmark your solving speed across progressive Monday-to-Sunday difficulty tiers and build a competitive daily streak.",
+    crossLinkRulesPrefix: "Want step-by-step visual diagrams for X-Wing, Y-Wing, Pointing Pairs, and our 7 built-in Smart Assistants? Browse the ",
+    crossLinkRulesLabel: "Sudoku Rules & Strategies Hub",
+    crossLinkRulesSuffix: ".",
     keyboardHeading: "Desktop Keyboard Workflow: Fast Clue Entry & Play Mode Controls",
     keyboardIntro: [
       {
@@ -553,6 +559,9 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Daily Sudoku Challenge",
     crossLinkSuffix:
       " पर जरूर आज़माएं। हर दिन दुनियाभर के सभी खिलाड़ियों को बिल्कुल एक जैसा डिटरमिनिस्टिक बोर्ड मिलता है—जहाँ आप सोमवार से रविवार तक के लेवल स्केलिंग में अपनी स्पीड जांच सकते हैं और कॉम्पिटिटिव डेली स्ट्रीक बना सकते हैं।",
+    crossLinkRulesPrefix: "अगर आप X-Wing, Y-Wing, Pointing Pairs के SVG डायग्राम और हमारे 7 Smart Assistants (जैसे Auto-Notes व Fast Fill) को विस्तार से समझना चाहते हैं, तो ",
+    crossLinkRulesLabel: "Sudoku नियम और रणनीतियाँ (Rules Hub)",
+    crossLinkRulesSuffix: " ज़रूर पढ़ें।",
     keyboardHeading: "डेस्कटॉप कीबोर्ड वर्कफ़्लो: फ़ास्ट क्लू एंट्री और प्ले मोड कंट्रोल्स",
     keyboardIntro: [
       {
@@ -845,6 +854,9 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Tages-Rätsel (Daily Challenge)",
     crossLinkSuffix:
       ". Weltweit erhalten alle Spieler jeden Tag exakt dasselbe deterministisch erzeugte Gitter—ideal, um deine Lösungszeit von Montag bis Sonntag zu vergleichen und eine echte Serie aufzubauen.",
+    crossLinkRulesPrefix: "Möchtest du visuelle Schritt-für-Schritt-Diagramme für X-Wing, Y-Wing, Pointing Pairs und unsere 7 Smart-Assistenten? Öffne den ",
+    crossLinkRulesLabel: "Sudoku-Regel- & Strategieführer",
+    crossLinkRulesSuffix: ".",
     keyboardHeading: "Desktop-Tastatur-Workflow: Schnelle Vorgaben-Eingabe & Spielkürzel",
     keyboardIntro: [
       {
@@ -1134,6 +1146,9 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "デイリー問題（Daily Challenge）",
     crossLinkSuffix:
       " で実力を試してみましょう。毎日すべてのプレイヤーにまったく同じ盤面が出題されるため、月曜から日曜までの難易度カーブに沿ってタイム比較や連続ストリーク記録に挑戦できます。",
+    crossLinkRulesPrefix: "X-Wing・Y-Wing・Pointing Pairs の図解や、Auto-Notes（Hard/Expert専用）を含む7つのスマート補助機能の使い方は、",
+    crossLinkRulesLabel: "数独ルール・解法＆機能ガイド",
+    crossLinkRulesSuffix: " で確認できます。",
     keyboardHeading: "デスクトップ版キーボード操作ガイド：高速入力とプレイ時ショートカット",
     keyboardIntro: [
       {
@@ -1424,6 +1439,9 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "일일 챌린지(Daily Challenge)",
     crossLinkSuffix:
       " 에 도전해 보세요. 매일 모든 플레이어가 완전히 같은 퍼즐을 받으며 월요일부터 일요일까지 이어지는 난이도 곡선 속에서 기록을 비교하고 데일리 스트릭을 쌓을 수 있습니다.",
+    crossLinkRulesPrefix: "X-Wing·Y-Wing·Pointing Pairs 단계별 다이어그램과 7가지 스마트 도우미(Hard/Expert 전용 자동 메모 등)의 자세한 설명은 ",
+    crossLinkRulesLabel: "스도쿠 규칙 및 전략 허브",
+    crossLinkRulesSuffix: " 에서 확인할 수 있습니다.",
     keyboardHeading: "데스크톱 키보드 단축키 워크플로: 빠른 숫자 입력 및 플레이 제어",
     keyboardIntro: [
       {
@@ -1711,6 +1729,9 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Reto Diario (Daily Challenge)",
     crossLinkSuffix:
       ". Cada día todos los jugadores del mundo reciben el mismo tablero generado de forma determinista, ideal para comparar tiempos de lunes a domingo y mantener tu racha diaria.",
+    crossLinkRulesPrefix: "¿Buscas diagramas paso a paso de X-Wing, Y-Wing, Pointing Pairs y los 7 Asistentes Inteligentes integrados? Explora el ",
+    crossLinkRulesLabel: "Centro de Reglas y Estrategias de Sudoku",
+    crossLinkRulesSuffix: ".",
     keyboardHeading: "Flujo de teclado en escritorio: entrada rápida y controles de juego",
     keyboardIntro: [
       {
@@ -1998,6 +2019,9 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Défi du Jour (Daily Challenge)",
     crossLinkSuffix:
       ". Chaque joueur dans le monde reçoit exactement la même grille générée de façon déterministe : mesurez-vous du lundi au dimanche et entretenez votre série quotidienne.",
+    crossLinkRulesPrefix: "Vous voulez consulter nos schémas visuels pour X-Wing, Y-Wing, les paires pointantes et nos 7 Assistants Intelligents intégrés ? Parcourez le ",
+    crossLinkRulesLabel: "Guide des Règles et Stratégies Sudoku",
+    crossLinkRulesSuffix: ".",
     keyboardHeading: "Raccourcis clavier sur ordinateur : saisie rapide et mode jeu",
     keyboardIntro: [
       {
@@ -2285,6 +2309,9 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Sfida del Giorno (Daily Challenge)",
     crossLinkSuffix:
       ". Ogni giocatore nel mondo riceve ogni giorno la stessa griglia generata deterministicamente, ideale per confrontare i tempi dal lunedì alla domenica e costruire la tua serie positiva.",
+    crossLinkRulesPrefix: "Vuoi vedere diagrammi passo passo per X-Wing, Y-Wing, Pointing Pairs e scoprire i 7 Assistenti Smart integrati? Visita l'",
+    crossLinkRulesLabel: "Hub Regole e Strategie Sudoku",
+    crossLinkRulesSuffix: ".",
     keyboardHeading: "Flusso da tastiera su desktop: inserimento rapido e controlli di gioco",
     keyboardIntro: [
       {
@@ -2572,6 +2599,9 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Desafio Diário (Daily Challenge)",
     crossLinkSuffix:
       ". Todos os jogadores no mundo recebem exatamente a mesma grade gerada de forma determinística a cada dia—ideal para comparar tempos de segunda a domingo e construir uma sequência diária.",
+    crossLinkRulesPrefix: "Quer ver diagramas passo a passo de X-Wing, Y-Wing, Pares Apontadores e conferir todos os 7 Assistentes Inteligentes? Acesse o ",
+    crossLinkRulesLabel: "Guia de Regras e Estratégias do Sudoku",
+    crossLinkRulesSuffix: ".",
     keyboardHeading: "Atalhos de teclado no desktop: preenchimento rápido e controles do modo jogo",
     keyboardIntro: [
       {

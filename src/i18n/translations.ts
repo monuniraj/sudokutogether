@@ -464,6 +464,8 @@ export type TranslationKey =
   | "webLanguageEditions"
   | "dailyChallengeLabel"
   | "sudokuSolverLabel"
+  | "sudokuRulesLabel"
+  | "exploreRulesCtaLabel"
   | "comingSoonMessage"
   | "master"
   | "dailyOpenCalendarBtn"
@@ -858,6 +860,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     webLanguageEditions: "Languages",
     dailyChallengeLabel: "Daily Challenge",
     sudokuSolverLabel: "Sudoku Solver",
+    sudokuRulesLabel: "Rules & Strategies",
+    exploreRulesCtaLabel: "Open Full Rules, Techniques & Smart Assistants Hub",
     comingSoonMessage: "Coming soon",
     roomOpenBadge: "OPEN",
     inviteBtn: "INVITE",
@@ -1394,6 +1398,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     webLanguageEditions: "भाषाएँ",
     dailyChallengeLabel: "दैनिक चुनौती",
     sudokuSolverLabel: "सुडोकू सॉल्वर",
+    sudokuRulesLabel: "नियम और रणनीतियाँ",
+    exploreRulesCtaLabel: "पूरी Rules, Strategies और Smart Assistants गाइड खोलें",
     comingSoonMessage: "जल्द आ रहा है",
     roomOpenBadge: "खुला",
     inviteBtn: "इनवाइट",
@@ -1930,6 +1936,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     webLanguageEditions: "Sprachen",
     dailyChallengeLabel: "Tages-Rätsel",
     sudokuSolverLabel: "Sudoku-Löser",
+    sudokuRulesLabel: "Regeln & Strategien",
+    exploreRulesCtaLabel: "Vollständigen Regel-, Strategie- & Smart-Assistenten-Guide öffnen",
     comingSoonMessage: "Demnächst verfügbar",
     roomOpenBadge: "Offen",
     inviteBtn: "Einladen",
@@ -2466,6 +2474,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     webLanguageEditions: "言語",
     dailyChallengeLabel: "デイリー問題",
     sudokuSolverLabel: "数独ソルバー",
+    sudokuRulesLabel: "ルールと解法",
+    exploreRulesCtaLabel: "数独ルール・解法テクニック＆スマート補助ガイドを見る",
     comingSoonMessage: "近日公開",
     roomOpenBadge: "オープン",
     inviteBtn: "招待",
@@ -3002,6 +3012,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     webLanguageEditions: "언어",
     dailyChallengeLabel: "일일 챌린지",
     sudokuSolverLabel: "스도쿠 풀이기",
+    sudokuRulesLabel: "규칙 및 전략",
+    exploreRulesCtaLabel: "스도쿠 규칙·고급 전략 & 스마트 도우미 전체 가이드 열기",
     comingSoonMessage: "곧 출시 예정",
     roomOpenBadge: "열림",
     inviteBtn: "초대",
@@ -3538,6 +3550,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     webLanguageEditions: "Idiomas",
     dailyChallengeLabel: "Reto Diario",
     sudokuSolverLabel: "Solucionador",
+    sudokuRulesLabel: "Reglas y Estrategias",
+    exploreRulesCtaLabel: "Abrir guía completa de Reglas, Técnicas y Asistentes Inteligentes",
     comingSoonMessage: "Próximamente",
     roomOpenBadge: "Abierto",
     inviteBtn: "Invitar",
@@ -4074,6 +4088,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     webLanguageEditions: "Langues",
     dailyChallengeLabel: "Défi du Jour",
     sudokuSolverLabel: "Solveur Sudoku",
+    sudokuRulesLabel: "Règles & Stratégies",
+    exploreRulesCtaLabel: "Ouvrir le guide complet des Règles, Techniques & Assistants",
     comingSoonMessage: "Bientôt disponible",
     roomOpenBadge: "Ouvert",
     inviteBtn: "Inviter",
@@ -4610,6 +4626,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     webLanguageEditions: "Lingue",
     dailyChallengeLabel: "Sfida del Giorno",
     sudokuSolverLabel: "Risolutore",
+    sudokuRulesLabel: "Regole e Strategie",
+    exploreRulesCtaLabel: "Apri la guida completa a Regole, Tecniche e Assistenti Smart",
     comingSoonMessage: "Prossimamente",
     roomOpenBadge: "Aperto",
     inviteBtn: "Invita",
@@ -5146,6 +5164,8 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     webLanguageEditions: "Idiomas",
     dailyChallengeLabel: "Desafio Diário",
     sudokuSolverLabel: "Solucionador",
+    sudokuRulesLabel: "Regras e Estratégias",
+    exploreRulesCtaLabel: "Abrir guia completo de Regras, Técnicas e Assistentes",
     comingSoonMessage: "Em breve",
     roomOpenBadge: "Aberta",
     inviteBtn: "Convidar",

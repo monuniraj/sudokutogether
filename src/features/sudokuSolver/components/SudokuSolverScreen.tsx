@@ -52,6 +52,7 @@ export interface SudokuSolverScreenProps {
     customHistoryId?: string
   ) => void;
   onOpenDailyChallenge?: () => void;
+  onOpenRules?: () => void;
 }
 
 const EMPTY_SOLUTION_GRID: number[][] = [];
@@ -338,6 +339,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
   uid = null,
   onPlayCustomPuzzle,
   onOpenDailyChallenge,
+  onOpenRules,
 }) => {
   const { t } = useTranslation();
   const isDarkMode =
@@ -952,7 +954,10 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
         </div>
         </section>
 
-        <SolverSEOArticle onNavigateDailyChallenge={onOpenDailyChallenge} />
+        <SolverSEOArticle
+          onNavigateDailyChallenge={onOpenDailyChallenge}
+          onNavigateRules={onOpenRules}
+        />
       </main>
 
       <CustomHistoryModal

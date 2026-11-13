@@ -45,6 +45,7 @@ export interface DailyChallengeScreenProps {
   refreshTrigger?: number;
   onStartDailyChallenge: (payload: DailyChallengeLaunchPayload) => void;
   onOpenSolver?: () => void;
+  onOpenRules?: () => void;
 }
 
 function formatDurationMMSS(totalSeconds: number): string {
@@ -100,6 +101,7 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
   refreshTrigger = 0,
   onStartDailyChallenge,
   onOpenSolver,
+  onOpenRules,
 }) => {
   const { t, language } = useTranslation();
   const normalizedUid = uid && String(uid).trim().length > 0 ? String(uid).trim() : null;
@@ -656,7 +658,11 @@ export const DailyChallengeScreen: React.FC<DailyChallengeScreenProps> = ({
         </section>
 
         {/* Below-the-Fold AdSense Compliance SEO Article */}
-        <DailySEOArticle darkMode={darkMode} onNavigateSolver={onOpenSolver} />
+        <DailySEOArticle
+          darkMode={darkMode}
+          onNavigateSolver={onOpenSolver}
+          onNavigateRules={onOpenRules}
+        />
       </main>
 
       <DailyResultModal
