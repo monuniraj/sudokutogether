@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronDown, WifiOff, Check, RefreshCw, Search } from "lucide-react";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
@@ -6,6 +6,7 @@ import { useTranslation } from "../../i18n/useTranslation";
 import { Language } from "../../i18n/translations";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { isGenericDisplayName } from "../../utils/storageEngine";
+import { getFocusableElements, handleRovingMenuArrowKey } from "../../utils/keyboardControls";
 
 export interface SettingsModalProps {
   fromGameplaySettings: boolean;
@@ -120,6 +121,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const { isIncognito, toggleIncognito } = useFriendPresence(userProfile?.id);
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
+  const langTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const langMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isLangOpen) return;
+
+    const focusTimer = window.setTimeout(() => {
+      const items = getFocusableElements(langMenuRef.current);
+      const selected = items.find((el) => el.getAttribute("aria-checked") === "true");
+      (selected || items[0])?.focus();
+    }, 10);
+
+    const handleLangKeyDown = (e: KeyboardEvent) => {
+      const items = getFocusableElements(langMenuRef.current);
+      if (handleRovingMenuArrowKey(e, items, "vertical")) {
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsLangOpen(false);
+        requestAnimationFrame(() => langTriggerRef.current?.focus());
+        return;
+      }
+      if (e.key === "Tab") {
+        setIsLangOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleLangKeyDown, true);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", handleLangKeyDown, true);
+    };
+  }, [isLangOpen]);
 
   const toggleInfo = (id: string) => {
     setExpandedInfo(prev => ({ ...prev, [id]: !prev[id] }));
@@ -492,7 +528,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
                 <div className="relative">
                   <button
+                    ref={langTriggerRef}
                     type="button"
+                    aria-haspopup="menu"
                     onClick={() => {
                       playClickSound();
                       setIsLangOpen((prev) => !prev);
@@ -523,6 +561,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onClick={() => setIsLangOpen(false)}
                       />
                       <div
+                        ref={langMenuRef}
                         className={`absolute right-0 top-full mt-1.5 z-50 w-52 max-h-[320px] overflow-y-auto py-1.5 rounded-2xl shadow-2xl border flex flex-col backdrop-blur-md transition-all ${
                           darkMode
                             ? "bg-zinc-900 text-stone-100 border-zinc-800"
@@ -543,6 +582,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                   onLanguageChange(langOpt.code);
                                 }
                                 setIsLangOpen(false);
+                                requestAnimationFrame(() => langTriggerRef.current?.focus());
                               }}
                               className={`w-full text-left px-3.5 py-2 text-xs transition-colors flex items-center justify-between border-none cursor-pointer ${
                                 isSelected
@@ -553,7 +593,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                   ? "text-stone-200 hover:bg-zinc-800"
                                   : "text-slate-800 hover:bg-slate-100/80"
                               }`}
-                              role="menuitem"
+                              role="menuitemradio"
+                              aria-checked={isSelected}
                             >
                               <span className="truncate">{langOpt.nativeName}</span>
                               {isSelected && (

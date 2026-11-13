@@ -1,7 +1,11 @@
-import React from "react";
-import { motion } from "motion/react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { X, Users, ChevronRight, Grid3X3, WifiOff } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
+import {
+  getFocusableElements,
+  handleRovingMenuArrowKey,
+  trapFocusTabKey,
+} from "../../utils/keyboardControls";
 
 export interface MultiplayerForkModalProps {
   isOpen: boolean;
@@ -23,12 +27,83 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
   playClickSound
 }) => {
   const { t } = useTranslation();
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const handleDismiss = useCallback(() => {
+    const prev = previousFocusRef.current;
+    previousFocusRef.current = null;
+    onCloseRef.current();
+    if (prev && prev.isConnected) {
+      requestAnimationFrame(() => prev.focus());
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (!activeEl || !dialogRef.current?.contains(activeEl)) {
+      previousFocusRef.current = activeEl;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      const currentActive = document.activeElement as HTMLElement | null;
+      if (currentActive && dialogRef.current?.contains(currentActive)) {
+        return;
+      }
+      const menuButtons = getFocusableElements(menuRef.current);
+      if (menuButtons.length > 0) {
+        menuButtons[0].focus();
+      } else {
+        const dialogFocusables = getFocusableElements(dialogRef.current);
+        dialogFocusables[0]?.focus();
+      }
+    }, 30);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleDismiss();
+        return;
+      }
+
+      if (e.key === "Tab") {
+        trapFocusTabKey(e, dialogRef.current);
+        return;
+      }
+
+      const menuButtons = getFocusableElements(menuRef.current);
+      if (
+        menuButtons.length > 0 &&
+        (e.key === "ArrowUp" ||
+          e.key === "ArrowDown" ||
+          e.key === "Home" ||
+          e.key === "End")
+      ) {
+        handleRovingMenuArrowKey(e, menuButtons, "vertical");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [isOpen, isOnline, handleDismiss]);
 
   if (!isOpen) return null;
 
   return (
-    <div 
+    <div
+      ref={dialogRef}
       key="multiplayer-fork-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label={isOnline ? t("multiplayerLobbyTitle") : t("multiplayerUnavailable")}
       className={`relative w-full max-w-[400px] rounded-3xl p-6 border-none flex flex-col gap-5 select-none z-[10001] ${
         darkMode ? "bg-[#1A1A1A] text-stone-200" : "bg-[#FDFBF7] text-stone-850"
       }`}
@@ -47,9 +122,11 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
           </h3>
         </div>
         <button
+          type="button"
+          aria-label={t("closeTooltip")}
           onClick={() => {
             playClickSound();
-            onClose();
+            handleDismiss();
           }}
           className="p-1.5 rounded-full text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
         >
@@ -75,9 +152,10 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
           </p>
 
           <button
+            type="button"
             onClick={() => {
               playClickSound();
-              onClose();
+              handleDismiss();
             }}
             className={`w-full py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider transition-all duration-150 border-none cursor-pointer shadow-sm active:scale-[0.98] truncate leading-normal overflow-visible ${
               darkMode
@@ -90,9 +168,11 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
         </div>
       ) : (
         /* 🌐 ONLINE ROUTES: Create Room & Join Room */
-        <div className="grid grid-cols-1 gap-2.5">
+        <div ref={menuRef} role="menu" className="grid grid-cols-1 gap-2.5">
           {/* Route 1: Create Room */}
           <button
+            type="button"
+            role="menuitem"
             onClick={() => {
               playClickSound();
               onCreateRoom();
@@ -116,6 +196,8 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
 
           {/* Route 2: Join Room */}
           <button
+            type="button"
+            role="menuitem"
             onClick={() => {
               playClickSound();
               onOpenJoinRoom();

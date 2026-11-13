@@ -35,7 +35,13 @@ const isSolverPath = (pathname?: string | null): boolean =>
 import { solveCustomBoard } from "./features/sudokuSolver/services/solverEngine";
 import { updateCustomHistoryTime } from "./features/sudokuSolver/services/customHistoryService";
 import { countSolutionsBitmaskMRV, generateHumanGradedBoard } from "./services/humanDifficultyEngine";
-import { getKeyboardDigit, isEditableEventTarget } from "./utils/keyboardControls";
+import {
+  getFocusableElements,
+  getKeyboardDigit,
+  handleRovingMenuArrowKey,
+  isEditableEventTarget,
+} from "./utils/keyboardControls";
+import { getKeyboardGuideCopy } from "./utils/keyboardGuideTranslations";
 import { incrementGuestGameCount } from "./utils/guestTracking";
 import { SudokuBoard, CompletionPulse } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
@@ -168,7 +174,8 @@ import {
   WifiOff,
   Calendar,
   Search,
-  Globe
+  Globe,
+  Keyboard
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Capacitor } from '@capacitor/core';
@@ -15408,9 +15415,69 @@ export default function App() {
 
   generateAndSetNewPuzzleRef.current = generateAndSetNewPuzzle;
 
+  const handleNavigateHome = () => {
+    playClickSound();
+    triggerHapticTap(vibrations);
+
+    if (
+      (currentScreen === "game" || (currentScreen === "settings" && fromGameplaySettings)) &&
+      boardState &&
+      !boardState.isGameOver
+    ) {
+      if ((!dailyChallengeActiveDate && !isDailyBoardContextRef.current) || isDailyRoomRef.current || challengeMode) {
+        saveCurrentGameToLocal(boardState, sessionSeconds, difficulty);
+      }
+      if (dailyChallengeActiveDate && !(isDailyRoomRef.current && isDailyExhibitionRef.current)) {
+        const dailyUid = (isGuestSession || !auth.currentUser || auth.currentUser.isAnonymous)
+          ? null
+          : (authUser?.uid || auth.currentUser.uid);
+        const latestDaily = getDailyProgress(dailyChallengeActiveDate, dailyUid);
+        if (latestDaily && dailyUid) {
+          if (dailyCloudAutoSaveTimerRef.current !== null && typeof window !== "undefined") {
+            window.clearTimeout(dailyCloudAutoSaveTimerRef.current);
+            dailyCloudAutoSaveTimerRef.current = null;
+          }
+          void saveDailyProgressToCloud(dailyUid, latestDaily, { isExhibition: false });
+        }
+      }
+    }
+
+    setFromGameplaySettings(false);
+    const wasAlreadyHome = currentScreen === "home";
+    if (!wasAlreadyHome) {
+      setCurrentScreen("home");
+      setNavigationHistory(["home"]);
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      !Capacitor.isNativePlatform() &&
+      !isCrazyGamesActive()
+    ) {
+      let hasInviteParams = false;
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        hasInviteParams = Boolean(sp.get("room") || sp.get("challenge") || sp.get("gameId") || sp.get("seed") || sp.get("c") || sp.get("daily"));
+      } catch { }
+      if (!hasInviteParams && (window.location.pathname !== "/" || !wasAlreadyHome)) {
+        const nextUrl = `/${window.location.search}${window.location.hash}`;
+        setRoutePathname("/");
+        try {
+          window.history.pushState({ view: "home" }, "", nextUrl);
+        } catch { }
+      }
+    }
+
+    if (typeof document !== "undefined") {
+      setTimeout(() => {
+        document.getElementById("home-scroll-container")?.scrollTo({ top: 0, behavior: "smooth" });
+      }, wasAlreadyHome ? 0 : 40);
+    }
+  };
+
   const handleSelectDifficultySilo = (
     lvl: Difficulty,
-    options?: { startNewGame?: boolean; scrollToBoard?: boolean }
+    options?: { startNewGame?: boolean; scrollToBoard?: boolean; scrollToEditorial?: boolean }
   ) => {
     setDifficulty(lvl);
 
@@ -15456,6 +15523,12 @@ export default function App() {
     if (options?.scrollToBoard && typeof document !== "undefined") {
       setTimeout(() => {
         document.getElementById("status-and-grid-group")?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    }
+
+    if (options?.scrollToEditorial && typeof document !== "undefined") {
+      setTimeout(() => {
+        document.getElementById("editorial-difficulty-silo")?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 50);
     }
   };
@@ -15860,7 +15933,16 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!boardState || activeTab !== "sudoku" || currentScreen !== "game" || visualizingBacktrack) return;
-      if (isPauseModalOpen || showHintRewardModal) return;
+      if (
+        isPauseModalOpen ||
+        showHintRewardModal ||
+        showDifficultySheet ||
+        showMultiplayerForkModal ||
+        showCreateChallengeModal ||
+        showJoinRoomModal
+      ) {
+        return;
+      }
       if (isEditableEventTarget(e.target)) return;
 
       const key = e.key;
@@ -15929,6 +16011,16 @@ export default function App() {
 
       const { selectedRow, selectedCol } = boardState;
       if (selectedRow === null || selectedCol === null) {
+        if (
+          key === "ArrowUp" ||
+          key === "ArrowDown" ||
+          key === "ArrowLeft" ||
+          key === "ArrowRight"
+        ) {
+          e.preventDefault();
+          setBoardState(prev => prev ? { ...prev, selectedRow: 0, selectedCol: 0 } : null);
+          return;
+        }
         // Requirement 2 & 3: Keyboard number selection when no cell is selected
         if (digitVal !== null) {
           e.preventDefault();
@@ -15977,7 +16069,7 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [boardState, activeTab, currentScreen, pencilMode, visualizingBacktrack, isNumberFirstInputMode, lockedNum, activeKeypadNum, history.length, isPauseModalOpen, showHintRewardModal]);
+  }, [boardState, activeTab, currentScreen, pencilMode, visualizingBacktrack, isNumberFirstInputMode, lockedNum, activeKeypadNum, history.length, isPauseModalOpen, showHintRewardModal, showDifficultySheet, showMultiplayerForkModal, showCreateChallengeModal, showJoinRoomModal]);
 
   const pushToHistory = () => {
     if (!boardState) return;
@@ -17387,6 +17479,7 @@ export default function App() {
         ? (boardState.difficulty as SeoDifficulty)
         : (difficulty as SeoDifficulty);
     const activeSilo = getLocalizedSeoSilo(activeSiloDiff, activeLang);
+    const keyboardGuide = getKeyboardGuideCopy(activeLang);
 
     const siloCardPalette = darkMode
       ? activeSiloDiff === "EASY"
@@ -17427,6 +17520,7 @@ export default function App() {
       <section className="w-full max-w-5xl mx-auto px-4 pt-12 pb-6 mt-8 border-t border-stone-200/50 dark:border-zinc-800/50 flex flex-col select-text selection:bg-[#E0F2FE]">
         {/* Difficulty SEO Silo Guide & Strategy Hub */}
         <article
+          id="editorial-difficulty-silo"
           aria-label={activeSilo.crossLinkLabel}
           className={`p-6 md:p-8 rounded-3xl border-none shadow-[0_8px_30px_rgba(0,0,0,0.03)] mb-12 transition-colors duration-200 ${siloCardPalette.card}`}
         >
@@ -17741,6 +17835,110 @@ export default function App() {
           </div>
         </div>
 
+        {/* SECTION 2.5: DESKTOP & KEYBOARD SHORTCUTS GUIDE */}
+        <section
+          id="desktop-keyboard-shortcuts-guide"
+          aria-labelledby="keyboard-guide-heading"
+          className={`w-full mb-12 p-6 md:p-8 rounded-3xl border-0 shadow-[0_8px_30px_rgba(0,0,0,0.03)] ${darkMode ? "bg-[#0f172a]/70 text-sky-50" : "bg-[#F0F9FF] text-[#0F172A]"}`}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-5">
+            <div className={`w-12 h-12 rounded-2xl border-0 flex items-center justify-center shrink-0 ${darkMode ? "bg-[#0369a1]/45 text-[#bae6fd]" : "bg-[#E0F2FE] text-[#0369A1]"}`}>
+              <Keyboard className="w-6 h-6" />
+            </div>
+            <div>
+              <h2
+                id="keyboard-guide-heading"
+                className={`text-xl md:text-2xl font-black uppercase tracking-tight leading-tight ${darkMode ? "text-sky-100" : "text-[#0C4A6E]"}`}
+              >
+                {keyboardGuide.heading}
+              </h2>
+              <p className={`text-[11px] mt-1 font-mono uppercase tracking-wider ${darkMode ? "text-sky-300/85" : "text-[#0369A1]/85"}`}>
+                {keyboardGuide.subheading}
+              </p>
+            </div>
+          </div>
+
+          <p className={`text-xs md:text-sm leading-relaxed mb-6 ${darkMode ? "text-sky-100/85" : "text-[#334155]"}`}>
+            {keyboardGuide.intro}
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {keyboardGuide.cards.map((card, idx) => {
+              const cardTones = darkMode
+                ? [
+                    "bg-[#1e1b4b]/60 text-indigo-100",
+                    "bg-[#4c0519]/45 text-rose-100",
+                    "bg-[#451a03]/45 text-amber-100",
+                    "bg-[#022c22]/55 text-emerald-100",
+                    "bg-[#2e1065]/55 text-purple-100",
+                    "bg-[#0c4a6e]/50 text-sky-100",
+                  ]
+                : [
+                    "bg-[#EEF2FF] text-[#312E81]",
+                    "bg-[#FFF1F2] text-[#881337]",
+                    "bg-[#FEF9C3]/80 text-[#713F12]",
+                    "bg-[#ECFDF5] text-[#065F46]",
+                    "bg-[#F3E8FF]/85 text-[#581C87]",
+                    "bg-[#E0F2FE]/80 text-[#0C4A6E]",
+                  ];
+              const kbdTones = darkMode
+                ? "bg-black/35 text-white shadow-[0_2px_8px_rgba(0,0,0,0.25)]"
+                : "bg-white/90 text-[#1E293B] shadow-[0_2px_8px_rgba(15,23,42,0.06)]";
+              return (
+                <div
+                  key={idx}
+                  className={`p-5 rounded-2xl border-0 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col gap-2.5 ${cardTones[idx % cardTones.length]}`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <kbd className={`inline-flex items-center px-2.5 py-1 rounded-xl border-0 font-mono text-[11px] font-bold tracking-tight ${kbdTones}`}>
+                      {card.keys}
+                    </kbd>
+                  </div>
+                  <h3 className="font-black text-sm tracking-tight leading-snug">
+                    {card.title}
+                  </h3>
+                  <p className="text-xs leading-relaxed opacity-90">
+                    {card.desc}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className={`p-4 md:p-5 rounded-2xl border-0 shadow-[0_4px_18px_rgba(0,0,0,0.02)] text-xs md:text-sm leading-relaxed ${darkMode ? "bg-black/25 text-sky-100/90" : "bg-white/80 text-[#334155]"}`}>
+            <span className={`inline-block font-black uppercase tracking-wider text-[11px] mr-2 ${darkMode ? "text-[#7dd3fc]" : "text-[#0369A1]"}`}>
+              {keyboardGuide.proTipTitle}:
+            </span>
+            <span>{keyboardGuide.crossLinkPrefix}</span>
+            <a
+              href="/daily-challenge"
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                e.preventDefault();
+                playClickSound();
+                navigateToScreen("daily-challenge");
+              }}
+              className="font-bold text-[#4F46E5] dark:text-[#A5B4FC] hover:underline"
+            >
+              {keyboardGuide.crossLinkDailyLabel}
+            </a>
+            <span>{keyboardGuide.crossLinkMiddle}</span>
+            <a
+              href="/solver"
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                e.preventDefault();
+                playClickSound();
+                navigateToScreen("solver");
+              }}
+              className="font-bold text-[#0F766E] dark:text-[#5EEAD4] hover:underline"
+            >
+              {keyboardGuide.crossLinkSolverLabel}
+            </a>
+            <span>{keyboardGuide.crossLinkSuffix}</span>
+          </div>
+        </section>
+
         {/* SECTION 3: FREQUENTLY ASKED QUESTIONS */}
         <div className="w-full max-w-4xl mx-auto mb-8 flex flex-col gap-4">
           <div className="text-center mb-2">
@@ -17821,11 +18019,14 @@ export default function App() {
                       key={item.path}
                       href={item.path}
                       onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
                         e.preventDefault();
                         playClickSound();
+                        const shouldStartGame = context === "game" && !challengeMode;
                         handleSelectDifficultySilo(item.difficulty, {
-                          startNewGame: context === "game" && !challengeMode,
-                          scrollToBoard: context === "game",
+                          startNewGame: shouldStartGame,
+                          scrollToBoard: shouldStartGame,
+                          scrollToEditorial: context === "home" || Boolean(challengeMode),
                         });
                       }}
                       className="py-1 px-2 text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline"
@@ -17834,6 +18035,30 @@ export default function App() {
                     </a>
                   );
                 })}
+                <a
+                  href="/daily-challenge"
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                    e.preventDefault();
+                    playClickSound();
+                    navigateToScreen("daily-challenge");
+                  }}
+                  className="py-1 px-2 text-[#4F46E5] hover:text-[#3730A3] dark:text-[#A5B4FC] dark:hover:text-[#c7d2fe] transition-colors hover:underline"
+                >
+                  {t("dailyChallengeLabel")}
+                </a>
+                <a
+                  href="/solver"
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                    e.preventDefault();
+                    playClickSound();
+                    navigateToScreen("solver");
+                  }}
+                  className="py-1 px-2 text-[#0F766E] hover:text-[#115E59] dark:text-[#5EEAD4] dark:hover:text-[#99F6E4] transition-colors hover:underline"
+                >
+                  {t("sudokuSolverLabel")}
+                </a>
               </div>
 
               {/* 9-Language Crawl Navigation Links */}
@@ -18104,19 +18329,31 @@ export default function App() {
           </div>
 
           {/* Central Title & Difficulty: Fluid scaling within bounded 1fr track */}
-          <div className="min-w-0 flex flex-col items-center justify-center text-center px-1 overflow-hidden pointer-events-none">
-            <div className="text-[clamp(1rem,4.2vw,1.35rem)] font-black tracking-tight uppercase font-sans select-none leading-none pt-0.5 truncate max-w-full block">
-              <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
-              <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
-            </div>
-            {(() => {
-              const activeBadgeDiff = currentScreen === "home" ? homeContextDifficulty : (boardState?.difficulty || difficulty);
-              return (
-                <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? (activeBadgeDiff === "EASY" ? "text-[#d1fae5]" : activeBadgeDiff === "MEDIUM" ? "text-[#fef08a]" : activeBadgeDiff === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : (activeBadgeDiff === "EASY" ? "text-[#065F46]" : activeBadgeDiff === "MEDIUM" ? "text-[#854D0E]" : activeBadgeDiff === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
-                  {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : currentScreen === "daily-challenge" ? t("dailyChallengeLabel") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
-                </span>
-              );
-            })()}
+          <div className="min-w-0 flex flex-col items-center justify-center text-center px-1 overflow-hidden">
+            <a
+              id="global-header-logo-link"
+              href="/"
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                e.preventDefault();
+                handleNavigateHome();
+              }}
+              aria-label="SudokuSync — Home"
+              className="group max-w-full flex flex-col items-center justify-center rounded-xl border-none px-2 py-0.5 no-underline cursor-pointer select-none transition-opacity duration-150 hover:opacity-85 active:scale-[0.98]"
+            >
+              <span className="text-[clamp(1rem,4.2vw,1.35rem)] font-black tracking-tight uppercase font-sans select-none leading-none pt-0.5 truncate max-w-full block">
+                <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
+                <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
+              </span>
+              {(() => {
+                const activeBadgeDiff = currentScreen === "home" ? homeContextDifficulty : (boardState?.difficulty || difficulty);
+                return (
+                  <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? (activeBadgeDiff === "EASY" ? "text-[#d1fae5]" : activeBadgeDiff === "MEDIUM" ? "text-[#fef08a]" : activeBadgeDiff === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : (activeBadgeDiff === "EASY" ? "text-[#065F46]" : activeBadgeDiff === "MEDIUM" ? "text-[#854D0E]" : activeBadgeDiff === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
+                    {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : currentScreen === "daily-challenge" ? t("dailyChallengeLabel") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
+                  </span>
+                );
+              })()}
+            </a>
           </div>
 
           {/* Right Actions: Responsive cluster (Notification Bell, Settings) */}
@@ -18435,6 +18672,8 @@ export default function App() {
 
                   {/* Right Button ('Multiplayer') */}
                   <button
+                    type="button"
+                    id="home-multiplayer-action-button"
                     onClick={() => {
                       playClickSound();
                       setShowMultiplayerForkModal(true);
@@ -18519,10 +18758,15 @@ export default function App() {
                           return (
                             <button
                               key={lvl}
+                              type="button"
                               onClick={() => {
                                 playClickSound();
                                 handleSelectDifficultySilo(lvl, { startNewGame: true });
                                 addLog(`⚙️ Started new ${lvl} game on desktop`);
+                              }}
+                              onKeyDown={(e) => {
+                                const buttons = getFocusableElements(e.currentTarget.parentElement);
+                                handleRovingMenuArrowKey(e, buttons, "horizontal");
                               }}
                               className={`flex-1 h-full flex items-center justify-center text-xs uppercase tracking-wider transition-all duration-150 cursor-pointer select-none rounded-xl outline-none ${btnClass}`}
                             >

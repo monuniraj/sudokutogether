@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -21,6 +21,11 @@ import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { IncognitoIcon } from "../common/IncognitoIcon";
 import { auth } from "../../firebase";
 import { getActiveAuthUid, loadVault } from "../../utils/storageEngine";
+import {
+  getFocusableElements,
+  handleRovingMenuArrowKey,
+  trapFocusTabKey,
+} from "../../utils/keyboardControls";
 
 export type Difficulty = "EASY" | "MEDIUM" | "HARD" | "EXPERT";
 
@@ -114,6 +119,16 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
   const [openDropdown, setOpenDropdown] = useState<"difficulty" | "mistakes" | "hints" | "timer" | null>(null);
   const [isLobbyLocked, setIsLobbyLocked] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"recent" | "friends">("recent");
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const activeDropdownRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const dropdownTriggerRefs = useRef<Record<"difficulty" | "mistakes" | "hints" | "timer", HTMLButtonElement | null>>({
+    difficulty: null,
+    mistakes: null,
+    hints: null,
+    timer: null,
+  });
 
   useEffect(() => {
     if (!isOpen) {
@@ -122,12 +137,74 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || !openDropdown) return;
+    const focusTimer = window.setTimeout(() => {
+      const options = getFocusableElements(activeDropdownRef.current);
+      const selected = options.find((el) => el.getAttribute("aria-selected") === "true");
+      (selected || options[0])?.focus();
+    }, 10);
+    return () => window.clearTimeout(focusTimer);
+  }, [isOpen, openDropdown]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const initialTimer = window.setTimeout(() => {
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !modalRef.current?.contains(active)) {
+        const focusables = getFocusableElements(modalRef.current);
+        focusables[0]?.focus();
+      }
+    }, 30);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (openDropdown) {
+        const options = getFocusableElements(activeDropdownRef.current);
+        if (handleRovingMenuArrowKey(e, options, "vertical")) {
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          const trigger = dropdownTriggerRefs.current[openDropdown];
+          setOpenDropdown(null);
+          requestAnimationFrame(() => trigger?.focus());
+          return;
+        }
+        if (e.key === "Tab") {
+          setOpenDropdown(null);
+          return;
+        }
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onCloseRef.current();
+        return;
+      }
+
+      if (e.key === "Tab") {
+        trapFocusTabKey(e, modalRef.current);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [isOpen, openDropdown]);
+
   if (!isOpen) return null;
 
   const activeRoomCode = String(challengeSeed || (boardState?.seed ? String(boardState.seed).slice(-6) : "849201")).padStart(6, '0').slice(-6);
 
   return (
-    <motion.div 
+    <motion.div
+      ref={modalRef}
+      role="dialog"
+      aria-modal="true"
       key="multiplayer-create-modal"
       initial={{ scale: 0.96, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
@@ -288,6 +365,10 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           {/* Top-Left: Difficulty */}
           <div className={`relative w-full transition-opacity duration-150 ${isLobbyLocked ? "pointer-events-none opacity-50" : ""}`}>
             <button
+              ref={(el) => { dropdownTriggerRefs.current.difficulty = el; }}
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={openDropdown === "difficulty"}
               onClick={() => {
                 playClickSound();
                 setOpenDropdown(openDropdown === "difficulty" ? null : "difficulty");
@@ -308,15 +389,24 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             </button>
 
             {openDropdown === "difficulty" && (
-              <div className="absolute top-full left-0 mt-1.5 w-full min-w-[140px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800">
+              <div
+                ref={activeDropdownRef}
+                role="listbox"
+                aria-label={t("selectDifficulty")}
+                className="absolute top-full left-0 mt-1.5 w-full min-w-[140px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800"
+              >
                 {(["EASY", "MEDIUM", "HARD", "EXPERT"] as Difficulty[]).map(lvl => (
                   <button
                     key={lvl}
+                    type="button"
+                    role="option"
+                    aria-selected={challengeDifficulty === lvl}
                     onClick={() => {
                       playClickSound();
                       setChallengeDifficulty(lvl);
                       setOpenDropdown(null);
                       updateRoomSettingsInFirestore({ difficulty: lvl });
+                      requestAnimationFrame(() => dropdownTriggerRefs.current.difficulty?.focus());
                     }}
                     className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all ${
                       lvl === "EASY"
@@ -338,6 +428,10 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           {/* Top-Right: Mistakes */}
           <div className={`relative w-full transition-opacity duration-150 ${isLobbyLocked ? "pointer-events-none opacity-50" : ""}`}>
             <button
+              ref={(el) => { dropdownTriggerRefs.current.mistakes = el; }}
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={openDropdown === "mistakes"}
               onClick={() => {
                 playClickSound();
                 setOpenDropdown(openDropdown === "mistakes" ? null : "mistakes");
@@ -354,7 +448,11 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             </button>
 
             {openDropdown === "mistakes" && (
-              <div className="absolute top-full right-0 mt-1.5 w-full min-w-[200px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800">
+              <div
+                ref={activeDropdownRef}
+                role="listbox"
+                className="absolute top-full right-0 mt-1.5 w-full min-w-[200px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800"
+              >
                 {[
                   { label: t("mistakes0"), val: 0 },
                   { label: t("mistakes3"), val: 3 },
@@ -363,6 +461,9 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 ].map(opt => (
                   <button
                     key={opt.val}
+                    type="button"
+                    role="option"
+                    aria-selected={challengeMistakeLimit === opt.val}
                     onClick={() => {
                       playClickSound();
                       setChallengeMistakeLimit(opt.val);
@@ -371,6 +472,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                       if (opt.val > 3) {
                         onMistakeLimitAbove3?.();
                       }
+                      requestAnimationFrame(() => dropdownTriggerRefs.current.mistakes?.focus());
                     }}
                     className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all ${
                       darkMode
@@ -388,6 +490,10 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           {/* Bottom-Left: Hints */}
           <div className={`relative w-full transition-opacity duration-150 ${isLobbyLocked ? "pointer-events-none opacity-50" : ""}`}>
             <button
+              ref={(el) => { dropdownTriggerRefs.current.hints = el; }}
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={openDropdown === "hints"}
               onClick={() => {
                 playClickSound();
                 setOpenDropdown(openDropdown === "hints" ? null : "hints");
@@ -405,7 +511,11 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             </button>
 
             {openDropdown === "hints" && (
-              <div className="absolute top-full left-0 mt-1.5 w-full min-w-[150px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800">
+              <div
+                ref={activeDropdownRef}
+                role="listbox"
+                className="absolute top-full left-0 mt-1.5 w-full min-w-[150px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800"
+              >
                 {[
                   { label: t("hints0"), val: 0 },
                   { label: t("hints1"), val: 1 },
@@ -414,6 +524,9 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 ].map(opt => (
                   <button
                     key={opt.val}
+                    type="button"
+                    role="option"
+                    aria-selected={challengeHintLimit === opt.val}
                     onClick={() => {
                       playClickSound();
                       setChallengeHintLimit(opt.val);
@@ -422,6 +535,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                       if (opt.val > 3) {
                         onHintLimitAbove3?.();
                       }
+                      requestAnimationFrame(() => dropdownTriggerRefs.current.hints?.focus());
                     }}
                     className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all flex items-center gap-1.5 ${
                       darkMode
@@ -440,6 +554,10 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
           {/* Bottom-Right: Timer */}
           <div className={`relative w-full transition-opacity duration-150 ${isLobbyLocked ? "pointer-events-none opacity-50" : ""}`}>
             <button
+              ref={(el) => { dropdownTriggerRefs.current.timer = el; }}
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={openDropdown === "timer"}
               onClick={() => {
                 playClickSound();
                 setOpenDropdown(openDropdown === "timer" ? null : "timer");
@@ -457,18 +575,26 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             </button>
 
             {openDropdown === "timer" && (
-              <div className="absolute top-full right-0 mt-1.5 w-full min-w-[150px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800">
+              <div
+                ref={activeDropdownRef}
+                role="listbox"
+                className="absolute top-full right-0 mt-1.5 w-full min-w-[150px] rounded-xl p-1.5 flex flex-col gap-1 z-[10020] bg-white dark:bg-zinc-900 shadow-xl border border-stone-200/80 dark:border-zinc-800"
+              >
                 {[
                   { label: t("timerOn"), val: true },
                   { label: t("timerOff"), val: false },
                 ].map(opt => (
                   <button
                     key={String(opt.val)}
+                    type="button"
+                    role="option"
+                    aria-selected={challengeTimerEnabled === opt.val}
                     onClick={() => {
                       playClickSound();
                       setChallengeTimerEnabled(opt.val);
                       setOpenDropdown(null);
                       updateRoomSettingsInFirestore({ timerEnabled: opt.val });
+                      requestAnimationFrame(() => dropdownTriggerRefs.current.timer?.focus());
                     }}
                     className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-mono font-black uppercase tracking-wider text-left border-none cursor-pointer transition-all flex items-center gap-1.5 ${
                       darkMode

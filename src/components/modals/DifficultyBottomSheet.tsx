@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Timer, X } from "lucide-react";
 import {
   DIFFICULTY_GRID_THEMES,
@@ -6,6 +6,11 @@ import {
   type Difficulty,
 } from "../game/SudokuBoard";
 import { useTranslation } from "../../i18n/useTranslation";
+import {
+  getFocusableElements,
+  handleRovingMenuArrowKey,
+  trapFocusTabKey,
+} from "../../utils/keyboardControls";
 
 export interface DifficultyBottomSheetProps {
   isOpen: boolean;
@@ -33,18 +38,76 @@ export const DifficultyBottomSheet: React.FC<DifficultyBottomSheetProps> = ({
 }) => {
   const { t } = useTranslation();
   const modeKey = darkMode ? "dark" : "light";
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef<boolean>(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      if (wasOpenRef.current) {
+        wasOpenRef.current = false;
+        const prev = previousFocusRef.current;
+        previousFocusRef.current = null;
+        if (prev && prev.isConnected) {
+          requestAnimationFrame(() => prev.focus());
+        }
+      }
+      return;
+    }
+
+    wasOpenRef.current = true;
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (!activeEl || !panelRef.current?.contains(activeEl)) {
+      previousFocusRef.current = activeEl;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      const currentActive = document.activeElement as HTMLElement | null;
+      if (currentActive && panelRef.current?.contains(currentActive)) {
+        return;
+      }
+      const listButtons = getFocusableElements(listRef.current);
+      if (listButtons.length > 0) {
+        listButtons[0].focus();
+      } else {
+        const panelFocusables = getFocusableElements(panelRef.current);
+        panelFocusables[0]?.focus();
+      }
+    }, 30);
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        e.preventDefault();
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
+        return;
+      }
+
+      if (e.key === "Tab") {
+        trapFocusTabKey(e, panelRef.current);
+        return;
+      }
+
+      const panelFocusables = getFocusableElements(panelRef.current);
+      if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "Home" ||
+        e.key === "End"
+      ) {
+        handleRovingMenuArrowKey(e, panelFocusables, "vertical");
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [isOpen]);
 
   return (
     <div
@@ -64,6 +127,7 @@ export const DifficultyBottomSheet: React.FC<DifficultyBottomSheetProps> = ({
 
       {/* Bottom Sheet Panel */}
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={t("selectDifficulty")}
@@ -94,7 +158,7 @@ export const DifficultyBottomSheet: React.FC<DifficultyBottomSheetProps> = ({
             onClick={onClose}
             aria-label={t("closeTooltip")}
             title={t("closeTooltip")}
-            className={`w-8 h-8 rounded-full border-none outline-none flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-95 shrink-0 ${
+            className={`w-8 h-8 rounded-full border-none flex items-center justify-center transition-all duration-150 cursor-pointer active:scale-95 shrink-0 ${
               darkMode
                 ? "bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300"
                 : "bg-stone-200/60 hover:bg-stone-200 text-stone-600"
@@ -105,7 +169,12 @@ export const DifficultyBottomSheet: React.FC<DifficultyBottomSheetProps> = ({
         </div>
 
         {/* 4 Luxury Minimal Vertical Cards (Strictly Title + Personal Best) */}
-        <div className="flex flex-col gap-2.5">
+        <div
+          ref={listRef}
+          role="menu"
+          aria-label={t("selectDifficulty")}
+          className="flex flex-col gap-2.5"
+        >
           {DIFFICULTY_LEVELS.map((lvl) => {
             const themeSurface = DIFFICULTY_GRID_THEMES[lvl].crosshair[modeKey];
             const pillSurface = DIFFICULTY_GRID_THEMES[lvl].activeCell[modeKey];
@@ -116,6 +185,7 @@ export const DifficultyBottomSheet: React.FC<DifficultyBottomSheetProps> = ({
               <button
                 key={lvl}
                 type="button"
+                role="menuitem"
                 tabIndex={isOpen ? 0 : -1}
                 id={`difficulty-sheet-card-${lvl.toLowerCase()}`}
                 onClick={() => onSelectDifficulty(lvl)}
@@ -124,7 +194,7 @@ export const DifficultyBottomSheet: React.FC<DifficultyBottomSheetProps> = ({
                   color: themeText,
                   border: "none",
                 }}
-                className="w-full py-4 px-5 rounded-2xl border-none outline-none flex items-center justify-between gap-3 transition-transform duration-150 cursor-pointer active:scale-[0.98] shadow-[0_4px_14px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_18px_rgba(0,0,0,0.28)]"
+                className="w-full py-4 px-5 rounded-2xl border-none flex items-center justify-between gap-3 transition-transform duration-150 cursor-pointer active:scale-[0.98] shadow-[0_4px_14px_rgba(0,0,0,0.03)] dark:shadow-[0_6px_18px_rgba(0,0,0,0.28)]"
               >
                 <span className="font-sans font-black text-base sm:text-lg uppercase tracking-wider leading-none truncate">
                   {t(lvl.toLowerCase() as "easy" | "medium" | "hard" | "expert")}
@@ -151,4 +221,3 @@ export const DifficultyBottomSheet: React.FC<DifficultyBottomSheetProps> = ({
     </div>
   );
 };
-

@@ -664,4 +664,30 @@ html.theme-snapshotting *::after {
   will-change: transform;
 }
 
-
+
+/* Crystal-clear keyboard-only focus indicators across Home, Game, Modals & Dropdowns */
+:is(
+  button,
+  a[href],
+  [role="button"],
+  [role="menuitem"],
+  [role="option"],
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  outline: 2.5px solid #4F46E5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.22) !important;
+}
+
+.dark :is(
+  button,
+  a[href],
+  [role="button"],
+  [role="menuitem"],
+  [role="option"],
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  outline: 2.5px solid #A5B4FC !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(165, 180, 252, 0.28) !important;
+}

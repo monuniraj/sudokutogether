@@ -142,6 +142,50 @@ export const SolverSEOArticle: React.FC<SolverSEOArticleProps> = ({
         </p>
       </section>
 
+      {/* Section 3.5: Desktop Keyboard Workflow */}
+      <section
+        aria-labelledby="solver-keyboard-heading"
+        className="rounded-3xl border-0 shadow-[0_6px_24px_rgba(0,0,0,0.02)] bg-sky-50/90 dark:bg-sky-950/30 p-6 sm:p-8"
+      >
+        <h2
+          id="solver-keyboard-heading"
+          className="text-lg sm:text-xl font-black tracking-tight text-sky-950 dark:text-sky-100"
+        >
+          {copy.keyboardHeading}
+        </h2>
+
+        <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-zinc-300">
+          {renderRichText(copy.keyboardIntro)}
+        </p>
+
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {copy.keyboardCards.map((card, idx) => {
+            const tileTones = [
+              "bg-indigo-50/90 dark:bg-indigo-950/45 text-indigo-950 dark:text-indigo-100",
+              "bg-rose-50/90 dark:bg-rose-950/40 text-rose-950 dark:text-rose-100",
+              "bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100",
+              "bg-violet-50/90 dark:bg-violet-950/45 text-violet-950 dark:text-violet-100",
+            ];
+            return (
+              <div
+                key={idx}
+                className={`rounded-2xl border-0 shadow-[0_4px_16px_rgba(0,0,0,0.02)] p-4 ${tileTones[idx % tileTones.length]}`}
+              >
+                <kbd className="inline-flex items-center px-2.5 py-1 rounded-xl border-0 bg-white/90 dark:bg-black/35 text-slate-800 dark:text-zinc-100 font-mono text-[11px] font-bold shadow-[0_2px_8px_rgba(15,23,42,0.05)]">
+                  {card.keys}
+                </kbd>
+                <h3 className="mt-2.5 text-sm font-extrabold">
+                  {card.title}
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed opacity-90">
+                  {card.desc}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       {/* Section 4: FAQs */}
       <section
         aria-labelledby="solver-faq-heading"

@@ -15,6 +15,12 @@ export interface SolverFaqCopy {
   a: RichText;
 }
 
+export interface SolverKeyboardCardCopy {
+  keys: string;
+  title: string;
+  desc: string;
+}
+
 export interface SolverArticleCopy {
   articleAriaLabel: string;
   overviewHeading: string;
@@ -40,6 +46,14 @@ export interface SolverArticleCopy {
   crossLinkPrefix: string;
   crossLinkLabel: string;
   crossLinkSuffix: string;
+  keyboardHeading: string;
+  keyboardIntro: RichText;
+  keyboardCards: readonly [
+    SolverKeyboardCardCopy,
+    SolverKeyboardCardCopy,
+    SolverKeyboardCardCopy,
+    SolverKeyboardCardCopy
+  ];
   faqHeading: string;
   faqs: readonly SolverFaqCopy[];
 }
@@ -248,6 +262,48 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Daily Sudoku Challenge",
     crossLinkSuffix:
       ". Every player worldwide receives the exact same deterministically seeded grid each day, letting you benchmark your solving speed across progressive Monday-to-Sunday difficulty tiers and build a competitive daily streak.",
+    keyboardHeading: "Desktop Keyboard Workflow: Fast Clue Entry & Play Mode Controls",
+    keyboardIntro: [
+      {
+        text: "Transcribe newspaper, book, or screenshot grids in seconds without lifting your hands off the keyboard. While entering givens in the Solver workspace, ",
+      },
+      { text: "Arrow keys, 1–9 / Numpad 1–9, and Backspace / Delete / 0", strong: true },
+      {
+        text: " keep entry rapid; switching to ",
+      },
+      { text: "Play Puzzle", strong: true },
+      {
+        text: " unlocks the complete six-shortcut gameplay suite (",
+      },
+      { text: "Spacebar / N", strong: true },
+      { text: " for Notes, " },
+      { text: "Ctrl + Z / Cmd + Z", strong: true },
+      { text: " for Undo, and " },
+      { text: "H", strong: true },
+      { text: " for Hints)." },
+    ],
+    keyboardCards: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "Rapid Clue & Answer Input",
+        desc: "Use either top-row number keys or your dedicated Numpad to lock printed clues onto the 9×9 grid—or fill final answers once you switch into Play Puzzle.",
+      },
+      {
+        keys: "Backspace / Delete / 0",
+        title: "Instant Cell Clear",
+        desc: "Pressed a wrong clue from a book puzzle? Hit Backspace, Delete, or 0 before tapping Lock & Play to clear any conflicting cell immediately.",
+      },
+      {
+        keys: "Arrow Keys & Tab / Esc",
+        title: "Zero-Mouse Grid Navigation",
+        desc: "Glide smoothly across rows and columns with Up, Down, Left, and Right arrows, move between controls with Tab, and dismiss drawers cleanly via Esc.",
+      },
+      {
+        keys: "Space / N • Ctrl/Cmd+Z • H",
+        title: "Full Play Puzzle Shortcuts",
+        desc: "After choosing Play Puzzle on your locked board, toggle Pencil Notes with Spacebar or N, step back with Ctrl/Cmd + Z, or inspect a Hint via H.",
+      },
+    ],
     faqHeading: "Sudoku Solver Frequently Asked Questions",
     faqs: [
       {
@@ -497,6 +553,44 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Daily Sudoku Challenge",
     crossLinkSuffix:
       " पर जरूर आज़माएं। हर दिन दुनियाभर के सभी खिलाड़ियों को बिल्कुल एक जैसा डिटरमिनिस्टिक बोर्ड मिलता है—जहाँ आप सोमवार से रविवार तक के लेवल स्केलिंग में अपनी स्पीड जांच सकते हैं और कॉम्पिटिटिव डेली स्ट्रीक बना सकते हैं।",
+    keyboardHeading: "डेस्कटॉप कीबोर्ड वर्कफ़्लो: फ़ास्ट क्लू एंट्री और प्ले मोड कंट्रोल्स",
+    keyboardIntro: [
+      {
+        text: "कीबोर्ड से हाथ हटाए बिना अख़बार या किताब का कोई भी ग्रिड सेकंडों में टाइप करें। सॉल्वर सेटअप बोर्ड पर ",
+      },
+      { text: "Arrow keys, 1–9 / Numpad 1–9 और Backspace / Delete / 0", strong: true },
+      { text: " से क्ल्यूज़ तुरंत भरें, और जैसे ही आप " },
+      { text: "Play Puzzle", strong: true },
+      { text: " पर स्विच करते हैं, पूरा 6-शॉर्टकट गेमप्ले सेट (" },
+      { text: "Spacebar / N", strong: true },
+      { text: " पेंसिल नोट्स, " },
+      { text: "Ctrl + Z / Cmd + Z", strong: true },
+      { text: " अनडू, और " },
+      { text: "H", strong: true },
+      { text: " हिंट) एक्टिव हो जाता है।" },
+    ],
+    keyboardCards: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "फ़ास्ट क्लू और नंबर एंट्री",
+        desc: "चाहे टॉप-रो नंबर्स दबाएं या डेडिकेटेड Numpad—सॉल्वर ग्रिड में प्रिंटेड क्ल्यूज़ तुरंत एंटर करें या Play Puzzle मोड में फाइनल डिजिट्स लॉक करें।",
+      },
+      {
+        keys: "Backspace / Delete / 0",
+        title: "गलत सेल तुरंत साफ़ करें",
+        desc: "प्रिंटेड पज़ल उतारते वक्त गलती हो जाए तो Lock & Play दबाने से पहले Backspace, Delete या 0 दबाकर कन्फ्लिक्ट सेल को फ़ौरन खाली करें।",
+      },
+      {
+        keys: "Arrow Keys • Tab / Esc",
+        title: "बिना माउस ग्रिड और मेन्यू नेविगेशन",
+        desc: "Up, Down, Left और Right एरो कीज़ से 9×9 ग्रिड पर तेज़ी से मूव करें, Tab से साफ़ फ़ोकस रिंग के साथ बटन्स बदलें और Esc से ड्रॉअर बंद करें।",
+      },
+      {
+        keys: "Space / N • Ctrl/Cmd+Z • H",
+        title: "Play Puzzle के पूरे शॉर्टकट्स",
+        desc: "बोर्ड लॉक करके Play Puzzle चुनने के बाद Spacebar या N से Pencil Notes ऑन-ऑफ़ करें, Ctrl/Cmd + Z से अनडू करें और H से लॉजिकल हिंट पाएं।",
+      },
+    ],
     faqHeading: "सुडोकू सॉल्वर से जुड़े आम सवाल (FAQs)",
     faqs: [
       {
@@ -751,6 +845,44 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Tages-Rätsel (Daily Challenge)",
     crossLinkSuffix:
       ". Weltweit erhalten alle Spieler jeden Tag exakt dasselbe deterministisch erzeugte Gitter—ideal, um deine Lösungszeit von Montag bis Sonntag zu vergleichen und eine echte Serie aufzubauen.",
+    keyboardHeading: "Desktop-Tastatur-Workflow: Schnelle Vorgaben-Eingabe & Spielkürzel",
+    keyboardIntro: [
+      {
+        text: "Übertragen Sie Zeitungs- oder Buchrätsel in Sekunden, ohne die Hände von der Tastatur zu nehmen. Im Eingabemodus des Lösers sorgen ",
+      },
+      { text: "Pfeiltasten, 1–9 / Ziffernblock 1–9 sowie Backspace / Entf / 0", strong: true },
+      { text: " für höchstes Tempo; mit einem Klick auf " },
+      { text: "Play Puzzle", strong: true },
+      { text: " stehen zusätzlich alle Spielkürzel (" },
+      { text: "Leertaste / N", strong: true },
+      { text: " für Notizen, " },
+      { text: "Strg + Z / Cmd + Z", strong: true },
+      { text: " zum Rückgängigmachen und " },
+      { text: "H", strong: true },
+      { text: " für Hinweise) bereit." },
+    ],
+    keyboardCards: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "Vorgaben & Ziffern eingeben",
+        desc: "Nutzen Sie wahlweise die obere Zahlenreihe oder den separaten Ziffernblock, um gegebene Zahlen blitzschnell ins 9×9-Gitter zu übernehmen.",
+      },
+      {
+        keys: "Backspace / Entf / 0",
+        title: "Feld sofort leeren",
+        desc: "Tippfehler beim Abtippen aus dem Heft? Backspace, Entfernen oder 0 löscht das markierte Feld noch vor „Lock & Play“ ohne Umweg.",
+      },
+      {
+        keys: "Pfeile • Tab / Esc",
+        title: "Navigation ohne Maus",
+        desc: "Springen Sie per Pfeiltasten direkt von Feld zu Feld, steuern Sie Schaltflächen mit Tab samt klarer Fokus-Umrandung und schließen Sie Menüs mit Esc.",
+      },
+      {
+        keys: "Space / N • Strg/Cmd+Z • H",
+        title: "Alle Spielkürzel im Play-Modus",
+        desc: "Sobald Sie nach dem Sperren „Play Puzzle“ starten, schalten Leertaste oder N Kandidaten-Notizen um, Strg/Cmd + Z macht Züge rückgängig und H zeigt einen Hinweis.",
+      },
+    ],
     faqHeading: "Häufige Fragen zum Sudoku-Löser",
     faqs: [
       {
@@ -1002,6 +1134,44 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "デイリー問題（Daily Challenge）",
     crossLinkSuffix:
       " で実力を試してみましょう。毎日すべてのプレイヤーにまったく同じ盤面が出題されるため、月曜から日曜までの難易度カーブに沿ってタイム比較や連続ストリーク記録に挑戦できます。",
+    keyboardHeading: "デスクトップ版キーボード操作ガイド：高速入力とプレイ時ショートカット",
+    keyboardIntro: [
+      {
+        text: "キーボードから手を離さず、新聞やパズル誌の盤面を数秒で入力できます。ソルバーの入力画面では ",
+      },
+      { text: "矢印キー・1〜9 / テンキー 1〜9・Backspace / Delete / 0", strong: true },
+      { text: " が即座に反応し、" },
+      { text: "Play Puzzle", strong: true },
+      { text: " に切り替えるとメモ切替（" },
+      { text: "Space / N", strong: true },
+      { text: "）、元に戻す（" },
+      { text: "Ctrl + Z / Cmd + Z", strong: true },
+      { text: "）、ヒント（" },
+      { text: "H", strong: true },
+      { text: "）を含む全6系統のショートカットが使えます。" },
+    ],
+    keyboardCards: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "数字と初期ヒントの高速入力",
+        desc: "メインキーボードの数字キーでもテンキー（Numpad）でも同じ精度で素早く 9×9 盤面へ数字を入力できます。",
+      },
+      {
+        keys: "Backspace / Delete / 0",
+        title: "誤入力セルの即時消去",
+        desc: "問題を写し間違えても、Lock & Play を押す前に Backspace・Delete・0 のいずれかで即座にマスを空に戻せます。",
+      },
+      {
+        keys: "矢印キー • Tab / Esc",
+        title: "マウス不要の盤面・メニュー移動",
+        desc: "上下左右の矢印キーでマスを滑らかに移動し、Tab の視認性の高いフォーカス枠や Esc で各種メニューを操作できます。",
+      },
+      {
+        keys: "Space / N • Ctrl/Cmd+Z • H",
+        title: "Play Puzzle モードの完全ショートカット",
+        desc: "盤面ロック後に Play Puzzle を開けば、Space や N で候補メモ切替、Ctrl/Cmd + Z で一手戻す、H でヒント確認が行えます。",
+      },
+    ],
     faqHeading: "数独ソルバー よくある質問（FAQ）",
     faqs: [
       {
@@ -1254,6 +1424,44 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "일일 챌린지(Daily Challenge)",
     crossLinkSuffix:
       " 에 도전해 보세요. 매일 모든 플레이어가 완전히 같은 퍼즐을 받으며 월요일부터 일요일까지 이어지는 난이도 곡선 속에서 기록을 비교하고 데일리 스트릭을 쌓을 수 있습니다.",
+    keyboardHeading: "데스크톱 키보드 단축키 워크플로: 빠른 숫자 입력 및 플레이 제어",
+    keyboardIntro: [
+      {
+        text: "키보드에서 손을 떼지 않고도 책이나 신문 퍼즐을 몇 초 만에 옮겨 적을 수 있습니다. 풀이기 입력 단계에서는 ",
+      },
+      { text: "방향키, 1–9 / 넘패드(Numpad) 1–9, Backspace / Delete / 0", strong: true },
+      { text: " 으로 빠르게 입력하고, " },
+      { text: "Play Puzzle", strong: true },
+      { text: " 로 전환하면 메모(" },
+      { text: "Spacebar / N", strong: true },
+      { text: "), 실행 취소(" },
+      { text: "Ctrl + Z / Cmd + Z", strong: true },
+      { text: "), 힌트(" },
+      { text: "H", strong: true },
+      { text: ") 단축키를 모두 사용할 수 있습니다." },
+    ],
+    keyboardCards: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "초기 힌트 및 정답 고속 입력",
+        desc: "상단 숫자 키와 전용 숫자 패드(Numpad)를 모두 지원해 9×9 보드에 숫자를 빈틈없이 빠르게 입력할 수 있습니다.",
+      },
+      {
+        keys: "Backspace / Delete / 0",
+        title: "선택 칸 즉시 지우기",
+        desc: "오타가 나도 Lock & Play를 누르기 전에 Backspace, Delete 또는 0 키를 눌러 잘못된 숫자를 즉시 지울 수 있습니다.",
+      },
+      {
+        keys: "방향키 • Tab / Esc",
+        title: "마우스 없는 보드 및 메뉴 이동",
+        desc: "상하좌우 방향키로 보드 칸을 자유롭게 이동하고, 선명한 포커스 링이 적용된 Tab 이동 및 Esc 닫기로 쾌적하게 조작하세요.",
+      },
+      {
+        keys: "Space / N • Ctrl/Cmd+Z • H",
+        title: "Play Puzzle 전용 단축키 6종",
+        desc: "보드를 잠근 뒤 Play Puzzle을 시작하면 Spacebar 또는 N으로 연필 메모, Ctrl/Cmd + Z로 실행 취소, H로 논리 힌트를 호출할 수 있습니다.",
+      },
+    ],
     faqHeading: "스도쿠 풀이기 자주 묻는 질문 (FAQ)",
     faqs: [
       {
@@ -1503,6 +1711,44 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Reto Diario (Daily Challenge)",
     crossLinkSuffix:
       ". Cada día todos los jugadores del mundo reciben el mismo tablero generado de forma determinista, ideal para comparar tiempos de lunes a domingo y mantener tu racha diaria.",
+    keyboardHeading: "Flujo de teclado en escritorio: entrada rápida y controles de juego",
+    keyboardIntro: [
+      {
+        text: "Transcribe cualquier tablero impreso o captura en segundos sin soltar el teclado. Al introducir pistas en el solucionador, ",
+      },
+      { text: "las flechas, 1–9 / teclado numérico y Backspace / Supr / 0", strong: true },
+      { text: " agilizan la carga; al cambiar a " },
+      { text: "Play Puzzle", strong: true },
+      { text: " dispondrás además de " },
+      { text: "Barra espaciadora / N", strong: true },
+      { text: " (notas), " },
+      { text: "Ctrl + Z / Cmd + Z", strong: true },
+      { text: " (deshacer) y " },
+      { text: "H", strong: true },
+      { text: " (pista)." },
+    ],
+    keyboardCards: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "Entrada ágil de pistas y dígitos",
+        desc: "Usa la fila superior de números o el teclado numérico lateral para fijar pistas iniciales o completar casillas en Play Puzzle.",
+      },
+      {
+        keys: "Backspace / Delete / 0",
+        title: "Borrado inmediato de casilla",
+        desc: "¿Te equivocaste al copiar un número? Pulsa Backspace, Supr o 0 antes de pulsar Lock & Play para limpiar la celda al instante.",
+      },
+      {
+        keys: "Flechas • Tab / Esc",
+        title: "Navegación total sin ratón",
+        desc: "Recorre la cuadrícula 9×9 con las teclas de flecha, muévete entre botones con Tab y enfoque visible, y cierra paneles con Esc.",
+      },
+      {
+        keys: "Space / N • Ctrl/Cmd+Z • H",
+        title: "Atajos completos en Play Puzzle",
+        desc: "Al bloquear el tablero en Play Puzzle, activa notas de lápiz con Espacio o N, deshaz movimientos con Ctrl/Cmd + Z y pide pista con H.",
+      },
+    ],
     faqHeading: "Preguntas frecuentes sobre el Solucionador",
     faqs: [
       {
@@ -1752,6 +1998,44 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Défi du Jour (Daily Challenge)",
     crossLinkSuffix:
       ". Chaque joueur dans le monde reçoit exactement la même grille générée de façon déterministe : mesurez-vous du lundi au dimanche et entretenez votre série quotidienne.",
+    keyboardHeading: "Raccourcis clavier sur ordinateur : saisie rapide et mode jeu",
+    keyboardIntro: [
+      {
+        text: "Recopiez une grille de journal ou de livre en quelques secondes sans quitter le clavier. Lors de la saisie des indices, ",
+      },
+      { text: "les flèches, 1–9 / pavé numérique et Retour arrière / Suppr / 0", strong: true },
+      { text: " assurent une frappe fluide ; en passant sur " },
+      { text: "Play Puzzle", strong: true },
+      { text: ", vous débloquez " },
+      { text: "Espace / N", strong: true },
+      { text: " (notes), " },
+      { text: "Ctrl + Z / Cmd + Z", strong: true },
+      { text: " (annuler) et " },
+      { text: "H", strong: true },
+      { text: " (indice)." },
+    ],
+    keyboardCards: [
+      {
+        keys: "1–9 / Pavé num. 1–9",
+        title: "Saisie rapide des chiffres",
+        desc: "Utilisez indifféremment la rangée supérieure ou le pavé numérique dédié pour placer les indices ou finaliser votre grille.",
+      },
+      {
+        keys: "Backspace / Suppr / 0",
+        title: "Effacement instantané",
+        desc: "Une erreur de copie ? Appuyez sur Retour arrière, Suppr ou 0 avant de cliquer sur Lock & Play pour vider la case aussitôt.",
+      },
+      {
+        keys: "Flèches • Tab / Échap",
+        title: "Navigation complète sans souris",
+        desc: "Déplacez-vous dans les 81 cases avec les flèches directionnelles, naviguez via Tab avec anneau de focus net et fermez les tiroirs avec Échap.",
+      },
+      {
+        keys: "Espace / N • Ctrl/Cmd+Z • H",
+        title: "Raccourcis complets en Play Puzzle",
+        desc: "Une fois la grille verrouillée en Play Puzzle, activez le mode notes avec Espace ou N, annulez avec Ctrl/Cmd + Z ou affichez un indice via H.",
+      },
+    ],
     faqHeading: "Questions fréquentes sur le Solveur",
     faqs: [
       {
@@ -2001,6 +2285,44 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Sfida del Giorno (Daily Challenge)",
     crossLinkSuffix:
       ". Ogni giocatore nel mondo riceve ogni giorno la stessa griglia generata deterministicamente, ideale per confrontare i tempi dal lunedì alla domenica e costruire la tua serie positiva.",
+    keyboardHeading: "Flusso da tastiera su desktop: inserimento rapido e controlli di gioco",
+    keyboardIntro: [
+      {
+        text: "Trascrivi qualsiasi schema da rivista o giornale in pochi secondi senza staccare le mani dalla tastiera. In fase di caricamento usi ",
+      },
+      { text: "frecce, 1–9 / tastierino numerico e Backspace / Canc / 0", strong: true },
+      { text: ", mentre passando a " },
+      { text: "Play Puzzle", strong: true },
+      { text: " si attivano " },
+      { text: "Spazio / N", strong: true },
+      { text: " (appunti), " },
+      { text: "Ctrl + Z / Cmd + Z", strong: true },
+      { text: " (annulla) e " },
+      { text: "H", strong: true },
+      { text: " (suggerimento)." },
+    ],
+    keyboardCards: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "Inserimento veloce cifre e indizi",
+        desc: "Digita con la fila numerica superiore o il tastierino numerico laterale per impostare gli indizi o risolvere la griglia in Play Puzzle.",
+      },
+      {
+        keys: "Backspace / Canc / 0",
+        title: "Cancellazione immediata della cella",
+        desc: "Hai sbagliato un numero copiando lo schema? Premi Backspace, Canc o 0 prima di Lock & Play per svuotare subito la cella.",
+      },
+      {
+        keys: "Frecce • Tab / Esc",
+        title: "Navigazione precisa senza mouse",
+        desc: "Spostati fra righe e colonne con le frecce, muoviti tra i pulsanti con Tab e contorno di focus ben visibile, e chiudi i pannelli con Esc.",
+      },
+      {
+        keys: "Spazio / N • Ctrl/Cmd+Z • H",
+        title: "Scorciatoie complete in Play Puzzle",
+        desc: "Avviata la modalità Play Puzzle sullo schema bloccato, attiva i candidati a matita con Spazio o N, annulla con Ctrl/Cmd + Z o richiedi un aiuto con H.",
+      },
+    ],
     faqHeading: "Domande frequenti sul Risolutore Sudoku",
     faqs: [
       {
@@ -2250,6 +2572,44 @@ export const SOLVER_ARTICLE_TRANSLATIONS: Record<
     crossLinkLabel: "Desafio Diário (Daily Challenge)",
     crossLinkSuffix:
       ". Todos os jogadores no mundo recebem exatamente a mesma grade gerada de forma determinística a cada dia—ideal para comparar tempos de segunda a domingo e construir uma sequência diária.",
+    keyboardHeading: "Atalhos de teclado no desktop: preenchimento rápido e controles do modo jogo",
+    keyboardIntro: [
+      {
+        text: "Digite qualquer grade de revista ou jornal em segundos sem tirar as mãos do teclado. Na entrada de pistas, use ",
+      },
+      { text: "setas, 1–9 / teclado numérico e Backspace / Delete / 0", strong: true },
+      { text: "; ao alternar para " },
+      { text: "Play Puzzle", strong: true },
+      { text: ", você também ganha " },
+      { text: "Espaço / N", strong: true },
+      { text: " (rascunho), " },
+      { text: "Ctrl + Z / Cmd + Z", strong: true },
+      { text: " (desfazer) e " },
+      { text: "H", strong: true },
+      { text: " (dica)." },
+    ],
+    keyboardCards: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "Entrada ágil de pistas e dígitos",
+        desc: "Funciona tanto com a linha superior de números quanto com o teclado numérico (Numpad) para preencher ou resolver a grade 9×9.",
+      },
+      {
+        keys: "Backspace / Delete / 0",
+        title: "Limpeza imediata da célula",
+        desc: "Digitou uma pista errada? Pressione Backspace, Delete ou 0 antes de tocar em Lock & Play para limpar o conflito na hora.",
+      },
+      {
+        keys: "Setas • Tab / Esc",
+        title: "Navegação completa sem mouse",
+        desc: "Percorra linhas e colunas com as setas direcionais, navegue pelos botões via Tab com destaque de foco nítido e feche painéis com Esc.",
+      },
+      {
+        keys: "Espaço / N • Ctrl/Cmd+Z • H",
+        title: "Atalhos completos no Play Puzzle",
+        desc: "Após travar a grade e abrir Play Puzzle, alterne notas a lápis com Espaço ou N, desfaça jogadas com Ctrl/Cmd + Z e peça dica com H.",
+      },
+    ],
     faqHeading: "Perguntas frequentes sobre o Solucionador",
     faqs: [
       {

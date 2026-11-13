@@ -16,6 +16,12 @@ export interface DailyFaqCopy {
   a: DailyRichText;
 }
 
+export interface DailyKeyboardShortcutCopy {
+  keys: string;
+  title: string;
+  desc: string;
+}
+
 export interface DailyArticleCopy {
   articleAriaLabel: string;
   whatIsHeading: string;
@@ -38,6 +44,16 @@ export interface DailyArticleCopy {
   streakP1: DailyRichText;
   streakP2: DailyRichText;
   streakBullets: readonly [DailyRichText, DailyRichText];
+  keyboardHeading: string;
+  keyboardIntro: DailyRichText;
+  keyboardShortcuts: readonly [
+    DailyKeyboardShortcutCopy,
+    DailyKeyboardShortcutCopy,
+    DailyKeyboardShortcutCopy,
+    DailyKeyboardShortcutCopy,
+    DailyKeyboardShortcutCopy,
+    DailyKeyboardShortcutCopy
+  ];
   faqHeading: string;
   faqs: readonly DailyFaqCopy[];
 }
@@ -220,6 +236,48 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
           text: " Signing in keeps your calendar records, solve times, and streak milestones backed up in Cloud Firestore, while Guest sessions store history in an isolated local vault with zero account leakage.",
         },
       ],
+    ],
+    keyboardHeading: "Desktop Speed-Solving: Keyboard Controls for Daily Rankings",
+    keyboardIntro: [
+      {
+        text: "Breaking into the ",
+      },
+      { text: "Top-20 Daily Speed Leaderboard", strong: true },
+      {
+        text: " requires zero wasted cursor travel. Every active Daily Challenge puzzle supports all six core desktop shortcuts so you can scan candidates, enter digits, and undo misclicks cleanly without lifting your hands:",
+      },
+    ],
+    keyboardShortcuts: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "Dual-Zone Digit Entry",
+        desc: "Enter solved values or candidate pencil digits smoothly using either top-row numbers or your dedicated Numpad.",
+      },
+      {
+        keys: "Backspace / Delete",
+        title: "Zero-Friction Erase",
+        desc: "Clear tentative pencil marks or wipe an unverified cell immediately without reaching for an on-screen button.",
+      },
+      {
+        keys: "Ctrl + Z / Cmd + Z",
+        title: "Single-Tap Undo",
+        desc: "Step back through move history instantaneously on Windows, Linux, or macOS without breaking your solving cadence.",
+      },
+      {
+        keys: "Spacebar / N",
+        title: "Pencil Notes Toggle",
+        desc: "Flip between normal digit entry and candidate pencil mode on the fly—Spacebar captures focus cleanly without scrolling the page.",
+      },
+      {
+        keys: "H",
+        title: "Logical Hint Check",
+        desc: "Need a nudge on Sunday Expert tiers? Press H to trigger a targeted Hint right from the grid.",
+      },
+      {
+        keys: "Arrow Keys • Tab / Esc",
+        title: "Keyboard & Menu Navigation",
+        desc: "Glide across cells with Up/Down/Left/Right arrows, switch modal choices with arrows, and follow clear pastel focus outlines via Tab.",
+      },
     ],
     faqHeading: "Daily Challenge Frequently Asked Questions",
     faqs: [
@@ -443,6 +501,46 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
           text: " लॉगिन करने पर आपका पूरा कैलेंडर रिकॉर्ड, सॉल्व टाइम और Streak माइलस्टोन Cloud Firestore में सेफ रहते हैं, जबकि Guest सेशन बिल्कुल अलग लोकल वॉल्ट में रहता है ताकि कोई डेटा मिक्स न हो।",
         },
       ],
+    ],
+    keyboardHeading: "डेस्कटॉप स्पीड-सॉल्विंग: Daily Rankings के लिए कीबोर्ड कंट्रोल्स",
+    keyboardIntro: [
+      { text: "अगर आपका लक्ष्य " },
+      { text: "Top-20 डेली लीडरबोर्ड", strong: true },
+      {
+        text: " में जगह बनाना है, तो माउस क्लिक करने में सेकंड्स बर्बाद न करें। Daily Challenge बोर्ड पर सभी 6 डेस्कटॉप कीबोर्ड शॉर्टकट्स चलते हैं—जिससे तेज़ नंबर एंट्री और क्लीन अनडू सब हाथ के नीचे रहता है:",
+      },
+    ],
+    keyboardShortcuts: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "फ़ास्ट डिजिट एंट्री",
+        desc: "टॉप नंबर-रो या डेडिकेटेड Numpad—दोनों से फाइनल डिजिट्स और कैंडिडेट नोट्स बिजली की रफ्तार से भरें।",
+      },
+      {
+        keys: "Backspace / Delete",
+        title: "तुरंत सेल इरेज़",
+        desc: "गलत नंबर या पुराने पेंसिल नोट को बिना माउस हिलाए एक की-प्रेस में साफ़ करें।",
+      },
+      {
+        keys: "Ctrl + Z / Cmd + Z",
+        title: "इंस्टैंट अनडू",
+        desc: "गलत क्लिक हो जाए तो Windows/Linux पर Ctrl + Z या Mac पर Cmd + Z से तुरंत पिछली स्टेप पर लौटें।",
+      },
+      {
+        keys: "Spacebar / N",
+        title: "Pencil Notes टॉगल",
+        desc: "नॉर्मल एंट्री और पेंसिल नोट्स मोड के बीच तुरंत स्विच करें—Spacebar बिना पेज स्क्रॉल किए स्मार्ट तरीके से काम करता है।",
+      },
+      {
+        keys: "H",
+        title: "तुरंत Hint पाएं",
+        desc: "रविवार के Expert बोर्ड पर कहीं अटक जाएं तो H दबाकर सुरक्षित रूप से लॉजिकल Hint चेक करें।",
+      },
+      {
+        keys: "Arrow Keys • Tab / Esc",
+        title: "स्मूद ग्रिड और मेन्यू मूवमेंट",
+        desc: "एरो कीज़ से 9×9 ग्रिड और पॉपअप ऑप्शंस में ऊपर-नीचे जाएं, और साफ़ :focus-visible रिंग के साथ Tab से पूरा इंटरफ़ेस कंट्रोल करें।",
+      },
     ],
     faqHeading: "Daily Challenge से जुड़े आम सवाल (FAQs)",
     faqs: [
@@ -668,6 +766,46 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
           text: " Mit Konto bleiben Kalenderverlauf, Bestzeiten und Serien-Meilensteine in Cloud Firestore gesichert; Gast-Sitzungen speichern lokal im strikt getrennten Speicher ohne Datenvermischung.",
         },
       ],
+    ],
+    keyboardHeading: "Desktop-Tempo: Tastenkürzel für die tägliche Bestenliste",
+    keyboardIntro: [
+      { text: "Wer beim " },
+      { text: "Tages-Rätsel unter die Top 20", strong: true },
+      {
+        text: " kommen möchte, spart mit der Tastatur wertvolle Sekunden pro Zug. Alle sechs Desktop-Kürzel stehen Ihnen im gesamten Daily Challenge ohne Mauswege zur Verfügung:",
+      },
+    ],
+    keyboardShortcuts: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "Zifferneingabe im Doppelpack",
+        desc: "Geben Sie Lösungen und Kandidaten wahlweise über die obere Zahlenreihe oder den Ziffernblock ohne Verzögerung ein.",
+      },
+      {
+        keys: "Backspace / Entf",
+        title: "Feld direkt leeren",
+        desc: "Entfernen Sie Notizen oder Zahlen mit einem einzigen Anschlag, statt zum Radiergummi-Button zu greifen.",
+      },
+      {
+        keys: "Strg + Z / Cmd + Z",
+        title: "Züge sicher widerrufen",
+        desc: "Machen Sie Verklicker unter Windows, Linux und macOS sofort mit einem vertrauten Kürzel rückgängig.",
+      },
+      {
+        keys: "Leertaste / N",
+        title: "Notizen-Umschalter",
+        desc: "Wechseln Sie blitzschnell zwischen Wert- und Kandidaten-Modus—die Leertaste schaltet um, ohne dass die Seite scrollt.",
+      },
+      {
+        keys: "H",
+        title: "Gezielter Hinweis",
+        desc: "Wenn ein Sonntags-Experte feststeckt, liefert die Taste H direkt einen strategischen Denkanstoß.",
+      },
+      {
+        keys: "Pfeiltasten • Tab / Esc",
+        title: "Volle Fokus- und Menüsteuerung",
+        desc: "Bewegen Sie die Auswahl im Gitter und in Dialogmenüs per Pfeiltaste und folgen Sie klaren Fokusrahmen über Tab.",
+      },
     ],
     faqHeading: "Häufige Fragen zum Tages-Rätsel",
     faqs: [
@@ -895,6 +1033,46 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
         },
       ],
     ],
+    keyboardHeading: "デスクトップ高速攻略：デイリーランキング用キーボード操作",
+    keyboardIntro: [
+      { text: "デイリーチャレンジの " },
+      { text: "Top-20 スピードランキング", strong: true },
+      {
+        text: " を狙うなら、カーソル移動のロスをゼロにすることが近道です。デイリー盤面では以下6種類のデスクトップ操作がすべてネイティブ対応しています：",
+      },
+    ],
+    keyboardShortcuts: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "数字キー＆テンキー完全対応",
+        desc: "最上段の数字キーと右側のテンキーのどちらからでも確定数字・候補メモを遅延なく入力できます。",
+      },
+      {
+        keys: "Backspace / Delete",
+        title: "ワンタッチ消去",
+        desc: "入力ミスや古いメモを、消去ボタンまでカーソルを動かさず一瞬でクリアします。",
+      },
+      {
+        keys: "Ctrl + Z / Cmd + Z",
+        title: "即座に一手戻す（Undo）",
+        desc: "タイムアタック中の誤入力も、OS標準のショートカットでリズムを崩さずやり直せます。",
+      },
+      {
+        keys: "Space / N",
+        title: "鉛筆メモ切替（スクロール抑止）",
+        desc: "入力と候補メモを瞬時に切替。Spaceキーを押してもブラウザ画面が下にスクロールしない設計です。",
+      },
+      {
+        keys: "H",
+        title: "ヒント呼び出し",
+        desc: "日曜の難問（Expert）で詰まったときは H キーからロジカルヒントをすぐに確認できます。",
+      },
+      {
+        keys: "矢印キー • Tab / Esc",
+        title: "盤面・メニューの全キーボード操作",
+        desc: "上下左右の矢印キーでマスとメニュー項目を移動し、視認性の高いフォーカスリングを見ながら Tab で操作できます。",
+      },
+    ],
     faqHeading: "デイリーチャレンジ よくある質問（FAQ）",
     faqs: [
       {
@@ -1119,6 +1297,46 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
           text: " 로그인하면 달력 기록, 완료 시간, 연속 달성 내역이 Cloud Firestore에 안전하게 백업되며, 게스트 세션은 계정에 섞이지 않는 별도의 로컬 보관함에 저장됩니다.",
         },
       ],
+    ],
+    keyboardHeading: "데스크톱 스피드 솔빙: 일일 랭킹을 위한 키보드 단축키",
+    keyboardIntro: [
+      { text: "일일 챌린지 " },
+      { text: "Top-20 스피드 리더보드", strong: true },
+      {
+        text: " 에 진입하려면 마우스 이동 시간을 줄이는 것이 핵심입니다. 모든 일일 퍼즐은 6가지 데스크톱 단축키를 완벽히 지원합니다:",
+      },
+    ],
+    keyboardShortcuts: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "상단 숫자 & 넘패드 입력",
+        desc: "상단 숫자 열과 오른쪽 전용 Numpad 중 편한 쪽으로 정답과 후보 메모를 즉시 입력하세요.",
+      },
+      {
+        keys: "Backspace / Delete",
+        title: "선택 칸 즉시 지우기",
+        desc: "잘못 적었거나 오래된 후보 메모를 지우개 버튼 클릭 없이 한 번에 삭제합니다.",
+      },
+      {
+        keys: "Ctrl + Z / Cmd + Z",
+        title: "즉시 실행 취소",
+        desc: "Windows, Linux, macOS에서 익숙한 단축키로 실수를 바로 되돌리고 기록 흐름을 유지하세요.",
+      },
+      {
+        keys: "Spacebar / N",
+        title: "연필 메모 빠른 전환",
+        desc: "Spacebar 또는 N 키로 메모 모드를 전환하세요. 스페이스바를 눌러도 화면이 스크롤되지 않습니다.",
+      },
+      {
+        keys: "H",
+        title: "논리 힌트 확인",
+        desc: "일요일 Expert 난이도에서 흐름이 막혔을 때 H 키로 즉시 힌트를 확인할 수 있습니다.",
+      },
+      {
+        keys: "방향키 • Tab / Esc",
+        title: "보드 및 메뉴 방향키 이동",
+        desc: "상하좌우 방향키로 보드와 모달 메뉴를 오가고, 선명한 포커스 링과 함께 Tab/Esc로 제어하세요.",
+      },
     ],
     faqHeading: "일일 챌린지 자주 묻는 질문 (FAQ)",
     faqs: [
@@ -1345,6 +1563,46 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
         },
       ],
     ],
+    keyboardHeading: "Velocidad en escritorio: atajos de teclado para el ranking diario",
+    keyboardIntro: [
+      { text: "Entrar en el " },
+      { text: "Top-20 de velocidad del Reto Diario", strong: true },
+      {
+        text: " exige eliminar desplazamientos innecesarios de ratón. Cada tablero diario admite los seis atajos principales de escritorio para resolver sin pausas:",
+      },
+    ],
+    keyboardShortcuts: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "Dígitos con fila superior o Numpad",
+        desc: "Introduce valores definitivos o candidatos usando indistintamente los números superiores o el teclado numérico.",
+      },
+      {
+        keys: "Backspace / Delete",
+        title: "Borrado sin fricción",
+        desc: "Limpia marcas de lápiz o dígitos sin confirmar al instante sin apartar la vista de la región activa.",
+      },
+      {
+        keys: "Ctrl + Z / Cmd + Z",
+        title: "Deshacer al instante",
+        desc: "Revierte cualquier toque erróneo en Windows, Linux o Mac sin perder el ritmo de tu cronómetro.",
+      },
+      {
+        keys: "Barra espaciadora / N",
+        title: "Alternar notas de lápiz",
+        desc: "Cambia entre modo normal y notas de candidatos al vuelo; el espacio evita el desplazamiento de página.",
+      },
+      {
+        keys: "H",
+        title: "Pista lógica rápida",
+        desc: "¿Atascado en el reto Experto del domingo? Pulsa H para consultar una pista directa desde el tablero.",
+      },
+      {
+        keys: "Flechas • Tab / Esc",
+        title: "Navegación total y menús",
+        desc: "Muévete por la cuadrícula y las listas abiertas con las flechas, con anillos de enfoque nítidos al usar Tab.",
+      },
+    ],
     faqHeading: "Preguntas frecuentes sobre el Reto Diario",
     faqs: [
       {
@@ -1569,6 +1827,46 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
           text: " En vous connectant, calendrier, temps et paliers de série sont sauvegardés sur Cloud Firestore ; en mode Invité, tout reste dans un stockage local strictement cloisonné sans mélange de données.",
         },
       ],
+    ],
+    keyboardHeading: "Jeu rapide sur ordinateur : raccourcis clavier du Défi du Jour",
+    keyboardIntro: [
+      { text: "Pour viser le " },
+      { text: "Top 20 du classement quotidien", strong: true },
+      {
+        text: ", chaque aller-retour de souris compte. Chaque grille du Défi du Jour prend en charge nos six raccourcis clavier essentiels :",
+      },
+    ],
+    keyboardShortcuts: [
+      {
+        keys: "1–9 / Pavé num. 1–9",
+        title: "Saisie double zone des chiffres",
+        desc: "Tapez vos réponses et candidats avec la rangée supérieure ou le pavé numérique dédié sans aucune latence.",
+      },
+      {
+        keys: "Backspace / Suppr",
+        title: "Effacement immédiat",
+        desc: "Supprimez une annotation au crayon ou une saisie douteuse d'une simple touche sans quitter la case des yeux.",
+      },
+      {
+        keys: "Ctrl + Z / Cmd + Z",
+        title: "Annulation en un geste",
+        desc: "Revenez en arrière sur Windows, Linux ou macOS sans casser votre cadence de résolution.",
+      },
+      {
+        keys: "Espace / N",
+        title: "Bascule Notes au crayon",
+        desc: "Passez instantanément du mode chiffre au mode notes ; Espace est intercepté pour éviter le défilement de la page.",
+      },
+      {
+        keys: "H",
+        title: "Indice stratégique",
+        desc: "Bloqué sur une grille Expert du dimanche ? Appuyez sur H pour obtenir un indice ciblé depuis le plateau.",
+      },
+      {
+        keys: "Flèches • Tab / Échap",
+        title: "Navigation clavier et menus",
+        desc: "Parcourez la grille 9×9 et les listes déroulantes avec les flèches, guidé par des anneaux de focus bien visibles.",
+      },
     ],
     faqHeading: "Foire aux questions — Défi du Jour",
     faqs: [
@@ -1795,6 +2093,46 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
         },
       ],
     ],
+    keyboardHeading: "Velocità su desktop: scorciatoie da tastiera per la classifica giornaliera",
+    keyboardIntro: [
+      { text: "Entrare nella " },
+      { text: "Top-20 di velocità della Sfida del Giorno", strong: true },
+      {
+        text: " significa ridurre a zero gli spostamenti del mouse. Ogni griglia quotidiana supporta tutte e sei le scorciatoie principali:",
+      },
+    ],
+    keyboardShortcuts: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "Inserimento cifre a doppia zona",
+        desc: "Digita soluzioni definitive o candidati a matita sia con la riga numerica superiore sia con il tastierino numerico.",
+      },
+      {
+        keys: "Backspace / Canc",
+        title: "Cancellazione immediata",
+        desc: "Rimuovi al volo appunti o cifre provvisorie senza dover cliccare il pulsante Gomma sullo schermo.",
+      },
+      {
+        keys: "Ctrl + Z / Cmd + Z",
+        title: "Annulla istantaneo",
+        desc: "Correggi subito un clic errato su Windows, Linux o macOS mantenendo fluido il ritmo sul timer.",
+      },
+      {
+        keys: "Spazio / N",
+        title: "Attiva/Disattiva Note",
+        desc: "Alterna tra inserimento normale e modalità matita senza staccare le dita: Spazio non fa scorrere la pagina.",
+      },
+      {
+        keys: "H",
+        title: "Suggerimento logico",
+        desc: "In difficoltà sulla sfida Esperta della domenica? Premi H per richiamare un aiuto mirato direttamente sulla griglia.",
+      },
+      {
+        keys: "Frecce • Tab / Esc",
+        title: "Navigazione griglia e menu",
+        desc: "Spostati tra celle e menu aperti con i tasti freccia e segui chiaramente i contorni di focus con Tab.",
+      },
+    ],
     faqHeading: "Domande frequenti sulla Sfida del Giorno",
     faqs: [
       {
@@ -2019,6 +2357,46 @@ export const DAILY_ARTICLE_TRANSLATIONS: Record<
           text: " Ao fazer login, seu histórico do calendário, tempos e marcos ficam salvos no Cloud Firestore; sessões de Visitante usam um cofre local isolado sem vazar dados entre contas.",
         },
       ],
+    ],
+    keyboardHeading: "Velocidade no desktop: atalhos de teclado para o ranking diário",
+    keyboardIntro: [
+      { text: "Alcançar o " },
+      { text: "Top-20 de velocidade do Desafio Diário", strong: true },
+      {
+        text: " exige eliminar movimentos extras do mouse. Toda grade diária suporta os seis atalhos completos de teclado:",
+      },
+    ],
+    keyboardShortcuts: [
+      {
+        keys: "1–9 / Numpad 1–9",
+        title: "Entrada dupla de dígitos",
+        desc: "Preencha respostas finais ou candidatos usando tanto os números superiores quanto o teclado numérico dedicado.",
+      },
+      {
+        keys: "Backspace / Delete",
+        title: "Limpeza sem atrito",
+        desc: "Apague anotações a lápis ou células duvidosas com um único toque, sem buscar o botão na tela.",
+      },
+      {
+        keys: "Ctrl + Z / Cmd + Z",
+        title: "Desfazer instantâneo",
+        desc: "Volte um passo na hora no Windows, Linux ou macOS sem quebrar o ritmo do seu cronômetro.",
+      },
+      {
+        keys: "Espaço / N",
+        title: "Alternar Notas a lápis",
+        desc: "Troque entre valor fixo e rascunho em movimento—a barra de Espaço alterna sem rolar a página.",
+      },
+      {
+        keys: "H",
+        title: "Dica lógica na grade",
+        desc: "Travou no Desafio Expert de domingo? Pressione H para acionar uma dica diretamente no tabuleiro.",
+      },
+      {
+        keys: "Setas • Tab / Esc",
+        title: "Navegação na grade e menus",
+        desc: "Percorra células e opções de menu com as setas direcionais acompanhado por anéis de foco nítidos via Tab.",
+      },
     ],
     faqHeading: "Perguntas frequentes sobre o Desafio Diário",
     faqs: [

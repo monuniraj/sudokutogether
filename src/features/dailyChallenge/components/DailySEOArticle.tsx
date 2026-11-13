@@ -217,6 +217,63 @@ export const DailySEOArticle: React.FC<DailySEOArticleProps> = ({
         </div>
       </section>
 
+      {/* 3.5 Desktop Speed-Solving Keyboard Guide */}
+      <section
+        aria-labelledby="daily-keyboard-heading"
+        className={`rounded-3xl p-6 sm:p-8 border-0 shadow-none ${
+          darkMode ? "bg-[#0c4a6e]/30 text-sky-50" : "bg-[#F0F9FF]/90 text-slate-800"
+        }`}
+      >
+        <h2
+          id="daily-keyboard-heading"
+          className={`text-xl sm:text-2xl font-black tracking-tight mb-3 ${headingText}`}
+        >
+          {copy.keyboardHeading}
+        </h2>
+
+        <p className="text-sm sm:text-[15px] leading-relaxed mb-5">
+          {renderDailyRichText(copy.keyboardIntro)}
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {copy.keyboardShortcuts.map((item, idx) => {
+            const tileClasses = darkMode
+              ? [
+                  "bg-[#1e1b4b]/55 text-indigo-100",
+                  "bg-[#4c0519]/45 text-rose-100",
+                  "bg-[#451a03]/45 text-amber-100",
+                  "bg-[#064e3b]/40 text-emerald-100",
+                  "bg-[#3b0764]/45 text-purple-100",
+                  "bg-[#0c4a6e]/45 text-sky-100",
+                ]
+              : [
+                  "bg-[#EEF2FF]/90 text-[#312E81]",
+                  "bg-[#FFE4E6]/75 text-[#881337]",
+                  "bg-[#FEF3C7]/80 text-[#713F12]",
+                  "bg-[#D1FAE5]/70 text-[#065F46]",
+                  "bg-[#F3E8FF]/85 text-[#581C87]",
+                  "bg-[#E0F2FE]/85 text-[#0C4A6E]",
+                ];
+            return (
+              <div
+                key={idx}
+                className={`rounded-2xl p-4 border-0 shadow-[0_4px_16px_rgba(0,0,0,0.02)] ${tileClasses[idx % tileClasses.length]}`}
+              >
+                <kbd
+                  className={`inline-flex items-center px-2.5 py-1 rounded-xl border-0 font-mono text-[11px] font-bold shadow-[0_2px_8px_rgba(15,23,42,0.05)] ${
+                    darkMode ? "bg-black/35 text-white" : "bg-white/90 text-slate-800"
+                  }`}
+                >
+                  {item.keys}
+                </kbd>
+                <h3 className="mt-2.5 text-sm font-extrabold">{item.title}</h3>
+                <p className="mt-1 text-xs leading-relaxed opacity-90">{item.desc}</p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       {/* 4. Daily Challenge FAQs */}
       <section className={`rounded-3xl p-6 sm:p-8 border-0 shadow-none ${cardSurface}`}>
         <div className="flex items-center gap-3 mb-5">
