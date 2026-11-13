@@ -1,6 +1,21 @@
-import React, { useState } from "react";
-import { Mail, Copy, Check, Shield, FileText, Info, Trash2, ExternalLink, ArrowLeft } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import {
+  Mail,
+  Copy,
+  Check,
+  Shield,
+  FileText,
+  Info,
+  Trash2,
+  ExternalLink,
+  ArrowLeft,
+  SlidersHorizontal,
+} from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
+import {
+  ContactTopicId,
+  LEGAL_DOCUMENT_CONTENT,
+} from "../../i18n/legalDocumentContent";
 
 export type CompliancePageType = "privacy" | "terms" | "contact" | "about";
 
@@ -40,24 +55,54 @@ export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
   onOpenSettings,
   onCopyEmail,
 }) => {
-  const { t } = useTranslation();
-  const [copiedEmail, setCopiedEmail] = useState(false);
+  const { t, language } = useTranslation();
+  const legal = LEGAL_DOCUMENT_CONTENT[language] || LEGAL_DOCUMENT_CONTENT.en;
 
-  const handleCopySupportEmail = async () => {
-    let success = false;
+  const [copiedEmail, setCopiedEmail] = useState(false);
+  const [copiedMessage, setCopiedMessage] = useState(false);
+  const [activeTopic, setActiveTopic] = useState<ContactTopicId>("bug");
+  const [composerSubject, setComposerSubject] = useState<string>(
+    legal.contactComposer.topics.bug.subject
+  );
+  const [composerBody, setComposerBody] = useState<string>(
+    legal.contactComposer.topics.bug.body
+  );
+
+  useEffect(() => {
+    const template = legal.contactComposer.topics[activeTopic];
+    setComposerSubject(template.subject);
+    setComposerBody(template.body);
+  }, [language, activeTopic, legal]);
+
+  const copyTextValue = async (value: string): Promise<boolean> => {
     try {
       if (onCopyEmail) {
-        success = await onCopyEmail(SUPPORT_EMAIL);
-      } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(SUPPORT_EMAIL);
-        success = true;
+        return await onCopyEmail(value);
+      }
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
       }
     } catch {
-      success = false;
+      return false;
     }
+    return false;
+  };
+
+  const handleCopySupportEmail = async () => {
+    const success = await copyTextValue(SUPPORT_EMAIL);
     if (success) {
       setCopiedEmail(true);
       setTimeout(() => setCopiedEmail(false), 2000);
+    }
+  };
+
+  const handleCopyComposerMessage = async () => {
+    const formatted = `To: ${SUPPORT_EMAIL}\nSubject: ${composerSubject}\n\n${composerBody}`;
+    const success = await copyTextValue(formatted);
+    if (success) {
+      setCopiedMessage(true);
+      setTimeout(() => setCopiedMessage(false), 2000);
     }
   };
 
@@ -73,12 +118,43 @@ export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
     ? "bg-emerald-500/10 text-emerald-100 shadow-[0_6px_20px_rgba(0,0,0,0.22)]"
     : "bg-emerald-50/85 text-emerald-950 shadow-[0_6px_20px_rgba(5,150,105,0.06)]";
 
+  const lavenderPastelCls = darkMode
+    ? "bg-violet-500/10 text-violet-100 shadow-[0_6px_20px_rgba(0,0,0,0.22)]"
+    : "bg-violet-50/85 text-violet-950 shadow-[0_6px_20px_rgba(124,58,237,0.06)]";
+
   const textSize = compact ? "text-xs" : "text-sm";
   const headingCls = compact
     ? "text-sm font-bold text-[#0369A1] dark:text-[#7dd3fc] leading-normal"
     : "text-lg sm:text-xl font-bold text-[#0369A1] dark:text-[#7dd3fc] leading-snug";
   const sectionHeadingCls =
     "font-bold uppercase tracking-wider text-[11px] sm:text-xs text-stone-800 dark:text-stone-200 leading-normal";
+
+  const renderEmailCopyBadge = () => (
+    <div className="flex items-center gap-2 flex-wrap pt-0.5">
+      <button
+        type="button"
+        onClick={handleCopySupportEmail}
+        className="inline-flex items-center gap-1.5 font-bold text-xs sm:text-sm text-sky-600 dark:text-sky-400 hover:underline rounded-md border-0 bg-transparent p-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+      >
+        <Mail className="w-3.5 h-3.5 shrink-0" />
+        <span>{SUPPORT_EMAIL}</span>
+      </button>
+      <button
+        type="button"
+        onClick={handleCopySupportEmail}
+        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border-0 text-[11px] font-bold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+          copiedEmail
+            ? "bg-emerald-500 text-white shadow-[0_3px_10px_rgba(16,185,129,0.22)]"
+            : darkMode
+              ? "bg-zinc-700 text-zinc-200 hover:bg-zinc-600"
+              : "bg-white text-sky-800 hover:bg-sky-100 shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
+        }`}
+      >
+        {copiedEmail ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+        <span>{copiedEmail ? legal.contactComposer.emailCopiedBtn : legal.contactComposer.copyEmailBtn}</span>
+      </button>
+    </div>
+  );
 
   return (
     <div className="space-y-4 select-text">
@@ -147,80 +223,166 @@ export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
             </p>
           </div>
 
-          <div className={`p-4 rounded-2xl border-0 space-y-3 ${softCardCls}`}>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className={`p-4 rounded-2xl border-0 space-y-3.5 ${softCardCls}`}>
+            <div className="flex items-start justify-between gap-2 flex-wrap">
               <div className="space-y-1 min-w-0">
                 <p className="font-bold text-[11px] uppercase tracking-wider text-stone-600 dark:text-stone-300">
                   {t("officialSupportContact")}
                 </p>
-                <a
-                  href={`mailto:${SUPPORT_EMAIL}?subject=SudokuSync%20Support%20Inquiry`}
-                  className="inline-flex items-center gap-1.5 text-sky-600 dark:text-sky-400 font-bold hover:underline text-sm sm:text-base break-all rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-                >
-                  <Mail className="w-4 h-4 shrink-0" />
-                  <span>{SUPPORT_EMAIL}</span>
-                </a>
+                {renderEmailCopyBadge()}
                 <p className="text-[11px] text-stone-500 dark:text-stone-400 font-mono">
                   {t("contactTurnaround")}
                 </p>
               </div>
-
-              <button
-                type="button"
-                onClick={handleCopySupportEmail}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border-0 text-xs font-bold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
-                  copiedEmail
-                    ? "bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.25)]"
-                    : darkMode
-                      ? "bg-zinc-700/80 text-zinc-100 hover:bg-zinc-700 shadow-[0_4px_12px_rgba(0,0,0,0.2)]"
-                      : "bg-white text-sky-800 hover:bg-sky-100/80 shadow-[0_4px_12px_rgba(14,116,144,0.08)]"
-                }`}
-              >
-                {copiedEmail ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedEmail ? t("copied") || "Copied" : t("copy") || "Copy Email"}</span>
-              </button>
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-1">
-              {[
-                { label: "Bug Report", subject: "SudokuSync%20Bug%20Report" },
-                { label: "Privacy / UMP Consent", subject: "SudokuSync%20Privacy%20Inquiry" },
-                { label: "Account & Data Deletion", subject: "SudokuSync%20Account%20Deletion%20Request" },
-              ].map((topic) => (
-                <a
-                  key={topic.label}
-                  href={`mailto:${SUPPORT_EMAIL}?subject=${topic.subject}`}
-                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border-0 text-[11px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
-                    darkMode
-                      ? "bg-zinc-900/70 text-sky-300 hover:bg-zinc-900"
-                      : "bg-white/90 text-sky-800 hover:bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
-                  }`}
-                >
-                  <span>{topic.label}</span>
-                  <ExternalLink className="w-3 h-3 opacity-70" />
-                </a>
-              ))}
+            <div className="space-y-2.5 pt-1">
+              <div className="space-y-1">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-stone-700 dark:text-stone-200">
+                  {legal.contactComposer.sectionLabel}
+                </p>
+                <p className="text-[11px] leading-relaxed text-stone-600 dark:text-stone-400">
+                  {legal.contactComposer.helperText}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2" role="tablist" aria-label={legal.contactComposer.sectionLabel}>
+                {(["bug", "privacy", "deletion"] as ContactTopicId[]).map((topicId) => {
+                  const topic = legal.contactComposer.topics[topicId];
+                  const selected = activeTopic === topicId;
+                  return (
+                    <button
+                      key={topicId}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => setActiveTopic(topicId)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 text-[11px] font-bold transition-all cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                        selected
+                          ? "bg-sky-500 text-white shadow-[0_4px_12px_rgba(14,165,233,0.26)]"
+                          : darkMode
+                            ? "bg-zinc-900/75 text-sky-200 hover:bg-zinc-900"
+                            : "bg-white/95 text-sky-900 hover:bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
+                      }`}
+                    >
+                      <span>{topic.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div
+                className={`p-3 rounded-2xl border-0 space-y-2.5 ${
+                  darkMode
+                    ? "bg-zinc-900/70 shadow-[inset_0_1px_4px_rgba(0,0,0,0.3)]"
+                    : "bg-white/95 shadow-[0_4px_16px_rgba(15,23,42,0.05)]"
+                }`}
+              >
+                <label className="block space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                    {legal.contactComposer.subjectLabel}
+                  </span>
+                  <input
+                    type="text"
+                    value={composerSubject}
+                    onChange={(e) => setComposerSubject(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border-0 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                      darkMode
+                        ? "bg-zinc-800/90 text-zinc-100"
+                        : "bg-stone-100/90 text-stone-800"
+                    }`}
+                  />
+                </label>
+
+                <label className="block space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                    {legal.contactComposer.messageLabel}
+                  </span>
+                  <textarea
+                    rows={4}
+                    value={composerBody}
+                    onChange={(e) => setComposerBody(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border-0 text-xs leading-relaxed resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                      darkMode
+                        ? "bg-zinc-800/90 text-zinc-100"
+                        : "bg-stone-100/90 text-stone-800"
+                    }`}
+                  />
+                </label>
+
+                <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={handleCopyComposerMessage}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border-0 text-xs font-bold transition-all cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                      copiedMessage
+                        ? "bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.25)]"
+                        : darkMode
+                          ? "bg-sky-500/25 text-sky-200 hover:bg-sky-500/35"
+                          : "bg-sky-100 text-sky-900 hover:bg-sky-200/80 shadow-[0_2px_8px_rgba(14,116,144,0.08)]"
+                    }`}
+                  >
+                    {copiedMessage ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>
+                      {copiedMessage
+                        ? legal.contactComposer.messageCopiedBtn
+                        : legal.contactComposer.copyMessageBtn}
+                    </span>
+                  </button>
+
+                  {activeTopic === "privacy" && onNavigatePage && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigatePage("privacy")}
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border-0 text-xs font-bold transition-all cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                        darkMode
+                          ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                          : "bg-amber-50 text-amber-900 hover:bg-amber-100 shadow-[0_2px_8px_rgba(217,119,6,0.08)]"
+                      }`}
+                    >
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>{legal.contactComposer.openPrivacyBtn}</span>
+                    </button>
+                  )}
+
+                  {activeTopic === "deletion" && onOpenSettings && (
+                    <button
+                      type="button"
+                      onClick={onOpenSettings}
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border-0 text-xs font-bold transition-all cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                        darkMode
+                          ? "bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
+                          : "bg-emerald-50 text-emerald-900 hover:bg-emerald-100 shadow-[0_2px_8px_rgba(5,150,105,0.1)]"
+                      }`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{legal.contactComposer.openDeleteSettingsBtn}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className={`p-4 rounded-2xl border-0 space-y-1.5 ${emeraldPastelCls}`}>
+          <div className={`p-4 rounded-2xl border-0 space-y-2 ${emeraldPastelCls}`}>
             <div className="flex items-center gap-2">
               <Trash2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <h3 className={sectionHeadingCls}>{t("contactDeletionHeader")}</h3>
             </div>
             <p className="text-xs leading-relaxed opacity-90">{t("contactDeletionDesc")}</p>
             {onOpenSettings && (
-              <div className="pt-1.5">
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={onOpenSettings}
-                  className={`px-3 py-1.5 rounded-xl border-0 text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border-0 text-xs font-bold transition-all cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                     darkMode
                       ? "bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
                       : "bg-white text-emerald-800 hover:bg-emerald-100/70 shadow-[0_2px_8px_rgba(5,150,105,0.1)]"
                   }`}
                 >
-                  {t("settings")}
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>{t("settings")}</span>
                 </button>
               </div>
             )}
@@ -231,62 +393,161 @@ export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
       {page === "privacy" && (
         <div className="space-y-4">
           <div>
-            <h2 className={headingCls}>{t("privacyPolicyTitle")}</h2>
+            <h2 className={headingCls}>{legal.privacy.title}</h2>
             <p className="text-[11px] font-mono text-stone-500 dark:text-stone-400 mt-0.5">
-              {t("privacyEffectiveDate")}
+              {legal.metaLine}
             </p>
           </div>
 
           <p className={`${textSize} leading-relaxed font-medium text-stone-700 dark:text-stone-300`}>
-            {t("privacyScopeDesc")}
+            {legal.privacy.intro}
           </p>
 
+          {/* Section 1 */}
           <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2.5 ${softCardCls}`}>
-            <h3 className={sectionHeadingCls}>{t("privacySection1Header")}</h3>
-            <p className="text-xs leading-relaxed">{t("privacySection1Desc")}</p>
+            <h3 className={sectionHeadingCls}>{legal.privacy.s1Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.privacy.s1Intro}</p>
             <ul className="list-disc pl-5 space-y-2 text-xs leading-relaxed">
-              <li>{t("privacyLocalStorageItem")}</li>
-              <li>{t("privacyCloudStorageItem")}</li>
-              <li>{t("privacyGoogleSyncItem")}</li>
-              <li>{t("privacyPushNotificationItem")}</li>
+              <li>
+                <strong>{legal.privacy.s1LocalStorage.label}</strong> {legal.privacy.s1LocalStorage.text}
+              </li>
+              <li>
+                <strong>{legal.privacy.s1Firestore.label}</strong> {legal.privacy.s1Firestore.intro}
+                <ul className="list-disc pl-5 mt-1 space-y-1">
+                  {legal.privacy.s1Firestore.bullets.map((b) => (
+                    <li key={b}>{b}</li>
+                  ))}
+                </ul>
+              </li>
+              <li>
+                <strong>{legal.privacy.s1Fcm.label}</strong> {legal.privacy.s1Fcm.text}
+                <br />
+                <strong>{legal.privacy.s1Fcm.controlLabel}</strong> {legal.privacy.s1Fcm.controlText}
+              </li>
+              <li>
+                <strong>{legal.privacy.s1Auth.label}</strong> {legal.privacy.s1Auth.text}
+              </li>
+              <li>
+                <strong>{legal.privacy.s1ServerLogs.label}</strong> {legal.privacy.s1ServerLogs.text}
+              </li>
             </ul>
           </div>
 
-          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2 ${highlightPastelCls}`}>
-            <h3 className={sectionHeadingCls}>{t("privacyAdSenseHeader")}</h3>
-            <p className="text-xs leading-relaxed">{t("privacyAdSenseDesc")}</p>
-          </div>
+          {/* Section 2 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2.5 ${highlightPastelCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.privacy.s2Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.privacy.s2P1}</p>
+            <p className="text-xs leading-relaxed">{legal.privacy.s2P2}</p>
 
-          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2 ${softCardCls}`}>
-            <h3 className={sectionHeadingCls}>{t("privacySection2Header")}</h3>
-            <p className="text-xs leading-relaxed">{t("privacySection2Desc")}</p>
-            <div className="flex items-center gap-2 flex-wrap pt-0.5">
-              <a
-                href={`mailto:${SUPPORT_EMAIL}?subject=SudokuSync%20Privacy%20Inquiry`}
-                className="font-bold text-xs sm:text-sm text-sky-600 dark:text-sky-400 hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-              >
-                {SUPPORT_EMAIL}
-              </a>
-              <button
-                type="button"
-                onClick={handleCopySupportEmail}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border-0 text-[11px] font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
-                  copiedEmail
-                    ? "bg-emerald-500 text-white"
-                    : darkMode
-                      ? "bg-zinc-700 text-zinc-200 hover:bg-zinc-600"
-                      : "bg-white text-sky-800 hover:bg-sky-100 shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
-                }`}
-              >
-                {copiedEmail ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                <span>{copiedEmail ? t("copied") || "Copied" : t("copy") || "Copy"}</span>
-              </button>
+            <div
+              className={`p-3 rounded-2xl border-0 space-y-1.5 ${
+                darkMode
+                  ? "bg-zinc-900/55 text-amber-100"
+                  : "bg-white/85 text-amber-950 shadow-[0_3px_12px_rgba(217,119,6,0.06)]"
+              }`}
+            >
+              <p className="text-xs font-bold">{legal.privacy.s2BoxTitle}</p>
+              <p className="text-xs leading-relaxed opacity-90">{legal.privacy.s2BoxIntro}</p>
+              <ul className="list-disc pl-5 space-y-1 text-xs leading-relaxed">
+                <li>
+                  <strong>{legal.privacy.s2AndroidAaid.label}</strong> {legal.privacy.s2AndroidAaid.text}
+                </li>
+                {legal.privacy.s2Portals.map((portal) => (
+                  <li key={portal.url}>
+                    <strong>{portal.name}:</strong>{" "}
+                    <a
+                      href={portal.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-semibold text-sky-600 dark:text-sky-400 hover:underline break-all"
+                    >
+                      <span>{portal.url}</span>
+                      <ExternalLink className="w-3 h-3 shrink-0" />
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </div>
+
+            <p className="text-xs leading-relaxed">
+              <strong>{legal.privacy.s2Quality.label}</strong> {legal.privacy.s2Quality.text}
+            </p>
           </div>
 
+          {/* Section 3 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2.5 ${emeraldPastelCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.privacy.s3Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.privacy.s3Intro}</p>
+            <div
+              className={`p-3 rounded-2xl border-0 space-y-1.5 ${
+                darkMode
+                  ? "bg-zinc-900/55 text-emerald-100"
+                  : "bg-white/85 text-emerald-950 shadow-[0_3px_12px_rgba(5,150,105,0.06)]"
+              }`}
+            >
+              <p className="text-xs font-bold">{legal.privacy.s3BoxTitle}</p>
+              <ul className="list-disc pl-5 space-y-1.5 text-xs leading-relaxed">
+                <li>
+                  <strong>{legal.privacy.s3InApp.label}</strong> {legal.privacy.s3InApp.text}
+                </li>
+                <li>
+                  <strong>{legal.privacy.s3Email.label}</strong> {legal.privacy.s3Email.text}
+                </li>
+              </ul>
+              {onOpenSettings && (
+                <div className="pt-1.5">
+                  <button
+                    type="button"
+                    onClick={onOpenSettings}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 text-xs font-bold transition-all cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                      darkMode
+                        ? "bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
+                        : "bg-emerald-100/80 text-emerald-900 hover:bg-emerald-200/70 shadow-[0_2px_8px_rgba(5,150,105,0.08)]"
+                    }`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{legal.contactComposer.openDeleteSettingsBtn}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs leading-relaxed">{legal.privacy.s3RightsIntro}</p>
+            <ul className="list-disc pl-5 space-y-1 text-xs leading-relaxed">
+              {legal.privacy.s3RightsBullets.map((item) => (
+                <li key={item.label}>
+                  <strong>{item.label}</strong> {item.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Section 4 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-1.5 ${lavenderPastelCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.privacy.s4Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.privacy.s4Text}</p>
+          </div>
+
+          {/* Section 5 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2 ${softCardCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.privacy.s5Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.privacy.s5Text}</p>
+          </div>
+
+          {/* Section 6 */}
           <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-1.5 ${emeraldPastelCls}`}>
-            <h3 className={sectionHeadingCls}>{t("privacySection3Header")}</h3>
-            <p className="text-xs leading-relaxed">{t("privacySection3Desc")}</p>
+            <h3 className={sectionHeadingCls}>{legal.privacy.s6Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.privacy.s6Text}</p>
+          </div>
+
+          {/* Section 7 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2 ${softCardCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.privacy.s7Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.privacy.s7Intro}</p>
+            {renderEmailCopyBadge()}
+            <p className="text-[11px] font-mono text-stone-500 dark:text-stone-400">
+              <strong>{legal.privacy.s7TurnaroundLabel}</strong> {legal.privacy.s7TurnaroundValue}
+            </p>
           </div>
         </div>
       )}
@@ -294,41 +555,108 @@ export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
       {page === "terms" && (
         <div className="space-y-4">
           <div>
-            <h2 className={headingCls}>{t("termsOfServiceTitle")}</h2>
+            <h2 className={headingCls}>{legal.terms.title}</h2>
             <p className="text-[11px] font-mono text-stone-500 dark:text-stone-400 mt-0.5">
-              {t("termsEffectiveDate")}
+              {legal.metaLine}
             </p>
           </div>
 
-          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2 ${softCardCls}`}>
-            <h3 className={sectionHeadingCls}>{t("termsSection1Header")}</h3>
-            <p className="text-xs leading-relaxed">{t("termsSection1Desc")}</p>
-          </div>
+          <p className={`${textSize} leading-relaxed font-medium text-stone-700 dark:text-stone-300`}>
+            {legal.terms.intro}
+          </p>
 
-          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2 ${softCardCls}`}>
-            <h3 className={sectionHeadingCls}>{t("termsSection2Header")}</h3>
-            <p className="text-xs leading-relaxed">{t("termsSection2Desc")}</p>
-          </div>
-
-          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-1.5 ${highlightPastelCls}`}>
-            <h3 className={sectionHeadingCls}>{t("termsFairPlayHeader")}</h3>
-            <p className="text-xs leading-relaxed">{t("termsFairPlayDesc")}</p>
-          </div>
-
-          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-1.5 ${emeraldPastelCls}`}>
-            <h3 className={sectionHeadingCls}>{t("termsCloudAccountHeader")}</h3>
-            <p className="text-xs leading-relaxed">{t("termsCloudAccountDesc")}</p>
-          </div>
-
+          {/* Section 1 */}
           <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-1.5 ${softCardCls}`}>
-            <h3 className={sectionHeadingCls}>{t("termsSection3Header")}</h3>
-            <p className="text-xs leading-relaxed">{t("termsSection3Desc")}</p>
-            <a
-              href={`mailto:${SUPPORT_EMAIL}?subject=SudokuSync%20Terms%20Inquiry`}
-              className="inline-block font-bold text-xs sm:text-sm text-sky-600 dark:text-sky-400 hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            <h3 className={sectionHeadingCls}>{legal.terms.s1Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.terms.s1Text}</p>
+          </div>
+
+          {/* Section 2 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2.5 ${highlightPastelCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.terms.s2Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.terms.s2Intro}</p>
+            <div
+              className={`p-3 rounded-2xl border-0 space-y-1.5 ${
+                darkMode
+                  ? "bg-zinc-900/55 text-amber-100"
+                  : "bg-white/85 text-amber-950 shadow-[0_3px_12px_rgba(217,119,6,0.06)]"
+              }`}
             >
-              {SUPPORT_EMAIL}
-            </a>
+              <p className="text-xs font-bold">{legal.terms.s2BoxTitle}</p>
+              <ul className="list-disc pl-5 space-y-1.5 text-xs leading-relaxed">
+                {legal.terms.s2Bullets.map((item) => (
+                  <li key={item.label}>
+                    <strong>{item.label}</strong> {item.text}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs leading-relaxed pt-1">
+                <strong>{legal.terms.s2Penalty.label}</strong> {legal.terms.s2Penalty.text}
+              </p>
+            </div>
+          </div>
+
+          {/* Section 3 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2 ${emeraldPastelCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.terms.s3Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.terms.s3Intro}</p>
+            <ul className="list-disc pl-5 space-y-1.5 text-xs leading-relaxed">
+              {legal.terms.s3Bullets.map((item) => (
+                <li key={item.label}>
+                  <strong>{item.label}</strong> {item.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Section 4 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-1.5 ${softCardCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.terms.s4Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.terms.s4Text}</p>
+          </div>
+
+          {/* Section 5 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-1.5 ${lavenderPastelCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.terms.s5Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.terms.s5Text}</p>
+          </div>
+
+          {/* Section 6 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-1.5 ${softCardCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.terms.s6Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.terms.s6Text}</p>
+          </div>
+
+          {/* Section 7 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2 ${emeraldPastelCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.terms.s7Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.terms.s7Text}</p>
+            {onOpenSettings && (
+              <div>
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 text-xs font-bold transition-all cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                    darkMode
+                      ? "bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
+                      : "bg-white text-emerald-800 hover:bg-emerald-100/80 shadow-[0_2px_8px_rgba(5,150,105,0.08)]"
+                  }`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{legal.contactComposer.openDeleteSettingsBtn}</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Section 8 */}
+          <div className={`p-3.5 sm:p-4 rounded-2xl border-0 space-y-2 ${softCardCls}`}>
+            <h3 className={sectionHeadingCls}>{legal.terms.s8Header}</h3>
+            <p className="text-xs leading-relaxed">{legal.terms.s8Intro}</p>
+            {renderEmailCopyBadge()}
+            <p className="text-[11px] font-mono text-stone-500 dark:text-stone-400">
+              <strong>{legal.terms.s8TurnaroundLabel}</strong> {legal.terms.s8TurnaroundValue}
+            </p>
           </div>
         </div>
       )}
@@ -349,7 +677,7 @@ export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
                 key={id}
                 type="button"
                 onClick={() => onNavigatePage(id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
                   active
                     ? "bg-sky-500 text-white shadow-[0_4px_12px_rgba(14,165,233,0.28)]"
                     : darkMode
@@ -388,7 +716,7 @@ export const ComplianceScreen: React.FC<ComplianceScreenProps> = ({
   const { t } = useTranslation();
 
   return (
-    <div className="w-full h-full overflow-y-auto px-4 sm:px-6 py-5 sm:py-8">
+    <div className="w-full h-full overflow-y-auto px-4 sm:px-6 pb-8 sm:pb-12 pt-[calc(84px+env(safe-area-inset-top,0px))] lg:pt-[92px]">
       <div className="max-w-3xl mx-auto space-y-4">
         <div
           className={`p-5 sm:p-7 rounded-3xl border-0 transition-colors ${
@@ -409,7 +737,7 @@ export const ComplianceScreen: React.FC<ComplianceScreenProps> = ({
             <button
               type="button"
               onClick={onBackHome}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-2xl border-0 text-xs font-bold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-2xl border-0 text-xs font-bold transition-all cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
                 darkMode
                   ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700 shadow-[0_4px_12px_rgba(0,0,0,0.24)]"
                   : "bg-sky-50 text-sky-900 hover:bg-sky-100 shadow-[0_4px_12px_rgba(14,116,144,0.07)]"
@@ -427,4 +755,3 @@ export const ComplianceScreen: React.FC<ComplianceScreenProps> = ({
     </div>
   );
 };
-

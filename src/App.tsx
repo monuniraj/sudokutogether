@@ -3294,7 +3294,18 @@ export default function App() {
   const [showTargetLoginRequiredModal, setShowTargetLoginRequiredModal] = useState<boolean>(false);
   const [pendingTargetPlayer, setPendingTargetPlayer] = useState<{ id: string; name: string } | null>(null);
   const [activeCompliancePage, setActiveCompliancePage] = useState<"privacy" | "terms" | "about" | "contact" | null>(null);
+  const [settingsScrollTarget, setSettingsScrollTarget] = useState<"delete-account" | null>(null);
   const [lastGameParticipants, setLastGameParticipants] = useState<Array<{ id: string; name: string; isReal: boolean }>>([]);
+
+  const handleOpenSettingsFromCompliance = () => {
+    setActiveCompliancePage(null);
+    setShowSettingsModal(false);
+    setSettingsScrollTarget("delete-account");
+    if (currentScreen !== "settings") {
+      setFromGameplaySettings(currentScreen === "game");
+      navigateToScreen("settings");
+    }
+  };
 
   const isUserAuthorizedForMultiplayer = () => {
     return true;
@@ -20504,6 +20515,8 @@ export default function App() {
               setShowSettingsModal(false);
               navigateToScreen("solver");
             }}
+            scrollToSection={settingsScrollTarget}
+            onScrollTargetConsumed={() => setSettingsScrollTarget(null)}
             isOnline={isOnline}
           />
         )}
@@ -21249,7 +21262,7 @@ export default function App() {
                 window.history.pushState({ view: "home" }, "", "/");
               }
             }}
-            onOpenSettings={() => setShowSettingsModal(true)}
+            onOpenSettings={handleOpenSettingsFromCompliance}
             onCopyEmail={async (email) => {
               const ok = await copyToClipboard(email);
               if (ok) {
@@ -25246,10 +25259,7 @@ export default function App() {
                   darkMode={darkMode}
                   compact
                   onNavigatePage={(nextPage) => setActiveCompliancePage(nextPage)}
-                  onOpenSettings={() => {
-                    setActiveCompliancePage(null);
-                    setShowSettingsModal(true);
-                  }}
+                  onOpenSettings={handleOpenSettingsFromCompliance}
                   onCopyEmail={async (email) => {
                     const ok = await copyToClipboard(email);
                     if (ok) {

@@ -63,6 +63,8 @@ export interface SettingsModalProps {
   onLogout?: () => void;
   onLanguageChange?: (lang: Language) => void;
   onOpenSudokuSolver?: () => void;
+  scrollToSection?: "delete-account" | null;
+  onScrollTargetConsumed?: () => void;
   isOnline?: boolean;
 }
 
@@ -114,6 +116,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onLogout,
   onLanguageChange,
   onOpenSudokuSolver,
+  scrollToSection = null,
+  onScrollTargetConsumed,
   isOnline = true
 }) => {
   const isConnecting = isSyncingCloudData ?? isConnectingGoogle;
@@ -121,8 +125,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const { isIncognito, toggleIncognito } = useFriendPresence(userProfile?.id);
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
+  const [highlightDeleteAccount, setHighlightDeleteAccount] = useState<boolean>(false);
   const langTriggerRef = useRef<HTMLButtonElement | null>(null);
   const langMenuRef = useRef<HTMLDivElement | null>(null);
+  const deleteAccountButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (scrollToSection !== "delete-account") return;
+    let highlightTimer: number | undefined;
+    const scrollTimer = window.setTimeout(() => {
+      const btn = deleteAccountButtonRef.current;
+      if (btn) {
+        btn.scrollIntoView({ behavior: "smooth", block: "center" });
+        btn.focus({ preventScroll: true });
+        setHighlightDeleteAccount(true);
+        highlightTimer = window.setTimeout(() => setHighlightDeleteAccount(false), 2200);
+      }
+      onScrollTargetConsumed?.();
+    }, 90);
+    return () => {
+      window.clearTimeout(scrollTimer);
+      if (highlightTimer) window.clearTimeout(highlightTimer);
+    };
+  }, [scrollToSection, onScrollTargetConsumed]);
 
   useEffect(() => {
     if (!isLangOpen) return;
@@ -1393,15 +1418,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
 
               <button
+                ref={deleteAccountButtonRef}
+                id="settings-delete-account-btn"
                 onClick={() => {
                   playClickSound();
                   onOpenDeleteAccountModal();
                 }}
-                className={`w-full mt-2 py-2.5 px-4 text-sm font-medium text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center ${
+                className={`w-full mt-2 py-2.5 px-4 text-sm font-medium text-left rounded-xl border-none shadow-sm active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 ${
                   darkMode
                     ? "bg-red-900/40 hover:bg-red-900/60 text-red-300"
                     : "bg-red-50 hover:bg-red-100 text-red-700"
-                }`}
+                } ${highlightDeleteAccount ? "ring-2 ring-red-400/80 shadow-[0_6px_18px_rgba(239,68,68,0.2)]" : ""}`}
               >
                 <span>{t("deleteAccountAndData")}</span>
                 <svg
