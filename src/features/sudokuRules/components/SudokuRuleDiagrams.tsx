@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 import { RulesDiagramLabels } from "../../../utils/rulesArticleTranslations";
 
 export interface RuleDiagramProps {
@@ -6,6 +6,11 @@ export interface RuleDiagramProps {
   darkMode: boolean;
 }
 
+const OUTER_RADIUS = 14;
+
+/**
+ * Shared borderless pastel figure card with subtle legend chips and caption.
+ */
 const FigureShell: React.FC<{
   darkMode: boolean;
   caption: string;
@@ -26,7 +31,9 @@ const FigureShell: React.FC<{
           <span
             key={item.text}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border-0 ${
-              darkMode ? "bg-zinc-800/90 text-zinc-200" : "bg-white text-stone-700 shadow-[0_2px_6px_rgba(15,23,42,0.04)]"
+              darkMode
+                ? "bg-zinc-800/90 text-zinc-200"
+                : "bg-white text-stone-700 shadow-[0_2px_6px_rgba(15,23,42,0.04)]"
             }`}
           >
             <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.dotClass}`} />
@@ -46,21 +53,44 @@ const FigureShell: React.FC<{
 );
 
 /**
+ * Shared Sudoku Sync pastel SVG palette matching SudokuBoard's soft aesthetic.
+ */
+function getGridPalette(darkMode: boolean) {
+  return {
+    boardBg: darkMode ? "#18181B" : "#FFFFFF",
+    placedDigit: darkMode ? "#F4F4F5" : "#1E293B",
+    minorLine: darkMode ? "rgba(255, 255, 255, 0.09)" : "rgba(100, 116, 139, 0.18)",
+    majorLine: darkMode ? "rgba(212, 212, 216, 0.38)" : "rgba(100, 116, 139, 0.48)",
+    outerFrame: darkMode ? "rgba(161, 161, 170, 0.42)" : "rgba(100, 116, 139, 0.45)",
+    rowTint: darkMode ? "rgba(56, 189, 248, 0.20)" : "#E0F2FE",
+    colTint: darkMode ? "rgba(167, 139, 250, 0.22)" : "#EDE9FE",
+    boxTint: darkMode ? "rgba(251, 191, 36, 0.18)" : "#FEF3C7",
+    targetTint: darkMode ? "rgba(16, 185, 129, 0.22)" : "#ECFDF5",
+    targetBadge: darkMode ? "#10B981" : "#34D399",
+    pairTint: darkMode ? "rgba(139, 92, 246, 0.22)" : "#F3E8FF",
+    pairBadgeBg: darkMode ? "rgba(167, 139, 250, 0.24)" : "#EDE9FE",
+    pairText: darkMode ? "#DDD6FE" : "#5B21B6",
+    noteBadgeBg: darkMode ? "rgba(56, 189, 248, 0.18)" : "#E0F2FE",
+    noteText: darkMode ? "#7DD3FC" : "#0369A1",
+    elimTint: darkMode ? "rgba(244, 63, 94, 0.14)" : "#FFF1F2",
+    elimBadgeBg: darkMode ? "rgba(244, 63, 94, 0.24)" : "#FFE4E6",
+    elimColor: darkMode ? "#FDA4AF" : "#E11D48",
+    winBadgeBg: darkMode ? "#10B981" : "#A7F3D0",
+    winText: darkMode ? "#022C22" : "#065F46",
+  };
+}
+
+/**
  * Diagram 1: Classic 9x9 Row, Column, and 3x3 Box House Intersection at R4C5.
  */
 export const GridHousesDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) => {
+  const clipId = `clip-houses-${useId().replace(/:/g, "")}`;
   const size = 26;
   const pad = 12;
+  const boardSize = size * 9;
   const targetR = 3;
   const targetC = 4;
-
-  const rowBg = darkMode ? "rgba(56, 189, 248, 0.20)" : "#E0F2FE";
-  const colBg = darkMode ? "rgba(167, 139, 250, 0.22)" : "#EDE9FE";
-  const boxBg = darkMode ? "rgba(251, 191, 36, 0.18)" : "#FEF3C7";
-  const targetBg = darkMode ? "#10B981" : "#34D399";
-  const neutralBg = darkMode ? "#18181B" : "#FFFFFF";
-  const minorStroke = darkMode ? "#3F3F46" : "#E5E7EB";
-  const majorStroke = darkMode ? "#A1A1AA" : "#78716C";
+  const palette = getGridPalette(darkMode);
 
   return (
     <FigureShell
@@ -79,67 +109,106 @@ export const GridHousesDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode
         role="img"
         aria-label={labels.stepCaption1}
       >
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={pad} y={pad} width={boardSize} height={boardSize} rx={OUTER_RADIUS} />
+          </clipPath>
+        </defs>
+
+        <rect x={pad} y={pad} width={boardSize} height={boardSize} rx={OUTER_RADIUS} fill={palette.boardBg} />
+
+        <g clipPath={`url(#${clipId})`}>
+          {Array.from({ length: 81 }).map((_, idx) => {
+            const r = Math.floor(idx / 9);
+            const c = idx % 9;
+            const inRow = r === targetR;
+            const inCol = c === targetC;
+            const inBox = Math.floor(r / 3) === 1 && Math.floor(c / 3) === 1;
+            const isTarget = inRow && inCol;
+
+            let fill = palette.boardBg;
+            if (isTarget) fill = palette.targetBadge;
+            else if (inRow) fill = palette.rowTint;
+            else if (inCol) fill = palette.colTint;
+            else if (inBox) fill = palette.boxTint;
+
+            return (
+              <rect
+                key={idx}
+                x={pad + c * size}
+                y={pad + r * size}
+                width={size}
+                height={size}
+                fill={fill}
+              />
+            );
+          })}
+
+          {/* Subtle interior cell lines */}
+          {[1, 2, 4, 5, 7, 8].map((idx) => (
+            <React.Fragment key={`minor-${idx}`}>
+              <line
+                x1={pad + idx * size}
+                y1={pad}
+                x2={pad + idx * size}
+                y2={pad + boardSize}
+                stroke={palette.minorLine}
+                strokeWidth={0.85}
+              />
+              <line
+                x1={pad}
+                y1={pad + idx * size}
+                x2={pad + boardSize}
+                y2={pad + idx * size}
+                stroke={palette.minorLine}
+                strokeWidth={0.85}
+              />
+            </React.Fragment>
+          ))}
+
+          {/* Interior 3x3 box divider lines */}
+          {[3, 6].map((idx) => (
+            <React.Fragment key={`major-${idx}`}>
+              <line
+                x1={pad + idx * size}
+                y1={pad}
+                x2={pad + idx * size}
+                y2={pad + boardSize}
+                stroke={palette.majorLine}
+                strokeWidth={1.6}
+              />
+              <line
+                x1={pad}
+                y1={pad + idx * size}
+                x2={pad + boardSize}
+                y2={pad + idx * size}
+                stroke={palette.majorLine}
+                strokeWidth={1.6}
+              />
+            </React.Fragment>
+          ))}
+        </g>
+
+        {/* Single smooth curved outer frame */}
         <rect
           x={pad}
           y={pad}
-          width={size * 9}
-          height={size * 9}
-          rx={10}
-          fill={neutralBg}
+          width={boardSize}
+          height={boardSize}
+          rx={OUTER_RADIUS}
+          fill="none"
+          stroke={palette.outerFrame}
+          strokeWidth={1.7}
         />
-        {Array.from({ length: 81 }).map((_, idx) => {
-          const r = Math.floor(idx / 9);
-          const c = idx % 9;
-          const inRow = r === targetR;
-          const inCol = c === targetC;
-          const inBox = Math.floor(r / 3) === 1 && Math.floor(c / 3) === 1;
-          const isTarget = inRow && inCol;
-
-          let fill = neutralBg;
-          if (isTarget) fill = targetBg;
-          else if (inRow && inBox) fill = rowBg;
-          else if (inCol && inBox) fill = colBg;
-          else if (inRow) fill = rowBg;
-          else if (inCol) fill = colBg;
-          else if (inBox) fill = boxBg;
-
-          return (
-            <rect
-              key={idx}
-              x={pad + c * size}
-              y={pad + r * size}
-              width={size}
-              height={size}
-              fill={fill}
-              stroke={minorStroke}
-              strokeWidth={0.8}
-            />
-          );
-        })}
-
-        {/* Bold 3x3 box boundaries */}
-        {[0, 1, 2].flatMap((br) =>
-          [0, 1, 2].map((bc) => (
-            <rect
-              key={`${br}-${bc}`}
-              x={pad + bc * size * 3}
-              y={pad + br * size * 3}
-              width={size * 3}
-              height={size * 3}
-              fill="none"
-              stroke={majorStroke}
-              strokeWidth={1.6}
-            />
-          ))
-        )}
 
         <text
           x={pad + targetC * size + size / 2}
-          y={pad + targetR * size + size / 2 + 4}
+          y={pad + targetR * size + size / 2}
           textAnchor="middle"
-          fontSize="11"
-          fontWeight="800"
-          fill={darkMode ? "#052E16" : "#064E3B"}
+          dominantBaseline="central"
+          fontSize="16"
+          fontWeight="700"
+          fill={darkMode ? "#022C22" : "#064E3B"}
         >
           ?
         </text>
@@ -149,22 +218,25 @@ export const GridHousesDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode
 };
 
 /**
- * Diagram 2: 3x3 Box Pencil Marks (Candidate Notes Eliminated by Peers).
+ * Diagram 2: 3x3 Box Pencil Marks (Valid {4,6} Naked Pair eliminates 4 and 6 from center R2C2 -> 2).
  */
 export const PencilNotesDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) => {
-  const cell = 64;
-  const pad = 16;
-  const boxFill = darkMode ? "#18181B" : "#FFFFFF";
-  const targetFill = darkMode ? "rgba(16, 185, 129, 0.16)" : "#ECFDF5";
-  const lineStroke = darkMode ? "#3F3F46" : "#D6D3D1";
-  const clueColor = darkMode ? "#E4E4E7" : "#1C1917";
-  const noteColor = darkMode ? "#7DD3FC" : "#0369A1";
-  const elimColor = darkMode ? "#FB7185" : "#E11D48";
+  const clipId = `clip-notes-${useId().replace(/:/g, "")}`;
+  const cell = 68;
+  const pad = 14;
+  const boardSize = cell * 3;
+  const palette = getGridPalette(darkMode);
 
-  const boxClues: Array<{ r: number; c: number; val?: string; notes?: number[]; eliminated?: number[] }> = [
+  const boxCells: Array<{
+    r: number;
+    c: number;
+    val?: string;
+    notes?: number[];
+    eliminated?: number[];
+  }> = [
     { r: 0, c: 0, val: "1" },
     { r: 0, c: 1, val: "3" },
-    { r: 0, c: 2, notes: [5, 8], eliminated: [] },
+    { r: 0, c: 2, notes: [4, 6], eliminated: [] },
     { r: 1, c: 0, val: "7" },
     { r: 1, c: 1, notes: [2, 4, 6], eliminated: [4, 6] },
     { r: 1, c: 2, val: "9" },
@@ -184,81 +256,140 @@ export const PencilNotesDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMod
       ]}
     >
       <svg
-        viewBox="0 0 224 224"
-        className="w-full max-w-[224px] h-auto select-none"
+        viewBox="0 0 232 232"
+        className="w-full max-w-[232px] h-auto select-none"
         role="img"
         aria-label={labels.stepCaption2}
       >
-        <rect
-          x={pad}
-          y={pad}
-          width={cell * 3}
-          height={cell * 3}
-          rx={12}
-          fill={boxFill}
-          stroke={darkMode ? "#71717A" : "#A8A29E"}
-          strokeWidth={2}
-        />
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={pad} y={pad} width={boardSize} height={boardSize} rx={OUTER_RADIUS} />
+          </clipPath>
+        </defs>
 
-        {boxClues.map((item, idx) => {
-          const x = pad + item.c * cell;
-          const y = pad + item.r * cell;
-          const isFocus = item.r === 1 && item.c === 1;
-          return (
-            <g key={idx}>
+        <rect x={pad} y={pad} width={boardSize} height={boardSize} rx={OUTER_RADIUS} fill={palette.boardBg} />
+
+        <g clipPath={`url(#${clipId})`}>
+          {boxCells.map((item, idx) => {
+            const x = pad + item.c * cell;
+            const y = pad + item.r * cell;
+            const isFocus = item.r === 1 && item.c === 1;
+            const isPairCell = (item.r === 0 && item.c === 2) || (item.r === 2 && item.c === 0);
+            const cellFill = isFocus
+              ? palette.targetTint
+              : isPairCell
+                ? darkMode
+                  ? "rgba(56, 189, 248, 0.08)"
+                  : "#F8FAFC"
+                : palette.boardBg;
+
+            return (
               <rect
+                key={`bg-${idx}`}
                 x={x}
                 y={y}
                 width={cell}
                 height={cell}
-                fill={isFocus ? targetFill : "none"}
-                stroke={lineStroke}
-                strokeWidth={1}
+                fill={cellFill}
               />
+            );
+          })}
+
+          {/* Subtle interior cell lines */}
+          {[1, 2].map((idx) => (
+            <React.Fragment key={`line-${idx}`}>
+              <line
+                x1={pad + idx * cell}
+                y1={pad}
+                x2={pad + idx * cell}
+                y2={pad + boardSize}
+                stroke={palette.minorLine}
+                strokeWidth={1.1}
+              />
+              <line
+                x1={pad}
+                y1={pad + idx * cell}
+                x2={pad + boardSize}
+                y2={pad + idx * cell}
+                stroke={palette.minorLine}
+                strokeWidth={1.1}
+              />
+            </React.Fragment>
+          ))}
+        </g>
+
+        {/* Single smooth curved outer frame */}
+        <rect
+          x={pad}
+          y={pad}
+          width={boardSize}
+          height={boardSize}
+          rx={OUTER_RADIUS}
+          fill="none"
+          stroke={palette.outerFrame}
+          strokeWidth={1.8}
+        />
+
+        {/* Large bold placed digits & small candidate pencil badges */}
+        {boxCells.map((item, idx) => {
+          const x = pad + item.c * cell;
+          const y = pad + item.r * cell;
+          const isFocus = item.r === 1 && item.c === 1;
+
+          return (
+            <g key={`fg-${idx}`}>
               {item.val && (
                 <text
                   x={x + cell / 2}
-                  y={y + cell / 2 + 7}
+                  y={y + cell / 2}
                   textAnchor="middle"
-                  fontSize="20"
-                  fontWeight="800"
-                  fill={clueColor}
+                  dominantBaseline="central"
+                  fontSize="18"
+                  fontWeight="700"
+                  fill={palette.placedDigit}
                 >
                   {item.val}
                 </text>
               )}
+
               {item.notes &&
                 item.notes.map((digit) => {
                   const subR = Math.floor((digit - 1) / 3);
                   const subC = (digit - 1) % 3;
-                  const nx = x + 13 + subC * 18;
-                  const ny = y + 18 + subR * 17;
+                  const nx = x + 16 + subC * 18;
+                  const ny = y + 16 + subR * 18;
                   const isElim = item.eliminated?.includes(digit);
                   const isWinner = isFocus && !isElim;
+
                   return (
                     <g key={digit}>
-                      {isWinner && (
-                        <circle
-                          cx={nx}
-                          cy={ny - 4}
-                          r={8}
-                          fill={darkMode ? "#10B981" : "#A7F3D0"}
-                        />
-                      )}
+                      <rect
+                        x={nx - 8}
+                        y={ny - 8}
+                        width={16}
+                        height={16}
+                        rx={5}
+                        fill={
+                          isWinner
+                            ? palette.winBadgeBg
+                            : isElim
+                              ? palette.elimBadgeBg
+                              : palette.noteBadgeBg
+                        }
+                      />
                       <text
                         x={nx}
                         y={ny}
                         textAnchor="middle"
-                        fontSize="11"
-                        fontWeight={isWinner ? "800" : "700"}
+                        dominantBaseline="central"
+                        fontSize="10.5"
+                        fontWeight="600"
                         fill={
-                          isElim
-                            ? elimColor
-                            : isWinner
-                              ? darkMode
-                                ? "#022C22"
-                                : "#064E3B"
-                              : noteColor
+                          isWinner
+                            ? palette.winText
+                            : isElim
+                              ? palette.elimColor
+                              : palette.noteText
                         }
                       >
                         {digit}
@@ -266,11 +397,12 @@ export const PencilNotesDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMod
                       {isElim && (
                         <line
                           x1={nx - 5}
-                          y1={ny - 8}
+                          y1={ny - 5}
                           x2={nx + 5}
-                          y2={ny}
-                          stroke={elimColor}
-                          strokeWidth={1.6}
+                          y2={ny + 5}
+                          stroke={palette.elimColor}
+                          strokeWidth={1.5}
+                          strokeLinecap="round"
                         />
                       )}
                     </g>
@@ -285,19 +417,22 @@ export const PencilNotesDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMod
 };
 
 /**
- * Diagram 3: Naked Pair Lock (R4C1={3,7} and R4C8={3,7} clearing R4C5={3,7,9} -> 9).
+ * Diagram 3: Naked Pair Lock (R4C1={3,7} and R4C8={3,7} clearing {3,7} from R4C5 -> 9).
  */
 export const NakedHiddenPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) => {
-  const cellW = 34;
-  const cellH = 44;
+  const clipId = `clip-pair-${useId().replace(/:/g, "")}`;
+  const cellW = 38;
+  const cellH = 50;
   const padX = 12;
-  const padY = 14;
+  const padY = 12;
+  const rowWidth = cellW * 9;
+  const palette = getGridPalette(darkMode);
 
   const cells: Array<{
     c: number;
     val?: string;
     pair?: [number, number];
-    mixed?: { keep: number; elim: number[] };
+    mixed?: { keep: number; elim: [number, number] };
   }> = [
     { c: 0, pair: [3, 7] },
     { c: 1, val: "1" },
@@ -310,11 +445,6 @@ export const NakedHiddenPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, da
     { c: 8, val: "4" },
   ];
 
-  const baseFill = darkMode ? "#18181B" : "#FFFFFF";
-  const pairFill = darkMode ? "rgba(139, 92, 246, 0.25)" : "#EDE9FE";
-  const targetFill = darkMode ? "rgba(16, 185, 129, 0.20)" : "#ECFDF5";
-  const borderStroke = darkMode ? "#52525B" : "#D6D3D1";
-
   return (
     <FigureShell
       darkMode={darkMode}
@@ -326,146 +456,203 @@ export const NakedHiddenPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, da
       ]}
     >
       <svg
-        viewBox="0 0 330 72"
-        className="w-full max-w-[360px] h-auto select-none"
+        viewBox="0 0 366 74"
+        className="w-full max-w-[368px] h-auto select-none"
         role="img"
         aria-label={labels.stepCaption3}
       >
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={padX} y={padY} width={rowWidth} height={cellH} rx={OUTER_RADIUS} />
+          </clipPath>
+        </defs>
+
+        <rect x={padX} y={padY} width={rowWidth} height={cellH} rx={OUTER_RADIUS} fill={palette.boardBg} />
+
+        <g clipPath={`url(#${clipId})`}>
+          {cells.map((item) => {
+            const x = padX + item.c * cellW;
+            const fill = item.pair
+              ? palette.pairTint
+              : item.mixed
+                ? palette.targetTint
+                : palette.boardBg;
+            return <rect key={`bg-${item.c}`} x={x} y={padY} width={cellW} height={cellH} fill={fill} />;
+          })}
+
+          {/* Subtle interior cell lines */}
+          {[1, 2, 4, 5, 7, 8].map((col) => (
+            <line
+              key={`minor-${col}`}
+              x1={padX + col * cellW}
+              y1={padY}
+              x2={padX + col * cellW}
+              y2={padY + cellH}
+              stroke={palette.minorLine}
+              strokeWidth={0.95}
+            />
+          ))}
+
+          {/* Interior 3x3 box separators */}
+          {[3, 6].map((col) => (
+            <line
+              key={`major-${col}`}
+              x1={padX + col * cellW}
+              y1={padY}
+              x2={padX + col * cellW}
+              y2={padY + cellH}
+              stroke={palette.majorLine}
+              strokeWidth={1.7}
+            />
+          ))}
+        </g>
+
+        {/* Single smooth curved outer frame */}
+        <rect
+          x={padX}
+          y={padY}
+          width={rowWidth}
+          height={cellH}
+          rx={OUTER_RADIUS}
+          fill="none"
+          stroke={palette.outerFrame}
+          strokeWidth={1.7}
+        />
+
+        {/* Typography & candidate badges */}
         {cells.map((item) => {
           const x = padX + item.c * cellW;
-          const fill = item.pair ? pairFill : item.mixed ? targetFill : baseFill;
-          return (
-            <g key={item.c}>
-              <rect
-                x={x}
-                y={padY}
-                width={cellW}
-                height={cellH}
-                fill={fill}
-                stroke={borderStroke}
-                strokeWidth={1}
-              />
-              {item.val && (
+
+          if (item.val) {
+            return (
+              <text
+                key={`fg-${item.c}`}
+                x={x + cellW / 2}
+                y={padY + cellH / 2}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize="17"
+                fontWeight="700"
+                fill={palette.placedDigit}
+              >
+                {item.val}
+              </text>
+            );
+          }
+
+          if (item.pair) {
+            const p1x = x + 11.5;
+            const p2x = x + cellW - 11.5;
+            const py = padY + 18;
+            return (
+              <g key={`fg-${item.c}`}>
+                <rect x={p1x - 7} y={py - 7.5} width={14} height={15} rx={4.5} fill={palette.pairBadgeBg} />
+                <text
+                  x={p1x}
+                  y={py}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize="10.5"
+                  fontWeight="600"
+                  fill={palette.pairText}
+                >
+                  {item.pair[0]}
+                </text>
+                <rect x={p2x - 7} y={py - 7.5} width={14} height={15} rx={4.5} fill={palette.pairBadgeBg} />
+                <text
+                  x={p2x}
+                  y={py}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize="10.5"
+                  fontWeight="600"
+                  fill={palette.pairText}
+                >
+                  {item.pair[1]}
+                </text>
+              </g>
+            );
+          }
+
+          if (item.mixed) {
+            const e1x = x + 11.5;
+            const e2x = x + cellW - 11.5;
+            const ey = padY + 13;
+            return (
+              <g key={`fg-${item.c}`}>
+                {item.mixed.elim.map((digit, dIdx) => {
+                  const ex = dIdx === 0 ? e1x : e2x;
+                  return (
+                    <g key={digit}>
+                      <rect
+                        x={ex - 6.5}
+                        y={ey - 6.5}
+                        width={13}
+                        height={13}
+                        rx={4}
+                        fill={palette.elimBadgeBg}
+                      />
+                      <text
+                        x={ex}
+                        y={ey}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fontSize="10"
+                        fontWeight="600"
+                        fill={palette.elimColor}
+                      >
+                        {digit}
+                      </text>
+                      <line
+                        x1={ex - 4}
+                        y1={ey - 4}
+                        x2={ex + 4}
+                        y2={ey + 4}
+                        stroke={palette.elimColor}
+                        strokeWidth={1.4}
+                        strokeLinecap="round"
+                      />
+                    </g>
+                  );
+                })}
+
                 <text
                   x={x + cellW / 2}
-                  y={padY + cellH / 2 + 5}
+                  y={padY + 35.5}
                   textAnchor="middle"
-                  fontSize="14"
+                  dominantBaseline="central"
+                  fontSize="16"
                   fontWeight="700"
-                  fill={darkMode ? "#D4D4D8" : "#57534E"}
+                  fill={darkMode ? "#6EE7B7" : "#047857"}
                 >
-                  {item.val}
+                  {item.mixed.keep}
                 </text>
-              )}
-              {item.pair && (
-                <>
-                  <text
-                    x={x + 11}
-                    y={padY + 26}
-                    textAnchor="middle"
-                    fontSize="12"
-                    fontWeight="800"
-                    fill={darkMode ? "#DDD6FE" : "#5B21B6"}
-                  >
-                    {item.pair[0]}
-                  </text>
-                  <text
-                    x={x + 23}
-                    y={padY + 26}
-                    textAnchor="middle"
-                    fontSize="12"
-                    fontWeight="800"
-                    fill={darkMode ? "#DDD6FE" : "#5B21B6"}
-                  >
-                    {item.pair[1]}
-                  </text>
-                </>
-              )}
-              {item.mixed && (
-                <>
-                  <text
-                    x={x + 10}
-                    y={padY + 17}
-                    textAnchor="middle"
-                    fontSize="10"
-                    fontWeight="700"
-                    fill={darkMode ? "#FB7185" : "#E11D48"}
-                  >
-                    3
-                  </text>
-                  <line
-                    x1={x + 6}
-                    y1={padY + 11}
-                    x2={x + 14}
-                    y2={padY + 18}
-                    stroke={darkMode ? "#FB7185" : "#E11D48"}
-                    strokeWidth={1.5}
-                  />
-                  <text
-                    x={x + 24}
-                    y={padY + 17}
-                    textAnchor="middle"
-                    fontSize="10"
-                    fontWeight="700"
-                    fill={darkMode ? "#FB7185" : "#E11D48"}
-                  >
-                    7
-                  </text>
-                  <line
-                    x1={x + 20}
-                    y1={padY + 11}
-                    x2={x + 28}
-                    y2={padY + 18}
-                    stroke={darkMode ? "#FB7185" : "#E11D48"}
-                    strokeWidth={1.5}
-                  />
-                  <text
-                    x={x + cellW / 2}
-                    y={padY + 36}
-                    textAnchor="middle"
-                    fontSize="13"
-                    fontWeight="900"
-                    fill={darkMode ? "#6EE7B7" : "#047857"}
-                  >
-                    9
-                  </text>
-                </>
-              )}
-            </g>
-          );
+              </g>
+            );
+          }
+
+          return null;
         })}
-        {/* Box separators */}
-        {[0, 3, 6].map((col) => (
-          <rect
-            key={col}
-            x={padX + col * cellW}
-            y={padY}
-            width={cellW * 3}
-            height={cellH}
-            fill="none"
-            stroke={darkMode ? "#A1A1AA" : "#78716C"}
-            strokeWidth={1.8}
-          />
-        ))}
       </svg>
     </FigureShell>
   );
 };
 
 /**
- * Diagram 4: Pointing Pair in Box 1 (R1C2 & R1C3 claim digit 4 along Row 1, eliminating 4 in Box 2).
+ * Diagram 4: Pointing Pair in Box 1 (R1C2 & R1C3 claim candidate 4 along Row 1, eliminating 4 in Box 2).
  */
 export const PointingPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) => {
-  const size = 38;
-  const padX = 16;
-  const padY = 14;
-  const boxGap = 12;
+  const clipLeftId = `clip-pt-left-${useId().replace(/:/g, "")}`;
+  const clipRightId = `clip-pt-right-${useId().replace(/:/g, "")}`;
+  const size = 44;
+  const padX = 12;
+  const padY = 12;
+  const boxGap = 16;
+  const boxSize = size * 3;
+  const palette = getGridPalette(darkMode);
 
-  const baseFill = darkMode ? "#18181B" : "#FFFFFF";
-  const pointingFill = darkMode ? "rgba(56, 189, 248, 0.24)" : "#E0F2FE";
-  const elimFill = darkMode ? "rgba(244, 63, 94, 0.16)" : "#FFE4E6";
-  const borderStroke = darkMode ? "#3F3F46" : "#D6D3D1";
-  const boxStroke = darkMode ? "#A1A1AA" : "#78716C";
+  const pointingFill = darkMode ? "rgba(56, 189, 248, 0.16)" : "#F0F9FF";
+  const elimCellFill = palette.elimTint;
 
   return (
     <FigureShell
@@ -477,16 +664,95 @@ export const PointingPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, darkM
       ]}
     >
       <svg
-        viewBox="0 0 272 142"
-        className="w-full max-w-[290px] h-auto select-none"
+        viewBox="0 0 304 156"
+        className="w-full max-w-[306px] h-auto select-none"
         role="img"
         aria-label={labels.stepCaption4}
       >
-        {/* Box 1 (left 3x3) and Box 2 (right 3x3) */}
+        <defs>
+          <clipPath id={clipLeftId}>
+            <rect x={padX} y={padY} width={boxSize} height={boxSize} rx={OUTER_RADIUS} />
+          </clipPath>
+          <clipPath id={clipRightId}>
+            <rect
+              x={padX + boxSize + boxGap}
+              y={padY}
+              width={boxSize}
+              height={boxSize}
+              rx={OUTER_RADIUS}
+            />
+          </clipPath>
+        </defs>
+
+        {/* Pointing alignment guide connecting Box 1 Row 1 into Box 2 Row 1 */}
+        <line
+          x1={padX + size * 1.5}
+          y1={padY + size / 2}
+          x2={padX + boxSize + boxGap + size * 2.5}
+          y2={padY + size / 2}
+          stroke={darkMode ? "#38BDF8" : "#0284C7"}
+          strokeWidth={1.6}
+          strokeDasharray="4 3"
+          opacity={0.65}
+        />
+
         {[0, 1].map((boxIdx) => {
-          const bx = padX + boxIdx * (size * 3 + boxGap);
+          const bx = padX + boxIdx * (boxSize + boxGap);
+          const clipId = boxIdx === 0 ? clipLeftId : clipRightId;
+
           return (
             <g key={boxIdx}>
+              <rect x={bx} y={padY} width={boxSize} height={boxSize} rx={OUTER_RADIUS} fill={palette.boardBg} />
+
+              <g clipPath={`url(#${clipId})`}>
+                {Array.from({ length: 9 }).map((_, idx) => {
+                  const r = Math.floor(idx / 3);
+                  const c = idx % 3;
+                  const x = bx + c * size;
+                  const y = padY + r * size;
+                  const isPointing = boxIdx === 0 && r === 0 && (c === 1 || c === 2);
+                  const isElim = boxIdx === 1 && r === 0 && (c === 0 || c === 2);
+                  const fill = isPointing ? pointingFill : isElim ? elimCellFill : palette.boardBg;
+
+                  return <rect key={`bg-${idx}`} x={x} y={y} width={size} height={size} fill={fill} />;
+                })}
+
+                {/* Interior cell divider lines */}
+                {[1, 2].map((lineIdx) => (
+                  <React.Fragment key={`line-${lineIdx}`}>
+                    <line
+                      x1={bx + lineIdx * size}
+                      y1={padY}
+                      x2={bx + lineIdx * size}
+                      y2={padY + boxSize}
+                      stroke={palette.minorLine}
+                      strokeWidth={1}
+                    />
+                    <line
+                      x1={bx}
+                      y1={padY + lineIdx * size}
+                      x2={bx + boxSize}
+                      y2={padY + lineIdx * size}
+                      stroke={palette.minorLine}
+                      strokeWidth={1}
+                    />
+                  </React.Fragment>
+                ))}
+              </g>
+
+              {/* Single smooth curved outer frame per 3x3 box */}
+              <rect
+                x={bx}
+                y={padY}
+                width={boxSize}
+                height={boxSize}
+                rx={OUTER_RADIUS}
+                fill="none"
+                stroke={palette.outerFrame}
+                strokeWidth={1.7}
+              />
+
+              {/* Cell digits & candidate pencil marks */}
               {Array.from({ length: 9 }).map((_, idx) => {
                 const r = Math.floor(idx / 3);
                 const c = idx % 3;
@@ -505,118 +771,117 @@ export const PointingPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, darkM
                           ? "5"
                           : "";
 
+                // Candidate 4 sits in top-left/middle pencil-note position so it reads unmistakably as a note
+                const nx = x + 15;
+                const ny = y + 18;
+
                 return (
-                  <g key={idx}>
-                    <rect
-                      x={x}
-                      y={y}
-                      width={size}
-                      height={size}
-                      fill={isPointing ? pointingFill : isElim ? elimFill : baseFill}
-                      stroke={borderStroke}
-                      strokeWidth={0.9}
-                    />
+                  <g key={`fg-${idx}`}>
                     {clueText && (
                       <text
                         x={x + size / 2}
-                        y={y + size / 2 + 5}
+                        y={y + size / 2}
                         textAnchor="middle"
-                        fontSize="14"
+                        dominantBaseline="central"
+                        fontSize="17"
                         fontWeight="700"
-                        fill={darkMode ? "#E4E4E7" : "#44403C"}
+                        fill={palette.placedDigit}
                       >
                         {clueText}
                       </text>
                     )}
+
                     {isPointing && (
-                      <text
-                        x={x + size / 2}
-                        y={y + size / 2 + 5}
-                        textAnchor="middle"
-                        fontSize="13"
-                        fontWeight="800"
-                        fill={darkMode ? "#7DD3FC" : "#0369A1"}
-                      >
-                        4
-                      </text>
-                    )}
-                    {isElim && (
-                      <>
+                      <g>
+                        <rect
+                          x={nx - 8}
+                          y={ny - 8}
+                          width={16}
+                          height={16}
+                          rx={5}
+                          fill={palette.noteBadgeBg}
+                        />
                         <text
-                          x={x + size / 2}
-                          y={y + size / 2 + 5}
+                          x={nx}
+                          y={ny}
                           textAnchor="middle"
-                          fontSize="13"
-                          fontWeight="800"
-                          fill={darkMode ? "#FB7185" : "#E11D48"}
+                          dominantBaseline="central"
+                          fontSize="10.5"
+                          fontWeight="600"
+                          fill={palette.noteText}
+                        >
+                          4
+                        </text>
+                      </g>
+                    )}
+
+                    {isElim && (
+                      <g>
+                        <rect
+                          x={nx - 8}
+                          y={ny - 8}
+                          width={16}
+                          height={16}
+                          rx={5}
+                          fill={palette.elimBadgeBg}
+                        />
+                        <text
+                          x={nx}
+                          y={ny}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fontSize="10.5"
+                          fontWeight="600"
+                          fill={palette.elimColor}
                         >
                           4
                         </text>
                         <line
-                          x1={x + 11}
-                          y1={y + 11}
-                          x2={x + size - 11}
-                          y2={y + size - 11}
-                          stroke={darkMode ? "#FB7185" : "#E11D48"}
-                          strokeWidth={1.8}
+                          x1={nx - 5}
+                          y1={ny - 5}
+                          x2={nx + 5}
+                          y2={ny + 5}
+                          stroke={palette.elimColor}
+                          strokeWidth={1.45}
+                          strokeLinecap="round"
                         />
-                      </>
+                      </g>
                     )}
                   </g>
                 );
               })}
-              <rect
-                x={bx}
-                y={padY}
-                width={size * 3}
-                height={size * 3}
-                fill="none"
-                stroke={boxStroke}
-                strokeWidth={1.8}
-              />
             </g>
           );
         })}
-
-        {/* Pointing dashed alignment guide across Row 1 */}
-        <line
-          x1={padX + size * 1.4}
-          y1={padY + size / 2}
-          x2={padX + size * 3 + boxGap + size * 2.6}
-          y2={padY + size / 2}
-          stroke={darkMode ? "#38BDF8" : "#0284C7"}
-          strokeWidth={1.5}
-          strokeDasharray="4 3"
-          opacity={0.7}
-        />
       </svg>
     </FigureShell>
   );
 };
 
 /**
- * Diagram 5: X-Wing Pattern (Rows 2 & 8 aligned on Columns 2 & 7 for digit 6).
+ * Diagram 5: X-Wing Pattern (Rows 2 & 8 aligned on Columns 2 & 7 for candidate 6; eliminates 6 at R4C2 and R6C7).
  */
 export const XWingDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) => {
-  const size = 24;
-  const pad = 14;
+  const clipId = `clip-xwing-${useId().replace(/:/g, "")}`;
+  const size = 26;
+  const pad = 12;
+  const boardSize = size * 9;
+  const palette = getGridPalette(darkMode);
+
   const corners = [
-    { r: 1, c: 1 },
-    { r: 1, c: 6 },
-    { r: 7, c: 1 },
-    { r: 7, c: 6 },
+    { r: 1, c: 1 }, // R2C2
+    { r: 1, c: 6 }, // R2C7
+    { r: 7, c: 1 }, // R8C2
+    { r: 7, c: 6 }, // R8C7
   ];
   const elimSamples = [
-    { r: 3, c: 1 },
-    { r: 5, c: 6 },
+    { r: 3, c: 1 }, // R4C2 (Column 2 elimination)
+    { r: 5, c: 6 }, // R6C7 (Column 7 elimination)
   ];
 
-  const baseFill = darkMode ? "#18181B" : "#FFFFFF";
   const rowTint = darkMode ? "rgba(251, 191, 36, 0.14)" : "#FEF9C3";
   const colTint = darkMode ? "rgba(244, 63, 94, 0.14)" : "#FFE4E6";
-  const cornerFill = darkMode ? "#8B5CF6" : "#DDD6FE";
-  const minorStroke = darkMode ? "#3F3F46" : "#E5E7EB";
-  const majorStroke = darkMode ? "#A1A1AA" : "#78716C";
+  const cornerFill = darkMode ? "rgba(139, 92, 246, 0.35)" : "#EDE9FE";
 
   return (
     <FigureShell
@@ -629,91 +894,165 @@ export const XWingDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) =
       ]}
     >
       <svg
-        viewBox="0 0 244 244"
-        className="w-full max-w-[244px] h-auto select-none"
+        viewBox="0 0 258 258"
+        className="w-full max-w-[260px] h-auto select-none"
         role="img"
         aria-label={labels.stepCaption5}
       >
-        {Array.from({ length: 81 }).map((_, idx) => {
-          const r = Math.floor(idx / 9);
-          const c = idx % 9;
-          const isCorner = corners.some((pt) => pt.r === r && pt.c === c);
-          const inBaseRow = r === 1 || r === 7;
-          const inCoverCol = c === 1 || c === 6;
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={pad} y={pad} width={boardSize} height={boardSize} rx={OUTER_RADIUS} />
+          </clipPath>
+        </defs>
 
-          let fill = baseFill;
-          if (isCorner) fill = cornerFill;
-          else if (inBaseRow) fill = rowTint;
-          else if (inCoverCol) fill = colTint;
+        <rect x={pad} y={pad} width={boardSize} height={boardSize} rx={OUTER_RADIUS} fill={palette.boardBg} />
 
-          return (
-            <rect
-              key={idx}
-              x={pad + c * size}
-              y={pad + r * size}
-              width={size}
-              height={size}
-              fill={fill}
-              stroke={minorStroke}
-              strokeWidth={0.75}
-            />
-          );
-        })}
+        <g clipPath={`url(#${clipId})`}>
+          {Array.from({ length: 81 }).map((_, idx) => {
+            const r = Math.floor(idx / 9);
+            const c = idx % 9;
+            const isCorner = corners.some((pt) => pt.r === r && pt.c === c);
+            const inBaseRow = r === 1 || r === 7;
+            const inCoverCol = c === 1 || c === 6;
 
-        {/* Bold 3x3 outlines */}
-        {[0, 1, 2].flatMap((br) =>
-          [0, 1, 2].map((bc) => (
-            <rect
-              key={`${br}-${bc}`}
-              x={pad + bc * size * 3}
-              y={pad + br * size * 3}
-              width={size * 3}
-              height={size * 3}
-              fill="none"
-              stroke={majorStroke}
-              strokeWidth={1.5}
-            />
-          ))
-        )}
+            let fill = palette.boardBg;
+            if (isCorner) fill = cornerFill;
+            else if (inBaseRow) fill = rowTint;
+            else if (inCoverCol) fill = colTint;
 
-        {/* Dashed X-Wing rectangle & diagonals */}
+            return (
+              <rect
+                key={idx}
+                x={pad + c * size}
+                y={pad + r * size}
+                width={size}
+                height={size}
+                fill={fill}
+              />
+            );
+          })}
+
+          {/* Subtle interior cell lines */}
+          {[1, 2, 4, 5, 7, 8].map((idx) => (
+            <React.Fragment key={`minor-${idx}`}>
+              <line
+                x1={pad + idx * size}
+                y1={pad}
+                x2={pad + idx * size}
+                y2={pad + boardSize}
+                stroke={palette.minorLine}
+                strokeWidth={0.85}
+              />
+              <line
+                x1={pad}
+                y1={pad + idx * size}
+                x2={pad + boardSize}
+                y2={pad + idx * size}
+                stroke={palette.minorLine}
+                strokeWidth={0.85}
+              />
+            </React.Fragment>
+          ))}
+
+          {/* Interior 3x3 box divider lines */}
+          {[3, 6].map((idx) => (
+            <React.Fragment key={`major-${idx}`}>
+              <line
+                x1={pad + idx * size}
+                y1={pad}
+                x2={pad + idx * size}
+                y2={pad + boardSize}
+                stroke={palette.majorLine}
+                strokeWidth={1.6}
+              />
+              <line
+                x1={pad}
+                y1={pad + idx * size}
+                x2={pad + boardSize}
+                y2={pad + idx * size}
+                stroke={palette.majorLine}
+                strokeWidth={1.6}
+              />
+            </React.Fragment>
+          ))}
+        </g>
+
+        {/* Single smooth curved outer frame */}
+        <rect
+          x={pad}
+          y={pad}
+          width={boardSize}
+          height={boardSize}
+          rx={OUTER_RADIUS}
+          fill="none"
+          stroke={palette.outerFrame}
+          strokeWidth={1.7}
+        />
+
+        {/* Dashed X-Wing rectangle linking exact centers of R2C2, R2C7, R8C2, R8C7 */}
         <rect
           x={pad + 1.5 * size}
           y={pad + 1.5 * size}
           width={5 * size}
           height={6 * size}
+          rx={4}
           fill="none"
-          stroke={darkMode ? "#C4B5FD" : "#6D28D9"}
-          strokeWidth={1.6}
+          stroke={darkMode ? "#C4B5FD" : "#7C3AED"}
+          strokeWidth={1.5}
           strokeDasharray="4 3"
         />
 
-        {corners.map((pt, i) => (
-          <text
-            key={i}
-            x={pad + pt.c * size + size / 2}
-            y={pad + pt.r * size + size / 2 + 4}
-            textAnchor="middle"
-            fontSize="11"
-            fontWeight="900"
-            fill={darkMode ? "#FFFFFF" : "#4C1D95"}
-          >
-            6
-          </text>
-        ))}
+        {/* Centered X-Wing corner candidate badges (6) */}
+        {corners.map((pt, i) => {
+          const cx = pad + pt.c * size + size / 2;
+          const cy = pad + pt.r * size + size / 2;
+          return (
+            <g key={`corner-${i}`}>
+              <rect
+                x={cx - 8}
+                y={cy - 8}
+                width={16}
+                height={16}
+                rx={5}
+                fill={darkMode ? "#7C3AED" : "#DDD6FE"}
+              />
+              <text
+                x={cx}
+                y={cy}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize="10.5"
+                fontWeight="600"
+                fill={darkMode ? "#FFFFFF" : "#4C1D95"}
+              >
+                6
+              </text>
+            </g>
+          );
+        })}
 
+        {/* Centered red crossed-out candidate badges (6) in both Cover Columns C2 (R4C2) & C7 (R6C7) */}
         {elimSamples.map((pt, i) => {
           const cx = pad + pt.c * size + size / 2;
           const cy = pad + pt.r * size + size / 2;
           return (
-            <g key={i}>
+            <g key={`elim-${i}`}>
+              <rect
+                x={cx - 8}
+                y={cy - 8}
+                width={16}
+                height={16}
+                rx={5}
+                fill={palette.elimBadgeBg}
+              />
               <text
                 x={cx}
-                y={cy + 4}
+                y={cy}
                 textAnchor="middle"
-                fontSize="10"
-                fontWeight="800"
-                fill={darkMode ? "#FB7185" : "#E11D48"}
+                dominantBaseline="central"
+                fontSize="10.5"
+                fontWeight="600"
+                fill={palette.elimColor}
               >
                 6
               </text>
@@ -722,8 +1061,9 @@ export const XWingDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) =
                 y1={cy - 5}
                 x2={cx + 5}
                 y2={cy + 5}
-                stroke={darkMode ? "#FB7185" : "#E11D48"}
+                stroke={palette.elimColor}
                 strokeWidth={1.5}
+                strokeLinecap="round"
               />
             </g>
           );
@@ -732,4 +1072,3 @@ export const XWingDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) =
     </FigureShell>
   );
 };
-
