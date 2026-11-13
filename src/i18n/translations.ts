@@ -476,6 +476,7 @@ export type TranslationKey =
   | "dailyFailedCta"
   | "dailyCalendarTitle"
   | "dailyCalendarSubtitle"
+  | "dailyStreakTitle"
   | "dailyTotalSolvedLabel"
   | "dailyLongestStreakShort"
   | "dailyPrevMonthBtn"
@@ -1021,6 +1022,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyFailedCta: "Failed (View Stats)",
     dailyCalendarTitle: "Daily Challenge Calendar",
     dailyCalendarSubtitle: "Select any past day for Archive Play",
+    dailyStreakTitle: "Daily Streak",
     dailyTotalSolvedLabel: "Total Solved",
     dailyLongestStreakShort: "Best Streak",
     dailyPrevMonthBtn: "Previous Month",
@@ -1565,6 +1567,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyFailedCta: "असफल (आँकड़े देखें)",
     dailyCalendarTitle: "दैनिक चुनौती कैलेंडर",
     dailyCalendarSubtitle: "आर्काइव खेलने के लिए पिछला दिन चुनें",
+    dailyStreakTitle: "डेली स्ट्रीक",
     dailyTotalSolvedLabel: "कुल हल",
     dailyLongestStreakShort: "बेस्ट स्ट्रीक",
     dailyPrevMonthBtn: "पिछला महीना",
@@ -2109,6 +2112,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyFailedCta: "Gescheitert (Statistik)",
     dailyCalendarTitle: "Tages-Rätsel-Kalender",
     dailyCalendarSubtitle: "Wähle einen Tag aus dem Archiv",
+    dailyStreakTitle: "Tages-Serie",
     dailyTotalSolvedLabel: "Gelöst gesamt",
     dailyLongestStreakShort: "Beste Serie",
     dailyPrevMonthBtn: "Vorheriger Monat",
@@ -2653,6 +2657,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyFailedCta: "失敗（成績を見る）",
     dailyCalendarTitle: "デイリーカレンダー",
     dailyCalendarSubtitle: "過去の問題をプレイできます",
+    dailyStreakTitle: "連続達成",
     dailyTotalSolvedLabel: "合計クリア",
     dailyLongestStreakShort: "最高連続",
     dailyPrevMonthBtn: "前月",
@@ -3197,6 +3202,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyFailedCta: "실패 (기록 보기)",
     dailyCalendarTitle: "일일 챌린지 캘린더",
     dailyCalendarSubtitle: "지난 날짜 퍼즐을 풀어보세요",
+    dailyStreakTitle: "연속 달성",
     dailyTotalSolvedLabel: "총 해결",
     dailyLongestStreakShort: "최고 연속",
     dailyPrevMonthBtn: "이전 달",
@@ -3741,6 +3747,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyFailedCta: "Fallido (Estadísticas)",
     dailyCalendarTitle: "Calendario del Reto Diario",
     dailyCalendarSubtitle: "Elige un día pasado del archivo",
+    dailyStreakTitle: "Racha Diaria",
     dailyTotalSolvedLabel: "Resueltos",
     dailyLongestStreakShort: "Mejor racha",
     dailyPrevMonthBtn: "Mes anterior",
@@ -4285,6 +4292,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyFailedCta: "Échoué (Voir stats)",
     dailyCalendarTitle: "Calendrier du Défi",
     dailyCalendarSubtitle: "Jouez aux grilles passées",
+    dailyStreakTitle: "Série Quotidienne",
     dailyTotalSolvedLabel: "Résolus",
     dailyLongestStreakShort: "Meilleure série",
     dailyPrevMonthBtn: "Mois précédent",
@@ -4829,6 +4837,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyFailedCta: "Fallita (Statistiche)",
     dailyCalendarTitle: "Calendario Sfida del Giorno",
     dailyCalendarSubtitle: "Scegli un giorno dall'archivio",
+    dailyStreakTitle: "Serie Giornaliera",
     dailyTotalSolvedLabel: "Risolte",
     dailyLongestStreakShort: "Miglior serie",
     dailyPrevMonthBtn: "Mese precedente",
@@ -5373,6 +5382,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     dailyFailedCta: "Falhou (Estatísticas)",
     dailyCalendarTitle: "Calendário Diário",
     dailyCalendarSubtitle: "Escolha um dia anterior no arquivo",
+    dailyStreakTitle: "Sequência Diária",
     dailyTotalSolvedLabel: "Resolvidos",
     dailyLongestStreakShort: "Melhor série",
     dailyPrevMonthBtn: "Mês anterior",
