@@ -51,7 +51,7 @@ const ALIAS_MAP: Record<string, TranslationKey> = {
  */
 export const HOME_NAV_LABELS: Record<Language, string> = {
   en: "Home",
-  hi: "Home",
+  hi: "होम",
   de: "Startseite",
   ja: "ホーム",
   ko: "홈",

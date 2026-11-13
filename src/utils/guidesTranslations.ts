@@ -353,28 +353,28 @@ const GUIDES_EN: Record<GuideSlug, GuideArticleContent> = {
 };
 
 // ---------------------------------------------------------------------------
-// HI (conversational Hinglish)
+// HI (Devanagari conversational Hinglish)
 // ---------------------------------------------------------------------------
 
 const NAV_HI: GuideNavCopy = {
-  relatedLinksTitle: "Aur Seekhein",
-  practiceTitle: "Jo Padha, Ab Khel Kar Dekhein",
+  relatedLinksTitle: "और सीखें",
+  practiceTitle: "जो पढ़ा, अब खेल कर देखें",
   linkLabels: {
-    rules: "Sudoku Rules aur Strategies",
-    solver: "Sudoku Solver",
-    daily: "Daily Challenge",
-    about: "Sudoku Sync ke Baare Mein",
-    multiplayerGuide: "Multiplayer Sudoku Guide",
-    beginnerGuide: "Beginner Sudoku Guide",
-    advancedGuide: "Advanced Patterns Guide",
+    rules: "सुडोकू रूल्स और स्ट्रैटेजीज़",
+    solver: "सुडोकू सॉल्वर",
+    daily: "डेली चैलेंज",
+    about: "Sudoku Sync के बारे में",
+    multiplayerGuide: "मल्टीप्लेयर सुडोकू गाइड",
+    beginnerGuide: "बिगिनर सुडोकू गाइड",
+    advancedGuide: "एडवांस्ड पैटर्न्स गाइड",
   },
   practiceLabels: {
-    easy: "Easy Khelein",
-    medium: "Medium Khelein",
-    hard: "Hard Khelein",
-    expert: "Expert Khelein",
-    daily: "Aaj ka Daily Challenge Khelein",
-    multiplayer: "Multiplayer Room Shuru Karein",
+    easy: "Easy खेलें",
+    medium: "Medium खेलें",
+    hard: "Hard खेलें",
+    expert: "Expert खेलें",
+    daily: "आज का डेली चैलेंज खेलें",
+    multiplayer: "मल्टीप्लेयर रूम शुरू करें",
   },
 };
 
@@ -382,243 +382,243 @@ const GUIDES_HI: Record<GuideSlug, GuideArticleContent> = {
   "multiplayer-sudoku": {
     slug: "multiplayer-sudoku",
     ...NAV_HI,
-    badge: "Multiplayer Guide",
-    title: "Doston ke Saath Multiplayer Sudoku Kaise Khelein",
+    badge: "मल्टीप्लेयर गाइड",
+    title: "दोस्तों के साथ मल्टीप्लेयर सुडोकू कैसे खेलें",
     subtitle:
-      "Bilkul ek hi board par race karein, kuch second mein link share karein, aur jab sab khatam karein tab results compare karein. Na lobby, na intezaar.",
-    metaTitle: "Multiplayer Sudoku Guide: Room Code, Share Link aur Friends",
+      "बिल्कुल एक ही बोर्ड पर रेस करें, कुछ सेकंड में लिंक शेयर करें, और जब सब खत्म करें तब रिज़ल्ट्स कम्पेयर करें। न लॉबी, न इंतज़ार।",
+    metaTitle: "मल्टीप्लेयर सुडोकू गाइड: रूम कोड, शेयर लिंक और फ्रेंड्स",
     metaDescription:
-      "Sudoku Sync mein same-board live aur asynchronous multiplayer kaise kaam karta hai: 6-digit Room Code, optional PIN, direct share link, Friends aur Ghost Mode.",
-    readTimeLabel: "5 min ka read",
+      "Sudoku Sync में सेम-बोर्ड लाइव और एसिंक्रोनस मल्टीप्लेयर कैसे काम करता है: 6-डिजिट रूम कोड, ऑप्शनल PIN, डायरेक्ट शेयर लिंक, फ्रेंड्स और घोस्ट मोड।",
+    readTimeLabel: "5 मिनट रीड",
     sections: [
       {
-        heading: "Ek Board, Zero Intezaar",
+        heading: "एक बोर्ड, ज़ीरो इंतज़ार",
         paragraphs: [
-          "Sudoku Sync multiplayer mein har player ko bilkul same 9×9 puzzle milta hai. Kisi ka grid aasan ya mushkil nahi hota, isliye jeet sirf logic aur speed se tay hoti hai.",
-          "Yahan koi lobby nahi jisme wait karna pade. Har player ka timer, progress aur submission alag-alag chalta hai, to aap saath mein live khel sakte hain ya ghanton baad khatam karein, standings phir bhi same rehti hain.",
+          "Sudoku Sync मल्टीप्लेयर में हर प्लेयर को बिल्कुल सेम 9×9 पज़ल मिलता है। किसी का ग्रिड आसान या मुश्किल नहीं होता, इसलिए जीत सिर्फ लॉजिक और स्पीड से तय होती है।",
+          "यहाँ कोई लॉबी नहीं जिसमें वेट करना पड़े। हर प्लेयर का टाइमर, प्रोग्रेस और सबमिशन अलग-अलग चलता है, तो आप साथ में लाइव खेल सकते हैं या घंटों बाद खत्म करें, स्टैंडिंग्स फिर भी एक जैसी रहती हैं।",
         ],
       },
       {
-        heading: "Chaar Step Mein Room Banayein",
+        heading: "चार स्टेप में रूम बनाएँ",
         paragraphs: [
-          "Multiplayer kholein aur Create chunein. Room setup mein aap kisi ke judne se pehle rules tay kar sakte hain.",
+          "मल्टीप्लेयर खोलें और Create चुनें। रूम सेटअप में आप किसी के जुड़ने से पहले नियम तय कर सकते हैं।",
         ],
         bullets: [
-          "Difficulty chunein: Easy (51 clues), Medium (39), Hard (30) ya Expert (25).",
-          "Mistake limit, hint limit aur timer dikhana hai ya nahi, yeh set karein.",
-          "Chahein to Room PIN se room lock karein.",
-          "6-digit numeric Room Code share karein ya direct link bhej dein.",
+          "डिफिकल्टी चुनें: Easy (51 क्लूज़), Medium (39), Hard (30) या Expert (25)।",
+          "मिस्टेक लिमिट, हिंट लिमिट और टाइमर दिखाना है या नहीं, यह सेट करें।",
+          "चाहें तो रूम PIN से रूम लॉक करें।",
+          "6-डिजिट न्यूमेरिक रूम कोड शेयर करें या डायरेक्ट लिंक भेज दें।",
         ],
       },
       {
-        heading: "Code ya Direct Link se Join Karein",
+        heading: "कोड या डायरेक्ट लिंक से जॉइन करें",
         paragraphs: [
-          "Join karne ke liye Multiplayer kholein, Join chunein aur 6-digit Room Code daalein. Agar host ne Room PIN lagaya hai to woh bhi daalna hoga.",
-          "Share links ?room= format mein hote hain. Kisi bhi browser mein kholte hi board load ho jata hai, to doston ko kuch install karna nahi padta. Android aur web players same board par compete karte hain.",
+          "जॉइन करने के लिए मल्टीप्लेयर खोलें, Join चुनें और 6-डिजिट रूम कोड डालें। अगर होस्ट ने रूम PIN लगाया है तो वह भी डालना होगा।",
+          "शेयर लिंक्स ?room= फॉर्मेट में होते हैं। किसी भी ब्राउज़र में खोलते ही बोर्ड लोड हो जाता है, तो दोस्तों को कुछ इंस्टॉल नहीं करना पड़ता। Android और वेब प्लेयर्स सेम बोर्ड पर कम्पीट करते हैं।",
         ],
       },
       {
-        heading: "Recent Players, Friends aur Ghost Mode",
+        heading: "रीसेंट प्लेयर्स, फ्रेंड्स और घोस्ट मोड",
         paragraphs: [
-          "Invite list mein do tabs hain. Recent Players mein woh log dikhte hain jinke saath aap pehle khel chuke hain, rematch ke liye ready. Friends aapki persistent list hai.",
-          "Google Sign-In karne par Friends aapke saare devices par sync hote hain. Guest mode mein sab kuch usi device par alag rehta hai. Ghost Mode se aap bina online dikhe khel sakte hain.",
+          "इनवाइट लिस्ट में दो टैब्स हैं। Recent Players में वे लोग दिखते हैं जिनके साथ आप पहले खेल चुके हैं, रीमैच के लिए तैयार। Friends आपकी पर्सिस्टेंट लिस्ट है।",
+          "Google Sign-In करने पर Friends आपके सारे डिवाइस पर सिंक होते हैं। गेस्ट मोड में सब कुछ उसी डिवाइस पर अलग रहता है। Ghost Mode से आप बिना ऑनलाइन दिखे खेल सकते हैं।",
         ],
       },
       {
-        heading: "Results Apne Aap Aa Jate Hain",
+        heading: "रिज़ल्ट्स अपने आप आ जाते हैं",
         paragraphs: [
-          "Jab koi dost baad mein khatam karta hai, result automatically sync hota hai aur notification aata hai ki race poori ho gayi. Use kholkar har participant ka finish time aur mistakes ke saath standings dekhein.",
+          "जब कोई दोस्त बाद में खत्म करता है, रिज़ल्ट अपने आप सिंक होता है और नोटिफिकेशन आता है कि रेस पूरी हो गई। उसे खोलकर हर पार्टिसिपेंट का फिनिश टाइम और मिस्टेक्स के साथ स्टैंडिंग्स देखें।",
         ],
         bullets: [
-          "Code bhejne se pehle room ki limits tay kar lein taaki sab ek jaisi conditions mein khelein.",
-          "Smart Assistants personal Settings hain, isliye pure race chahiye to pehle saath mein tay kar lein.",
+          "कोड भेजने से पहले रूम की लिमिट्स तय कर लें ताकि सब एक जैसी कंडीशंस में खेलें।",
+          "Smart Assistants पर्सनल सेटिंग्स हैं, इसलिए प्योर रेस चाहिए तो पहले साथ में तय कर लें।",
         ],
       },
     ],
-    proTipTitle: "Pro Tip",
+    proTipTitle: "प्रो टिप",
     proTipBody:
-      "Code share karne se pehle room setup mein mistake, hint aur timer limits set kar dein. Phir sab ek jaisi conditions mein khelte hain aur standings fair rehti hain, chahe players alag-alag time par judein.",
-    faqTitle: "Multiplayer FAQ",
+      "कोड शेयर करने से पहले रूम सेटअप में मिस्टेक, हिंट और टाइमर लिमिट्स सेट कर दें। फिर सब एक जैसी कंडीशंस में खेलते हैं और स्टैंडिंग्स फेयर रहती हैं, चाहे प्लेयर्स अलग-अलग टाइम पर जुड़ें।",
+    faqTitle: "मल्टीप्लेयर FAQ",
     faqs: [
       {
-        question: "Kya doston ko app install karna padega?",
+        question: "क्या दोस्तों को ऐप इंस्टॉल करना पड़ेगा?",
         answer:
-          "Nahi. ?room= share link kisi bhi browser mein wahi board khol deta hai. Dost baad mein chahein to Android app install karke khelna jaari rakh sakte hain.",
+          "नहीं। ?room= शेयर लिंक किसी भी ब्राउज़र में वही बोर्ड खोल देता है। दोस्त बाद में चाहें तो Android ऐप इंस्टॉल करके खेलना जारी रख सकते हैं।",
       },
       {
-        question: "Doston ke saath khelne ke liye account chahiye?",
+        question: "दोस्तों के साथ खेलने के लिए अकाउंट चाहिए?",
         answer:
-          "Aap Guest ke taur par bhi host ya join kar sakte hain. Google Sign-In se persistent Friends list milti hai jo devices par sync hoti hai, jabki Guest data aapke device par alag rehta hai.",
+          "आप गेस्ट के तौर पर भी होस्ट या जॉइन कर सकते हैं। Google Sign-In से पर्सिस्टेंट फ्रेंड्स लिस्ट मिलती है जो डिवाइस पर सिंक होती है, जबकि गेस्ट डेटा आपके डिवाइस पर अलग रहता है।",
       },
       {
-        question: "Agar dost mere baad khatam kare to kya hota hai?",
+        question: "अगर दोस्त मेरे बाद खत्म करे तो क्या होता है?",
         answer:
-          "Aapka result save rehta hai aur unka result khatam karte hi standings mein judh jata hai. Aapko notification milta hai, isliye online baithkar wait nahi karna padta.",
+          "आपका रिज़ल्ट सेव रहता है और उनका रिज़ल्ट खत्म करते ही स्टैंडिंग्स में जुड़ जाता है। आपको नोटिफिकेशन मिलता है, इसलिए ऑनलाइन बैठकर वेट नहीं करना पड़ता।",
       },
     ],
     crossLinkIntro:
-      "Game mein naye hain? Pehle Beginner Sudoku Guide aur Rules aur Strategies page padhein, ya agli race se pehle Daily Challenge se apni solving speed tez karein.",
+      "गेम में नए हैं? पहले बिगिनर सुडोकू गाइड और सुडोकू रूल्स और स्ट्रैटेजीज़ पेज पढ़ें, या अगली रेस से पहले डेली चैलेंज से अपनी सॉल्विंग स्पीड तेज़ करें।",
   },
   "beginner-sudoku": {
     slug: "beginner-sudoku",
     ...NAV_HI,
-    badge: "Beginner Guide",
-    title: "Beginners ke Liye Sudoku: Pehli Puzzle, Step by Step",
+    badge: "बिगिनर गाइड",
+    title: "बिगिनर्स के लिए सुडोकू: पहली पज़ल, स्टेप बाय स्टेप",
     subtitle:
-      "Ek zaroori rule samjhein, sahi starting difficulty chunein aur built-in helpers ki madad se apni pehli grid aaram se poori karein.",
-    metaTitle: "Beginners ke Liye Sudoku: Rules, Easy Tips aur Smart Assistants",
+      "एक ज़रूरी नियम समझें, सही स्टार्टिंग डिफिकल्टी चुनें और बिल्ट-इन हेल्पर्स की मदद से अपनी पहली ग्रिड आराम से पूरी करें।",
+    metaTitle: "बिगिनर्स के लिए सुडोकू: रूल्स, आसान टिप्स और स्मार्ट असिस्टेंट्स",
     metaDescription:
-      "Classic 9×9 Sudoku ki aasan beginner guide: core rule, Easy, Medium, Hard aur Expert ka fark, pehli techniques, pencil notes aur Smart Assistants.",
-    readTimeLabel: "6 min ka read",
+      "क्लासिक 9×9 सुडोकू की आसान बिगिनर गाइड: कोर रूल, Easy, Medium, Hard और Expert का फर्क, पहली टेक्निक्स, पेंसिल नोट्स और Smart Assistants।",
+    readTimeLabel: "6 मिनट रीड",
     sections: [
       {
-        heading: "Sirf Ek Rule Yaad Rakhein",
+        heading: "सिर्फ एक नियम याद रखें",
         paragraphs: [
-          "Sudoku 9×9 grid par khela jata hai jo nau 3×3 boxes se bani hoti hai. Har khali cell mein 1 se 9 tak ka digit aise bharein ki har row, har column aur har 3×3 box mein har digit sirf ek baar aaye.",
-          "Aapko calculation ki zaroorat nahi aur andaaza lagane ki bhi nahi. Sudoku Sync ki har puzzle ka sirf ek solution hota hai, isliye logic hamesha kaafi hai.",
+          "सुडोकू 9×9 ग्रिड पर खेला जाता है जो नौ 3×3 बॉक्सेज़ से बनी होती है। हर खाली सेल में 1 से 9 तक का डिजिट ऐसे भरें कि हर रो, हर कॉलम और हर 3×3 बॉक्स में हर डिजिट सिर्फ एक बार आए।",
+          "आपको कैलकुलेशन की ज़रूरत नहीं और अंदाज़ा लगाने की भी नहीं। Sudoku Sync की हर पज़ल का सिर्फ एक सॉल्यूशन होता है, इसलिए लॉजिक हमेशा काफी है।",
         ],
       },
       {
-        heading: "Pehli Difficulty Kaise Chunein",
+        heading: "पहली डिफिकल्टी कैसे चुनें",
         paragraphs: [
-          "Chaaron levels ka fark shuru mein diye gaye digits ki ginti se hota hai. Zyada clues ka matlab kam khali cells aur aasan deductions.",
+          "चारों लेवल्स का फर्क शुरुआत में दिए गए डिजिट्स की गिनती से होता है। ज़्यादा क्लूज़ का मतलब कम खाली सेल्स और आसान डिडक्शंस।",
         ],
         bullets: [
-          "Easy: 51 clues (30 khali cells). Shuruaat ke liye sabse achha.",
-          "Medium: 39 clues (42 khali cells).",
-          "Hard: 30 clues (51 khali cells).",
-          "Expert: 25 clues (56 khali cells).",
+          "Easy: 51 क्लूज़ (30 खाली सेल्स)। शुरुआत के लिए सबसे बढ़िया।",
+          "Medium: 39 क्लूज़ (42 खाली सेल्स)।",
+          "Hard: 30 क्लूज़ (51 खाली सेल्स)।",
+          "Expert: 25 क्लूज़ (56 खाली सेल्स)।",
         ],
       },
       {
-        heading: "Aapki Pehli Teen Techniques",
+        heading: "आपकी पहली तीन टेक्निक्स",
         paragraphs: [
-          "Scanning se shuru karein: ek digit chunein, dekhein woh kahan pehle se hai, aur samjhein ki uski row aur column kis box ke cells ko block karte hain.",
-          "Phir singles dhundhein. Naked Single woh cell hai jisme sirf ek hi digit aa sakta hai. Hidden Single woh digit hai jo row, column ya box ke sirf ek cell mein fit hota hai. Jab kisi unit ke aath cells bhar jayein to aakhri khali cell Full House hoti hai.",
+          "स्कैनिंग से शुरुआत करें: एक डिजिट चुनें, देखें वह कहाँ पहले से है, और समझें कि उसकी रो और कॉलम किस बॉक्स के सेल्स को ब्लॉक करते हैं।",
+          "फिर सिंगल्स ढूँढें। Naked Single वह सेल है जिसमें सिर्फ एक ही डिजिट आ सकता है। Hidden Single वह डिजिट है जो रो, कॉलम या बॉक्स के सिर्फ एक सेल में फिट होता है। जब किसी यूनिट के आठ सेल्स भर जाएँ तो आखिरी खाली सेल Full House होती है।",
         ],
       },
       {
-        heading: "Pencil Notes aur Smart Assistants",
+        heading: "पेंसिल नोट्स और Smart Assistants",
         paragraphs: [
-          "Notes se aap cell mein chhote candidate digits likh sakte hain jab tak pakka na ho jaye. Settings ke yeh helpers seekhna aasan banate hain:",
+          "नोट्स से आप सेल में छोटे कैंडिडेट डिजिट्स लिख सकते हैं जब तक पक्का न हो जाए। सेटिंग्स के ये हेल्पर्स सीखना आसान बनाते हैं:",
         ],
         bullets: [
-          "Highlight Identical Numbers cell select karte hi saare matching digits dikhata hai.",
-          "Show Remaining Numbers batata hai ki har digit kitni baar rakhna baaki hai.",
-          "Highlight Related Area active cell ki row, column aur box ko halka shade karta hai.",
-          "Auto-Remove Notes digit rakhte hi jude hue cells ke matching notes hata deta hai.",
-          "Fast Fill (Number-First) ek digit lock karta hai taaki aap kai cells par lagatar tap kar sakein.",
-          "Auto-Switch Completed Numbers jab ek digit ke nau ke nau lag jayein to agle digit par le jata hai.",
+          "Highlight Identical Numbers सेल सेलेक्ट करते ही सारे मैचिंग डिजिट्स दिखाता है।",
+          "Show Remaining Numbers बताता है कि हर डिजिट कितनी बार रखना बाकी है।",
+          "Highlight Related Area एक्टिव सेल की रो, कॉलम और बॉक्स को हल्का शेड करता है।",
+          "Auto-Remove Notes डिजिट रखते ही जुड़े हुए सेल्स के मैचिंग नोट्स हटा देता है।",
+          "Fast Fill (Number-First) एक डिजिट लॉक करता है ताकि आप कई सेल्स पर लगातार टैप कर सकें।",
+          "Auto-Switch Completed Numbers जब एक डिजिट के नौ के नौ लग जाएँ तो अगले डिजिट पर ले जाता है।",
         ],
       },
       {
-        heading: "Mistake Limit aur Daily Aadat",
+        heading: "मिस्टेक लिमिट और डेली आदत",
         paragraphs: [
-          "Strict Mistake Limit (3/3) teen galtiyon ke baad game khatam kar deta hai aur dhyan se khelna sikhata hai. Seekhte waqt aap ise Settings mein band kar sakte hain.",
-          "Roz ka chhota Daily Challenge aadat banata hai, aur Sudoku Solver se aap check kar sakte hain ki jis puzzle mein atke hain woh sahi hai ya nahi.",
+          "Strict Mistake Limit (3/3) तीन गलतियों के बाद गेम खत्म कर देता है और ध्यान से खेलना सिखाता है। सीखते वक्त आप इसे सेटिंग्स में बंद कर सकते हैं।",
+          "रोज़ का छोटा डेली चैलेंज आदत बनाता है, और सुडोकू सॉल्वर से आप चेक कर सकते हैं कि जिस पज़ल में अटके हैं वह सही है या नहीं।",
         ],
       },
     ],
-    proTipTitle: "Pro Tip",
+    proTipTitle: "प्रो टिप",
     proTipBody:
-      "Har puzzle ki shuruaat us digit se karein jo pehle se sabse zyada baar dikh raha ho. Uske liye sabse kam jagah bachti hai, isliye pehle pakke placements aksar wahin se milte hain.",
-    faqTitle: "Beginner FAQ",
+      "हर पज़ल की शुरुआत उस डिजिट से करें जो पहले से सबसे ज़्यादा बार दिख रहा हो। उसके लिए सबसे कम जगह बचती है, इसलिए पहले पक्के प्लेसमेंट्स अक्सर वहीं से मिलते हैं।",
+    faqTitle: "बिगिनर FAQ",
     faqs: [
       {
-        question: "Sabse pehle kaunsi difficulty khelni chahiye?",
+        question: "सबसे पहले कौनसी डिफिकल्टी खेलनी चाहिए?",
         answer:
-          "Easy. 51 clues ke saath ise scanning aur single-digit deductions se solve kiya ja sakta hai, aur yahi har mushkil level ki neev hain.",
+          "Easy। 51 क्लूज़ के साथ इसे स्कैनिंग और सिंगल-डिजिट डिडक्शंस से सॉल्व किया जा सकता है, और यही हर मुश्किल लेवल की नींव हैं।",
       },
       {
-        question: "Kya kabhi andaaza lagana padta hai?",
+        question: "क्या कभी अंदाज़ा लगाना पड़ता है?",
         answer:
-          "Nahi. Har puzzle ka ek hi solution hota hai aur logic se solve hota hai. Agar lage ki guess karna pad raha hai to apne notes dobara check karein ya koi nayi technique dhundhein.",
+          "नहीं। हर पज़ल का एक ही सॉल्यूशन होता है और लॉजिक से सॉल्व होता है। अगर लगे कि गेस करना पड़ रहा है तो अपने नोट्स दोबारा चेक करें या कोई नई टेक्निक ढूँढें।",
       },
       {
-        question: "Mistake Limit kya hai?",
+        question: "मिस्टेक लिमिट क्या है?",
         answer:
-          "Yeh Strict Mistake Limit (3/3) naam ki Smart Setting hai. Galat digit mistake ginta hai aur teen par game khatam ho jata hai. Ise Settings mein band kiya ja sakta hai.",
+          "यह Strict Mistake Limit (3/3) नाम की स्मार्ट सेटिंग है। गलत डिजिट मिस्टेक गिनता है और तीन पर गेम खत्म हो जाता है। इसे सेटिंग्स में बंद किया जा सकता है।",
       },
     ],
     crossLinkIntro:
-      "Jab singles aasan lagne lagein to Advanced Patterns Guide padhein. Dost ke saath same board par khelne ke liye Multiplayer Sudoku Guide dekhein, aur Rules aur Strategies page ko reference ke taur par paas rakhein.",
+      "जब सिंगल्स आसान लगने लगें तो एडवांस्ड पैटर्न्स गाइड पढ़ें। दोस्त के साथ सेम बोर्ड पर खेलने के लिए मल्टीप्लेयर सुडोकू गाइड देखें, और सुडोकू रूल्स और स्ट्रैटेजीज़ पेज को रेफरेंस के तौर पर पास रखें।",
   },
   "advanced-patterns": {
     slug: "advanced-patterns",
     ...NAV_HI,
-    badge: "Advanced Guide",
-    title: "Hard aur Expert Puzzles ke Liye Advanced Sudoku Patterns",
+    badge: "एडवांस्ड गाइड",
+    title: "Hard और Expert पज़ल्स के लिए एडवांस्ड सुडोकू पैटर्न्स",
     subtitle:
-      "Singles se aage badhein: pairs, intersections, X-Wing, Skyscraper, 2-String Kite aur Y-Wing seekhein, aur notes ka istemal strong solvers ki tarah karein.",
-    metaTitle: "Advanced Sudoku Patterns: X-Wing, Y-Wing, Pairs aur Aur Bhi",
+      "सिंगल्स से आगे बढ़ें: पेयर्स, इंटरसेक्शंस, X-Wing, Skyscraper, 2-String Kite और Y-Wing सीखें, और नोट्स का इस्तेमाल स्ट्रॉन्ग सॉल्वर्स की तरह करें।",
+    metaTitle: "एडवांस्ड सुडोकू पैटर्न्स: X-Wing, Y-Wing, पेयर्स और और भी",
     metaDescription:
-      "Naked aur Hidden Pairs, Pointing Pairs, Box-Line Reduction, X-Wing, Skyscraper, 2-String Kite aur Y-Wing ke saath Hard aur Expert Sudoku mein aage badhein.",
-    readTimeLabel: "8 min ka read",
+      "Naked और Hidden Pairs, Pointing Pairs, Box-Line Reduction, X-Wing, Skyscraper, 2-String Kite और Y-Wing के साथ Hard और Expert सुडोकू में आगे बढ़ें।",
+    readTimeLabel: "8 मिनट रीड",
     sections: [
       {
-        heading: "Bharosemand Notes Workflow Banayein",
+        heading: "भरोसेमंद नोट्स वर्कफ़्लो बनाएँ",
         paragraphs: [
-          "Advanced patterns sahi candidate notes par tike hote hain. Auto-Notes khali cells mein candidates bhar deta hai aur sirf Hard aur Expert mein milta hai, jabki Auto-Remove Notes digit rakhte waqt unhe saaf rakhta hai.",
-          "Notes ek baar bharein, phir har placement ke baad update karein. Ek purana note bhi pattern ko galat tarah se sahi dikha sakta hai.",
+          "एडवांस्ड पैटर्न्स सही कैंडिडेट नोट्स पर टिके होते हैं। Auto-Notes खाली सेल्स में कैंडिडेट्स भर देता है और सिर्फ Hard और Expert में मिलता है, जबकि Auto-Remove Notes डिजिट रखते वक्त उन्हें साफ रखता है।",
+          "नोट्स एक बार भरें, फिर हर प्लेसमेंट के बाद अपडेट करें। एक पुराना नोट भी पैटर्न को गलत तरह से सही दिखा सकता है।",
         ],
       },
       {
-        heading: "Naked aur Hidden Pairs aur Triples",
+        heading: "Naked और Hidden Pairs और Triples",
         paragraphs: [
-          "Naked Pair ek unit ke woh do cells hain jinke candidates wahi do digits hain. Woh digits unhi cells mein jayenge, isliye unit ke baaki cells se hata dein.",
-          "Hidden Pair ulta hai: do digits jo unit ke sirf do cells mein aate hain. Un cells mein aur kuch nahi ja sakta, isliye unke baaki candidates mita dein. Triples yahi logic teen cells aur teen digits par lagate hain.",
+          "Naked Pair एक यूनिट के वे दो सेल्स हैं जिनके कैंडिडेट्स वही दो डिजिट्स हैं। वे डिजिट्स उन्हीं सेल्स में जाएँगे, इसलिए यूनिट के बाकी सेल्स से हटा दें।",
+          "Hidden Pair उल्टा है: दो डिजिट्स जो यूनिट के सिर्फ दो सेल्स में आते हैं। उन सेल्स में और कुछ नहीं जा सकता, इसलिए उनके बाकी कैंडिडेट्स मिटा दें। Triples यही लॉजिक तीन सेल्स और तीन डिजिट्स पर लगाते हैं।",
         ],
       },
       {
-        heading: "Pointing Pairs aur Box-Line Reduction",
+        heading: "Pointing Pairs और Box-Line Reduction",
         paragraphs: [
-          "Jab kisi digit ke box ke andar ke saare candidates ek hi row ya column mein hon, to woh digit us line ke baaki hisse mein nahi aa sakta. Isse Pointing Pair kehte hain.",
-          "Box-Line Reduction ulta kaam karta hai: agar kisi row ya column mein digit ke saare candidates ek hi box mein hon, to us box ke baaki cells se use hata dein.",
+          "जब किसी डिजिट के बॉक्स के अंदर के सारे कैंडिडेट्स एक ही रो या कॉलम में हों, तो वह डिजिट उस लाइन के बाकी हिस्से में नहीं आ सकता। इसे Pointing Pair कहते हैं।",
+          "Box-Line Reduction उल्टा काम करता है: अगर किसी रो या कॉलम में डिजिट के सारे कैंडिडेट्स एक ही बॉक्स में हों, तो उस बॉक्स के बाकी सेल्स से उसे हटा दें।",
         ],
       },
       {
-        heading: "Wings aur Fish: X-Wing, Skyscraper, 2-String Kite, Y-Wing",
+        heading: "विंग्स और फिश: X-Wing, Skyscraper, 2-String Kite, Y-Wing",
         paragraphs: [
-          "Yeh patterns kuch cells ko aise jodte hain ki do mein se ek outcome sach hona hi hai, jisse aap woh candidates hata sakte hain jo dono ko dekhte hain.",
+          "ये पैटर्न्स कुछ सेल्स को ऐसे जोड़ते हैं कि दो में से एक आउटकम सच होना ही है, जिससे आप वे कैंडिडेट्स हटा सकते हैं जो दोनों को देखते हैं।",
         ],
         bullets: [
-          "X-Wing: ek digit do rows mein sirf do-do cells mein aata hai, aur woh same do columns mein aligned hain. Un columns ke baaki cells se use hata dein.",
-          "Skyscraper: do lines mein digit do-do cells mein hai aur ek column ka ek sira common hai. Dono khule siron ko dekhne wale cells se woh digit hat jata hai.",
-          "2-String Kite: ek row aur ek column mein digit do-do baar hai aur dono ek box ke zariye jude hain.",
-          "Y-Wing: AB candidates wala pivot, AC aur BC wale do cells ko jodta hai. Dono wings ko dekhne wale har cell se C hat jata hai.",
+          "X-Wing: एक डिजिट दो रोज़ में सिर्फ दो-दो सेल्स में आता है, और वे सेम दो कॉलम्स में अलाइन्ड हैं। उन कॉलम्स के बाकी सेल्स से उसे हटा दें।",
+          "Skyscraper: दो लाइंस में डिजिट दो-दो सेल्स में है और एक कॉलम का एक सिरा कॉमन है। दोनों खुले सिरों को देखने वाले सेल्स से वह डिजिट हट जाता है।",
+          "2-String Kite: एक रो और एक कॉलम में डिजिट दो-दो बार है और दोनों एक बॉक्स के ज़रिए जुड़े हैं।",
+          "Y-Wing: AB कैंडिडेट्स वाला पिवट, AC और BC वाले दो सेल्स को जोड़ता है। दोनों विंग्स को देखने वाले हर सेल से C हट जाता है।",
         ],
       },
       {
-        heading: "Expert Boards ke Liye Solving Order",
+        heading: "Expert बोर्ड्स के लिए सॉल्विंग ऑर्डर",
         paragraphs: [
-          "Expert puzzles sirf 25 clues se shuru hoti hain. Ek tay order mein chalein: pehle singles, phir intersections, phir pairs aur triples, aur tab jaakar wings aur fish.",
-          "Har elimination ke baad nayi singles ke liye dobara scan karein. Agar koi custom puzzle atak jaye to Sudoku Solver bata sakta hai ki uska ek solution hai, kai hain ya koi nahi.",
+          "Expert पज़ल्स सिर्फ 25 क्लूज़ से शुरू होती हैं। एक तय ऑर्डर में चलें: पहले सिंगल्स, फिर इंटरसेक्शंस, फिर पेयर्स और ट्रिपल्स, और तब जाकर विंग्स और फिश।",
+          "हर एलिमिनेशन के बाद नई सिंगल्स के लिए दोबारा स्कैन करें। अगर कोई कस्टम पज़ल अटक जाए तो सुडोकू सॉल्वर बता सकता है कि उसका एक सॉल्यूशन है, कई हैं या कोई नहीं।",
         ],
       },
     ],
-    proTipTitle: "Pro Tip",
+    proTipTitle: "प्रो टिप",
     proTipBody:
-      "Patterns ek-ek digit karke dhundhein. Saare notes mein ek hi digit ko dekhein aur 1 se 9 tak chalte jayein. Zyadatar X-Wing aur Skyscraper isi tarah milte hain.",
-    faqTitle: "Advanced FAQ",
+      "पैटर्न्स एक-एक डिजिट करके ढूँढें। सारे नोट्स में एक ही डिजिट को देखें और 1 से 9 तक चलते जाएँ। ज़्यादातर X-Wing और Skyscraper इसी तरह मिलते हैं।",
+    faqTitle: "एडवांस्ड FAQ",
     faqs: [
       {
-        question: "Sabse pehle kaunsi advanced technique seekhni chahiye?",
+        question: "सबसे पहले कौनसी एडवांस्ड टेक्निक सीखनी चाहिए?",
         answer:
-          "Pointing Pairs aur Box-Line Reduction. Yeh aksar milte hain, inme sirf ek digit aur ek box dekhna padta hai, aur kai Hard boards khol dete hain.",
+          "Pointing Pairs और Box-Line Reduction। ये अक्सर मिलते हैं, इनमें सिर्फ एक डिजिट और एक बॉक्स देखना पड़ता है, और कई Hard बोर्ड्स खोल देते हैं।",
       },
       {
-        question: "Kya Auto-Notes har difficulty mein kaam karta hai?",
+        question: "क्या Auto-Notes हर डिफिकल्टी में काम करता है?",
         answer:
-          "Nahi. Auto-Notes sirf Hard aur Expert mode mein milta hai. Easy aur Medium mein notes aap khud likhte hain, jo achhi practice hai.",
+          "नहीं। Auto-Notes सिर्फ Hard और Expert मोड में मिलता है। Easy और Medium में नोट्स आप खुद लिखते हैं, जो अच्छी प्रैक्टिस है।",
       },
       {
-        question: "Kya main kisi aur source ki puzzle check kar sakta hoon?",
+        question: "क्या मैं किसी और सोर्स की पज़ल चेक कर सकता हूँ?",
         answer:
-          "Haan. Clues ko Sudoku Solver mein daalein. Woh batata hai ki grid ka unique solution hai, kai solutions hain ya koi nahi, aur aapke liye solve bhi kar sakta hai.",
+          "हाँ। क्लूज़ को सुडोकू सॉल्वर में डालें। वह बताता है कि ग्रिड का यूनिक सॉल्यूशन है, कई सॉल्यूशंस हैं या कोई नहीं, और आपके लिए सॉल्व भी कर सकता है।",
       },
     ],
     crossLinkIntro:
-      "Poori technique list Rules aur Strategies page par dekhein, Beginner Sudoku Guide se basics dobara mazboot karein, ya Multiplayer Sudoku Guide ke saath dost se apne patterns ka muqabla karein.",
+      "पूरी टेक्निक लिस्ट सुडोकू रूल्स और स्ट्रैटेजीज़ पेज पर देखें, बिगिनर सुडोकू गाइड से बेसिक्स दोबारा मज़बूत करें, या मल्टीप्लेयर सुडोकू गाइड के साथ दोस्त से अपने पैटर्न्स का मुकाबला करें।",
   },
 };
 
@@ -2530,7 +2530,7 @@ export const GUIDES_TRANSLATIONS: Record<Language, Record<GuideSlug, GuideArticl
 
 export const ACADEMY_STRIP_TITLES: Record<Language, string> = {
   en: "Sudoku Academy & Tools",
-  hi: "Sudoku Academy aur Tools",
+  hi: "सुडोकू अकादमी और टूल्स",
   de: "Sudoku-Akademie & Werkzeuge",
   ja: "数独アカデミー＆ツール",
   ko: "스도쿠 아카데미 & 도구",
