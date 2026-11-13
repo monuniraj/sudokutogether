@@ -299,10 +299,13 @@ export function buildStaticNoscriptHtml(
       </nav>
       <footer style="margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;">
         <a href="/" style="color: #0369a1; text-decoration: underline;">${escapeHtml(ui.homeLinkLabel)}</a> |
-        <a href="/about.html" style="color: #0369a1; text-decoration: underline;">${escapeHtml(ui.aboutLinkLabel)}</a> |
-        <a href="/contact.html" style="color: #0369a1; text-decoration: underline;">${escapeHtml(ui.contactLinkLabel)}</a> |
-        <a href="/privacy.html" style="color: #0369a1; text-decoration: underline;">${escapeHtml(ui.privacyLinkLabel)}</a> |
-        <a href="/terms.html" style="color: #0369a1; text-decoration: underline;">${escapeHtml(ui.termsLinkLabel)}</a>
+        <a href="/rules" style="color: #0369a1; text-decoration: underline;">Sudoku Rules</a> |
+        <a href="/daily-challenge" style="color: #0369a1; text-decoration: underline;">Daily Challenge</a> |
+        <a href="/solver" style="color: #0369a1; text-decoration: underline;">Sudoku Solver</a> |
+        <a href="/about" style="color: #0369a1; text-decoration: underline;">${escapeHtml(ui.aboutLinkLabel)}</a> |
+        <a href="/contact" style="color: #0369a1; text-decoration: underline;">${escapeHtml(ui.contactLinkLabel)}</a> |
+        <a href="/privacy" style="color: #0369a1; text-decoration: underline;">${escapeHtml(ui.privacyLinkLabel)}</a> |
+        <a href="/terms" style="color: #0369a1; text-decoration: underline;">${escapeHtml(ui.termsLinkLabel)}</a>
         <span style="opacity: 0.8; font-family: monospace; font-size: 11px; margin-left: 0.5rem;">${escapeHtml(ui.allRightsReserved)}</span>
       </footer>
     </div>

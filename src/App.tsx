@@ -8448,10 +8448,12 @@ export default function App() {
   }, []);
 
   // Conditionally inject Google AdSense script strictly on Web (Firebase Hosting / Browsers)
-  // Never inject AdSense when running natively on Android (Capacitor WebView) to prevent invalid traffic policy violations
+  // Deduplicated against static <head> tag in index.html, and never run inside native Capacitor Android WebView
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) {
-      const existingScript = document.querySelector('script[src*="pagead2.googlesyndication.com"]');
+      const existingScript = document.querySelector(
+        'script[src*="adsbygoogle.js"], script[src*="pagead2.googlesyndication.com"]'
+      );
       if (!existingScript) {
         const script = document.createElement("script");
         script.async = true;
