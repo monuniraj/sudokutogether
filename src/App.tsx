@@ -18414,7 +18414,7 @@ export default function App() {
             const academyItems: Array<{
               href: string;
               label: string;
-              screen: "rules" | "daily-challenge" | "solver" | "about" | GuideScreenId;
+              screen: "rules" | GuideScreenId;
               icon: React.ReactNode;
               cls: string;
             }> = [
@@ -18453,33 +18453,6 @@ export default function App() {
                 cls: darkMode
                   ? "bg-sky-500/20 text-sky-200 hover:bg-sky-500/30"
                   : "bg-[#E0F2FE] text-[#0369A1] hover:bg-[#BAE6FD]",
-              },
-              {
-                href: "/daily-challenge",
-                label: academyCopy.linkLabels.daily,
-                screen: "daily-challenge",
-                icon: <Calendar className="w-3.5 h-3.5 shrink-0" />,
-                cls: darkMode
-                  ? "bg-indigo-500/20 text-indigo-200 hover:bg-indigo-500/30"
-                  : "bg-[#E0E7FF] text-[#3730A3] hover:bg-[#C7D2FE]",
-              },
-              {
-                href: "/solver",
-                label: academyCopy.linkLabels.solver,
-                screen: "solver",
-                icon: <Calculator className="w-3.5 h-3.5 shrink-0" />,
-                cls: darkMode
-                  ? "bg-teal-500/20 text-teal-200 hover:bg-teal-500/30"
-                  : "bg-[#CCFBF1] text-[#0F766E] hover:bg-[#99F6E4]",
-              },
-              {
-                href: "/about",
-                label: academyCopy.linkLabels.about,
-                screen: "about",
-                icon: <Info className="w-3.5 h-3.5 shrink-0" />,
-                cls: darkMode
-                  ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
-                  : "bg-[#F5F5F4] text-stone-700 hover:bg-stone-200/80",
               },
             ];
 
@@ -18549,18 +18522,6 @@ export default function App() {
                   className="py-1.5 px-3 rounded-xl text-[#0F766E] hover:bg-teal-50/80 dark:text-[#5EEAD4] dark:hover:bg-teal-950/40 transition-colors no-underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
                 >
                   {t("sudokuSolverLabel")}
-                </a>
-                <a
-                  href="/rules"
-                  onClick={(e) => {
-                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                    e.preventDefault();
-                    playClickSound();
-                    navigateToScreen("rules");
-                  }}
-                  className="py-1.5 px-3 rounded-xl text-[#7E22CE] hover:bg-purple-50/80 dark:text-[#D8B4FE] dark:hover:bg-purple-950/40 transition-colors no-underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
-                >
-                  {t("sudokuRulesLabel")}
                 </a>
 
                 {/* Compact Borderless Pastel Language Dropdown */}
@@ -21568,6 +21529,7 @@ export default function App() {
         {currentScreen === "rules" && (
           <SudokuRulesScreen
             darkMode={darkMode}
+            language={language}
             onStartDifficulty={(diff) =>
               handleSelectDifficultySilo(diff, { startNewGame: true, scrollToBoard: true })
             }
@@ -21585,6 +21547,7 @@ export default function App() {
             <GuideArticleScreen
               slug={activeGuideSlug}
               darkMode={darkMode}
+              language={language}
               onStartDifficulty={(diff) =>
                 handleSelectDifficultySilo(diff, { startNewGame: true, scrollToBoard: true })
               }
@@ -21630,6 +21593,7 @@ export default function App() {
           <ComplianceScreen
             page={currentScreen}
             darkMode={darkMode}
+            language={language}
             onNavigatePage={(nextPage) => navigateToScreen(nextPage)}
             onNavigateRoute={(nextRoute) => navigateToScreen(nextRoute)}
             onBackHome={() => {
@@ -25640,6 +25604,7 @@ export default function App() {
                 <ComplianceDocumentBody
                   page={activeCompliancePage}
                   darkMode={darkMode}
+                  language={language}
                   compact
                   onNavigatePage={(nextPage) => setActiveCompliancePage(nextPage)}
                   onNavigateRoute={(nextRoute) => {

@@ -47,6 +47,29 @@ const ALIAS_MAP: Record<string, TranslationKey> = {
 };
 
 /**
+ * Localized "Back / Home" label shared across standalone editorial and legal screens.
+ */
+export const HOME_NAV_LABELS: Record<Language, string> = {
+  en: "Home",
+  hi: "Home",
+  de: "Startseite",
+  ja: "ホーム",
+  ko: "홈",
+  es: "Inicio",
+  fr: "Accueil",
+  it: "Home",
+  "pt-BR": "Início",
+};
+
+/**
+ * Synchronously resolves a translation key for an explicit target locale.
+ */
+export function translateForLanguage(lang: Language, key: TranslationKey): string {
+  const activeDict = translations[lang] || translations.en;
+  return activeDict[key] || translations.en[key] || key;
+}
+
+/**
  * Industry-standard localized puzzle difficulty terms across all 9 supported locales.
  */
 export const DIFFICULTY_TRANSLATIONS: Record<string, { easy: string; medium: string; hard: string; expert: string; master?: string }> = {

@@ -14,7 +14,8 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { useTranslation } from "../../../i18n/useTranslation";
+import { HOME_NAV_LABELS, useTranslation } from "../../../i18n/useTranslation";
+import type { Language } from "../../../i18n/translations";
 import {
   GUIDE_PATHS,
   GUIDE_SLUGS,
@@ -25,6 +26,7 @@ import {
 export interface GuideArticleScreenProps {
   slug: GuideSlug;
   darkMode: boolean;
+  language?: Language;
   onStartDifficulty: (difficulty: "EASY" | "MEDIUM" | "HARD" | "EXPERT") => void;
   onOpenDailyChallenge: () => void;
   onOpenSolver: () => void;
@@ -65,6 +67,7 @@ const SLUG_HERO_META: Record<
 export const GuideArticleScreen: React.FC<GuideArticleScreenProps> = ({
   slug,
   darkMode,
+  language: languageProp,
   onStartDifficulty,
   onOpenDailyChallenge,
   onOpenSolver,
@@ -72,7 +75,8 @@ export const GuideArticleScreen: React.FC<GuideArticleScreenProps> = ({
   onNavigateRoute,
   onBackHome,
 }) => {
-  const { t, language } = useTranslation();
+  const { language: hookLanguage } = useTranslation();
+  const language = languageProp || hookLanguage;
   const copy = getGuideCopy(language, slug);
   const heroPalette = SLUG_HERO_META[slug];
 
@@ -450,11 +454,11 @@ export const GuideArticleScreen: React.FC<GuideArticleScreenProps> = ({
             }`}
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>{t("home") || "Home"}</span>
+            <span>{HOME_NAV_LABELS[language] || HOME_NAV_LABELS.en}</span>
           </button>
 
           <span className="text-[11px] font-mono text-stone-400 dark:text-stone-500">
-            SudokuSync · Mo Logic
+            SudokuSync • v1.0.3
           </span>
         </div>
       </article>

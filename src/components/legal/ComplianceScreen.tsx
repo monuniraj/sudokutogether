@@ -18,7 +18,12 @@ import {
   Calendar,
   Sparkles,
 } from "lucide-react";
-import { useTranslation } from "../../i18n/useTranslation";
+import {
+  HOME_NAV_LABELS,
+  translateForLanguage,
+  useTranslation,
+} from "../../i18n/useTranslation";
+import type { Language, TranslationKey } from "../../i18n/translations";
 import {
   ContactTopicId,
   LEGAL_DOCUMENT_CONTENT,
@@ -50,6 +55,7 @@ export type ComplianceToolRoute = "rules" | "solver" | "daily-challenge";
 export interface ComplianceDocumentBodyProps {
   page: CompliancePageType;
   darkMode: boolean;
+  language?: Language;
   compact?: boolean;
   onNavigatePage?: (page: CompliancePageType) => void;
   onNavigateRoute?: (route: ComplianceToolRoute) => void;
@@ -60,13 +66,16 @@ export interface ComplianceDocumentBodyProps {
 export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
   page,
   darkMode,
+  language: languageProp,
   compact = false,
   onNavigatePage,
   onNavigateRoute,
   onOpenSettings,
   onCopyEmail,
 }) => {
-  const { t, language } = useTranslation();
+  const { language: hookLanguage } = useTranslation();
+  const language = languageProp || hookLanguage;
+  const t = (key: TranslationKey) => translateForLanguage(language, key);
   const legal = LEGAL_DOCUMENT_CONTENT[language] || LEGAL_DOCUMENT_CONTENT.en;
 
   const [copiedEmail, setCopiedEmail] = useState(false);
@@ -109,7 +118,7 @@ export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
   };
 
   const handleCopyComposerMessage = async () => {
-    const formatted = `To: ${SUPPORT_EMAIL}\nSubject: ${composerSubject}\n\n${composerBody}`;
+    const formatted = `${SUPPORT_EMAIL}\n${legal.contactComposer.subjectLabel}: ${composerSubject}\n\n${composerBody}`;
     const success = await copyTextValue(formatted);
     if (success) {
       setCopiedMessage(true);
@@ -848,6 +857,7 @@ export const ComplianceDocumentBody: React.FC<ComplianceDocumentBodyProps> = ({
 export interface ComplianceScreenProps {
   page: CompliancePageType;
   darkMode: boolean;
+  language?: Language;
   onNavigatePage: (page: CompliancePageType) => void;
   onNavigateRoute?: (route: ComplianceToolRoute) => void;
   onBackHome: () => void;
@@ -858,13 +868,15 @@ export interface ComplianceScreenProps {
 export const ComplianceScreen: React.FC<ComplianceScreenProps> = ({
   page,
   darkMode,
+  language: languageProp,
   onNavigatePage,
   onNavigateRoute,
   onBackHome,
   onOpenSettings,
   onCopyEmail,
 }) => {
-  const { t } = useTranslation();
+  const { language: hookLanguage } = useTranslation();
+  const language = languageProp || hookLanguage;
 
   return (
     <div className="w-full h-full overflow-y-auto px-4 sm:px-6 pb-8 sm:pb-12 pt-[calc(84px+env(safe-area-inset-top,0px))] lg:pt-[92px]">
@@ -879,6 +891,7 @@ export const ComplianceScreen: React.FC<ComplianceScreenProps> = ({
           <ComplianceDocumentBody
             page={page}
             darkMode={darkMode}
+            language={language}
             onNavigatePage={onNavigatePage}
             onNavigateRoute={onNavigateRoute}
             onOpenSettings={onOpenSettings}
@@ -896,7 +909,7 @@ export const ComplianceScreen: React.FC<ComplianceScreenProps> = ({
               }`}
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>{t("home") || "Home"}</span>
+              <span>{HOME_NAV_LABELS[language] || HOME_NAV_LABELS.en}</span>
             </button>
             <span className="text-[11px] font-mono text-stone-400 dark:text-stone-500">
               SudokuSync • v1.0.3

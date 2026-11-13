@@ -14,7 +14,8 @@ import {
   Sliders,
   Sparkles,
 } from "lucide-react";
-import { useTranslation } from "../../../i18n/useTranslation";
+import { HOME_NAV_LABELS, useTranslation } from "../../../i18n/useTranslation";
+import type { Language } from "../../../i18n/translations";
 import { getSeoPath } from "../../../utils/seoSilos";
 import {
   getFocusableElements,
@@ -34,6 +35,7 @@ import {
 
 export interface SudokuRulesScreenProps {
   darkMode: boolean;
+  language?: Language;
   onStartDifficulty: (difficulty: "EASY" | "MEDIUM" | "HARD" | "EXPERT") => void;
   onOpenDailyChallenge: () => void;
   onOpenSolver: () => void;
@@ -53,12 +55,14 @@ const TOKEN_SPLIT_RE =
 
 export const SudokuRulesScreen: React.FC<SudokuRulesScreenProps> = ({
   darkMode,
+  language: languageProp,
   onStartDifficulty,
   onOpenDailyChallenge,
   onOpenSolver,
   onBackHome,
 }) => {
-  const { t, language } = useTranslation();
+  const { language: hookLanguage } = useTranslation();
+  const language = languageProp || hookLanguage;
   const copy = getRulesArticleCopy(language);
   const [activeTab, setActiveTab] = useState<RulesQuickJumpTab["id"]>("rules-basics");
   const quickJumpRef = useRef<HTMLDivElement | null>(null);
@@ -622,7 +626,7 @@ export const SudokuRulesScreen: React.FC<SudokuRulesScreenProps> = ({
               }`}
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>{t("home") || "Home"}</span>
+              <span>{HOME_NAV_LABELS[language] || HOME_NAV_LABELS.en}</span>
             </button>
 
             <div className="flex flex-wrap items-center gap-2">
