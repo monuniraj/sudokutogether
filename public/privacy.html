@@ -7,8 +7,8 @@
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="canonical" href="https://sudokusync.com/privacy.html" />
-    <meta name="description" content="Privacy Policy for SudokuSync - GDPR, CCPA/CPRA, COPPA, and Google AdSense compliance disclosures." />
+    <link rel="canonical" href="https://sudokusync.com/privacy" />
+    <meta name="description" content="Privacy Policy for SudokuSync - GDPR, CCPA/CPRA, COPPA, Google AdSense, Google AdMob SDK, AAID, and Google UMP Consent disclosures." />
     <style>
       :root {
         --bg-color: #fdfbf7;
@@ -75,10 +75,10 @@
   <body>
     <div class="container">
       <h1>Privacy Policy</h1>
-      <div class="meta"><strong>Effective Date:</strong> August 12, 2026 | <strong>Version:</strong> 1.0.1 | <strong>Platform:</strong> Web & Android App</div>
+      <div class="meta"><strong>Effective Date:</strong> August 12, 2026 | <strong>Version:</strong> 1.0.3 | <strong>Platform:</strong> Web & Android App</div>
 
       <p>
-        At <strong>SudokuSync</strong> (accessible from <a href="https://sudokusync.com">https://sudokusync.com</a> and the official Android mobile application), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed, and how we uphold global privacy standards including the <strong>General Data Protection Regulation (GDPR)</strong>, the <strong>California Consumer Privacy Act (CCPA/CPRA)</strong>, the <strong>Children's Online Privacy Protection Act (COPPA)</strong>, <strong>Google Play Store Data Safety Policies</strong>, and <strong>Google AdSense Program Policies</strong>.
+        At <strong>SudokuSync</strong> (accessible from <a href="https://sudokusync.com">https://sudokusync.com</a> and the official Android mobile application), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed, and how we uphold global privacy standards including the <strong>General Data Protection Regulation (GDPR)</strong>, the <strong>California Consumer Privacy Act (CCPA/CPRA)</strong>, the <strong>Children's Online Privacy Protection Act (COPPA)</strong>, <strong>Google Play Store Data Safety Policies</strong>, <strong>Google AdSense Program Policies</strong>, and <strong>Google AdMob Policies</strong>.
       </p>
 
       <h2>1. Information Collection & Storage Architecture</h2>
@@ -93,30 +93,36 @@
             <li>Anonymous Challenge ID, seed number, and difficulty level.</li>
             <li>Player display nickname (user-chosen alphanumeric string) and user ID.</li>
             <li>Match performance metrics: Completion time (seconds), mistake count, and win/loss completion status.</li>
+          </ul>
+        </li>
         <li>
           <strong>Firebase Cloud Messaging (FCM) & Device Identifiers:</strong> When notification permissions are granted, an anonymous Firebase Cloud Messaging (FCM) registration token and anonymous device identifier are generated strictly to deliver real-time challenge invites, opponent duel alerts, and match completion updates. <em>Push tokens are never used for cross-app tracking, device fingerprinting, behavioral profiling, or unsolicited advertising.</em>
           <br />
           <strong>User Control & Revocation:</strong> Players maintain total control over notifications and may enable or disable notifications at any time via the in-game toggle under <em>Settings &rarr; "Push Notifications"</em> or through the operating system / web browser application settings.
         </li>
         <li>
-          <strong>Google Account & Cloud Synchronization (Optional):</strong> When players choose to link or sign in with their Google Account ("Connect Google"), we receive basic profile identity credentials via Google OAuth (Display Name, Email address, and unique authentication User ID) solely to authenticate user sessions, securely synchronize personal stats and puzzle records across devices, and manage player profile settings. <em>We do NOT collect, access, or store passwords, contacts, personal device files, or financial details.</em> Authentication credentials are used strictly for game functionality and cross-device continuity, and are never sold, rented, or shared with third-party advertisers.
+          <strong>Firebase Authentication & Cloud Synchronization (Optional):</strong> When players choose to sign in with Google via <strong>Firebase Authentication (Google OAuth)</strong>, we receive basic profile identity credentials (Display Name, Email address, and unique authentication User ID) solely to authenticate user sessions, securely synchronize personal stats and puzzle records across devices, and manage player profile settings. <strong>Anonymous Guest sessions</strong> run in a physically isolated local vault and never write to private authenticated user profiles without explicit sign-in. <em>We do NOT collect, access, or store passwords, contacts, personal device files, or financial details.</em> Authentication credentials are used strictly for game functionality and cross-device continuity, and are never sold, rented, or shared with third-party advertisers.
         </li>
         <li>
           <strong>Infrastructure & Diagnostic Server Logs:</strong> Standard web server request logs (including IP addresses, browser user-agent, timestamps, and rate limiting metrics) are processed automatically by Google Firebase Hosting and our Express server solely for operational security, DDoS prevention, and rate-limiting integrity.
         </li>
       </ul>
 
-      <h2>2. Google AdSense & Third-Party Cookies</h2>
+      <h2>2. Advertising, Google AdSense, AdMob SDK, AAID & Google UMP Consent</h2>
       <p>
-        We partner with third-party advertising vendors, including <strong>Google LLC (Google AdSense)</strong>, to serve advertisements when you visit our website. Third-party advertising networks use cookies, web beacons, and device identifiers to measure ad performance and serve advertisements based on your prior visits to this website or other websites on the Internet.
+        We partner with Google LLC to keep SudokuSync free across platforms using <strong>Google AdSense</strong> on the web and the <strong>Google AdMob SDK</strong> in our official Android mobile application. On the web, Google and third-party ad networks use cookies, web beacons, and identifiers to measure ad performance and deliver ads. On Android, the AdMob SDK may process the <strong>Android Advertising ID (AAID)</strong>, app interaction events, and diagnostic signals for ad delivery, frequency capping, and fraud prevention.
+      </p>
+      <p>
+        Before serving personalized ads to users in regulated jurisdictions (including the EEA and the UK), our mobile app uses the <strong>Google UMP (User Messaging Platform) Consent SDK</strong> to present a clear privacy choices dialog so you can grant, manage, or withdraw your consent at any time.
       </p>
       
       <div class="highlight-box">
-        <strong>🍪 Advertising Cookie Transparency & Opt-Out Portals:</strong>
+        <strong>🍪 Advertising Transparency, AAID Controls & Opt-Out Portals:</strong>
         <p>
-          Google's use of advertising cookies, including the DoubleClick cookie (DART cookie), enables it and its partners to serve ads to our users based on their visit to our sites and/or other sites on the Internet. Users may opt out of personalized advertising or manage cookie preferences at any time through the following official privacy portals:
+          Users may opt out of personalized advertising, reset/delete their mobile advertising ID, or manage cookie/consent preferences at any time:
         </p>
         <ul>
+          <li><strong>Android Advertising ID (AAID) Opt-Out / Reset:</strong> Open Android <em>Settings &rarr; Google &rarr; Ads</em> (or <em>Settings &rarr; Privacy &rarr; Ads</em>) to reset your Advertising ID or opt out of Ads Personalization.</li>
           <li><strong>Google Ads Settings:</strong> <a href="https://adssettings.google.com" target="_blank" rel="noopener noreferrer">https://adssettings.google.com</a></li>
           <li><strong>Network Advertising Initiative (NAI):</strong> <a href="https://www.networkadvertising.org" target="_blank" rel="noopener noreferrer">https://www.networkadvertising.org</a></li>
           <li><strong>Digital Advertising Alliance (DAA / AboutAds):</strong> <a href="https://www.aboutads.info/choices" target="_blank" rel="noopener noreferrer">https://www.aboutads.info/choices</a></li>
@@ -173,7 +179,7 @@
       </div>
 
       <div class="footer">
-        <a href="/">← Return to SudokuSync</a> | <a href="/terms.html">Terms of Service</a>
+        <a href="/">← Return to SudokuSync</a> | <a href="/terms">Terms of Service</a> | <a href="/contact">Contact</a> | <a href="/about">About</a>
         <br /><br />
         © 2026 SudokuSync. All rights reserved.
       </div>

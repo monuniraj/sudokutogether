@@ -26,6 +26,13 @@ import { saveDailyProgress, recordDailyCompletion, getDailyStats, getDailyProgre
 import { saveDailyProgressToCloud, recordDailyCompletionToCloud, checkPlayerDailyEligibility, fetchDailyProgressFromCloud, resolveProgressConflict } from "./features/dailyChallenge/services/dailyCloudService";
 import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./features/dailyChallenge/types/daily.types";
 import { SudokuSolverScreen } from "./features/sudokuSolver/components/SudokuSolverScreen";
+import {
+  ComplianceScreen,
+  ComplianceDocumentBody,
+  parseComplianceRoute,
+  COMPLIANCE_PATHS,
+  type CompliancePageType,
+} from "./components/legal/ComplianceScreen";
 
 const isDailyChallengePath = (pathname?: string | null): boolean =>
   Boolean(pathname && pathname.trim().replace(/\/+$/, "").toLowerCase() === "/daily-challenge");
@@ -128,6 +135,7 @@ import {
   Bookmark,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Eye,
   HelpCircle,
   Play,
@@ -1896,7 +1904,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<"sudoku" | "sandbox" | "kotlin-code" | "spec-docs">("sudoku");
   const [currentScreen, setCurrentScreen] = useState<
-    "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge"
+    "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | CompliancePageType
   >(() => {
     if (
       typeof window !== "undefined" &&
@@ -1905,6 +1913,8 @@ export default function App() {
     ) {
       if (isDailyChallengePath(window.location.pathname)) return "daily-challenge";
       if (isSolverPath(window.location.pathname)) return "solver";
+      const legalRoute = parseComplianceRoute(window.location.pathname);
+      if (legalRoute) return legalRoute;
     }
     return "home";
   });
@@ -2036,13 +2046,15 @@ export default function App() {
     ) {
       if (isDailyChallengePath(window.location.pathname)) return ["daily-challenge"];
       if (isSolverPath(window.location.pathname)) return ["solver"];
+      const legalRoute = parseComplianceRoute(window.location.pathname);
+      if (legalRoute) return [legalRoute];
     }
     return ["home"];
   });
   const isProgrammaticBackRef = useRef<boolean>(false);
 
   const navigateToScreen = (
-    screen: "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge"
+    screen: "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | CompliancePageType
   ) => {
     setCurrentScreen(screen);
     setNavigationHistory(prev => {
@@ -2058,9 +2070,13 @@ export default function App() {
         } else if (screen === "solver") {
           nextUrl = "/solver";
           setRoutePathname("/solver");
+        } else if (screen === "privacy" || screen === "terms" || screen === "contact" || screen === "about") {
+          nextUrl = COMPLIANCE_PATHS[screen];
+          setRoutePathname(nextUrl);
         } else if (
           isDailyChallengePath(window.location.pathname) ||
-          isSolverPath(window.location.pathname)
+          isSolverPath(window.location.pathname) ||
+          Boolean(parseComplianceRoute(window.location.pathname))
         ) {
           nextUrl = "/";
           setRoutePathname("/");
@@ -2075,13 +2091,38 @@ export default function App() {
     setNavigationHistory(prev => {
       if (prev.length <= 1) {
         setCurrentScreen("home");
+        if (
+          typeof window !== "undefined" &&
+          !Capacitor.isNativePlatform() &&
+          !isCrazyGamesActive() &&
+          (isDailyChallengePath(window.location.pathname) ||
+            isSolverPath(window.location.pathname) ||
+            Boolean(parseComplianceRoute(window.location.pathname)))
+        ) {
+          setRoutePathname("/");
+          try {
+            window.history.pushState({ view: "home" }, "", "/");
+          } catch { }
+        }
         return ["home"];
       }
       const nextStack = prev.slice(0, -1);
-      const lastScreen = nextStack[nextStack.length - 1] as "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge";
+      const lastScreen = nextStack[nextStack.length - 1] as
+        | "home"
+        | "status"
+        | "settings"
+        | "game"
+        | "login"
+        | "together"
+        | "solver"
+        | "daily-challenge"
+        | CompliancePageType;
 
       if (lastScreen === "game" && (boardState?.isGameOver || !boardState)) {
         setCurrentScreen("home");
+        if (!Capacitor.isNativePlatform() && !isCrazyGamesActive() && typeof window !== "undefined") {
+          setRoutePathname("/");
+        }
         return ["home"];
       }
 
@@ -4591,6 +4632,40 @@ export default function App() {
   const [difficulty, setDifficulty] = useState<Difficulty>(() => initialRouteDifficultyRef.current || "EASY");
   const difficultyRef = useRef<Difficulty>(difficulty);
   difficultyRef.current = difficulty;
+  const [editorialDifficulty, setEditorialDifficulty] = useState<SeoDifficulty>(() => initialRouteDifficultyRef.current || "EASY");
+  const editorialDifficultyRef = useRef<SeoDifficulty>(editorialDifficulty);
+  editorialDifficultyRef.current = editorialDifficulty;
+  const [footerLangMenuOpen, setFooterLangMenuOpen] = useState<boolean>(false);
+  const footerLangTriggerRef = useRef<HTMLButtonElement>(null);
+  const footerLangMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!footerLangMenuOpen) return;
+    const focusTimer = window.setTimeout(() => {
+      const container = footerLangMenuRef.current;
+      if (!container) return;
+      const items = getFocusableElements(container);
+      const activeItem = items.find((el) => el.getAttribute("aria-checked") === "true");
+      (activeItem || items[0])?.focus();
+    }, 0);
+
+    const handleDocPointerDown = (ev: MouseEvent) => {
+      const target = ev.target as Node | null;
+      if (
+        footerLangMenuRef.current?.contains(target) ||
+        footerLangTriggerRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setFooterLangMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleDocPointerDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("mousedown", handleDocPointerDown);
+    };
+  }, [footerLangMenuOpen]);
 
   // Helper to parse times stored as raw numbers, numeric strings, or mm:ss / hh:mm:ss strings
   const parseTimeToSeconds = (val: unknown): number => {
@@ -6714,7 +6789,9 @@ export default function App() {
       const candidateDiff = (
         currentScreenRef.current === "game" && boardStateRef.current?.difficulty
           ? boardStateRef.current.difficulty
-          : difficultyRef.current
+          : currentScreenRef.current === "home"
+            ? editorialDifficultyRef.current
+            : difficultyRef.current
       ) as SeoDifficulty;
       const safeDiff: SeoDifficulty =
         candidateDiff === "EASY" ||
@@ -6723,6 +6800,7 @@ export default function App() {
         candidateDiff === "EXPERT"
           ? candidateDiff
           : "EASY";
+      setEditorialDifficulty(safeDiff);
       const nextPath = getSeoPath(lang as SeoLanguage, safeDiff);
       setRoutePathname(nextPath);
       if (window.location.pathname !== nextPath) {
@@ -8162,7 +8240,11 @@ export default function App() {
         }
       }
 
-      const parsedPopRoute = (!Capacitor.isNativePlatform() && !isCrazyGamesActive() && !challengeModeRef.current)
+      const popLegalRoute =
+        !Capacitor.isNativePlatform() && !isCrazyGamesActive()
+          ? parseComplianceRoute(window.location.pathname)
+          : null;
+      const parsedPopRoute = (!Capacitor.isNativePlatform() && !isCrazyGamesActive() && !challengeModeRef.current && !popLegalRoute)
         ? parseDifficultyFromPath(window.location.pathname)
         : null;
       const pathDiff = parsedPopRoute?.hasExplicitDifficulty ? parsedPopRoute.difficulty : null;
@@ -8179,10 +8261,20 @@ export default function App() {
       const restoredDiff = pathDiff || ((state && typeof state === "object" && state.difficulty) ? (state.difficulty as Difficulty) : null);
       if (!Capacitor.isNativePlatform() && !isCrazyGamesActive() && !challengeModeRef.current && restoredDiff) {
         setDifficulty(restoredDiff);
+        setEditorialDifficulty(restoredDiff as SeoDifficulty);
       }
 
       if (state && typeof state === "object" && state.view) {
-        const v = state.view as "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge";
+        const v = state.view as
+          | "home"
+          | "status"
+          | "settings"
+          | "game"
+          | "login"
+          | "together"
+          | "solver"
+          | "daily-challenge"
+          | CompliancePageType;
         setCurrentScreen(v);
         if (!Capacitor.isNativePlatform() && !isCrazyGamesActive()) {
           setRoutePathname(window.location.pathname || "/");
@@ -8205,6 +8297,9 @@ export default function App() {
         ) {
           generateAndSetNewPuzzleRef.current?.(restoredDiff);
         }
+      } else if (popLegalRoute) {
+        setCurrentScreen(popLegalRoute);
+        setRoutePathname(COMPLIANCE_PATHS[popLegalRoute]);
       } else if (
         !Capacitor.isNativePlatform() &&
         !isCrazyGamesActive() &&
@@ -15025,71 +15120,93 @@ export default function App() {
     let isSubscribed = true;
     let urlListener: any = null;
 
+    const processIncomingDeepLinkUrl = (rawUrl: string) => {
+      if (!isSubscribed || !rawUrl) return;
+      try {
+        const urlObj = new URL(rawUrl);
+        const params = new URLSearchParams(urlObj.search);
+        let chalParam = params.get("room") || params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("c");
+        let dailyParam = params.get("daily");
+        let queryPw = params.get("pin") || params.get("pw") || params.get("password");
+        let senderParam = params.get("sender") || params.get("senderName") || params.get("invitedBy") || params.get("sender_name");
+        let targetUidParam = params.get("targetUid") || params.get("toUserId") || params.get("recipientId") || params.get("to");
+        let viewParam = params.get("view");
+
+        if (!chalParam && urlObj.hash) {
+          const hashIdx = urlObj.hash.indexOf("?");
+          if (hashIdx !== -1) {
+            const qs = urlObj.hash.substring(hashIdx + 1);
+            const hashParams = new URLSearchParams(qs);
+            chalParam = hashParams.get("room") || hashParams.get("challenge") || hashParams.get("gameId") || hashParams.get("seed") || hashParams.get("c");
+            if (!dailyParam) {
+              dailyParam = hashParams.get("daily");
+            }
+            if (!queryPw) {
+              queryPw = hashParams.get("pin") || hashParams.get("pw") || hashParams.get("password");
+            }
+            if (!senderParam) {
+              senderParam = hashParams.get("sender") || hashParams.get("senderName") || hashParams.get("invitedBy") || hashParams.get("sender_name");
+            }
+            if (!targetUidParam) {
+              targetUidParam = hashParams.get("targetUid") || hashParams.get("toUserId") || hashParams.get("recipientId") || hashParams.get("to");
+            }
+            if (!viewParam) {
+              viewParam = hashParams.get("view");
+            }
+          }
+        }
+
+        if (chalParam) {
+          const sanitizedChallenge = sanitizeGameId(chalParam);
+          const sanitizedPw = queryPw ? sanitizePassword(queryPw) : undefined;
+          const sanitizedSender = senderParam ? sanitizeSenderName(senderParam) : undefined;
+          if (viewParam === "results" && sanitizedChallenge) {
+            handleViewChallengeResults(sanitizedChallenge, true);
+          } else if (sanitizedChallenge) {
+            handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true, targetUidParam || undefined);
+          }
+        } else if (dailyParam) {
+          try {
+            const trimmedDaily = dailyParam.trim();
+            parseDateKey(trimmedDaily);
+            if (trimmedDaily <= formatDateKey(new Date())) {
+              if (isAppReadyRef.current && !isAuthHydratingRef.current) {
+                void launchDailyByDateKeyRef.current?.(trimmedDaily);
+              } else {
+                pendingDailyDeepLinkRef.current = trimmedDaily;
+              }
+            }
+          } catch { }
+        } else {
+          const customSchemePath = urlObj.protocol === "sudokusync:" ? `/${urlObj.host}${urlObj.pathname}` : urlObj.pathname;
+          const legalRoute = parseComplianceRoute(customSchemePath) || parseComplianceRoute(urlObj.pathname);
+          if (legalRoute) {
+            navigateToScreen(legalRoute);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse incoming deep link URL:", e);
+      }
+    };
+
     const setupDeepLinkListener = async () => {
       try {
+        try {
+          const launchInfo = await CapApp.getLaunchUrl();
+          if (isSubscribed && launchInfo?.url) {
+            const launchObj = new URL(launchInfo.url);
+            const launchPath = launchObj.protocol === "sudokusync:" ? `/${launchObj.host}${launchObj.pathname}` : launchObj.pathname;
+            const coldLegalRoute = parseComplianceRoute(launchPath) || parseComplianceRoute(launchObj.pathname);
+            if (coldLegalRoute) {
+              navigateToScreen(coldLegalRoute);
+            }
+          }
+        } catch { }
+
         urlListener = await CapApp.addListener('appUrlOpen', (event: any) => {
           if (!isSubscribed || !event?.url) return;
           console.log('App opened with URL:', event.url);
-
-          try {
-            const urlObj = new URL(event.url);
-            const params = new URLSearchParams(urlObj.search);
-            let chalParam = params.get("room") || params.get("challenge") || params.get("gameId") || params.get("seed") || params.get("c");
-            let dailyParam = params.get("daily");
-            let queryPw = params.get("pin") || params.get("pw") || params.get("password");
-            let senderParam = params.get("sender") || params.get("senderName") || params.get("invitedBy") || params.get("sender_name");
-            let targetUidParam = params.get("targetUid") || params.get("toUserId") || params.get("recipientId") || params.get("to");
-            let viewParam = params.get("view");
-
-            if (!chalParam && urlObj.hash) {
-              const hashIdx = urlObj.hash.indexOf("?");
-              if (hashIdx !== -1) {
-                const qs = urlObj.hash.substring(hashIdx + 1);
-                const hashParams = new URLSearchParams(qs);
-                chalParam = hashParams.get("room") || hashParams.get("challenge") || hashParams.get("gameId") || hashParams.get("seed") || hashParams.get("c");
-                if (!dailyParam) {
-                  dailyParam = hashParams.get("daily");
-                }
-                if (!queryPw) {
-                  queryPw = hashParams.get("pin") || hashParams.get("pw") || hashParams.get("password");
-                }
-                if (!senderParam) {
-                  senderParam = hashParams.get("sender") || hashParams.get("senderName") || hashParams.get("invitedBy") || hashParams.get("sender_name");
-                }
-                if (!targetUidParam) {
-                  targetUidParam = hashParams.get("targetUid") || hashParams.get("toUserId") || hashParams.get("recipientId") || hashParams.get("to");
-                }
-                if (!viewParam) {
-                  viewParam = hashParams.get("view");
-                }
-              }
-            }
-
-            if (chalParam) {
-              const sanitizedChallenge = sanitizeGameId(chalParam);
-              const sanitizedPw = queryPw ? sanitizePassword(queryPw) : undefined;
-              const sanitizedSender = senderParam ? sanitizeSenderName(senderParam) : undefined;
-              if (viewParam === "results" && sanitizedChallenge) {
-                handleViewChallengeResults(sanitizedChallenge, true);
-              } else if (sanitizedChallenge) {
-                handleLoadChallengeFromId(sanitizedChallenge, sanitizedPw, sanitizedSender, true, targetUidParam || undefined);
-              }
-            } else if (dailyParam) {
-              try {
-                const trimmedDaily = dailyParam.trim();
-                parseDateKey(trimmedDaily);
-                if (trimmedDaily <= formatDateKey(new Date())) {
-                  if (isAppReadyRef.current && !isAuthHydratingRef.current) {
-                    void launchDailyByDateKeyRef.current?.(trimmedDaily);
-                  } else {
-                    pendingDailyDeepLinkRef.current = trimmedDaily;
-                  }
-                }
-              } catch { }
-            }
-          } catch (e) {
-            console.error("Failed to parse incoming deep link URL:", e);
-          }
+          processIncomingDeepLinkUrl(event.url);
         });
       } catch (e) {
         console.error("Failed to register App appUrlOpen listener:", e);
@@ -15477,9 +15594,12 @@ export default function App() {
 
   const handleSelectDifficultySilo = (
     lvl: Difficulty,
-    options?: { startNewGame?: boolean; scrollToBoard?: boolean; scrollToEditorial?: boolean }
+    options?: { startNewGame?: boolean; scrollToBoard?: boolean; scrollToEditorial?: boolean; editorialOnly?: boolean }
   ) => {
-    setDifficulty(lvl);
+    setEditorialDifficulty(lvl as SeoDifficulty);
+    if (!options?.editorialOnly) {
+      setDifficulty(lvl);
+    }
 
     const hasInviteParams = (() => {
       if (typeof window === "undefined") return false;
@@ -15495,7 +15615,7 @@ export default function App() {
       !Capacitor.isNativePlatform() &&
       !isCrazyGamesActive() &&
       !hasInviteParams &&
-      (!challengeMode || Boolean(options?.startNewGame));
+      (!challengeMode || Boolean(options?.startNewGame) || Boolean(options?.editorialOnly));
 
     if (allowUrlRouteSync && typeof window !== "undefined") {
       const activeLang = (getCurrentLanguage() || "en") as SeoLanguage;
@@ -15533,13 +15653,81 @@ export default function App() {
     }
   };
 
-  // Sync <head> title, description, canonical, html lang, and social metadata with active web silo
+  // Sync <head> title, description, canonical, hreflang alternates, html lang, and social metadata with active web silo
   useEffect(() => {
     if (Capacitor.isNativePlatform() || isCrazyGamesActive()) return;
     const setMetaTag = (attr: "name" | "property", key: string, value: string) => {
       const el = document.querySelector(`meta[${attr}="${key}"]`);
       if (el) el.setAttribute("content", value);
     };
+    const clearHreflangLinks = () => {
+      document.querySelectorAll('link[data-seo-hreflang="true"]').forEach((el) => el.remove());
+    };
+    const syncHreflangLinks = (siloDiff: SeoDifficulty, isRootLanding: boolean) => {
+      clearHreflangLinks();
+      const headEl = document.head;
+      if (!headEl) return;
+      SEO_LANGUAGES.forEach((langOpt) => {
+        const link = document.createElement("link");
+        link.rel = "alternate";
+        link.hreflang = langOpt.htmlLang;
+        link.href = `https://sudokusync.com${getSeoPath(langOpt.code, siloDiff)}`;
+        link.setAttribute("data-seo-hreflang", "true");
+        headEl.appendChild(link);
+      });
+      const xDefault = document.createElement("link");
+      xDefault.rel = "alternate";
+      xDefault.hreflang = "x-default";
+      xDefault.href = isRootLanding
+        ? "https://sudokusync.com/"
+        : `https://sudokusync.com${getSeoPath("en", siloDiff)}`;
+      xDefault.setAttribute("data-seo-hreflang", "true");
+      headEl.appendChild(xDefault);
+    };
+
+    const activeLegalRoute =
+      currentScreen === "privacy" || currentScreen === "terms" || currentScreen === "contact" || currentScreen === "about"
+        ? currentScreen
+        : parseComplianceRoute(routePathname);
+
+    if (activeLegalRoute) {
+      const legalMetaMap: Record<CompliancePageType, { title: string; desc: string; path: string }> = {
+        privacy: {
+          title: "Privacy Policy (v1.0.3) — SudokuSync",
+          desc: "Privacy Policy for SudokuSync covering Firebase Authentication, Cloud Firestore, FCM, Google AdSense, Google AdMob SDK, AAID controls, and Google UMP Consent.",
+          path: "/privacy",
+        },
+        terms: {
+          title: "Terms of Service (v1.0.3) — SudokuSync",
+          desc: "Terms of Service, Fair Play policy, Google AdSense & AdMob guidelines, and cloud sync rules for SudokuSync.",
+          path: "/terms",
+        },
+        contact: {
+          title: "Contact & Support — SudokuSync",
+          desc: "Contact the SudokuSync team at sudokutogethermode@gmail.com for player support, bug reports, or privacy and data deletion inquiries.",
+          path: "/contact",
+        },
+        about: {
+          title: "About SudokuSync — Real-Time Social Sudoku",
+          desc: "Learn about SudokuSync, deterministic multiplayer rooms, offline-first vault architecture, and classic logic training.",
+          path: "/about",
+        },
+      };
+      const legalMeta = legalMetaMap[activeLegalRoute];
+      const legalCanonical = `https://sudokusync.com${legalMeta.path}`;
+      document.documentElement.lang = (language as string) || "en";
+      document.title = legalMeta.title;
+      setMetaTag("name", "description", legalMeta.desc);
+      setMetaTag("property", "og:title", legalMeta.title);
+      setMetaTag("property", "og:description", legalMeta.desc);
+      setMetaTag("property", "og:url", legalCanonical);
+      setMetaTag("name", "twitter:title", legalMeta.title);
+      setMetaTag("name", "twitter:description", legalMeta.desc);
+      const canonicalEl = document.querySelector('link[rel="canonical"]');
+      if (canonicalEl) canonicalEl.setAttribute("href", legalCanonical);
+      clearHreflangLinks();
+      return;
+    }
 
     if (currentScreen === "daily-challenge" || isDailyChallengePath(routePathname)) {
       const dailyTitle = "Daily Sudoku Challenge — Synchronized Global Puzzle & Archive | Sudoku Sync";
@@ -15556,6 +15744,7 @@ export default function App() {
       setMetaTag("name", "twitter:description", dailyDesc);
       const canonicalEl = document.querySelector('link[rel="canonical"]');
       if (canonicalEl) canonicalEl.setAttribute("href", dailyCanonical);
+      clearHreflangLinks();
       return;
     }
 
@@ -15574,15 +15763,16 @@ export default function App() {
       setMetaTag("name", "twitter:description", solverDesc);
       const canonicalEl = document.querySelector('link[rel="canonical"]');
       if (canonicalEl) canonicalEl.setAttribute("href", solverCanonical);
+      clearHreflangLinks();
       return;
     }
 
     const parsedRoute = parseDifficultyFromPath(routePathname);
     const activeHeadLang = ((parsedRoute.hasExplicitLanguage ? parsedRoute.language : (language as SeoLanguage)) || "en") as SeoLanguage;
-    const meta =
-      !parsedRoute.hasExplicitDifficulty && !parsedRoute.hasExplicitLanguage
-        ? getRootSeoMeta(activeHeadLang)
-        : getLocalizedSeoSilo(parsedRoute.difficulty, activeHeadLang);
+    const isRootLanding = !parsedRoute.hasExplicitDifficulty && !parsedRoute.hasExplicitLanguage;
+    const meta = isRootLanding
+      ? getRootSeoMeta(activeHeadLang)
+      : getLocalizedSeoSilo(parsedRoute.difficulty, activeHeadLang);
 
     document.documentElement.lang = meta.htmlLang;
     document.title = meta.title;
@@ -15598,6 +15788,7 @@ export default function App() {
     if (canonicalEl) {
       canonicalEl.setAttribute("href", meta.canonicalUrl);
     }
+    syncHreflangLinks(parsedRoute.difficulty, isRootLanding);
   }, [routePathname, language, currentScreen]);
 
   // Replay / Retry Puzzle: Resets personal board progress without leaving or affecting other room participants
@@ -16396,7 +16587,14 @@ export default function App() {
   // Web Instant-Play Auto-Start on initial mount (all web viewports, desktop & mobile web)
   useEffect(() => {
     if (webAutoStartedRef.current) return;
-    if (hasInitialInviteRef.current) {
+    if (
+      hasInitialInviteRef.current ||
+      currentScreenRef.current !== "home" ||
+      (typeof window !== "undefined" &&
+        (isDailyChallengePath(window.location.pathname) ||
+          isSolverPath(window.location.pathname) ||
+          Boolean(parseComplianceRoute(window.location.pathname))))
+    ) {
       webAutoStartedRef.current = true;
       return;
     }
@@ -17474,10 +17672,7 @@ export default function App() {
     }
 
     const activeLang = (language as SeoLanguage) || "en";
-    const activeSiloDiff: SeoDifficulty =
-      challengeMode && boardState?.difficulty
-        ? (boardState.difficulty as SeoDifficulty)
-        : (difficulty as SeoDifficulty);
+    const activeSiloDiff: SeoDifficulty = editorialDifficulty;
     const activeSilo = getLocalizedSeoSilo(activeSiloDiff, activeLang);
     const keyboardGuide = getKeyboardGuideCopy(activeLang);
 
@@ -17557,7 +17752,8 @@ export default function App() {
                     e.preventDefault();
                     playClickSound();
                     handleSelectDifficultySilo(item.difficulty, {
-                      startNewGame: context === "game" && !challengeMode,
+                      startNewGame: false,
+                      editorialOnly: true,
                     });
                   }}
                   className={`p-3 rounded-2xl border-none flex flex-col justify-between transition-all duration-150 no-underline ${pillTheme}`}
@@ -17992,7 +18188,8 @@ export default function App() {
               onClick={() => {
                 playClickSound();
                 if (context === "home") {
-                  generateAndSetNewPuzzle(difficulty);
+                  setDifficulty(activeSiloDiff);
+                  generateAndSetNewPuzzle(activeSiloDiff);
                   setIsTimerPaused(false);
                   navigateToScreen("game");
                 } else {
@@ -18008,33 +18205,10 @@ export default function App() {
             </button>
           </div>
 
-          {/* Compliant Static Footer + 9-Language Crawl Mesh */}
+          {/* Compliant Static Footer + Compact Pastel Language Dropdown */}
           {!Capacitor.isNativePlatform() && (
             <footer className="w-full max-w-4xl mx-auto px-4 py-6 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 text-center text-sm font-sans text-stone-600 select-text">
-              <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 text-xs font-semibold">
-                {SEO_SILO_ORDER.map((lvl) => {
-                  const item = getLocalizedSeoSilo(lvl, activeLang);
-                  return (
-                    <a
-                      key={item.path}
-                      href={item.path}
-                      onClick={(e) => {
-                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                        e.preventDefault();
-                        playClickSound();
-                        const shouldStartGame = context === "game" && !challengeMode;
-                        handleSelectDifficultySilo(item.difficulty, {
-                          startNewGame: shouldStartGame,
-                          scrollToBoard: shouldStartGame,
-                          scrollToEditorial: context === "home" || Boolean(challengeMode),
-                        });
-                      }}
-                      className="py-1 px-2 text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline"
-                    >
-                      {item.crossLinkLabel}
-                    </a>
-                  );
-                })}
+              <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 text-xs font-semibold">
                 <a
                   href="/daily-challenge"
                   onClick={(e) => {
@@ -18043,7 +18217,7 @@ export default function App() {
                     playClickSound();
                     navigateToScreen("daily-challenge");
                   }}
-                  className="py-1 px-2 text-[#4F46E5] hover:text-[#3730A3] dark:text-[#A5B4FC] dark:hover:text-[#c7d2fe] transition-colors hover:underline"
+                  className="py-1.5 px-3 rounded-xl text-[#4F46E5] hover:bg-indigo-50/80 dark:text-[#A5B4FC] dark:hover:bg-indigo-950/40 transition-colors no-underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                 >
                   {t("dailyChallengeLabel")}
                 </a>
@@ -18055,58 +18229,161 @@ export default function App() {
                     playClickSound();
                     navigateToScreen("solver");
                   }}
-                  className="py-1 px-2 text-[#0F766E] hover:text-[#115E59] dark:text-[#5EEAD4] dark:hover:text-[#99F6E4] transition-colors hover:underline"
+                  className="py-1.5 px-3 rounded-xl text-[#0F766E] hover:bg-teal-50/80 dark:text-[#5EEAD4] dark:hover:bg-teal-950/40 transition-colors no-underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
                 >
                   {t("sudokuSolverLabel")}
                 </a>
-              </div>
 
-              {/* 9-Language Crawl Navigation Links */}
-              <nav
-                id="seo-language-footer-nav"
-                aria-label={t("webLanguageEditions")}
-                className="w-full flex flex-wrap items-center justify-center gap-1.5 sm:gap-2"
-              >
-                <span className={`inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider px-2 py-1 ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
-                  <Globe className="w-3.5 h-3.5 shrink-0" />
-                  <span>{t("webLanguageEditions")}:</span>
-                </span>
-                {SEO_LANGUAGES.map((langOpt) => {
-                  const isCurrentLang = activeLang === langOpt.code;
-                  const langHref = getSeoPath(langOpt.code, activeSiloDiff);
-                  return (
-                    <a
-                      key={langOpt.code}
-                      href={langHref}
-                      hrefLang={langOpt.htmlLang}
-                      lang={langOpt.htmlLang}
-                      aria-current={isCurrentLang ? "page" : undefined}
-                      onClick={(e) => {
+                {/* Compact Borderless Pastel Language Dropdown */}
+                <div className="relative inline-flex items-center">
+                  <button
+                    ref={footerLangTriggerRef}
+                    id="footer-language-dropdown-trigger"
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={footerLangMenuOpen}
+                    aria-controls="footer-language-dropdown-menu"
+                    aria-label={t("webLanguageEditions")}
+                    onClick={() => {
+                      playClickSound();
+                      setFooterLangMenuOpen((prev) => !prev);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                         e.preventDefault();
-                        playClickSound();
-                        handleLanguageChange(langOpt.code);
+                        e.stopPropagation();
+                        setFooterLangMenuOpen(true);
+                      } else if (e.key === "Escape" && footerLangMenuOpen) {
+                        e.preventDefault();
+                        setFooterLangMenuOpen(false);
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border-0 text-xs font-bold uppercase tracking-wide transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                      darkMode
+                        ? "bg-zinc-800/90 text-sky-200 hover:bg-zinc-800 shadow-[0_4px_14px_rgba(0,0,0,0.3)]"
+                        : "bg-[#E0F2FE]/85 text-[#0369A1] hover:bg-[#BAE6FD]/80 shadow-[0_4px_14px_rgba(3,105,161,0.06)]"
+                    }`}
+                  >
+                    <Globe className="w-3.5 h-3.5 shrink-0" />
+                    <span>{activeLang === "pt-BR" ? "PT" : activeLang.toUpperCase()}</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${footerLangMenuOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {footerLangMenuOpen && (
+                    <div
+                      ref={footerLangMenuRef}
+                      id="footer-language-dropdown-menu"
+                      role="menu"
+                      aria-label={t("webLanguageEditions")}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setFooterLangMenuOpen(false);
+                          footerLangTriggerRef.current?.focus();
+                          return;
+                        }
+                        if (e.key === "Tab") {
+                          setFooterLangMenuOpen(false);
+                          return;
+                        }
+                        const container = footerLangMenuRef.current;
+                        if (container) {
+                          handleRovingMenuArrowKey(e, getFocusableElements(container), "vertical");
+                        }
                       }}
-                      className={`px-2.5 py-1 rounded-xl border-0 no-underline text-xs font-medium transition-colors duration-150 ${
-                        isCurrentLang
-                          ? darkMode
-                            ? "bg-[#0c4a6e]/80 text-[#bae6fd] shadow-[0_2px_10px_rgba(0,0,0,0.3)] font-bold"
-                            : "bg-[#E0F2FE] text-[#0369A1] shadow-[0_2px_10px_rgba(3,105,161,0.06)] font-bold"
-                          : darkMode
-                            ? "bg-zinc-900/50 text-stone-300 hover:bg-zinc-800/80 hover:text-white"
-                            : "bg-white/70 text-stone-600 hover:bg-[#E0F2FE]/60 hover:text-[#0369A1] shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
+                      className={`absolute bottom-full mb-2 right-0 sm:left-1/2 sm:-translate-x-1/2 sm:right-auto z-50 min-w-[176px] p-1.5 rounded-2xl border-0 flex flex-col gap-0.5 text-left ${
+                        darkMode
+                          ? "bg-zinc-900/95 text-zinc-100 shadow-[0_12px_32px_rgba(0,0,0,0.5)]"
+                          : "bg-white/95 text-stone-700 shadow-[0_12px_32px_rgba(15,23,42,0.1)]"
                       }`}
                     >
-                      {langOpt.nativeName}
-                    </a>
-                  );
-                })}
-              </nav>
+                      {SEO_LANGUAGES.map((langOpt) => {
+                        const isCurrentLang = activeLang === langOpt.code;
+                        return (
+                          <button
+                            key={langOpt.code}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={isCurrentLang}
+                            lang={langOpt.htmlLang}
+                            onClick={() => {
+                              playClickSound();
+                              handleLanguageChange(langOpt.code);
+                              setFooterLangMenuOpen(false);
+                              footerLangTriggerRef.current?.focus();
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border-0 text-xs transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                              isCurrentLang
+                                ? darkMode
+                                  ? "bg-sky-500/20 text-sky-300 font-bold"
+                                  : "bg-[#E0F2FE] text-[#0369A1] font-bold"
+                                : darkMode
+                                  ? "text-zinc-200 hover:bg-zinc-800"
+                                  : "text-stone-700 hover:bg-sky-50"
+                            }`}
+                          >
+                            <span>{langOpt.nativeName}</span>
+                            <span className="text-[10px] font-mono uppercase opacity-70">
+                              {langOpt.code === "pt-BR" ? "PT" : langOpt.code.toUpperCase()}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 max-w-xs sm:max-w-none mx-auto text-center sm:flex sm:flex-row sm:justify-center sm:gap-x-6">
-                <a href="/about.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">{t("aboutUs")}</a>
-                <a href="/contact.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">{t("contactUs")}</a>
-                <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">Privacy Policy</a>
-                <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="py-2 px-3 text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline">Terms of Service</a>
+                <a
+                  href="/about"
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                    e.preventDefault();
+                    playClickSound();
+                    navigateToScreen("about");
+                  }}
+                  className="py-2 px-3 rounded-xl text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                >
+                  {t("aboutUs")}
+                </a>
+                <a
+                  href="/contact"
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                    e.preventDefault();
+                    playClickSound();
+                    navigateToScreen("contact");
+                  }}
+                  className="py-2 px-3 rounded-xl text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                >
+                  {t("contactUs")}
+                </a>
+                <a
+                  href="/privacy"
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                    e.preventDefault();
+                    playClickSound();
+                    navigateToScreen("privacy");
+                  }}
+                  className="py-2 px-3 rounded-xl text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                >
+                  {t("privacyPolicy")}
+                </a>
+                <a
+                  href="/terms"
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                    e.preventDefault();
+                    playClickSound();
+                    navigateToScreen("terms");
+                  }}
+                  className="py-2 px-3 rounded-xl text-sm font-semibold text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                >
+                  {t("termsOfService")}
+                </a>
               </div>
               <div className="opacity-80 font-mono text-[11px]">
                 © 2026 SudokuSync. All rights reserved.
@@ -18261,14 +18538,23 @@ export default function App() {
                   setCurrentScreen("home");
                   setNavigationHistory(["home"]);
                   window.history.pushState({ view: "home" }, "", window.location.href);
-                } else if (currentScreen === "solver" || currentScreen === "daily-challenge") {
+                } else if (
+                  currentScreen === "solver" ||
+                  currentScreen === "daily-challenge" ||
+                  currentScreen === "privacy" ||
+                  currentScreen === "terms" ||
+                  currentScreen === "contact" ||
+                  currentScreen === "about"
+                ) {
                   setCurrentScreen("home");
                   setNavigationHistory(["home"]);
                   if (typeof window !== "undefined") {
                     const returnUrl =
                       !Capacitor.isNativePlatform() &&
                       !isCrazyGamesActive() &&
-                      (isDailyChallengePath(window.location.pathname) || isSolverPath(window.location.pathname))
+                      (isDailyChallengePath(window.location.pathname) ||
+                        isSolverPath(window.location.pathname) ||
+                        Boolean(parseComplianceRoute(window.location.pathname)))
                         ? "/"
                         : window.location.href;
                     if (returnUrl === "/") {
@@ -18349,7 +18635,7 @@ export default function App() {
                 const activeBadgeDiff = currentScreen === "home" ? homeContextDifficulty : (boardState?.difficulty || difficulty);
                 return (
                   <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? (activeBadgeDiff === "EASY" ? "text-[#d1fae5]" : activeBadgeDiff === "MEDIUM" ? "text-[#fef08a]" : activeBadgeDiff === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : (activeBadgeDiff === "EASY" ? "text-[#065F46]" : activeBadgeDiff === "MEDIUM" ? "text-[#854D0E]" : activeBadgeDiff === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
-                    {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : currentScreen === "daily-challenge" ? t("dailyChallengeLabel") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
+                    {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : currentScreen === "daily-challenge" ? t("dailyChallengeLabel") : currentScreen === "privacy" ? t("privacyPolicy") : currentScreen === "terms" ? t("termsOfService") : currentScreen === "contact" ? t("contactUs") : currentScreen === "about" ? t("aboutUs") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
                   </span>
                 );
               })()}
@@ -20938,6 +21224,39 @@ export default function App() {
             refreshTrigger={dailyRefreshCounter}
             onStartDailyChallenge={handleLaunchDailyChallenge}
             onOpenSolver={() => navigateToScreen("solver")}
+          />
+        )}
+
+        {/* PANE: LEGAL & COMPLIANCE SCREEN (/privacy, /terms, /contact, /about) */}
+        {(currentScreen === "privacy" ||
+          currentScreen === "terms" ||
+          currentScreen === "contact" ||
+          currentScreen === "about") && (
+          <ComplianceScreen
+            page={currentScreen}
+            darkMode={darkMode}
+            onNavigatePage={(nextPage) => navigateToScreen(nextPage)}
+            onBackHome={() => {
+              playClickSound();
+              setCurrentScreen("home");
+              setNavigationHistory(["home"]);
+              if (
+                typeof window !== "undefined" &&
+                !Capacitor.isNativePlatform() &&
+                !isCrazyGamesActive()
+              ) {
+                setRoutePathname("/");
+                window.history.pushState({ view: "home" }, "", "/");
+              }
+            }}
+            onOpenSettings={() => setShowSettingsModal(true)}
+            onCopyEmail={async (email) => {
+              const ok = await copyToClipboard(email);
+              if (ok) {
+                showToast(t("copied") || "Copied");
+              }
+              return ok;
+            }}
           />
         )}
 
@@ -24922,135 +25241,23 @@ export default function App() {
               </div>
 
               <div className="flex-1 overflow-y-auto pr-2 no-scrollbar leading-relaxed text-xs sm:text-sm font-sans flex flex-col gap-4 select-text">
-                {activeCompliancePage === "about" && (
-                  <div className="space-y-3">
-                    <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc] leading-normal overflow-visible">{t("aboutUsTitle")}</p>
-                    <p className="leading-normal overflow-visible">
-                      <strong>SudokuSync</strong> — {t("aboutUsDesc")}
-                    </p>
-                    <p className="leading-normal overflow-visible">
-                      {t("aboutMission")}
-                    </p>
-                    <p className="leading-normal overflow-visible text-xs text-stone-600 dark:text-stone-300">
-                      {t("aboutTechArchDesc")}
-                    </p>
-                    <div className="p-3 rounded-xl bg-stone-500/5 dark:bg-zinc-800/60 border border-stone-200/60 dark:border-zinc-700/60 space-y-1 my-2">
-                      <p className="text-xs font-bold text-stone-700 dark:text-stone-300 leading-normal overflow-visible">
-                        {t("versionLabel")}: <span className="font-mono text-sky-500 dark:text-sky-400">v1.0.1 (15)</span>
-                      </p>
-                      <p className="text-xs text-stone-500 dark:text-stone-400 leading-normal overflow-visible">
-                        {t("creditsLabel")}
-                      </p>
-                    </div>
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">{t("aboutFeaturesHeader")}:</h4>
-                    <ul className="list-disc pl-5 space-y-1.5 text-xs">
-                      <li><strong>{t("aboutFeat1Title")}:</strong> {t("aboutFeat1Desc")}</li>
-                      <li><strong>{t("aboutFeat2Title")}:</strong> {t("aboutFeat2Desc")}</li>
-                      <li><strong>{t("aboutFeat3Title")}:</strong> {t("aboutFeat3Desc")}</li>
-                      <li><strong>{t("aboutFeat4Title")}:</strong> {t("aboutFeat4Desc")}</li>
-                    </ul>
-                    <p className="pt-2 text-stone-600 dark:text-stone-400 leading-normal overflow-visible text-xs">
-                      {t("aboutAdNotice")}
-                    </p>
-                  </div>
-                )}
-
-                {activeCompliancePage === "contact" && (
-                  <div className="space-y-3">
-                    <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc] leading-normal overflow-visible">{t("contactUsTitle")}</p>
-                    <p className="leading-normal overflow-visible">
-                      {t("contactDesc")}
-                    </p>
-                    <div className="p-4 rounded-2xl bg-stone-500/5 dark:bg-zinc-800/60 border border-stone-200/60 dark:border-zinc-700/60 my-2 space-y-2">
-                      <p className="font-bold text-xs uppercase tracking-wider text-stone-600 dark:text-stone-300 leading-normal overflow-visible">{t("officialSupportContact")}</p>
-                      <a href="mailto:sudokutogethermode@gmail.com?subject=SudokuSync%20Support%20Inquiry" className="text-sky-500 dark:text-sky-400 font-bold hover:underline text-sm block leading-normal overflow-visible">
-                        sudokutogethermode@gmail.com
-                      </a>
-                      <p className="text-[11px] text-stone-500 dark:text-stone-400 font-mono leading-normal overflow-visible">
-                        {t("contactTurnaround")}
-                      </p>
-                    </div>
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("contactDeletionHeader")}:</h4>
-                    <p className="text-xs leading-normal overflow-visible">
-                      {t("contactDeletionDesc")}
-                    </p>
-                  </div>
-                )}
-
-                {activeCompliancePage === "privacy" && (
-                  <div className="space-y-4">
-                    <div>
-                      <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc] leading-normal overflow-visible">{t("privacyPolicyTitle")}</p>
-                      <p className="text-[11px] font-mono opacity-80 leading-normal overflow-visible">{t("privacyEffectiveDate")}</p>
-                    </div>
-
-                    <p className="leading-normal overflow-visible font-medium text-stone-700 dark:text-stone-300">
-                      {t("privacyScopeDesc")}
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("privacySection1Header")}</h4>
-                    <p className="leading-normal overflow-visible text-xs">{t("privacySection1Desc")}</p>
-                    <ul className="list-disc pl-5 space-y-2 text-xs">
-                      <li>{t("privacyLocalStorageItem")}</li>
-                      <li>{t("privacyCloudStorageItem")}</li>
-                      <li>{t("privacyGoogleSyncItem")}</li>
-                      <li>{t("privacyPushNotificationItem")}</li>
-                    </ul>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">{t("privacyAdSenseHeader")}</h4>
-                    <p className="text-xs leading-normal overflow-visible">
-                      {t("privacyAdSenseDesc")}
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">{t("privacySection2Header")}</h4>
-                    <p className="text-xs leading-normal overflow-visible">
-                      {t("privacySection2Desc")}
-                      <br />
-                      <strong className="text-sky-500 dark:text-sky-400">sudokutogethermode@gmail.com</strong>
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-3 leading-normal overflow-visible">{t("privacySection3Header")}</h4>
-                    <p className="text-xs leading-normal overflow-visible">
-                      {t("privacySection3Desc")}
-                    </p>
-                  </div>
-                )}
-
-                {activeCompliancePage === "terms" && (
-                  <div className="space-y-4">
-                    <div>
-                      <p className="font-bold text-sm text-[#0369A1] dark:text-[#7dd3fc] leading-normal overflow-visible">{t("termsOfServiceTitle")}</p>
-                      <p className="text-[11px] font-mono opacity-80 leading-normal overflow-visible">{t("termsEffectiveDate")}</p>
-                    </div>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsSection1Header")}</h4>
-                    <p className="text-xs leading-normal overflow-visible">
-                      {t("termsSection1Desc")}
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsSection2Header")}</h4>
-                    <p className="text-xs leading-normal overflow-visible">
-                      {t("termsSection2Desc")}
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsFairPlayHeader")}</h4>
-                    <p className="text-xs leading-normal overflow-visible">
-                      {t("termsFairPlayDesc")}
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsCloudAccountHeader")}</h4>
-                    <p className="text-xs leading-normal overflow-visible">
-                      {t("termsCloudAccountDesc")}
-                    </p>
-
-                    <h4 className="font-bold uppercase tracking-wider text-xs text-stone-800 dark:text-stone-200 mt-2 leading-normal overflow-visible">{t("termsSection3Header")}</h4>
-                    <p className="text-xs leading-normal overflow-visible">
-                      {t("termsSection3Desc")}
-                      <br />
-                      <strong className="text-sky-500 dark:text-sky-400">sudokutogethermode@gmail.com</strong>
-                    </p>
-                  </div>
-                )}
+                <ComplianceDocumentBody
+                  page={activeCompliancePage}
+                  darkMode={darkMode}
+                  compact
+                  onNavigatePage={(nextPage) => setActiveCompliancePage(nextPage)}
+                  onOpenSettings={() => {
+                    setActiveCompliancePage(null);
+                    setShowSettingsModal(true);
+                  }}
+                  onCopyEmail={async (email) => {
+                    const ok = await copyToClipboard(email);
+                    if (ok) {
+                      showToast(t("copied") || "Copied");
+                    }
+                    return ok;
+                  }}
+                />
               </div>
             </motion.div>
           </div>
