@@ -2528,6 +2528,18 @@ export const GUIDES_TRANSLATIONS: Record<Language, Record<GuideSlug, GuideArticl
   "pt-BR": GUIDES_PT_BR,
 };
 
+export const ACADEMY_STRIP_TITLES: Record<Language, string> = {
+  en: "Sudoku Academy & Tools",
+  hi: "Sudoku Academy aur Tools",
+  de: "Sudoku-Akademie & Werkzeuge",
+  ja: "数独アカデミー＆ツール",
+  ko: "스도쿠 아카데미 & 도구",
+  es: "Academia de Sudoku y Herramientas",
+  fr: "Académie Sudoku & Outils",
+  it: "Accademia Sudoku e Strumenti",
+  "pt-BR": "Academia Sudoku e Ferramentas",
+};
+
 /** Resolves a guide's localized copy, falling back to English. */
 export function getGuideCopy(lang: Language, slug: GuideSlug): GuideArticleContent {
   const locale = GUIDES_TRANSLATIONS[lang] || GUIDES_TRANSLATIONS.en;

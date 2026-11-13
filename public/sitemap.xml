@@ -25,6 +25,24 @@
     <priority>0.95</priority>
   </url>
   <url>
+    <loc>https://sudokusync.com/guides/multiplayer-sudoku</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.92</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/guides/beginner-sudoku</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.92</priority>
+  </url>
+  <url>
+    <loc>https://sudokusync.com/guides/advanced-patterns</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.92</priority>
+  </url>
+  <url>
     <loc>https://sudokusync.com/en/easy</loc>
     <lastmod>2026-11-10</lastmod>
     <changefreq>daily</changefreq>

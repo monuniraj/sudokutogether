@@ -28,6 +28,14 @@ import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./featur
 import { SudokuSolverScreen } from "./features/sudokuSolver/components/SudokuSolverScreen";
 import { SudokuRulesScreen } from "./features/sudokuRules/components/SudokuRulesScreen";
 import { getRulesArticleCopy } from "./utils/rulesArticleTranslations";
+import { GuideArticleScreen } from "./features/guides/components/GuideArticleScreen";
+import {
+  ACADEMY_STRIP_TITLES,
+  GUIDE_PATHS,
+  getGuideCopy,
+  parseGuideSlugFromPath,
+  type GuideSlug,
+} from "./utils/guidesTranslations";
 import {
   ComplianceScreen,
   ComplianceDocumentBody,
@@ -35,6 +43,15 @@ import {
   COMPLIANCE_PATHS,
   type CompliancePageType,
 } from "./components/legal/ComplianceScreen";
+
+type GuideScreenId = `guide:${GuideSlug}`;
+
+const toGuideScreen = (slug: GuideSlug): GuideScreenId => `guide:${slug}`;
+
+const parseGuideScreen = (screen?: string | null): GuideSlug | null => {
+  if (!screen || !screen.startsWith("guide:")) return null;
+  return parseGuideSlugFromPath(`/guides/${screen.slice("guide:".length)}`);
+};
 
 const isDailyChallengePath = (pathname?: string | null): boolean =>
   Boolean(pathname && pathname.trim().replace(/\/+$/, "").toLowerCase() === "/daily-challenge");
@@ -186,6 +203,7 @@ import {
   Crown,
   WifiOff,
   Calendar,
+  Calculator,
   Search,
   Globe,
   Keyboard
@@ -1909,7 +1927,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<"sudoku" | "sandbox" | "kotlin-code" | "spec-docs">("sudoku");
   const [currentScreen, setCurrentScreen] = useState<
-    "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | "rules" | CompliancePageType
+    "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | "rules" | CompliancePageType | GuideScreenId
   >(() => {
     if (
       typeof window !== "undefined" &&
@@ -1919,6 +1937,8 @@ export default function App() {
       if (isDailyChallengePath(window.location.pathname)) return "daily-challenge";
       if (isSolverPath(window.location.pathname)) return "solver";
       if (isRulesPath(window.location.pathname)) return "rules";
+      const guideSlug = parseGuideSlugFromPath(window.location.pathname);
+      if (guideSlug) return toGuideScreen(guideSlug);
       const legalRoute = parseComplianceRoute(window.location.pathname);
       if (legalRoute) return legalRoute;
     }
@@ -2053,6 +2073,8 @@ export default function App() {
       if (isDailyChallengePath(window.location.pathname)) return ["daily-challenge"];
       if (isSolverPath(window.location.pathname)) return ["solver"];
       if (isRulesPath(window.location.pathname)) return ["rules"];
+      const guideSlug = parseGuideSlugFromPath(window.location.pathname);
+      if (guideSlug) return [toGuideScreen(guideSlug)];
       const legalRoute = parseComplianceRoute(window.location.pathname);
       if (legalRoute) return [legalRoute];
     }
@@ -2061,7 +2083,7 @@ export default function App() {
   const isProgrammaticBackRef = useRef<boolean>(false);
 
   const navigateToScreen = (
-    screen: "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | "rules" | CompliancePageType
+    screen: "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | "rules" | CompliancePageType | GuideScreenId
   ) => {
     setCurrentScreen(screen);
     setNavigationHistory(prev => {
@@ -2071,6 +2093,7 @@ export default function App() {
     if (typeof window !== "undefined") {
       let nextUrl = window.location.href;
       if (!Capacitor.isNativePlatform() && !isCrazyGamesActive()) {
+        const targetGuideSlug = parseGuideScreen(screen);
         if (screen === "daily-challenge") {
           nextUrl = "/daily-challenge";
           setRoutePathname("/daily-challenge");
@@ -2080,6 +2103,9 @@ export default function App() {
         } else if (screen === "rules") {
           nextUrl = "/rules";
           setRoutePathname("/rules");
+        } else if (targetGuideSlug) {
+          nextUrl = GUIDE_PATHS[targetGuideSlug];
+          setRoutePathname(nextUrl);
         } else if (screen === "privacy" || screen === "terms" || screen === "contact" || screen === "about") {
           nextUrl = COMPLIANCE_PATHS[screen];
           setRoutePathname(nextUrl);
@@ -2087,6 +2113,7 @@ export default function App() {
           isDailyChallengePath(window.location.pathname) ||
           isSolverPath(window.location.pathname) ||
           isRulesPath(window.location.pathname) ||
+          Boolean(parseGuideSlugFromPath(window.location.pathname)) ||
           Boolean(parseComplianceRoute(window.location.pathname))
         ) {
           nextUrl = "/";
@@ -2109,6 +2136,7 @@ export default function App() {
           (isDailyChallengePath(window.location.pathname) ||
             isSolverPath(window.location.pathname) ||
             isRulesPath(window.location.pathname) ||
+            Boolean(parseGuideSlugFromPath(window.location.pathname)) ||
             Boolean(parseComplianceRoute(window.location.pathname)))
         ) {
           setRoutePathname("/");
@@ -2129,7 +2157,8 @@ export default function App() {
         | "solver"
         | "daily-challenge"
         | "rules"
-        | CompliancePageType;
+        | CompliancePageType
+        | GuideScreenId;
 
       if (lastScreen === "game" && (boardState?.isGameOver || !boardState)) {
         setCurrentScreen("home");
@@ -6812,9 +6841,11 @@ export default function App() {
         currentScreenRef.current === "terms" ||
         currentScreenRef.current === "contact" ||
         currentScreenRef.current === "about" ||
+        Boolean(parseGuideScreen(currentScreenRef.current)) ||
         isRulesPath(window.location.pathname) ||
         isSolverPath(window.location.pathname) ||
         isDailyChallengePath(window.location.pathname) ||
+        Boolean(parseGuideSlugFromPath(window.location.pathname)) ||
         Boolean(parseComplianceRoute(window.location.pathname)));
 
     if (
@@ -8283,7 +8314,11 @@ export default function App() {
         !Capacitor.isNativePlatform() && !isCrazyGamesActive()
           ? parseComplianceRoute(window.location.pathname)
           : null;
-      const parsedPopRoute = (!Capacitor.isNativePlatform() && !isCrazyGamesActive() && !challengeModeRef.current && !popLegalRoute)
+      const popGuideSlug =
+        !Capacitor.isNativePlatform() && !isCrazyGamesActive()
+          ? parseGuideSlugFromPath(window.location.pathname)
+          : null;
+      const parsedPopRoute = (!Capacitor.isNativePlatform() && !isCrazyGamesActive() && !challengeModeRef.current && !popLegalRoute && !popGuideSlug)
         ? parseDifficultyFromPath(window.location.pathname)
         : null;
       const pathDiff = parsedPopRoute?.hasExplicitDifficulty ? parsedPopRoute.difficulty : null;
@@ -8313,7 +8348,9 @@ export default function App() {
           | "together"
           | "solver"
           | "daily-challenge"
-          | CompliancePageType;
+          | "rules"
+          | CompliancePageType
+          | GuideScreenId;
         setCurrentScreen(v);
         if (!Capacitor.isNativePlatform() && !isCrazyGamesActive()) {
           setRoutePathname(window.location.pathname || "/");
@@ -8353,6 +8390,9 @@ export default function App() {
       ) {
         setCurrentScreen("solver");
         setRoutePathname("/solver");
+      } else if (popGuideSlug) {
+        setCurrentScreen(toGuideScreen(popGuideSlug));
+        setRoutePathname(GUIDE_PATHS[popGuideSlug]);
       } else if (
         !Capacitor.isNativePlatform() &&
         !isCrazyGamesActive() &&
@@ -15226,8 +15266,11 @@ export default function App() {
         } else {
           const customSchemePath = urlObj.protocol === "sudokusync:" ? `/${urlObj.host}${urlObj.pathname}` : urlObj.pathname;
           const legalRoute = parseComplianceRoute(customSchemePath) || parseComplianceRoute(urlObj.pathname);
+          const guideSlug = parseGuideSlugFromPath(customSchemePath) || parseGuideSlugFromPath(urlObj.pathname);
           if (legalRoute) {
             navigateToScreen(legalRoute);
+          } else if (guideSlug) {
+            navigateToScreen(toGuideScreen(guideSlug));
           } else if (isRulesPath(customSchemePath) || isRulesPath(urlObj.pathname)) {
             navigateToScreen("rules");
           }
@@ -15245,8 +15288,11 @@ export default function App() {
             const launchObj = new URL(launchInfo.url);
             const launchPath = launchObj.protocol === "sudokusync:" ? `/${launchObj.host}${launchObj.pathname}` : launchObj.pathname;
             const coldLegalRoute = parseComplianceRoute(launchPath) || parseComplianceRoute(launchObj.pathname);
+            const coldGuideSlug = parseGuideSlugFromPath(launchPath) || parseGuideSlugFromPath(launchObj.pathname);
             if (coldLegalRoute) {
               navigateToScreen(coldLegalRoute);
+            } else if (coldGuideSlug) {
+              navigateToScreen(toGuideScreen(coldGuideSlug));
             } else if (isRulesPath(launchPath) || isRulesPath(launchObj.pathname)) {
               navigateToScreen("rules");
             }
@@ -15832,6 +15878,24 @@ export default function App() {
       setMetaTag("name", "twitter:description", rulesDesc);
       const canonicalEl = document.querySelector('link[rel="canonical"]');
       if (canonicalEl) canonicalEl.setAttribute("href", rulesCanonical);
+      clearHreflangLinks();
+      return;
+    }
+
+    const activeGuideSlug = parseGuideScreen(currentScreen) || parseGuideSlugFromPath(routePathname);
+    if (activeGuideSlug) {
+      const guideMeta = getGuideCopy(language, activeGuideSlug);
+      const guideCanonical = `https://sudokusync.com${GUIDE_PATHS[activeGuideSlug]}`;
+      document.documentElement.lang = language;
+      document.title = `${guideMeta.metaTitle} | Sudoku Sync`;
+      setMetaTag("name", "description", guideMeta.metaDescription);
+      setMetaTag("property", "og:title", guideMeta.metaTitle);
+      setMetaTag("property", "og:description", guideMeta.metaDescription);
+      setMetaTag("property", "og:url", guideCanonical);
+      setMetaTag("name", "twitter:title", guideMeta.metaTitle);
+      setMetaTag("name", "twitter:description", guideMeta.metaDescription);
+      const canonicalEl = document.querySelector('link[rel="canonical"]');
+      if (canonicalEl) canonicalEl.setAttribute("href", guideCanonical);
       clearHreflangLinks();
       return;
     }
@@ -16663,6 +16727,7 @@ export default function App() {
         (isDailyChallengePath(window.location.pathname) ||
           isSolverPath(window.location.pathname) ||
           isRulesPath(window.location.pathname) ||
+          Boolean(parseGuideSlugFromPath(window.location.pathname)) ||
           Boolean(parseComplianceRoute(window.location.pathname))))
     ) {
       webAutoStartedRef.current = true;
@@ -18340,6 +18405,121 @@ export default function App() {
             </button>
           </div>
 
+          {/* Sudoku Academy & Tools Pastel Navigation Strip */}
+          {!Capacitor.isNativePlatform() && (() => {
+            const academyCopy = getGuideCopy(language, "multiplayer-sudoku");
+            const academyTitle = ACADEMY_STRIP_TITLES[language] || ACADEMY_STRIP_TITLES.en;
+            const academyItems: Array<{
+              href: string;
+              label: string;
+              screen: "rules" | "daily-challenge" | "solver" | "about" | GuideScreenId;
+              icon: React.ReactNode;
+              cls: string;
+            }> = [
+              {
+                href: "/rules",
+                label: academyCopy.linkLabels.rules,
+                screen: "rules",
+                icon: <BookOpen className="w-3.5 h-3.5 shrink-0" />,
+                cls: darkMode
+                  ? "bg-purple-500/20 text-purple-200 hover:bg-purple-500/30"
+                  : "bg-[#F3E8FF] text-[#6B21A8] hover:bg-[#E9D5FF]",
+              },
+              {
+                href: GUIDE_PATHS["multiplayer-sudoku"],
+                label: academyCopy.linkLabels.multiplayerGuide,
+                screen: toGuideScreen("multiplayer-sudoku"),
+                icon: <Users className="w-3.5 h-3.5 shrink-0" />,
+                cls: darkMode
+                  ? "bg-violet-500/20 text-violet-200 hover:bg-violet-500/30"
+                  : "bg-[#EDE9FE] text-[#5B21B6] hover:bg-[#DDD6FE]",
+              },
+              {
+                href: GUIDE_PATHS["beginner-sudoku"],
+                label: academyCopy.linkLabels.beginnerGuide,
+                screen: toGuideScreen("beginner-sudoku"),
+                icon: <Puzzle className="w-3.5 h-3.5 shrink-0" />,
+                cls: darkMode
+                  ? "bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
+                  : "bg-[#ECFDF5] text-[#065F46] hover:bg-[#D1FAE5]",
+              },
+              {
+                href: GUIDE_PATHS["advanced-patterns"],
+                label: academyCopy.linkLabels.advancedGuide,
+                screen: toGuideScreen("advanced-patterns"),
+                icon: <Sparkles className="w-3.5 h-3.5 shrink-0" />,
+                cls: darkMode
+                  ? "bg-sky-500/20 text-sky-200 hover:bg-sky-500/30"
+                  : "bg-[#E0F2FE] text-[#0369A1] hover:bg-[#BAE6FD]",
+              },
+              {
+                href: "/daily-challenge",
+                label: academyCopy.linkLabels.daily,
+                screen: "daily-challenge",
+                icon: <Calendar className="w-3.5 h-3.5 shrink-0" />,
+                cls: darkMode
+                  ? "bg-indigo-500/20 text-indigo-200 hover:bg-indigo-500/30"
+                  : "bg-[#E0E7FF] text-[#3730A3] hover:bg-[#C7D2FE]",
+              },
+              {
+                href: "/solver",
+                label: academyCopy.linkLabels.solver,
+                screen: "solver",
+                icon: <Calculator className="w-3.5 h-3.5 shrink-0" />,
+                cls: darkMode
+                  ? "bg-teal-500/20 text-teal-200 hover:bg-teal-500/30"
+                  : "bg-[#CCFBF1] text-[#0F766E] hover:bg-[#99F6E4]",
+              },
+              {
+                href: "/about",
+                label: academyCopy.linkLabels.about,
+                screen: "about",
+                icon: <Info className="w-3.5 h-3.5 shrink-0" />,
+                cls: darkMode
+                  ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                  : "bg-[#F5F5F4] text-stone-700 hover:bg-stone-200/80",
+              },
+            ];
+
+            return (
+              <nav
+                id="academy-tools-nav-strip"
+                aria-label={academyTitle}
+                className={`w-full max-w-4xl mx-auto mb-6 p-4 sm:p-5 rounded-3xl border-0 flex flex-col items-center gap-3 font-sans ${
+                  darkMode
+                    ? "bg-zinc-900/75 shadow-[0_8px_28px_rgba(0,0,0,0.32)]"
+                    : "bg-white/85 shadow-[0_8px_28px_rgba(15,23,42,0.04)]"
+                }`}
+              >
+                <span
+                  className={`text-[11px] font-extrabold uppercase tracking-widest ${
+                    darkMode ? "text-zinc-400" : "text-stone-500"
+                  }`}
+                >
+                  {academyTitle}
+                </span>
+                <div className="flex flex-wrap justify-center items-center gap-2">
+                  {academyItems.map((item) => (
+                    <a
+                      key={item.href}
+                      href={item.href}
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                        e.preventDefault();
+                        playClickSound();
+                        navigateToScreen(item.screen);
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-0 text-xs font-semibold no-underline transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 shadow-[0_2px_8px_rgba(15,23,42,0.04)] ${item.cls}`}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </a>
+                  ))}
+                </div>
+              </nav>
+            );
+          })()}
+
           {/* Compliant Static Footer + Compact Pastel Language Dropdown */}
           {!Capacitor.isNativePlatform() && (
             <footer className="w-full max-w-4xl mx-auto px-4 py-6 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 text-center text-sm font-sans text-stone-600 select-text">
@@ -18689,6 +18869,7 @@ export default function App() {
                   currentScreen === "solver" ||
                   currentScreen === "daily-challenge" ||
                   currentScreen === "rules" ||
+                  Boolean(parseGuideScreen(currentScreen)) ||
                   currentScreen === "privacy" ||
                   currentScreen === "terms" ||
                   currentScreen === "contact" ||
@@ -18703,6 +18884,7 @@ export default function App() {
                       (isDailyChallengePath(window.location.pathname) ||
                         isSolverPath(window.location.pathname) ||
                         isRulesPath(window.location.pathname) ||
+                        Boolean(parseGuideSlugFromPath(window.location.pathname)) ||
                         Boolean(parseComplianceRoute(window.location.pathname)))
                         ? "/"
                         : window.location.href;
@@ -18784,7 +18966,7 @@ export default function App() {
                 const activeBadgeDiff = currentScreen === "home" ? homeContextDifficulty : (boardState?.difficulty || difficulty);
                 return (
                   <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? (activeBadgeDiff === "EASY" ? "text-[#d1fae5]" : activeBadgeDiff === "MEDIUM" ? "text-[#fef08a]" : activeBadgeDiff === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : (activeBadgeDiff === "EASY" ? "text-[#065F46]" : activeBadgeDiff === "MEDIUM" ? "text-[#854D0E]" : activeBadgeDiff === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
-                    {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : currentScreen === "daily-challenge" ? t("dailyChallengeLabel") : currentScreen === "rules" ? t("sudokuRulesLabel") : currentScreen === "privacy" ? t("privacyPolicy") : currentScreen === "terms" ? t("termsOfService") : currentScreen === "contact" ? t("contactUs") : currentScreen === "about" ? t("aboutUs") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
+                    {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : currentScreen === "daily-challenge" ? t("dailyChallengeLabel") : currentScreen === "rules" ? t("sudokuRulesLabel") : parseGuideScreen(currentScreen) ? getGuideCopy(language, parseGuideScreen(currentScreen)!).badge : currentScreen === "privacy" ? t("privacyPolicy") : currentScreen === "terms" ? t("termsOfService") : currentScreen === "contact" ? t("contactUs") : currentScreen === "about" ? t("aboutUs") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
                   </span>
                 );
               })()}
@@ -21392,6 +21574,51 @@ export default function App() {
             onBackHome={() => handleNavigateHome()}
           />
         )}
+
+        {/* PANE: EDITORIAL SUDOKU ACADEMY GUIDES (/guides/*) */}
+        {(() => {
+          const activeGuideSlug = parseGuideScreen(currentScreen);
+          if (!activeGuideSlug) return null;
+          return (
+            <GuideArticleScreen
+              slug={activeGuideSlug}
+              darkMode={darkMode}
+              onStartDifficulty={(diff) =>
+                handleSelectDifficultySilo(diff, { startNewGame: true, scrollToBoard: true })
+              }
+              onOpenDailyChallenge={() => navigateToScreen("daily-challenge")}
+              onOpenSolver={() => navigateToScreen("solver")}
+              onOpenMultiplayer={() => {
+                playClickSound();
+                setShowMultiplayerForkModal(true);
+              }}
+              onNavigateRoute={(nextPath) => {
+                const targetGuide = parseGuideSlugFromPath(nextPath);
+                if (targetGuide) {
+                  navigateToScreen(toGuideScreen(targetGuide));
+                  return;
+                }
+                const targetLegal = parseComplianceRoute(nextPath);
+                if (targetLegal) {
+                  navigateToScreen(targetLegal);
+                  return;
+                }
+                if (isRulesPath(nextPath)) {
+                  navigateToScreen("rules");
+                  return;
+                }
+                if (isSolverPath(nextPath)) {
+                  navigateToScreen("solver");
+                  return;
+                }
+                if (isDailyChallengePath(nextPath)) {
+                  navigateToScreen("daily-challenge");
+                }
+              }}
+              onBackHome={() => handleNavigateHome()}
+            />
+          );
+        })()}
 
         {/* PANE: LEGAL & COMPLIANCE SCREEN (/privacy, /terms, /contact, /about) */}
         {(currentScreen === "privacy" ||
