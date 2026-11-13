@@ -58,6 +58,8 @@ export interface DailyChallengeCardProps {
   refreshTrigger?: number;
   /** Notifies parent App shell whenever Calendar or Result modal opens/closes (for timer auto-pause) */
   onModalOpenChange?: (isOpen: boolean) => void;
+  /** Optional handler to navigate directly to the dedicated `/daily-challenge` screen */
+  onOpenDailyScreen?: () => void;
 }
 
 function formatDurationMMSS(totalSeconds: number): string {
@@ -119,6 +121,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
   onStartDailyChallenge,
   refreshTrigger = 0,
   onModalOpenChange,
+  onOpenDailyScreen,
 }) => {
   const { t } = useTranslation();
   const normalizedUid =
@@ -288,11 +291,17 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({
       if (e) {
         e.stopPropagation();
       }
+      if (onOpenDailyScreen) {
+        setInspectedResult(null);
+        setIsCalendarOpen(false);
+        onOpenDailyScreen();
+        return;
+      }
       setCalendarAnchorDate(daily.date);
       setInspectedResult(null);
       setIsCalendarOpen(true);
     },
-    [daily.date]
+    [daily.date, onOpenDailyScreen]
   );
 
   const sharedModals = (

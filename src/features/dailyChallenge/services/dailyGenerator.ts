@@ -9,8 +9,13 @@
  */
 
 import type { DailyDifficulty, GeneratedDailyPuzzle } from "../types/daily.types";
+import {
+  countSolutionsBitmaskMRV,
+  generateHumanGradedBoard,
+} from "../../../services/humanDifficultyEngine";
 
 const DATE_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const dailyPuzzleCache = new Map<string, GeneratedDailyPuzzle>();
 
 /**
  * Day-of-week difficulty progression (UTC day index 0 = Sun .. 6 = Sat):
@@ -28,14 +33,14 @@ const DAY_OF_WEEK_DIFFICULTY: readonly DailyDifficulty[] = [
 
 /**
  * Target cell removals out of 81 cells per difficulty tier, aligned with
- * the core engine clue targets (51 / 41 / 33 / 27 / 24 clues).
+ * the core engine clue targets (51 / 39 / 30 / 25 / 23 clues).
  */
 const TARGET_REMOVALS_BY_DIFFICULTY: Record<DailyDifficulty, number> = {
   EASY: 30,   // 51 clues
-  MEDIUM: 40, // 41 clues
-  HARD: 48,   // 33 clues
-  EXPERT: 54, // 27 clues
-  MASTER: 57, // 24 clues (bounded by strict uniqueness guard)
+  MEDIUM: 42, // 39 clues
+  HARD: 51,   // 30 clues
+  EXPERT: 56, // 25 clues
+  MASTER: 58, // 23 clues (bounded by strict uniqueness guard)
 };
 
 /**
@@ -183,58 +188,10 @@ function solveSudokuDeterministic(grid: number[][], prng: () => number): boolean
 
 /**
  * Counts valid solutions up to `limit` (default 2) using Minimum Remaining Values (MRV)
- * heuristic for rapid uniqueness verification across EXPERT and MASTER boards.
+ * bitmask heuristic for rapid uniqueness verification across EXPERT and MASTER boards.
  */
 export function countSolutions(grid: number[][], limit = 2): number {
-  let solutions = 0;
-  const workGrid = grid.map((row) => [...row]);
-
-  const search = (): void => {
-    if (solutions >= limit) return;
-
-    // Pick the empty cell with the fewest valid candidates (MRV)
-    let bestRow = -1;
-    let bestCol = -1;
-    let bestCandidates: number[] | null = null;
-
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        if (workGrid[r][c] === 0) {
-          const validNums: number[] = [];
-          for (let num = 1; num <= 9; num++) {
-            if (isValidPlacement(workGrid, r, c, num)) {
-              validNums.push(num);
-            }
-          }
-          if (validNums.length === 0) {
-            return; // Dead end
-          }
-          if (!bestCandidates || validNums.length < bestCandidates.length) {
-            bestRow = r;
-            bestCol = c;
-            bestCandidates = validNums;
-            if (validNums.length === 1) break;
-          }
-        }
-      }
-      if (bestCandidates && bestCandidates.length === 1) break;
-    }
-
-    if (bestRow === -1 || !bestCandidates) {
-      solutions++;
-      return;
-    }
-
-    for (const num of bestCandidates) {
-      workGrid[bestRow][bestCol] = num;
-      search();
-      workGrid[bestRow][bestCol] = 0;
-      if (solutions >= limit) return;
-    }
-  };
-
-  search();
-  return solutions;
+  return countSolutionsBitmaskMRV(grid, limit);
 }
 
 /**
@@ -246,7 +203,8 @@ export function getTargetClueCount(difficulty: DailyDifficulty): number {
 
 /**
  * Generates the deterministic, uniquely solvable Daily Challenge puzzle for a given
- * YYYY-MM-DD date string (defaults to today's local calendar date).
+ * YYYY-MM-DD date string (defaults to today's local calendar date), graded via the
+ * Human-Logic Difficulty & Digit Starvation Engine.
  */
 export function generateDailyPuzzle(
   dateKey: string = formatDateKey(),
@@ -254,46 +212,57 @@ export function generateDailyPuzzle(
 ): GeneratedDailyPuzzle {
   const normalizedDate = dateKey.trim();
   const difficulty = difficultyOverride ?? getDailyDifficultyForDate(normalizedDate);
+  const cacheKey = `${normalizedDate}_${difficulty}`;
+
+  const cached = dailyPuzzleCache.get(cacheKey);
+  if (cached) {
+    const puzzle = cached.puzzle.map((r) => [...r]);
+    const solved = cached.solved.map((r) => [...r]);
+    return {
+      date: cached.date,
+      seed: cached.seed,
+      difficulty: cached.difficulty,
+      clueCount: cached.clueCount,
+      puzzle,
+      solved,
+      puzzleFlat: [...cached.puzzleFlat],
+      solutionFlat: [...cached.solutionFlat],
+    };
+  }
+
   const seed = getSeedForDate(normalizedDate);
   const prng = createSeededPRNG(seed);
 
-  // 1. Generate complete valid 9x9 solution deterministically
-  const solved: number[][] = Array.from({ length: 9 }, () => Array<number>(9).fill(0));
-  solveSudokuDeterministic(solved, prng);
+  const generated = generateHumanGradedBoard(
+    difficulty,
+    prng,
+    solveSudokuDeterministic,
+    80
+  );
 
-  // 2. Carve clues symmetrically/randomly while strictly enforcing a unique solution
-  const puzzle: number[][] = solved.map((row) => [...row]);
-  const removedTarget = TARGET_REMOVALS_BY_DIFFICULTY[difficulty];
-  let removedCount = 0;
-
-  const allPositions = Array.from({ length: 81 }, (_, idx) => idx);
-  const shuffledPositions = shuffleDeterministic(allPositions, prng);
-
-  for (const pos of shuffledPositions) {
-    if (removedCount >= removedTarget) break;
-    const row = Math.floor(pos / 9);
-    const col = pos % 9;
-    const backup = puzzle[row][col];
-
-    puzzle[row][col] = 0;
-    if (countSolutions(puzzle, 2) === 1) {
-      removedCount++;
-    } else {
-      puzzle[row][col] = backup;
-    }
-  }
-
-  const clueCount = 81 - removedCount;
-
-  return {
+  const result: GeneratedDailyPuzzle = {
     date: normalizedDate,
     seed,
     difficulty,
-    clueCount,
-    puzzle,
-    solved,
-    puzzleFlat: puzzle.flat(),
-    solutionFlat: solved.flat(),
+    clueCount: generated.clueCount,
+    puzzle: generated.puzzle,
+    solved: generated.solved,
+    puzzleFlat: generated.puzzleFlat,
+    solutionFlat: generated.solutionFlat,
   };
+
+  if (dailyPuzzleCache.size >= 64) {
+    const firstKey = dailyPuzzleCache.keys().next().value;
+    if (firstKey) dailyPuzzleCache.delete(firstKey);
+  }
+  dailyPuzzleCache.set(cacheKey, {
+    ...result,
+    puzzle: result.puzzle.map((r) => [...r]),
+    solved: result.solved.map((r) => [...r]),
+    puzzleFlat: [...result.puzzleFlat],
+    solutionFlat: [...result.solutionFlat],
+  });
+
+  return result;
 }
 

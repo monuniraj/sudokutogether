@@ -19,14 +19,23 @@ import { ShareActionWrapper } from "./components/share/ShareActionWrapper";
 import { GuestBannerPill } from "./components/auth/GuestBannerPill";
 import { DailyChallengeCard, type DailyChallengeLaunchPayload } from "./features/dailyChallenge/components/DailyChallengeCard";
 import { DailyCalendarModal } from "./features/dailyChallenge/components/DailyCalendarModal";
+import { DailyChallengeScreen } from "./features/dailyChallenge/components/DailyChallengeScreen";
 import { DailyResultModal, type DailyResultModalProps } from "./features/dailyChallenge/components/DailyResultModal";
 import { formatDateKey, generateDailyPuzzle, parseDateKey } from "./features/dailyChallenge/services/dailyGenerator";
 import { saveDailyProgress, recordDailyCompletion, getDailyStats, getDailyProgress } from "./features/dailyChallenge/services/dailyStorage";
 import { saveDailyProgressToCloud, recordDailyCompletionToCloud, checkPlayerDailyEligibility, fetchDailyProgressFromCloud, resolveProgressConflict } from "./features/dailyChallenge/services/dailyCloudService";
 import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./features/dailyChallenge/types/daily.types";
 import { SudokuSolverScreen } from "./features/sudokuSolver/components/SudokuSolverScreen";
+
+const isDailyChallengePath = (pathname?: string | null): boolean =>
+  Boolean(pathname && pathname.trim().replace(/\/+$/, "").toLowerCase() === "/daily-challenge");
+
+const isSolverPath = (pathname?: string | null): boolean =>
+  Boolean(pathname && pathname.trim().replace(/\/+$/, "").toLowerCase() === "/solver");
 import { solveCustomBoard } from "./features/sudokuSolver/services/solverEngine";
 import { updateCustomHistoryTime } from "./features/sudokuSolver/services/customHistoryService";
+import { countSolutionsBitmaskMRV, generateHumanGradedBoard } from "./services/humanDifficultyEngine";
+import { getKeyboardDigit, isEditableEventTarget } from "./utils/keyboardControls";
 import { incrementGuestGameCount } from "./utils/guestTracking";
 import { SudokuBoard, CompletionPulse } from "./components/game/SudokuBoard";
 import { SudokuKeypad } from "./components/game/SudokuKeypad";
@@ -667,68 +676,43 @@ const solveSudokuRecursivePure = (grid: number[][], prng?: () => number): boolea
 };
 
 const countSolutionsPure = (grid: number[][], limit = 2): number => {
-  let count = 0;
-  const clone = (arr: number[][]) => arr.map(row => [...row]);
-  const workGrid = clone(grid);
-
-  const checkAndSolve = (g: number[][]): boolean => {
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        if (g[r][c] === 0) {
-          for (let num = 1; num <= 9; num++) {
-            if (isValidPlacementPure(g, r, c, num)) {
-              g[r][c] = num;
-              if (checkAndSolve(g)) {
-                count++;
-              }
-              g[r][c] = 0;
-              if (count >= limit) {
-                return true;
-              }
-            }
-          }
-          return false;
-        }
-      }
-    }
-    return true;
-  };
-
-  checkAndSolve(workGrid);
-  return count;
+  return countSolutionsBitmaskMRV(grid, limit);
 };
 
 const generateFlatBoardForSeed = (diff: Difficulty, seed: number) => {
-  const prng = createPRNG(seed);
-  const solved = Array(9).fill(null).map(() => Array(9).fill(0));
-  solveSudokuRecursivePure(solved, prng);
-  const puzzle = solved.map(r => [...r]);
-  let removedTarget = 24;
-  if (diff === "EASY") removedTarget = 30;
-  else if (diff === "MEDIUM") removedTarget = 40;
-  else if (diff === "HARD") removedTarget = 48;
-  else if (diff === "EXPERT") removedTarget = 54;
-
-  let removedCount = 0;
-  const baseList = Array.from({ length: 81 }, (_, i) => i);
-  const list = shuffleWithPRNG(baseList, prng);
-  for (const pos of list) {
-    if (removedCount >= removedTarget) break;
-    const row = Math.floor(pos / 9);
-    const col = pos % 9;
-    const originalVal = puzzle[row][col];
-    puzzle[row][col] = 0;
-    if (countSolutionsPure(puzzle, 2) === 1) {
-      removedCount++;
-    } else {
-      puzzle[row][col] = originalVal;
-    }
+  const cacheKey = `${diff}_${seed}`;
+  const cached = puzzleCache.get(cacheKey);
+  if (cached) {
+    const puzzle = cached.puzzle.map(r => [...r]);
+    const solved = cached.solved.map(r => [...r]);
+    return {
+      puzzleFlat: puzzle.flat(),
+      solutionFlat: solved.flat(),
+      puzzle,
+      solved
+    };
   }
+
+  const prng = createPRNG(seed);
+  const generated = generateHumanGradedBoard(diff, prng, solveSudokuRecursivePure, 80);
+
+  if (puzzleCache.size >= 50) {
+    const firstKey = puzzleCache.keys().next().value;
+    if (firstKey) puzzleCache.delete(firstKey);
+  }
+  puzzleCache.set(cacheKey, {
+    solved: generated.solved.map(r => [...r]),
+    puzzle: generated.puzzle.map(r => [...r])
+  });
+
   return {
-    puzzleFlat: puzzle.flat(),
-    solutionFlat: solved.flat(),
-    puzzle,
-    solved
+    puzzleFlat: generated.puzzleFlat,
+    solutionFlat: generated.solutionFlat,
+    puzzle: generated.puzzle,
+    solved: generated.solved,
+    report: generated.report,
+    candidatesEvaluated: generated.candidatesEvaluated,
+    elapsedMs: generated.elapsedMs
   };
 };
 
@@ -1904,7 +1888,19 @@ export default function App() {
   }, []);
 
   const [activeTab, setActiveTab] = useState<"sudoku" | "sandbox" | "kotlin-code" | "spec-docs">("sudoku");
-  const [currentScreen, setCurrentScreen] = useState<"home" | "status" | "settings" | "game" | "login" | "together" | "solver">("home");
+  const [currentScreen, setCurrentScreen] = useState<
+    "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge"
+  >(() => {
+    if (
+      typeof window !== "undefined" &&
+      !Capacitor.isNativePlatform() &&
+      !isCrazyGamesActive()
+    ) {
+      if (isDailyChallengePath(window.location.pathname)) return "daily-challenge";
+      if (isSolverPath(window.location.pathname)) return "solver";
+    }
+    return "home";
+  });
   const [customPuzzlePayload, setCustomPuzzlePayload] = useState<{
     grid: number[][];
     difficulty: string;
@@ -2025,16 +2021,46 @@ export default function App() {
   }, [activeTheme, isAuthHydrating]);
 
   // --- STACK-BASED CRASH-FREE SYSTEM NAVIGATION ---
-  const [navigationHistory, setNavigationHistory] = useState<string[]>(["home"]);
+  const [navigationHistory, setNavigationHistory] = useState<string[]>(() => {
+    if (
+      typeof window !== "undefined" &&
+      !Capacitor.isNativePlatform() &&
+      !isCrazyGamesActive()
+    ) {
+      if (isDailyChallengePath(window.location.pathname)) return ["daily-challenge"];
+      if (isSolverPath(window.location.pathname)) return ["solver"];
+    }
+    return ["home"];
+  });
   const isProgrammaticBackRef = useRef<boolean>(false);
 
-  const navigateToScreen = (screen: "home" | "status" | "settings" | "game" | "login" | "together" | "solver") => {
+  const navigateToScreen = (
+    screen: "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge"
+  ) => {
     setCurrentScreen(screen);
     setNavigationHistory(prev => {
       if (prev[prev.length - 1] === screen) return prev;
       return [...prev, screen];
     });
-    window.history.pushState({ view: screen }, "", window.location.href);
+    if (typeof window !== "undefined") {
+      let nextUrl = window.location.href;
+      if (!Capacitor.isNativePlatform() && !isCrazyGamesActive()) {
+        if (screen === "daily-challenge") {
+          nextUrl = "/daily-challenge";
+          setRoutePathname("/daily-challenge");
+        } else if (screen === "solver") {
+          nextUrl = "/solver";
+          setRoutePathname("/solver");
+        } else if (
+          isDailyChallengePath(window.location.pathname) ||
+          isSolverPath(window.location.pathname)
+        ) {
+          nextUrl = "/";
+          setRoutePathname("/");
+        }
+      }
+      window.history.pushState({ view: screen }, "", nextUrl);
+    }
   };
 
   const navigatorPop = () => {
@@ -2045,7 +2071,7 @@ export default function App() {
         return ["home"];
       }
       const nextStack = prev.slice(0, -1);
-      const lastScreen = nextStack[nextStack.length - 1] as "home" | "status" | "settings" | "game" | "login" | "together" | "solver";
+      const lastScreen = nextStack[nextStack.length - 1] as "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge";
 
       if (lastScreen === "game" && (boardState?.isGameOver || !boardState)) {
         setCurrentScreen("home");
@@ -8149,8 +8175,11 @@ export default function App() {
       }
 
       if (state && typeof state === "object" && state.view) {
-        const v = state.view as "home" | "status" | "settings" | "game" | "login" | "together" | "solver";
+        const v = state.view as "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge";
         setCurrentScreen(v);
+        if (!Capacitor.isNativePlatform() && !isCrazyGamesActive()) {
+          setRoutePathname(window.location.pathname || "/");
+        }
         setNavigationHistory(prev => {
           if (prev[prev.length - 2] === v) {
             return prev.slice(0, -1);
@@ -8169,7 +8198,24 @@ export default function App() {
         ) {
           generateAndSetNewPuzzleRef.current?.(restoredDiff);
         }
+      } else if (
+        !Capacitor.isNativePlatform() &&
+        !isCrazyGamesActive() &&
+        isDailyChallengePath(window.location.pathname)
+      ) {
+        setCurrentScreen("daily-challenge");
+        setRoutePathname("/daily-challenge");
+      } else if (
+        !Capacitor.isNativePlatform() &&
+        !isCrazyGamesActive() &&
+        isSolverPath(window.location.pathname)
+      ) {
+        setCurrentScreen("solver");
+        setRoutePathname("/solver");
       } else {
+        if (!Capacitor.isNativePlatform() && !isCrazyGamesActive()) {
+          setRoutePathname(window.location.pathname || "/");
+        }
         navigatorPopRef.current();
       }
     };
@@ -15277,56 +15323,17 @@ export default function App() {
       puzzle = cached.puzzle.map(r => [...r]);
       addLog(`⚡ Instant puzzle load from memory cache (seed: [${seed}], ${level}) - 0ms CPU time!`);
     } else {
-      addLog(`1. Creating fully solved board with seed: [${seed}]`);
-
-      solved = Array(9).fill(null).map(() => Array(9).fill(0));
-      solveSudokuRecursive(solved, prng);
-      addLog("✓ Solved base seed successfully verified.");
-
-      let removedTarget = 24;
-      if (level === "EASY") removedTarget = 30;
-      else if (level === "MEDIUM") removedTarget = 40;
-      else if (level === "HARD") removedTarget = 48;
-      else if (level === "EXPERT") removedTarget = 54;
-
-      addLog(`2. Slicing board values (Targeting ${removedTarget} empty cells for ${level})`);
-
-      puzzle = solved.map(r => [...r]);
-      let removedCount = 0;
-      // Generate randomized position paths using the same PRNG
-      const baseList = Array.from({ length: 81 }, (_, i) => i);
-      const list = shuffleWithPRNG(baseList, prng);
-
-      for (const pos of list) {
-        if (removedCount >= removedTarget) break;
-        const row = Math.floor(pos / 9);
-        const col = pos % 9;
-        const originalVal = puzzle[row][col];
-
-        // Temporary puncture
-        puzzle[row][col] = 0;
-
-        // Count solutions
-        const sols = countSolutions(puzzle, 2);
-        if (sols === 1) {
-          removedCount++;
-        } else {
-          // Putting value back if it results in non-unique solutions
-          puzzle[row][col] = originalVal;
-        }
-      }
-
-      addLog(`✓ Uniqueness checks complete. Pipelined exactly ${81 - removedCount} persistent clues.`);
-
-      // Store in memory cache (cap to 50 items to keep footprint minimal)
-      if (puzzleCache.size >= 50) {
-        const firstKey = puzzleCache.keys().next().value;
-        if (firstKey) puzzleCache.delete(firstKey);
-      }
-      puzzleCache.set(cacheKey, {
-        solved: solved.map(r => [...r]),
-        puzzle: puzzle.map(r => [...r])
-      });
+      addLog(`1. Creating human-graded ${level} board with seed: [${seed}]`);
+      const generated = generateFlatBoardForSeed(level, seed);
+      solved = generated.solved.map(r => [...r]);
+      puzzle = generated.puzzle.map(r => [...r]);
+      const clueTotal = generated.report?.distribution.totalClues ?? puzzle.flat().filter(v => v !== 0).length;
+      const logicScore = generated.report?.logicScore ?? 0;
+      const evalCount = generated.candidatesEvaluated ?? 1;
+      const elapsed = generated.elapsedMs ?? 0;
+      addLog(
+        `✓ Evaluated ${evalCount} candidate(s) in ${elapsed}ms. Selected ${clueTotal} clues (Logic Score: ${logicScore}).`
+      );
     }
 
     // Set matching source solution grid
@@ -15456,6 +15463,47 @@ export default function App() {
   // Sync <head> title, description, canonical, html lang, and social metadata with active web silo
   useEffect(() => {
     if (Capacitor.isNativePlatform() || isCrazyGamesActive()) return;
+    const setMetaTag = (attr: "name" | "property", key: string, value: string) => {
+      const el = document.querySelector(`meta[${attr}="${key}"]`);
+      if (el) el.setAttribute("content", value);
+    };
+
+    if (currentScreen === "daily-challenge" || isDailyChallengePath(routePathname)) {
+      const dailyTitle = "Daily Sudoku Challenge — Synchronized Global Puzzle & Archive | Sudoku Sync";
+      const dailyDesc =
+        "Play today's synchronized Daily Sudoku Challenge seeded deterministically with Mulberry32. Track streaks, tackle Monday–Sunday difficulties, and explore the Monthly Archive.";
+      const dailyCanonical = "https://sudokusync.com/daily-challenge";
+      document.documentElement.lang = "en";
+      document.title = dailyTitle;
+      setMetaTag("name", "description", dailyDesc);
+      setMetaTag("property", "og:title", dailyTitle);
+      setMetaTag("property", "og:description", dailyDesc);
+      setMetaTag("property", "og:url", dailyCanonical);
+      setMetaTag("name", "twitter:title", dailyTitle);
+      setMetaTag("name", "twitter:description", dailyDesc);
+      const canonicalEl = document.querySelector('link[rel="canonical"]');
+      if (canonicalEl) canonicalEl.setAttribute("href", dailyCanonical);
+      return;
+    }
+
+    if (currentScreen === "solver" || isSolverPath(routePathname)) {
+      const solverTitle = "Free Online Sudoku Solver & Logic Diagnostics | Sudoku Sync";
+      const solverDesc =
+        "Solve, verify, and diagnose any 9x9 Sudoku puzzle instantly. Features real-time conflict detection, uniqueness verification, and advanced logic support including Skyscrapers and 2-String Kites.";
+      const solverCanonical = "https://sudokusync.com/solver";
+      document.documentElement.lang = "en";
+      document.title = solverTitle;
+      setMetaTag("name", "description", solverDesc);
+      setMetaTag("property", "og:title", solverTitle);
+      setMetaTag("property", "og:description", solverDesc);
+      setMetaTag("property", "og:url", solverCanonical);
+      setMetaTag("name", "twitter:title", solverTitle);
+      setMetaTag("name", "twitter:description", solverDesc);
+      const canonicalEl = document.querySelector('link[rel="canonical"]');
+      if (canonicalEl) canonicalEl.setAttribute("href", solverCanonical);
+      return;
+    }
+
     const parsedRoute = parseDifficultyFromPath(routePathname);
     const activeHeadLang = ((parsedRoute.hasExplicitLanguage ? parsedRoute.language : (language as SeoLanguage)) || "en") as SeoLanguage;
     const meta =
@@ -15465,11 +15513,6 @@ export default function App() {
 
     document.documentElement.lang = meta.htmlLang;
     document.title = meta.title;
-
-    const setMetaTag = (attr: "name" | "property", key: string, value: string) => {
-      const el = document.querySelector(`meta[${attr}="${key}"]`);
-      if (el) el.setAttribute("content", value);
-    };
 
     setMetaTag("name", "description", meta.description);
     setMetaTag("property", "og:title", meta.title);
@@ -15482,7 +15525,7 @@ export default function App() {
     if (canonicalEl) {
       canonicalEl.setAttribute("href", meta.canonicalUrl);
     }
-  }, [routePathname, language]);
+  }, [routePathname, language, currentScreen]);
 
   // Replay / Retry Puzzle: Resets personal board progress without leaving or affecting other room participants
   const handlePersonalReplay = async () => {
@@ -15817,35 +15860,69 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!boardState || activeTab !== "sudoku" || currentScreen !== "game" || visualizingBacktrack) return;
-      const key = e.key;
+      if (isPauseModalOpen || showHintRewardModal) return;
+      if (isEditableEventTarget(e.target)) return;
 
-      // In Paint / Fast-Fill mode, pressing 1-9 sets lockedNum and keeps active cell focus
-      if (isNumberFirstInputMode && /^[1-9]$/.test(key)) {
-        const val = parseInt(key);
+      const key = e.key;
+      const lowerKey = key.toLowerCase();
+      const digitVal = getKeyboardDigit(e);
+
+      // Undo (Ctrl+Z / Cmd+Z) — available regardless of cell focus while game is active
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && lowerKey === "z") {
+        if (!boardState.isGameOver) {
+          e.preventDefault();
+          handleUndo();
+        }
+        return;
+      }
+
+      // Toggle Pencil/Notes mode (Spacebar or N)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.code === "Space" || key === " " || lowerKey === "n")) {
+        if (!boardState.isGameOver) {
+          e.preventDefault();
+          playClickSound();
+          triggerHapticTap(vibrations);
+          setPencilMode(prev => !prev);
+        }
+        return;
+      }
+
+      // Trigger Hint (H)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && lowerKey === "h") {
+        if (!boardState.isGameOver) {
+          e.preventDefault();
+          triggerSmartHint();
+        }
+        return;
+      }
+
+      // In Paint / Fast-Fill mode, pressing 1-9 (Digit1-9 or Numpad1-9) sets lockedNum and keeps active cell focus
+      if (isNumberFirstInputMode && digitVal !== null) {
+        e.preventDefault();
         // Requirement 4: Completed number restriction
         let count = 0;
         for (let r = 0; r < 9; r++) {
           for (let c = 0; c < 9; c++) {
-            if (boardState.grid[r][c].value === val) count++;
+            if (boardState.grid[r][c].value === digitVal) count++;
           }
         }
         if (count >= 9) {
-          showToast(t("numberAlreadyCompletedToast", { val }));
+          showToast(t("numberAlreadyCompletedToast", { val: digitVal }));
           return;
         }
 
-        if (lockedNum === val) {
+        if (lockedNum === digitVal) {
           setLockedNum(null);
           setActiveKeypadNum(null);
           setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
           triggerHapticTap(vibrations);
-          addLog(`🔓 Unlocked digit ${val}.`);
+          addLog(`🔓 Unlocked digit ${digitVal}.`);
         } else {
-          setLockedNum(val);
-          setActiveKeypadNum(val);
+          setLockedNum(digitVal);
+          setActiveKeypadNum(digitVal);
           setBoardState(prev => prev ? { ...prev, selectedRow: null, selectedCol: null } : null);
           triggerHapticTap(vibrations);
-          addLog(`🎨 Selected paint digit ${val}. Tap empty cells to fast fill!`);
+          addLog(`🎨 Selected paint digit ${digitVal}. Tap empty cells to fast fill!`);
         }
         return;
       }
@@ -15853,12 +15930,12 @@ export default function App() {
       const { selectedRow, selectedCol } = boardState;
       if (selectedRow === null || selectedCol === null) {
         // Requirement 2 & 3: Keyboard number selection when no cell is selected
-        if (/^[1-9]$/.test(key)) {
-          const val = parseInt(key);
-          if (activeKeypadNum === val) {
+        if (digitVal !== null) {
+          e.preventDefault();
+          if (activeKeypadNum === digitVal) {
             setActiveKeypadNum(null);
           } else {
-            setActiveKeypadNum(val);
+            setActiveKeypadNum(digitVal);
           }
         }
         return;
@@ -15868,15 +15945,19 @@ export default function App() {
 
       // Handle navigation
       if (key === "ArrowUp") {
+        e.preventDefault();
         setBoardState(prev => prev ? { ...prev, selectedRow: Math.max(0, selectedRow - 1) } : null);
         return;
       } else if (key === "ArrowDown") {
+        e.preventDefault();
         setBoardState(prev => prev ? { ...prev, selectedRow: Math.min(8, selectedRow + 1) } : null);
         return;
       } else if (key === "ArrowLeft") {
+        e.preventDefault();
         setBoardState(prev => prev ? { ...prev, selectedCol: Math.max(0, selectedCol - 1) } : null);
         return;
       } else if (key === "ArrowRight") {
+        e.preventDefault();
         setBoardState(prev => prev ? { ...prev, selectedCol: Math.min(8, selectedCol + 1) } : null);
         return;
       }
@@ -15884,18 +15965,19 @@ export default function App() {
       if (boardState.isGameOver) return;
       if (cell.isOriginalClue) return;
 
-      // Handle numbers input
-      if (/^[1-9]$/.test(key)) {
-        const val = parseInt(key);
-        handleValueInput(val);
+      // Handle numbers input (Digit1-9 & Numpad1-9) and cell erase (Backspace / Delete)
+      if (digitVal !== null) {
+        e.preventDefault();
+        handleValueInput(digitVal);
       } else if (key === "Backspace" || key === "Delete") {
+        e.preventDefault();
         handleClearCell(true);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [boardState, activeTab, pencilMode, visualizingBacktrack, isNumberFirstInputMode, lockedNum, activeKeypadNum]);
+  }, [boardState, activeTab, currentScreen, pencilMode, visualizingBacktrack, isNumberFirstInputMode, lockedNum, activeKeypadNum, history.length, isPauseModalOpen, showHintRewardModal]);
 
   const pushToHistory = () => {
     if (!boardState) return;
@@ -17954,10 +18036,21 @@ export default function App() {
                   setCurrentScreen("home");
                   setNavigationHistory(["home"]);
                   window.history.pushState({ view: "home" }, "", window.location.href);
-                } else if (currentScreen === "solver") {
+                } else if (currentScreen === "solver" || currentScreen === "daily-challenge") {
                   setCurrentScreen("home");
                   setNavigationHistory(["home"]);
-                  window.history.pushState({ view: "home" }, "", window.location.href);
+                  if (typeof window !== "undefined") {
+                    const returnUrl =
+                      !Capacitor.isNativePlatform() &&
+                      !isCrazyGamesActive() &&
+                      (isDailyChallengePath(window.location.pathname) || isSolverPath(window.location.pathname))
+                        ? "/"
+                        : window.location.href;
+                    if (returnUrl === "/") {
+                      setRoutePathname("/");
+                    }
+                    window.history.pushState({ view: "home" }, "", returnUrl);
+                  }
                 } else if (currentScreen !== "home") {
                   navigatorPop();
                 } else {
@@ -18020,7 +18113,7 @@ export default function App() {
               const activeBadgeDiff = currentScreen === "home" ? homeContextDifficulty : (boardState?.difficulty || difficulty);
               return (
                 <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? (activeBadgeDiff === "EASY" ? "text-[#d1fae5]" : activeBadgeDiff === "MEDIUM" ? "text-[#fef08a]" : activeBadgeDiff === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : (activeBadgeDiff === "EASY" ? "text-[#065F46]" : activeBadgeDiff === "MEDIUM" ? "text-[#854D0E]" : activeBadgeDiff === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
-                  {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
+                  {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : currentScreen === "daily-challenge" ? t("dailyChallengeLabel") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
                 </span>
               );
             })()}
@@ -18146,6 +18239,7 @@ export default function App() {
                     uid={isGuestSession ? null : (authUser?.uid ?? null)}
                     darkMode={darkMode}
                     onStartDailyChallenge={handleLaunchDailyChallenge}
+                    onOpenDailyScreen={() => navigateToScreen("daily-challenge")}
                     refreshTrigger={dailyRefreshCounter}
                   />
                 </div>
@@ -18885,6 +18979,7 @@ export default function App() {
                     darkMode={darkMode}
                     compact
                     onStartDailyChallenge={handleLaunchDailyChallenge}
+                    onOpenDailyScreen={() => navigateToScreen("daily-challenge")}
                     onModalOpenChange={setIsDailyCardModalOpen}
                     refreshTrigger={dailyRefreshCounter}
                   />
@@ -20586,6 +20681,19 @@ export default function App() {
               setCustomPuzzlePayload({ grid, difficulty: diff, solution, customHistoryId });
               navigateToScreen("game");
             }}
+            onOpenDailyChallenge={() => navigateToScreen("daily-challenge")}
+          />
+        )}
+
+        {/* PANE: DAILY CHALLENGE SCREEN */}
+        {currentScreen === "daily-challenge" && (
+          <DailyChallengeScreen
+            key={`daily-screen-${isGuestSession ? "guest" : (authUser?.uid || "guest")}`}
+            uid={isGuestSession ? null : (authUser?.uid ?? null)}
+            darkMode={darkMode}
+            refreshTrigger={dailyRefreshCounter}
+            onStartDailyChallenge={handleLaunchDailyChallenge}
+            onOpenSolver={() => navigateToScreen("solver")}
           />
         )}
 

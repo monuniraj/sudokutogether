@@ -52,9 +52,9 @@ const DIFFICULTY_SPECS: Record<
   { slug: "easy" | "medium" | "hard" | "expert"; clueCount: number; emptyCells: number }
 > = {
   EASY: { slug: "easy", clueCount: 51, emptyCells: 30 },
-  MEDIUM: { slug: "medium", clueCount: 41, emptyCells: 40 },
-  HARD: { slug: "hard", clueCount: 33, emptyCells: 48 },
-  EXPERT: { slug: "expert", clueCount: 27, emptyCells: 54 },
+  MEDIUM: { slug: "medium", clueCount: 39, emptyCells: 42 },
+  HARD: { slug: "hard", clueCount: 30, emptyCells: 51 },
+  EXPERT: { slug: "expert", clueCount: 25, emptyCells: 56 },
 };
 
 const LANGUAGE_META_BY_CODE: Record<SeoLanguage, SeoLanguageMeta> = SEO_LANGUAGES.reduce(

@@ -38,6 +38,8 @@ import {
 } from "../services/customHistoryService";
 // --- NEW IMPORT ---
 import { showRewardedHintAd } from "../../../services/adMobService";
+import { getKeyboardDigit, isEditableEventTarget } from "../../../utils/keyboardControls";
+import { SolverSEOArticle } from "./SolverSEOArticle";
 
 export interface SudokuSolverScreenProps {
   navigatorPop: () => void;
@@ -49,6 +51,7 @@ export interface SudokuSolverScreenProps {
     solution?: number[][],
     customHistoryId?: string
   ) => void;
+  onOpenDailyChallenge?: () => void;
 }
 
 const EMPTY_SOLUTION_GRID: number[][] = [];
@@ -334,6 +337,7 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
   darkMode,
   uid = null,
   onPlayCustomPuzzle,
+  onOpenDailyChallenge,
 }) => {
   const { t } = useTranslation();
   const isDarkMode =
@@ -436,21 +440,21 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
         boardDifficulty: "EXPERT",
       };
     }
-    if (clueCount >= 41) {
+    if (clueCount >= 45) {
       return {
         difficultyText: t("easy"),
         colorClass: "text-emerald-500",
         boardDifficulty: "EASY",
       };
     }
-    if (clueCount >= 33) {
+    if (clueCount >= 35) {
       return {
         difficultyText: t("medium"),
         colorClass: "text-amber-500",
         boardDifficulty: "MEDIUM",
       };
     }
-    if (clueCount >= 27) {
+    if (clueCount >= 28) {
       return {
         difficultyText: t("hard"),
         colorClass: "text-purple-500",
@@ -645,6 +649,8 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!selectedCell || isHistoryOpen || isAdLoading) return;
+      if (isEditableEventTarget(e.target)) return;
+
       if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedCell((prev) =>
@@ -667,18 +673,21 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
         );
       } else if (isLocked) {
         return;
-      } else if (e.key >= "1" && e.key <= "9") {
-        e.preventDefault();
-        applyCellValue(Number(e.key));
-      } else if (e.key === "0" || e.key === "Backspace" || e.key === "Delete") {
-        e.preventDefault();
-        applyCellValue(0);
+      } else {
+        const digitVal = getKeyboardDigit(e);
+        if (digitVal !== null) {
+          e.preventDefault();
+          applyCellValue(digitVal);
+        } else if (e.key === "0" || e.key === "Backspace" || e.key === "Delete") {
+          e.preventDefault();
+          handleErase();
+        }
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isLocked, isHistoryOpen, selectedCell, applyCellValue, isAdLoading]);
+  }, [isLocked, isHistoryOpen, selectedCell, applyCellValue, handleErase, isAdLoading]);
 
   const boardState = useMemo<SudokuBoardState>(
     () => ({
@@ -765,7 +774,8 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
       </div>
 
       {/* Main Solver Grid & Control Deck */}
-      <main className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain flex flex-col items-center justify-start lg:justify-center px-3 sm:px-6 pt-3 pb-[clamp(24px,6vh,48px)]">
+      <main className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain flex flex-col items-center justify-start px-3 sm:px-6 pt-3 pb-[clamp(24px,6vh,48px)]">
+        <section className="w-full max-w-3xl mx-auto lg:min-h-[calc(100dvh-215px)] flex flex-col items-center justify-start lg:justify-center shrink-0">
         {/* Clean Pastel Solver Toast / Status Banner */}
         {solverBanner && (
           <div
@@ -940,6 +950,9 @@ export const SudokuSolverScreen: React.FC<SudokuSolverScreenProps> = ({
             )}
           </div>
         </div>
+        </section>
+
+        <SolverSEOArticle onNavigateDailyChallenge={onOpenDailyChallenge} />
       </main>
 
       <CustomHistoryModal
