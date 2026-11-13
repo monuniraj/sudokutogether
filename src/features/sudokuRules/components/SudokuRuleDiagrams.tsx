@@ -344,7 +344,7 @@ export const PencilNotesDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMod
                   y={y + cell / 2}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fontSize="18"
+                  fontSize="32"
                   fontWeight="700"
                   fill={palette.placedDigit}
                 >
@@ -356,18 +356,18 @@ export const PencilNotesDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMod
                 item.notes.map((digit) => {
                   const subR = Math.floor((digit - 1) / 3);
                   const subC = (digit - 1) % 3;
-                  const nx = x + 16 + subC * 18;
-                  const ny = y + 16 + subR * 18;
+                  const nx = x + 15 + subC * 19;
+                  const ny = y + 15 + subR * 19;
                   const isElim = item.eliminated?.includes(digit);
                   const isWinner = isFocus && !isElim;
 
                   return (
                     <g key={digit}>
                       <rect
-                        x={nx - 8}
-                        y={ny - 8}
-                        width={16}
-                        height={16}
+                        x={nx - 9}
+                        y={ny - 9}
+                        width={18}
+                        height={18}
                         rx={5}
                         fill={
                           isWinner
@@ -382,7 +382,7 @@ export const PencilNotesDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMod
                         y={ny}
                         textAnchor="middle"
                         dominantBaseline="central"
-                        fontSize="10.5"
+                        fontSize="13"
                         fontWeight="600"
                         fill={
                           isWinner
@@ -396,10 +396,10 @@ export const PencilNotesDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMod
                       </text>
                       {isElim && (
                         <line
-                          x1={nx - 5}
-                          y1={ny - 5}
-                          x2={nx + 5}
-                          y2={ny + 5}
+                          x1={nx - 6}
+                          y1={ny - 6}
+                          x2={nx + 6}
+                          y2={ny + 6}
                           stroke={palette.elimColor}
                           strokeWidth={1.5}
                           strokeLinecap="round"
@@ -531,7 +531,7 @@ export const NakedHiddenPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, da
                 y={padY + cellH / 2}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize="17"
+                fontSize="23"
                 fontWeight="700"
                 fill={palette.placedDigit}
               >
@@ -546,25 +546,25 @@ export const NakedHiddenPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, da
             const py = padY + 18;
             return (
               <g key={`fg-${item.c}`}>
-                <rect x={p1x - 7} y={py - 7.5} width={14} height={15} rx={4.5} fill={palette.pairBadgeBg} />
+                <rect x={p1x - 7.5} y={py - 8} width={15} height={16} rx={4.5} fill={palette.pairBadgeBg} />
                 <text
                   x={p1x}
                   y={py}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fontSize="10.5"
+                  fontSize="11.5"
                   fontWeight="600"
                   fill={palette.pairText}
                 >
                   {item.pair[0]}
                 </text>
-                <rect x={p2x - 7} y={py - 7.5} width={14} height={15} rx={4.5} fill={palette.pairBadgeBg} />
+                <rect x={p2x - 7.5} y={py - 8} width={15} height={16} rx={4.5} fill={palette.pairBadgeBg} />
                 <text
                   x={p2x}
                   y={py}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fontSize="10.5"
+                  fontSize="11.5"
                   fontWeight="600"
                   fill={palette.pairText}
                 >
@@ -577,7 +577,7 @@ export const NakedHiddenPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, da
           if (item.mixed) {
             const e1x = x + 11.5;
             const e2x = x + cellW - 11.5;
-            const ey = padY + 13;
+            const ey = padY + 13.5;
             return (
               <g key={`fg-${item.c}`}>
                 {item.mixed.elim.map((digit, dIdx) => {
@@ -585,10 +585,10 @@ export const NakedHiddenPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, da
                   return (
                     <g key={digit}>
                       <rect
-                        x={ex - 6.5}
-                        y={ey - 6.5}
-                        width={13}
-                        height={13}
+                        x={ex - 7}
+                        y={ey - 7}
+                        width={14}
+                        height={14}
                         rx={4}
                         fill={palette.elimBadgeBg}
                       />
@@ -597,17 +597,17 @@ export const NakedHiddenPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, da
                         y={ey}
                         textAnchor="middle"
                         dominantBaseline="central"
-                        fontSize="10"
+                        fontSize="11.5"
                         fontWeight="600"
                         fill={palette.elimColor}
                       >
                         {digit}
                       </text>
                       <line
-                        x1={ex - 4}
-                        y1={ey - 4}
-                        x2={ex + 4}
-                        y2={ey + 4}
+                        x1={ex - 4.5}
+                        y1={ey - 4.5}
+                        x2={ex + 4.5}
+                        y2={ey + 4.5}
                         stroke={palette.elimColor}
                         strokeWidth={1.4}
                         strokeLinecap="round"
@@ -621,7 +621,7 @@ export const NakedHiddenPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, da
                   y={padY + 35.5}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fontSize="16"
+                  fontSize="20"
                   fontWeight="700"
                   fill={darkMode ? "#6EE7B7" : "#047857"}
                 >
@@ -783,7 +783,7 @@ export const PointingPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, darkM
                         y={y + size / 2}
                         textAnchor="middle"
                         dominantBaseline="central"
-                        fontSize="17"
+                        fontSize="25"
                         fontWeight="700"
                         fill={palette.placedDigit}
                       >
@@ -794,10 +794,10 @@ export const PointingPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, darkM
                     {isPointing && (
                       <g>
                         <rect
-                          x={nx - 8}
-                          y={ny - 8}
-                          width={16}
-                          height={16}
+                          x={nx - 9}
+                          y={ny - 9}
+                          width={18}
+                          height={18}
                           rx={5}
                           fill={palette.noteBadgeBg}
                         />
@@ -806,7 +806,7 @@ export const PointingPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, darkM
                           y={ny}
                           textAnchor="middle"
                           dominantBaseline="central"
-                          fontSize="10.5"
+                          fontSize="12.5"
                           fontWeight="600"
                           fill={palette.noteText}
                         >
@@ -818,10 +818,10 @@ export const PointingPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, darkM
                     {isElim && (
                       <g>
                         <rect
-                          x={nx - 8}
-                          y={ny - 8}
-                          width={16}
-                          height={16}
+                          x={nx - 9}
+                          y={ny - 9}
+                          width={18}
+                          height={18}
                           rx={5}
                           fill={palette.elimBadgeBg}
                         />
@@ -830,19 +830,19 @@ export const PointingPairsDiagram: React.FC<RuleDiagramProps> = ({ labels, darkM
                           y={ny}
                           textAnchor="middle"
                           dominantBaseline="central"
-                          fontSize="10.5"
+                          fontSize="12.5"
                           fontWeight="600"
                           fill={palette.elimColor}
                         >
                           4
                         </text>
                         <line
-                          x1={nx - 5}
-                          y1={ny - 5}
-                          x2={nx + 5}
-                          y2={ny + 5}
+                          x1={nx - 5.5}
+                          y1={ny - 5.5}
+                          x2={nx + 5.5}
+                          y2={ny + 5.5}
                           stroke={palette.elimColor}
-                          strokeWidth={1.45}
+                          strokeWidth={1.5}
                           strokeLinecap="round"
                         />
                       </g>
@@ -1009,10 +1009,10 @@ export const XWingDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) =
           return (
             <g key={`corner-${i}`}>
               <rect
-                x={cx - 8}
-                y={cy - 8}
-                width={16}
-                height={16}
+                x={cx - 8.5}
+                y={cy - 8.5}
+                width={17}
+                height={17}
                 rx={5}
                 fill={darkMode ? "#7C3AED" : "#DDD6FE"}
               />
@@ -1021,8 +1021,8 @@ export const XWingDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) =
                 y={cy}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize="10.5"
-                fontWeight="600"
+                fontSize="12"
+                fontWeight="700"
                 fill={darkMode ? "#FFFFFF" : "#4C1D95"}
               >
                 6
@@ -1038,10 +1038,10 @@ export const XWingDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) =
           return (
             <g key={`elim-${i}`}>
               <rect
-                x={cx - 8}
-                y={cy - 8}
-                width={16}
-                height={16}
+                x={cx - 8.5}
+                y={cy - 8.5}
+                width={17}
+                height={17}
                 rx={5}
                 fill={palette.elimBadgeBg}
               />
@@ -1050,17 +1050,17 @@ export const XWingDiagram: React.FC<RuleDiagramProps> = ({ labels, darkMode }) =
                 y={cy}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize="10.5"
-                fontWeight="600"
+                fontSize="12"
+                fontWeight="700"
                 fill={palette.elimColor}
               >
                 6
               </text>
               <line
-                x1={cx - 5}
-                y1={cy - 5}
-                x2={cx + 5}
-                y2={cy + 5}
+                x1={cx - 5.5}
+                y1={cy - 5.5}
+                x2={cx + 5.5}
+                y2={cy + 5.5}
                 stroke={palette.elimColor}
                 strokeWidth={1.5}
                 strokeLinecap="round"
