@@ -18414,7 +18414,7 @@ export default function App() {
             const academyItems: Array<{
               href: string;
               label: string;
-              screen: "rules" | GuideScreenId;
+              screen: "rules" | "daily-challenge" | "solver" | GuideScreenId;
               icon: React.ReactNode;
               cls: string;
             }> = [
@@ -18453,6 +18453,24 @@ export default function App() {
                 cls: darkMode
                   ? "bg-sky-500/20 text-sky-200 hover:bg-sky-500/30"
                   : "bg-[#E0F2FE] text-[#0369A1] hover:bg-[#BAE6FD]",
+              },
+              {
+                href: "/daily-challenge",
+                label: t("dailyChallengeLabel"),
+                screen: "daily-challenge",
+                icon: <Calendar className="w-3.5 h-3.5 shrink-0" />,
+                cls: darkMode
+                  ? "bg-indigo-500/20 text-indigo-200 hover:bg-indigo-500/30"
+                  : "bg-[#EEF2FF] text-[#4338CA] hover:bg-[#E0E7FF]",
+              },
+              {
+                href: "/solver",
+                label: t("sudokuSolverLabel"),
+                screen: "solver",
+                icon: <Calculator className="w-3.5 h-3.5 shrink-0" />,
+                cls: darkMode
+                  ? "bg-teal-500/20 text-teal-200 hover:bg-teal-500/30"
+                  : "bg-[#CCFBF1] text-[#0F766E] hover:bg-[#99F6E4]",
               },
             ];
 
@@ -18495,35 +18513,10 @@ export default function App() {
             );
           })()}
 
-          {/* Compliant Static Footer + Compact Pastel Language Dropdown */}
+          {/* Compliant Static Footer: Company, Legal & Language Selector Only */}
           {!Capacitor.isNativePlatform() && (
             <footer className="w-full max-w-4xl mx-auto px-4 py-6 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 text-center text-sm font-sans text-stone-600 select-text">
               <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 text-xs font-semibold">
-                <a
-                  href="/daily-challenge"
-                  onClick={(e) => {
-                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                    e.preventDefault();
-                    playClickSound();
-                    navigateToScreen("daily-challenge");
-                  }}
-                  className="py-1.5 px-3 rounded-xl text-[#4F46E5] hover:bg-indigo-50/80 dark:text-[#A5B4FC] dark:hover:bg-indigo-950/40 transition-colors no-underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                >
-                  {t("dailyChallengeLabel")}
-                </a>
-                <a
-                  href="/solver"
-                  onClick={(e) => {
-                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                    e.preventDefault();
-                    playClickSound();
-                    navigateToScreen("solver");
-                  }}
-                  className="py-1.5 px-3 rounded-xl text-[#0F766E] hover:bg-teal-50/80 dark:text-[#5EEAD4] dark:hover:bg-teal-950/40 transition-colors no-underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
-                >
-                  {t("sudokuSolverLabel")}
-                </a>
-
                 {/* Compact Borderless Pastel Language Dropdown */}
                 <div className="relative inline-flex items-center">
                   <button
@@ -20762,6 +20755,7 @@ export default function App() {
             mistakeLimitEnabled={mistakeLimitEnabled}
             setMistakeLimitEnabled={handleToggleMistakeLimit}
             onLanguageChange={handleLanguageChange}
+            language={language}
             challengeMode={challengeMode}
             boardState={boardState}
             challengeMistakeLimit={challengeMistakeLimit}

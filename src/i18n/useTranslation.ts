@@ -62,11 +62,58 @@ export const HOME_NAV_LABELS: Record<Language, string> = {
 };
 
 /**
- * Synchronously resolves a translation key for an explicit target locale.
+ * Synchronously resolves a translation key (with aliases, params, and difficulty overrides) for an explicit target locale.
  */
-export function translateForLanguage(lang: Language, key: TranslationKey): string {
-  const activeDict = translations[lang] || translations.en;
-  return activeDict[key] || translations.en[key] || key;
+export function translateForLanguage(
+  lang: Language,
+  key: TranslationKey | string,
+  params?: Record<string, string | number>
+): string {
+  // Direct difficulty key interception across all 9 locales
+  const lowerKey = String(key).toLowerCase();
+  if (lowerKey === 'easy' || lowerKey === 'medium' || lowerKey === 'hard' || lowerKey === 'expert' || lowerKey === 'master') {
+    const diffDict = DIFFICULTY_TRANSLATIONS[lang] || DIFFICULTY_TRANSLATIONS['en'];
+    const diffVal = diffDict?.[lowerKey as 'easy' | 'medium' | 'hard' | 'expert' | 'master'];
+    if (diffVal) {
+      return diffVal;
+    }
+  }
+
+  // Direct incognito / setPin key interception across all locales
+  if (key === 'incognitoMode' || key === 'incognitoDesc' || key === 'setPin' || key === 'set4DigitPin') {
+    const mappedKey = key === 'set4DigitPin' ? 'setPin' : (key as 'incognitoMode' | 'incognitoDesc' | 'setPin');
+    const incogDict = INCOGNITO_TRANSLATIONS[lang] || INCOGNITO_TRANSLATIONS['en'];
+    if (incogDict && incogDict[mappedKey]) {
+      return incogDict[mappedKey];
+    }
+  }
+
+  const currentDict = translations[lang] || translations['en'];
+
+  // 1. Direct key match in current language dictionary or English dictionary
+  let val = currentDict[key as TranslationKey] || translations['en']?.[key as TranslationKey];
+
+  // 2. Try alias mapping (e.g. UPPERCASE code identifier to canonical camelCase key)
+  if (!val) {
+    const canonicalKey = ALIAS_MAP[key] || ALIAS_MAP[String(key).toUpperCase()];
+    if (canonicalKey) {
+      val = currentDict[canonicalKey] || translations['en']?.[canonicalKey];
+    }
+  }
+
+  // 3. Last-resort fallback shield: never display ugly unformatted code identifiers
+  if (!val) {
+    val = sanitizeFallbackKey(String(key), params);
+  }
+
+  // 4. Interpolate parameters if present
+  if (params && typeof val === 'string') {
+    Object.entries(params).forEach(([paramKey, paramVal]) => {
+      val = val.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(paramVal));
+    });
+  }
+
+  return val;
 }
 
 /**
@@ -306,53 +353,8 @@ export function useTranslation() {
   }, []);
 
   const t = useCallback(
-    (key: TranslationKey | string, params?: Record<string, string | number>): string => {
-      // Direct difficulty key interception across all 9 locales
-      const lowerKey = String(key).toLowerCase();
-      if (lowerKey === 'easy' || lowerKey === 'medium' || lowerKey === 'hard' || lowerKey === 'expert' || lowerKey === 'master') {
-        const diffDict = DIFFICULTY_TRANSLATIONS[lang] || DIFFICULTY_TRANSLATIONS['en'];
-        const diffVal = diffDict?.[lowerKey as 'easy' | 'medium' | 'hard' | 'expert' | 'master'];
-        if (diffVal) {
-          return diffVal;
-        }
-      }
-
-      // Direct incognito / setPin key interception across all locales
-      if (key === 'incognitoMode' || key === 'incognitoDesc' || key === 'setPin' || key === 'set4DigitPin') {
-        const mappedKey = key === 'set4DigitPin' ? 'setPin' : (key as 'incognitoMode' | 'incognitoDesc' | 'setPin');
-        const incogDict = INCOGNITO_TRANSLATIONS[lang] || INCOGNITO_TRANSLATIONS['en'];
-        if (incogDict && incogDict[mappedKey]) {
-          return incogDict[mappedKey];
-        }
-      }
-
-      const currentDict = translations[lang] || translations['en'];
-
-      // 1. Direct key match in current language dictionary or English dictionary
-      let val = currentDict[key as TranslationKey] || translations['en']?.[key as TranslationKey];
-
-      // 2. Try alias mapping (e.g. UPPERCASE code identifier to canonical camelCase key)
-      if (!val) {
-        const canonicalKey = ALIAS_MAP[key] || ALIAS_MAP[String(key).toUpperCase()];
-        if (canonicalKey) {
-          val = currentDict[canonicalKey] || translations['en']?.[canonicalKey];
-        }
-      }
-
-      // 3. Last-resort fallback shield: never display ugly unformatted code identifiers
-      if (!val) {
-        val = sanitizeFallbackKey(String(key), params);
-      }
-
-      // 4. Interpolate parameters if present
-      if (params && typeof val === 'string') {
-        Object.entries(params).forEach(([paramKey, paramVal]) => {
-          val = val.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(paramVal));
-        });
-      }
-
-      return val;
-    },
+    (key: TranslationKey | string, params?: Record<string, string | number>): string =>
+      translateForLanguage(lang, key, params),
     [lang]
   );
 

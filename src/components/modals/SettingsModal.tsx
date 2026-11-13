@@ -3,8 +3,8 @@ import { Pencil, Lock, Zap, Globe, Moon, Volume2, Vibrate, Bell, Ghost, ChevronD
 import { openAdPrivacyOptions, AdPrivacyOptionsResult } from "../../services/adMobService";
 import { applyThemeToggle } from "../../utils/themeFeedback";
 import { setGlobalHapticsEnabled, triggerHapticTap } from "../../utils/haptics";
-import { useTranslation } from "../../i18n/useTranslation";
-import { Language } from "../../i18n/translations";
+import { translateForLanguage, useTranslation } from "../../i18n/useTranslation";
+import { Language, TranslationKey } from "../../i18n/translations";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { isGenericDisplayName } from "../../utils/storageEngine";
 import { getFocusableElements, handleRovingMenuArrowKey } from "../../utils/keyboardControls";
@@ -63,6 +63,7 @@ export interface SettingsModalProps {
   onCancelConnectGoogle?: () => void;
   onLogout?: () => void;
   onLanguageChange?: (lang: Language) => void;
+  language?: Language;
   onOpenSudokuSolver?: () => void;
   scrollToSection?: "delete-account" | null;
   onScrollTargetConsumed?: () => void;
@@ -116,13 +117,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onCancelConnectGoogle,
   onLogout,
   onLanguageChange,
+  language: languageProp,
   onOpenSudokuSolver,
   scrollToSection = null,
   onScrollTargetConsumed,
   isOnline = true
 }) => {
   const isConnecting = isSyncingCloudData ?? isConnectingGoogle;
-  const { t, language, setLanguage, languages } = useTranslation();
+  const { language: hookLanguage, setLanguage, languages } = useTranslation();
+  const language = languageProp || hookLanguage;
+  const t = (key: TranslationKey | string, params?: Record<string, string | number>) =>
+    translateForLanguage(language, key, params);
   const { isIncognito, toggleIncognito } = useFriendPresence(userProfile?.id);
   const [expandedInfo, setExpandedInfo] = useState<Record<string, boolean>>({});
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
@@ -1439,6 +1444,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   id="settings-ad-privacy-btn"
                   onClick={handleOpenAdPrivacyPreferences}
                   disabled={isCheckingAdPrivacy}
+                  aria-busy={isCheckingAdPrivacy}
                   className={`w-full py-2.5 px-4 text-sm font-medium text-left rounded-xl border-0 active:scale-[0.98] transition-all cursor-pointer flex justify-between items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-70 ${
                     darkMode
                       ? "bg-sky-950/40 hover:bg-sky-950/60 text-sky-100 shadow-[0_4px_14px_rgba(0,0,0,0.22)]"
@@ -1446,15 +1452,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   }`}
                 >
                   <span className="inline-flex items-center gap-2 min-w-0">
-                    <Shield className="w-4 h-4 shrink-0 text-sky-600 dark:text-sky-400" />
+                    <Shield aria-hidden="true" className="w-4 h-4 shrink-0 text-sky-600 dark:text-sky-400" />
                     <span className="truncate">
                       {isCheckingAdPrivacy ? t("adPrivacyChecking") : t("adPrivacyPreferences")}
                     </span>
                   </span>
                   {isCheckingAdPrivacy ? (
-                    <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin opacity-75" />
+                    <Loader2 aria-hidden="true" className="w-3.5 h-3.5 shrink-0 animate-spin opacity-75" />
                   ) : (
-                    <ChevronRight className="w-3.5 h-3.5 shrink-0 opacity-60" />
+                    <ChevronRight aria-hidden="true" className="w-3.5 h-3.5 shrink-0 opacity-60" />
                   )}
                 </button>
 
@@ -1472,7 +1478,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }`}
                   >
                     <div className="flex items-start gap-2">
-                      <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-sky-600 dark:text-sky-400" />
+                      <Info aria-hidden="true" className="w-3.5 h-3.5 shrink-0 mt-0.5 text-sky-600 dark:text-sky-400" />
                       <p className="m-0">
                         {adPrivacyNotice === "opened"
                           ? t("adPrivacyOpened")
@@ -1495,7 +1501,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               : "bg-white text-sky-900 hover:bg-sky-100 shadow-[0_2px_8px_rgba(14,116,144,0.08)]"
                           }`}
                         >
-                          <Shield className="w-3 h-3 shrink-0" />
+                          <Shield aria-hidden="true" className="w-3 h-3 shrink-0" />
                           <span>{t("viewPrivacyPolicyLink")}</span>
                         </button>
                       </div>

@@ -281,7 +281,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Intellectual Property Rights",
       s4Text:
-        "All game logic engines, procedural sound synthesis code, user interface designs, the Scrapbook Design System tokens, graphics, logos, and software code are the intellectual property of SudokuSync and protected by international copyright and trademark laws.",
+        "All game logic engines, procedural sound synthesis code, user interface designs, SudokuSync Design System tokens, graphics, logos, and software code are the intellectual property of SudokuSync and protected by international copyright and trademark laws.",
       s5Header: "5. Third-Party Advertisements (AdSense & AdMob)",
       s5Text:
         "The service is kept free via Google AdSense on Web and the Google AdMob SDK (including optional interstitial or rewarded video ads, subject to Google UMP consent in applicable regions) on Android. We do not control or endorse the content of third-party advertisements or external links. Any interactions or transactions with advertised third parties are solely between you and the respective advertiser.",
@@ -374,14 +374,14 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
   },
 
   hi: {
-    metaLine: "Prabhavi Tithi: 12 August 2026 | Version: 1.0.3 | Platform: Web & Android App",
+    metaLine: "Effective Date: 12 August 2026 | Version: 1.0.3 | Platform: Web aur Android App",
     privacy: {
       title: "Privacy Policy",
       intro:
-        "SudokuSync (https://sudokusync.com aur official Android mobile app) par hum apne sabhi visitors aur players ki privacy ko sabse zyada ahmiyat dete hain. Yeh Privacy Policy detail mein batati hai ki kaunsa data collect, store aur process hota hai, aur hum GDPR, California Consumer Privacy Act (CCPA/CPRA), COPPA, Google Play Store Data Safety Policies, Google AdSense Program Policies, aur Google AdMob Policies ko kaise follow karte hain.",
+        "SudokuSync (https://sudokusync.com aur official Android mobile app) par hum apne sabhi visitors aur players ki privacy ko sabse zyada importance dete hain. Yeh Privacy Policy detail mein batati hai ki kaunsa data collect, store aur process hota hai, aur hum GDPR, California Consumer Privacy Act (CCPA/CPRA), COPPA, Google Play Store Data Safety Policies, Google AdSense Program Policies, aur Google AdMob Policies ko kaise follow karte hain.",
       s1Header: "1. Information Collection aur Storage Architecture",
       s1Intro:
-        "Hum strict data minimization follow karte hain aur device-local data aur cloud database records ke beech clear fark rakhte hain:",
+        "Hum strict data minimization follow karte hain aur device-local data aur cloud database records ke beech clear difference rakhte hain:",
       s1LocalStorage: {
         label: "Client-Side Local Storage (Sirf Browser & Device):",
         text: "Aapke device par browser localStorage sirf UI preferences (Dark Mode, sound synthesis, haptics), mistake limit, timer visibility, active puzzle notes, aur saved solo games ko yaad rakhne ke liye use hota hai. Yeh data aapke device par hi rehta hai aur kabhi kisi third-party marketing agency ko becha ya share nahi kiya jata.",
@@ -405,79 +405,79 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       },
       s1Auth: {
         label: "Firebase Authentication & Cloud Sync (Optional):",
-        text: "Agar aap Firebase Authentication (Google OAuth) se Google Sign-In karte hain, toh humein sirf basic profile identity (Display Name, Email, aur User ID) milti hai taaki aapka session authenticate ho aur stats/saved puzzles sabhi devices par sync ho sakein. Anonymous Guest sessions bilkul alag isolated local vault mein chalte hain aur bina sign-in kiye private user profiles mein kuch write nahi karte. Hum kabhi password, contacts, personal files, ya financial details collect nahi karte aur na hi kisi advertiser ke saath auth data share karte hain.",
+        text: "Agar aap Firebase Authentication (Google OAuth) se Google Sign-In karte hain, toh humein sirf basic profile identity (Display Name, Email, aur User ID) milti hai taaki aapka session verify ho aur stats/saved puzzles sabhi devices par sync ho sakein. Anonymous Guest sessions bilkul alag isolated local vault mein chalte hain aur bina sign-in kiye private user profiles mein kuch write nahi karte. Hum kabhi password, contacts, personal files, ya financial details collect nahi karte aur na hi kisi advertiser ke saath auth data share karte hain.",
       },
       s1ServerLogs: {
         label: "Infrastructure & Diagnostic Server Logs:",
-        text: "Google Firebase Hosting aur humara Express server operational security, DDoS protection, aur rate-limiting ke liye standard web server request logs (IP address, browser user-agent, timestamp) automatically process karte hain.",
+        text: "Google Firebase Hosting aur hamara Express server operational security, DDoS protection, aur rate-limiting ke liye standard web server request logs (IP address, browser user-agent, timestamp) automatically process karte hain.",
       },
       s2Header: "2. Advertising, Google AdSense, AdMob SDK, AAID & Google UMP Consent",
       s2P1: "SudokuSync ko free rakhne ke liye hum Google LLC ki services use karte hain — Web par Google AdSense aur official Android app mein Google AdMob SDK. Web par Google aur partner ad networks cookies (jaise DoubleClick / DART cookie), web beacons, aur identifiers use karte hain. Android par AdMob SDK ad delivery, frequency capping, aur fraud prevention ke liye Android Advertising ID (AAID), app interaction events, aur diagnostic signals process kar sakta hai.",
-      s2P2: "Regulated regions (jaise EEA aur UK) mein personalized ads dikhane se pehle humara mobile app Google UMP (User Messaging Platform) Consent SDK ke zariye clear privacy choices dialog dikhata hai jahan aap apni consent kabhi bhi manage ya withdraw kar sakte hain.",
+      s2P2: "Regulated regions (jaise EEA aur UK) mein personalized ads dikhane se pehle hamara mobile app Google UMP (User Messaging Platform) Consent SDK ke zariye clear privacy choices dialog dikhata hai jahan aap apni consent kabhi bhi manage ya withdraw kar sakte hain.",
       s2BoxTitle: "Advertising Transparency, AAID Controls aur Opt-Out Portals:",
       s2BoxIntro:
         "Google ki advertising cookies (DART cookie samet) aapki visits ke base par ads dikhane mein madad karti hain. Aap kabhi bhi personalized ads band kar sakte hain, AAID reset kar sakte hain, ya cookie preferences manage kar sakte hain:",
       s2AndroidAaid: {
         label: "Android Advertising ID (AAID) Opt-Out / Reset:",
-        text: "Apne Android phone mein Settings -> Google -> Ads (ya Settings -> Privacy -> Ads) kholkar Advertising ID reset karein ya Ads Personalization opt-out karein.",
+        text: "Apne Android phone mein Settings -> Google -> Ads (ya Settings -> Privacy -> Ads) kholkar Advertising ID reset karein ya Ads Personalization off karein.",
       },
       s2Portals: OPT_OUT_PORTALS,
       s2Quality: {
         label: "Ad Traffic & Quality Protection:",
-        text: "Automated bots, click-farms, baar-baar manual ad clicks, ad-block tampering, ya proxy manipulation sakhti se mana hai aur filter kiya jata hai.",
+        text: "Automated bots, click-farms, baar-baar manual ad clicks, ad-block tampering, ya proxy manipulation bilkul mana hai aur filter kiya jata hai.",
       },
       s3Header: "3. Right to Erasure / Account & Data Deletion (Google Play & Global Standards)",
       s3Intro:
-        "GDPR, CCPA/CPRA, DPDP aur Google Play Store Data Safety Guidelines ke tahat har player ko apna account, game records, aur telemetry data hamesha ke liye delete karne ka poora haq hai.",
+        "GDPR, CCPA/CPRA, DPDP aur Google Play Store Data Safety Guidelines ke under har player ko apna account, game records, aur telemetry data hamesha ke liye delete karne ka poora right hai.",
       s3BoxTitle: "Account & Data Deletion ke Tarike:",
       s3InApp: {
         label: "Seedha App ke Andar (Instant Self-Service):",
-        text: 'Settings kholein -> SUPPORT & INFO section mein jaayein -> "Delete Account & Data" par click karein. Isse turant aapka Firestore cloud profile, presence documents, active multiplayer player documents, FCM tokens, aur device ka localStorage / sessionStorage cache hamesha ke liye erase ho jata hai aur auth session revoke ho jata hai.',
+        text: 'Settings kholein -> SUPPORT AUR INFO section mein jaayein -> "Account aur Data Delete Karein" par tap karein. Isse turant aapka Firestore cloud profile, presence documents, active multiplayer player documents, FCM tokens, aur device ka localStorage / sessionStorage cache hamesha ke liye delete ho jata hai aur session sign out ho jata hai.',
       },
       s3Email: {
-        label: "Web & Email Request (Alternative Channel):",
-        text: "Agar aap app access nahi kar paa rahe hain ya app uninstall kar diya hai, toh sudokutogethermode@gmail.com par deletion request bhejein (email ya template copy karne ke liye Contact Support page use karein). Apna player display name ya email batayein; 24 se 48 business hours mein deletion confirm kar diya jayega.",
+        label: "Web & Email Request (Alternative Option):",
+        text: "Agar aap app access nahi kar paa rahe hain ya app uninstall kar diya hai, toh sudokutogethermode@gmail.com par deletion request bhejein (email ya template copy karne ke liye Contact Us page use karein). Apna player display name ya email batayein; 24 se 48 business hours mein deletion confirm kar diya jayega.",
       },
-      s3RightsIntro: "EEA, UK aur global users ke liye additional statutory rights:",
+      s3RightsIntro: "EEA, UK aur global users ke liye additional legal rights:",
       s3RightsBullets: [
         {
           label: "Right of Access:",
-          text: "Apne stored player aur leaderboard records ki copy mangne ka haq.",
+          text: "Apne stored player aur leaderboard records ki copy mangne ka right.",
         },
         {
           label: "Right to Rectification:",
-          text: "App ke andar kabhi bhi apna player display nickname update karne ka haq.",
+          text: "App ke andar kabhi bhi apna player display nickname update karne ka right.",
         },
         {
           label: "Right to Restriction & Data Portability:",
-          text: "Data processing par limit lagane ya match telemetry export mangne ka haq.",
+          text: "Data processing par limit lagane ya match telemetry export mangne ka right.",
         },
       ],
       s4Header: "4. California Privacy Rights (CCPA / CPRA)",
       s4Text:
-        "CCPA/CPRA ke tahat California residents ko jaanne ka haq hai ki kaunsa data collect hota hai aur woh deletion request kar sakte hain. Hum aapki personal information kabhi kisi third party ko paise ya commercial faayde ke liye bechte (sell) ya share nahi karte.",
+        "CCPA/CPRA ke under California residents ko jaanne ka right hai ki kaunsa data collect hota hai aur woh deletion request kar sakte hain. Hum aapki personal information kabhi kisi third party ko paise ya commercial benefit ke liye sell ya share nahi karte.",
       s5Header: "5. Children's Privacy Protection (COPPA)",
       s5Text:
-        "Bacchon ki privacy hamare liye bahut zaroori hai. SudokuSync 13 saal se kam (ya EEA/UK mein 16 saal se kam) bacchon se jaan-bujhkar koi personal information collect nahi karta. Khelne ke liye real name, ghar ka pata, ya phone number zaroori nahi hai. Agar kisi parent ko lage ki unke bacche ne koi personal info submit kar di hai, toh turant sudokutogethermode@gmail.com par sampark karein — hum turant woh records hata denge.",
+        "Bacchon ki privacy hamare liye bahut zaroori hai. SudokuSync 13 saal se kam (ya EEA/UK mein 16 saal se kam) bacchon se jaan-bujhkar koi personal information collect nahi karta. Khelne ke liye real name, ghar ka address, ya phone number zaroori nahi hai. Agar kisi parent ko lage ki unke bacche ne koi personal info submit kar di hai, toh turant sudokutogethermode@gmail.com par email karein — hum turant woh records hata denge.",
       s6Header: "6. Data Retention & Security Controls",
       s6Text:
-        "30 din se purane multiplayer challenge match records hamare databases se automatically delete ho jate hain. Sabhi client-to-server traffic TLS/HTTPS encryption se surakshit rehta hai aur strict Firestore security rules unauthorized tampering rokte hain.",
+        "30 din se purane multiplayer challenge match records hamare databases se automatically delete ho jate hain. Sabhi client-to-server traffic TLS/HTTPS encryption se protected rehta hai aur strict Firestore security rules unauthorized tampering rokte hain.",
       s7Header: "7. Contact Us",
       s7Intro:
-        "Is Privacy Policy ya data handling se jude kisi bhi sawal ke liye hamare Data Protection desk se sampark karein:",
+        "Is Privacy Policy ya data handling se jude kisi bhi sawal ke liye hamare support desk se contact karein:",
       s7TurnaroundLabel: "Response Time:",
       s7TurnaroundValue: "24 se 48 business hours ke andar.",
     },
     terms: {
       title: "Terms of Service",
       intro:
-        "SudokuSync (https://sudokusync.com ya official Android application) ko access karne, install karne, ya khelne se aap in Terms of Service aur sabhi laagu kanoono ko maante hain. Agar aap in sharton se sahmat nahi hain, toh is application ka upyog na karein.",
+        "SudokuSync (https://sudokusync.com ya official Android application) ko access karne, install karne, ya khelne se aap in Terms of Service aur sabhi laagu rules ko maante hain. Agar aap in terms se agree nahi karte, toh kripya is app ka use na karein.",
       s1Header: "1. Description of Service & Free Access",
       s1Text:
-        'SudokuSync free digital Sudoku puzzles, deterministic seeded multiplayer rooms, real-time leaderboards, aur logic training tools provide karta hai. Yeh service "AS IS" aur "AS AVAILABLE" basis par di jati hai. Hum bina poorv soochana ke features badalne ya update karne ka adhikar rakhte hain.',
+        'SudokuSync free digital Sudoku puzzles, deterministic seeded multiplayer rooms, real-time leaderboards, aur logic training tools deta hai. Yeh service "AS IS" aur "AS AVAILABLE" basis par di jati hai. Hum bina advance notice ke features update ya change karne ka right rakhte hain.',
       s2Header: "2. Fair Play, Anti-Cheat & Community Standards",
       s2Intro:
-        "SudokuSync ek imaandar aur skill-based puzzle platform banaye rakhne ke liye pratibaddh hai. Single-player leaderboards aur multiplayer duels mein fair play banaye rakhne ke liye aap in niyamon ka palan karenge:",
+        "SudokuSync ek fair aur skill-based puzzle platform banaye rakhne ke liye committed hai. Single-player leaderboards aur multiplayer duels mein fair play rakhne ke liye aap in rules ko follow karenge:",
       s2BoxTitle: "Fair Play & Anti-Cheat Policy:",
       s2Bullets: [
         {
@@ -490,15 +490,15 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         },
         {
           label: "No Network or API Manipulation:",
-          text: "Sync packets intercept/forge karna, matchmaking manipulate karna, ya fake match results bhejna sakht mana hai.",
+          text: "Sync packets intercept/fake karna, matchmaking manipulate karna, ya fake match results bhejna bilkul mana hai.",
         },
         {
           label: "Appropriate Player Nicknames:",
-          text: "Ashleel, apmanjanak, ya galat display names allow nahi hain. Sabhi profiles par profanity filter aur alphanumeric checks lagte hain.",
+          text: "Offensive, abusive, ya galat display names allow nahi hain. Sabhi profiles par profanity filter aur alphanumeric checks lagte hain.",
         },
         {
           label: "Zero Ad-Fraud:",
-          text: "Ads par automated, nakli, ya dhokhadhadi wale clicks karna poori tarah mana hai.",
+          text: "Ads par automated, fake, ya misleading clicks karna poori tarah mana hai.",
         },
       ],
       s2Penalty: {
@@ -515,7 +515,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         },
         {
           label: "Account Confidentiality & Responsibility:",
-          text: "Apne Google account credentials ki suraksha ki zimmedari aapki hai. Aapke session se hone wali sabhi activities ke liye aap khud zimmedar hain.",
+          text: "Apne Google account credentials ko safe rakhne ki zimmedari aapki hai. Aapke session se hone wali sabhi activities ke liye aap khud responsible hain.",
         },
         {
           label: "Personal, Non-Commercial Use:",
@@ -527,30 +527,30 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         },
         {
           label: "Self-Service Account & Data Deletion:",
-          text: 'Aap kabhi bhi Settings -> Support & Info -> "Delete Account & Data" dabakar apna cloud profile, match records, push tokens, aur local cache turant delete kar sakte hain, ya sudokutogethermode@gmail.com par likhit request bhej sakte hain.',
+          text: 'Aap kabhi bhi Settings -> SUPPORT AUR INFO -> "Account aur Data Delete Karein" dabakar apna cloud profile, match records, push tokens, aur local cache turant delete kar sakte hain, ya sudokutogethermode@gmail.com par email request bhej sakte hain.',
         },
       ],
       s4Header: "4. Intellectual Property Rights",
       s4Text:
-        "Sabhi puzzle logic engines, procedural sound synthesis code, UI designs, Scrapbook Design System tokens, graphics, logos, aur software code SudokuSync ki intellectual property hain aur copyright kanoon se surakshit hain.",
+        "Sabhi puzzle logic engines, procedural sound synthesis code, UI designs, SudokuSync Design System tokens, graphics, logos, aur software code SudokuSync ki intellectual property hain aur copyright laws se protected hain.",
       s5Header: "5. Third-Party Advertisements (AdSense & AdMob)",
       s5Text:
-        "App ko free rakhne ke liye Web par Google AdSense aur Android par Google AdMob SDK (jismein applicable regions mein Google UMP consent ke saath interstitial ya rewarded ads shamil ho sakte hain) use hota hai. Third-party ads ya external links ke content ke liye hum zimmedar nahi hain.",
+        "App ko free rakhne ke liye Web par Google AdSense aur Android par Google AdMob SDK (jismein applicable regions mein Google UMP consent ke saath interstitial ya rewarded ads shamil ho sakte hain) use hota hai. Third-party ads ya external links ke content ke liye hum responsible nahi hain.",
       s6Header: "6. Disclaimer of Warranties & Limitation of Liability",
       s6Text:
-        "SudokuSync ka software aur material 'as is' basis par diya jata hai. Hum kisi prakar ki warranty nahi dete aur game use karne ya na kar paane se hone wale kisi bhi data/profit loss ke liye developer zimmedar nahi hoga.",
+        "SudokuSync ka software aur material 'as is' basis par diya jata hai. Hum kisi tarah ki warranty nahi dete aur game use karne ya na kar paane se hone wale kisi bhi data ya profit loss ke liye developer responsible nahi hoga.",
       s7Header: "7. Account Deletion & Termination",
       s7Text:
-        'Aap kabhi bhi app use karna band kar sakte hain aur Settings mein "Delete Account & Data" se saara data turant mita sakte hain. Terms todne par nicknames ya access hatane ka adhikar humare paas surakshit hai.',
+        'Aap kabhi bhi app use karna band kar sakte hain aur Settings mein "Account aur Data Delete Karein" se saara data turant delete kar sakte hain. Terms todne par nicknames ya access hatane ka right hamare paas reserved hai.',
       s8Header: "8. Contact Us",
-      s8Intro: "In Terms of Service se jude kisi bhi sawal ya legal notice ke liye humein sampark karein:",
+      s8Intro: "In Terms of Service se jude kisi bhi sawal ya legal notice ke liye humein email karein:",
       s8TurnaroundLabel: "Response Time:",
       s8TurnaroundValue: "24 se 48 business hours ke andar.",
     },
     contactComposer: {
       sectionLabel: "Support Message Composer",
       helperText:
-        "Topic chunein, apna message customize karein aur seedhe copy karein — koi blank mail popup window nahi khulegi.",
+        "Topic chunein, apna message customize karein aur seedha copy karein — koi blank mail popup window nahi khulegi.",
       subjectLabel: "Subject",
       messageLabel: "Message Template",
       copyMessageBtn: "Message Copy Karein",
@@ -558,7 +558,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       copyEmailBtn: "Email Copy Karein",
       emailCopiedBtn: "Email Copy Ho Gaya",
       openPrivacyBtn: "Privacy & Ad/UMP Opt-Out Kholen",
-      openDeleteSettingsBtn: "Settings -> Delete Account & Data Par Jaayein",
+      openDeleteSettingsBtn: "Settings -> Account aur Data Delete Par Jaayein",
       topics: {
         bug: {
           label: "Bug Report",
@@ -573,18 +573,18 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         deletion: {
           label: "Account & Data Deletion",
           subject: "SudokuSync Account & Data Deletion Request (v1.0.3)",
-          body: "App Version: v1.0.3\nPlayer Display Name / Email: \nRequest: Kripya mera SudokuSync Firestore profile, leaderboard/match records, aur push notification tokens hamesha ke liye delete karein.",
+          body: "App Version: v1.0.3\nPlayer Display Name / Email: \nRequest: Please mera SudokuSync Firestore profile, leaderboard/match records, aur push notification tokens hamesha ke liye delete karein.",
         },
       },
     },
     about: {
-      publisherBadge: "Mo Logic dwara prakashit",
+      publisherBadge: "Mo Logic ki taraf se Published",
       publisherHeader: "Independent Puzzle Studio aur Quality Standards",
       publisherText:
-        "SudokuSync ko Mo Logic ne Web (https://sudokusync.com) aur Google Play Android (com.mologic.sudokusync) ke liye banaya aur publish kiya hai. Har puzzle, diagram aur guide ko saaf borderless pastel UI, Light/Dark modes, offline support aur transparent muft access ke saath tayyar kiya gaya hai.",
+        "SudokuSync ko Mo Logic ne Web (https://sudokusync.com) aur Google Play Android (com.mologic.sudokusync) ke liye independently banaya aur publish kiya hai. Har puzzle, diagram aur guide ko clean borderless pastel UI, Light/Dark modes, offline support aur transparent free access ke saath design kiya gaya hai.",
       engineHeader: "Deterministic 9x9 Puzzle Engine aur Verified Clues",
       engineIntro:
-        "Har classic 9x9 board humare seeded Mulberry32 PRNG generator se banta hai aur human-logic difficulty engine tatha bitmask MRV solver se check hota hai taaki har puzzle ka sirf ek hi sahi solution ho:",
+        "Har classic 9x9 board hamare seeded Mulberry32 PRNG generator se banta hai aur human-logic difficulty engine plus bitmask MRV solver se check hota hai taaki har puzzle ka sirf ek hi sahi solution ho:",
       difficultySpecs: [
         {
           level: "EASY",
@@ -608,7 +608,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           level: "EXPERT",
           label: "Expert",
           cluesBadge: "25 Clues",
-          summary: "Gehre candidate elimination chains, X-Wing patterns aur kam clues.",
+          summary: "Deep candidate elimination chains, X-Wing patterns aur kam starting clues.",
         },
       ],
       multiplayerHeader: "Same-Board Live aur Asynchronous Multiplayer",
@@ -741,7 +741,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Geistiges Eigentum",
       s4Text:
-        "Alle Spiel-Engines, prozedurale Audio-Synthese, UI-Designs, Scrapbook Design System-Tokens, Grafiken, Logos und Quellcodes sind geistiges Eigentum von SudokuSync.",
+        "Alle Spiel-Engines, prozedurale Audio-Synthese, UI-Designs, SudokuSync Design-System-Tokens, Grafiken, Logos und Quellcodes sind geistiges Eigentum von SudokuSync.",
       s5Header: "5. Werbung Dritter (AdSense & AdMob)",
       s5Text:
         "Die Finanzierung erfolgt über Google AdSense (Web) und das Google AdMob SDK (Android, inklusive optionaler Interstitial-/Rewarded-Ads vorbehaltlich Google UMP-Einwilligung). Für Inhalte externer Werbetreibender übernehmen wir keine Haftung.",
@@ -946,7 +946,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. 知的財産権",
       s4Text:
-        "すべてのゲームロジック、音声合成コード、UIデザイン、Scrapbook Design System トークン、画像、ロゴ、ソースコードの知的財産権は SudokuSync に帰属します。",
+        "すべてのゲームロジック、音声合成コード、UIデザイン、SudokuSync デザインシステムトークン、画像、ロゴ、ソースコードの知的財産権は SudokuSync に帰属します。",
       s5Header: "5. 第三者広告（AdSense & AdMob）",
       s5Text:
         "無料提供のため、Webでは Google AdSense、Androidでは Google AdMob SDK（対象地域での Google UMP 同意に基づくインタースティシャル／リワード広告を含む）を表示します。外部広告主の内容について当社は責任を負いません。",
@@ -1151,7 +1151,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. 지식재산권",
       s4Text:
-        "모든 게임 로직 엔진, 사운드 합성 코드, UI 디자인, Scrapbook Design System 토큰, 그래픽, 로고 및 소프트웨어 코드는 SudokuSync의 지식재산권으로 보호됩니다.",
+        "모든 게임 로직 엔진, 사운드 합성 코드, UI 디자인, SudokuSync 디자인 시스템 토큰, 그래픽, 로고 및 소프트웨어 코드는 SudokuSync의 지식재산권으로 보호됩니다.",
       s5Header: "5. 제3자 광고(AdSense 및 AdMob)",
       s5Text:
         "서비스 무료 운영을 위해 웹에서는 Google AdSense, Android에서는 Google AdMob SDK(해당 지역 Google UMP 동의 하에 전면·보상형 광고 포함 가능)가 제공됩니다. 외부 광고주의 콘텐츠에 대해서는 책임지지 않습니다.",
@@ -1357,7 +1357,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Propiedad Intelectual",
       s4Text:
-        "Todos los motores lógicos, síntesis procedural de sonido, interfaces, tokens Scrapbook Design System, gráficos, logotipos y código pertenecen a SudokuSync.",
+        "Todos los motores lógicos, síntesis procedural de sonido, interfaces, tokens de SudokuSync Design System, gráficos, logotipos y código pertenecen a SudokuSync.",
       s5Header: "5. Publicidad de Terceros (AdSense y AdMob)",
       s5Text:
         "El juego se financia con Google AdSense en Web y Google AdMob SDK en Android (incluidos anuncios intersticiales o recompensados sujetos a consentimiento Google UMP). No respaldamos ni controlamos sitios anunciados.",
@@ -1563,7 +1563,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Propriété Intellectuelle",
       s4Text:
-        "Tous les moteurs logiques, synthèse sonore procédurale, interfaces, jetons Scrapbook Design System, graphismes, logos et codes appartiennent à SudokuSync.",
+        "Tous les moteurs logiques, synthèse sonore procédurale, interfaces, jetons du SudokuSync Design System, graphismes, logos et codes appartiennent à SudokuSync.",
       s5Header: "5. Publicités Tierces (AdSense et AdMob)",
       s5Text:
         "Le service reste gratuit grâce à Google AdSense (Web) et au SDK Google AdMob (Android, incluant annonces interstitielles/récompensées soumises au consentement Google UMP). Nous ne sommes pas responsables des sites tiers annoncés.",
@@ -1769,7 +1769,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Proprietà Intellettuale",
       s4Text:
-        "Tutti i motori di gioco, sintesi sonora procedurale, design UI, token Scrapbook Design System, grafica, loghi e codice sono proprietà intellettuale di SudokuSync.",
+        "Tutti i motori di gioco, sintesi sonora procedurale, design UI, token di SudokuSync Design System, grafica, loghi e codice sono proprietà intellettuale di SudokuSync.",
       s5Header: "5. Pubblicità di Terze Parti (AdSense e AdMob)",
       s5Text:
         "Il servizio resta gratuito grazie a Google AdSense (Web) e Google AdMob SDK (Android, inclusi annunci interstitial o con premio soggetti al consenso Google UMP). Non rispondiamo di contenuti di inserzionisti esterni.",
@@ -1975,7 +1975,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Propriedade Intelectual",
       s4Text:
-        "Todos os motores de lógica, síntese sonora procedural, interfaces, tokens Scrapbook Design System, gráficos, logotipos e códigos são propriedade intelectual do SudokuSync.",
+        "Todos os motores de lógica, síntese sonora procedural, interfaces, tokens do SudokuSync Design System, gráficos, logotipos e códigos são propriedade intelectual do SudokuSync.",
       s5Header: "5. Anúncios de Terceiros (AdSense e AdMob)",
       s5Text:
         "O serviço é mantido gratuito via Google AdSense (Web) e Google AdMob SDK (Android, incluindo anúncios intersticiais ou premiados sujeitos ao consentimento Google UMP). Não nos responsabilizamos por sites anunciados.",
