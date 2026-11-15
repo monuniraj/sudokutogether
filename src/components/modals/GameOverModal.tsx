@@ -23,6 +23,7 @@ import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { formatActiveStatus } from "../../utils/formatTimestamp";
 import { auth } from "../../firebase";
 import { getActiveAuthUid, loadVault } from "../../utils/storageEngine";
+import { handleNumericInputKeyDown } from "../../utils/keyboardControls";
 
 export interface GameOverModalProps {
   isOpen: boolean;
@@ -1061,33 +1062,78 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                   </div>
                 </div>
 
-                {/* Revealed inline PIN input if locked */}
-                <AnimatePresence>
-                  {isRoomLocked && (
+                {/* Room lock status banner & inline PIN input when locked */}
+                <AnimatePresence mode="wait" initial={false}>
+                  {isRoomLocked ? (
                     <motion.div
+                      key="rematch-room-locked-pin"
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.18 }}
                       className="overflow-hidden"
                     >
-                      <div className="flex items-center justify-between gap-2 px-3 py-2 mt-1 rounded-xl bg-stone-100/80 dark:bg-zinc-900/60 border border-stone-200/80 dark:border-zinc-800/80">
-                        <span className="font-sans font-bold text-[10px] sm:text-xs uppercase tracking-wider text-stone-700 dark:text-stone-300">
-                          {t("setPin")}
-                        </span>
+                      <div
+                        className={`flex items-center justify-between gap-2 px-3 py-2 mt-1 rounded-xl border-none ${
+                          darkMode
+                            ? "bg-[#4c0519]/40 text-[#fecdd3] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                            : "bg-[#FFE4E6]/65 text-[#9D174D] shadow-[0_4px_14px_rgba(157,23,77,0.05)]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Lock className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
+                          <span className="font-sans font-bold text-[10px] sm:text-xs uppercase tracking-wider shrink-0">
+                            {t("setPin")}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-sans font-semibold truncate ${
+                              darkMode ? "bg-[#4c0519] text-[#fecdd3]" : "bg-white/80 text-[#9D174D]"
+                            }`}
+                          >
+                            {t("pinRequired")}
+                          </span>
+                        </div>
                         <input
                           type="text"
                           inputMode="numeric"
+                          pattern="[0-9]*"
                           maxLength={4}
                           placeholder="_ _ _ _"
                           value={roomPin}
+                          aria-label={t("pinRequired")}
+                          onKeyDown={(e) => {
+                            handleNumericInputKeyDown(e, roomPin, 4, (cleaned) => {
+                              setRoomPin(cleaned);
+                              updateRoomSettingsInFirestore({ isLocked: true, pin: cleaned });
+                            });
+                          }}
                           onChange={(e) => {
                             const cleaned = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
                             setRoomPin(cleaned);
                             updateRoomSettingsInFirestore({ isLocked: true, pin: cleaned });
                           }}
-                          className="w-24 px-2 py-1 text-center font-mono font-black text-xs sm:text-sm tracking-widest rounded-lg border border-stone-300/80 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-stone-850 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-rose-400"
+                          className="w-24 px-2 py-1 text-center font-mono font-black text-xs sm:text-sm tracking-widest rounded-lg border-none bg-white/95 dark:bg-zinc-950/90 text-stone-850 dark:text-stone-100 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-300"
                         />
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="rematch-room-unlocked-status"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.18 }}
+                      className="overflow-hidden"
+                    >
+                      <div
+                        className={`flex items-center gap-2 px-3 py-1.5 mt-1 rounded-xl border-none text-[11px] font-sans font-bold ${
+                          darkMode
+                            ? "bg-[#022c22]/55 text-[#d1fae5] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                            : "bg-[#D1FAE5]/70 text-[#065F46] shadow-[0_4px_14px_rgba(6,95,70,0.05)]"
+                        }`}
+                      >
+                        <Unlock className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
+                        <span>{t("roomIsUnlocked")}</span>
                       </div>
                     </motion.div>
                   )}

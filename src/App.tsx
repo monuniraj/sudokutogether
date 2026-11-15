@@ -8807,16 +8807,25 @@ export default function App() {
 
       // 4. Security check for locked rooms if PIN is set (Bypassed if direct in-game invite)
       if (!options?.isDirectInvite && rData.isLocked) {
-        const expectedPin = (rData.pin || rData.roomPin || "").trim();
-        if (expectedPin.length > 0) {
-          const enteredPin = (options?.passwordOverride || "").trim();
-          if (!enteredPin) {
+        const storedPinHash = (rData.pinHash || "").trim();
+        const legacyPin = (rData.pin || rData.roomPin || "").trim();
+        if (storedPinHash.length > 0 || legacyPin.length > 0) {
+          const rawSuppliedPw = (options?.passwordOverride || "").trim();
+          if (!rawSuppliedPw) {
             return { success: false, error: "This room is locked. Please enter the room PIN." };
           }
-          let isMatch = enteredPin === expectedPin || decodePass(enteredPin) === expectedPin;
-          try {
-            if (decodeURIComponent(enteredPin) === expectedPin) isMatch = true;
-          } catch (e) { }
+          const decodedPw = decodePass(rawSuppliedPw).trim();
+          let isMatch = false;
+          if (storedPinHash.length > 0) {
+            const rawHash = await hashRoomPin(rawSuppliedPw, roomCode);
+            const decodedHash = decodedPw ? await hashRoomPin(decodedPw, roomCode) : "";
+            isMatch = Boolean(rawHash === storedPinHash || (decodedHash && decodedHash === storedPinHash));
+          } else if (legacyPin.length > 0) {
+            isMatch = rawSuppliedPw === legacyPin || decodedPw === legacyPin;
+            try {
+              if (decodeURIComponent(rawSuppliedPw).trim() === legacyPin) isMatch = true;
+            } catch (e) { }
+          }
           if (!isMatch) {
             return { success: false, error: "Incorrect room PIN." };
           }
@@ -22572,7 +22581,7 @@ export default function App() {
                     }`}
                 >
                   <Share2 className="w-4 h-4 shrink-0 stroke-[2.5]" />
-                  <span>Share Invite</span>
+                  <span>{t("shareLink")}</span>
                 </button>
               </div>
             </motion.div>
@@ -23465,7 +23474,7 @@ export default function App() {
                       }`}
                   >
                     <Share2 className="w-3.5 h-3.5" />
-                    Share Link
+                    {t("shareLink")}
                   </button>
                   <button
                     onClick={() => {

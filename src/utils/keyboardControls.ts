@@ -130,3 +130,51 @@ export function handleRovingMenuArrowKey(
   return true;
 }
 
+/**
+ * Handles numeric input keydowns for both top-row `0–9` (`Digit0`–`Digit9`) and desktop Numpad
+ * (`Numpad0`–`Numpad9`, even when NumLock is off) without double-entry or missed keystrokes.
+ */
+export function handleNumericInputKeyDown(
+  e: {
+    code: string;
+    key: string;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    altKey: boolean;
+    preventDefault: () => void;
+    currentTarget: HTMLInputElement;
+  },
+  currentValue: string,
+  maxLength: number,
+  onValueChange: (cleaned: string) => void
+): boolean {
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+
+  const codeMatch = /^(?:Numpad|Digit)([0-9])$/.exec(e.code);
+  const digit = codeMatch
+    ? codeMatch[1]
+    : /^[0-9]$/.test(e.key)
+      ? e.key
+      : null;
+
+  if (digit === null) return false;
+
+  e.preventDefault();
+  const input = e.currentTarget;
+  const start = input.selectionStart ?? currentValue.length;
+  const end = input.selectionEnd ?? currentValue.length;
+  const rawNext = currentValue.slice(0, start) + digit + currentValue.slice(end);
+  const cleaned = rawNext.replace(/[^0-9]/g, "").slice(0, maxLength);
+  onValueChange(cleaned);
+
+  const nextPos = Math.min(start + 1, cleaned.length);
+  requestAnimationFrame(() => {
+    try {
+      input.setSelectionRange(nextPos, nextPos);
+    } catch {
+      // Ignore selection range errors on unmounted inputs
+    }
+  });
+  return true;
+}
+
