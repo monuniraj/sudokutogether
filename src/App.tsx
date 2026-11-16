@@ -791,6 +791,21 @@ const hashRoomPin = async (pin: string, salt: string): Promise<string> => {
   }
 };
 
+const resolveRoomLockState = async (
+  locked: boolean,
+  pin: string,
+  code: string
+): Promise<{ isLocked: boolean; pinHash: string }> => {
+  const cleanPin = pin.trim().replace(/[^0-9]/g, "").slice(0, 4);
+  if (!locked || cleanPin.length < 1 || cleanPin.length > 4) {
+    return { isLocked: false, pinHash: "" };
+  }
+  return {
+    isLocked: true,
+    pinHash: await hashRoomPin(cleanPin, code),
+  };
+};
+
 const encodePass = (str: string): string => {
   if (!str) return "";
   try {
@@ -12028,7 +12043,7 @@ export default function App() {
         puzzleFlat = generated.puzzleFlat;
       }
 
-      const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, roomCode) : "";
+      const { isLocked: effectiveLocked, pinHash: hashedPin } = await resolveRoomLockState(isRoomLocked, roomPin, roomCode);
       const mistakesLimit = isDailyRoomSession
         ? 3
         : (currentBoard?.maxMistakesLimit !== undefined ? currentBoard.maxMistakesLimit : (challengeMistakeLimit || 3));
@@ -12053,7 +12068,7 @@ export default function App() {
         mistakesLimit: mistakesLimit,
         hintsLimit: hintsLimit,
         timerEnabled: isDailyRoomSession ? true : timerEnabled,
-        isLocked: isRoomLocked,
+        isLocked: effectiveLocked,
         pinHash: hashedPin,
         status: "active",
         createdAt: serverTimestamp(),
@@ -12526,9 +12541,12 @@ export default function App() {
       }
       if (updates.timerEnabled !== undefined) payload.timerEnabled = updates.timerEnabled;
     }
-    if (updates.isLocked !== undefined) payload.isLocked = updates.isLocked;
-    if (updates.pin !== undefined) {
-      payload.pinHash = updates.pin ? await hashRoomPin(updates.pin, code) : "";
+    if (updates.isLocked !== undefined || updates.pin !== undefined) {
+      const targetLocked = updates.isLocked ?? isRoomLocked;
+      const targetPin = updates.pin ?? roomPin;
+      const resolvedLock = await resolveRoomLockState(targetLocked, targetPin, code);
+      payload.isLocked = resolvedLock.isLocked;
+      payload.pinHash = resolvedLock.pinHash;
     }
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.isClosed !== undefined) payload.isClosed = updates.isClosed;
@@ -16170,7 +16188,7 @@ export default function App() {
 
       const activeHostId = userProfile?.id || auth.currentUser?.uid || getOrCreateGuestIdentity().id;
       const activeHostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
-      const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, liveRoomCode) : "";
+      const { isLocked: effectiveLocked, pinHash: hashedPin } = await resolveRoomLockState(isRoomLocked, roomPin, liveRoomCode);
 
       setDoc(doc(db, "rooms", liveRoomCode), {
         roomCode: liveRoomCode,
@@ -16186,7 +16204,7 @@ export default function App() {
         mistakesLimit: 3,
         hintsLimit: 3,
         timerEnabled: true,
-        isLocked: isRoomLocked,
+        isLocked: effectiveLocked,
         pinHash: hashedPin,
         status: "active",
         createdAt: serverTimestamp(),
@@ -16234,7 +16252,7 @@ export default function App() {
     const activeHostId = userProfile?.id || auth.currentUser?.uid || getOrCreateGuestIdentity().id;
     const activeHostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
 
-    const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, liveRoomCode) : "";
+    const { isLocked: effectiveLocked, pinHash: hashedPin } = await resolveRoomLockState(isRoomLocked, roomPin, liveRoomCode);
 
     // Write canonical room to Firestore with flat arrays (safe against nested array errors)
     setDoc(doc(db, "rooms", liveRoomCode), {
@@ -16250,7 +16268,7 @@ export default function App() {
       mistakesLimit: midMistakes,
       hintsLimit: midHints,
       timerEnabled: timerEnabled,
-      isLocked: isRoomLocked,
+      isLocked: effectiveLocked,
       pinHash: hashedPin,
       status: "active",
       createdAt: serverTimestamp(),
@@ -20188,7 +20206,7 @@ export default function App() {
 
                       const hostId = userProfile?.id || authUser?.uid || getOrCreateGuestIdentity().id;
                       const hostName = getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
-                      const hashedPin = isRoomLocked && roomPin ? await hashRoomPin(roomPin, roomCode) : "";
+                      const { isLocked: effectiveLocked, pinHash: hashedPin } = await resolveRoomLockState(isRoomLocked, roomPin, roomCode);
 
                       await setDoc(doc(db, "rooms", roomCode), {
                         roomCode: roomCode,
@@ -20207,7 +20225,7 @@ export default function App() {
                         mistakesLimit: isDailyReplayRoom ? 3 : challengeMistakeLimit,
                         hintsLimit: isDailyReplayRoom ? 3 : challengeHintLimit,
                         timerEnabled: isDailyReplayRoom ? true : challengeTimerEnabled,
-                        isLocked: isRoomLocked,
+                        isLocked: effectiveLocked,
                         pinHash: hashedPin,
                         status: "active",
                         createdAt: serverTimestamp(),

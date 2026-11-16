@@ -1026,7 +1026,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                         playClickSound();
                         const next = !isRoomLocked;
                         setIsRoomLocked(next);
-                        updateRoomSettingsInFirestore({ isLocked: next, pin: roomPin });
+                        const cleanPin = roomPin.trim().replace(/[^0-9]/g, "").slice(0, 4);
+                        if (next && cleanPin.length >= 1 && cleanPin.length <= 4) {
+                          updateRoomSettingsInFirestore({ isLocked: true, pin: cleanPin });
+                        } else {
+                          updateRoomSettingsInFirestore({ isLocked: false, pin: "" });
+                        }
                       }}
                       title={isRoomLocked ? (t("locked") || "Locked") : (t("unlocked") || "Unlocked")}
                       aria-label={isRoomLocked ? "Room Locked" : "Room Unlocked"}
@@ -1094,7 +1099,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                           </span>
                         </div>
                         <input
-                          type="text"
+                          type="tel"
                           inputMode="numeric"
                           pattern="[0-9]*"
                           maxLength={4}
@@ -1104,13 +1109,21 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                           onKeyDown={(e) => {
                             handleNumericInputKeyDown(e, roomPin, 4, (cleaned) => {
                               setRoomPin(cleaned);
-                              updateRoomSettingsInFirestore({ isLocked: true, pin: cleaned });
+                              updateRoomSettingsInFirestore(
+                                cleaned.length >= 1
+                                  ? { isLocked: true, pin: cleaned }
+                                  : { isLocked: false, pin: "" }
+                              );
                             });
                           }}
                           onChange={(e) => {
                             const cleaned = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
                             setRoomPin(cleaned);
-                            updateRoomSettingsInFirestore({ isLocked: true, pin: cleaned });
+                            updateRoomSettingsInFirestore(
+                              cleaned.length >= 1
+                                ? { isLocked: true, pin: cleaned }
+                                : { isLocked: false, pin: "" }
+                            );
                           }}
                           className="w-24 px-2 py-1 text-center font-mono font-black text-xs sm:text-sm tracking-widest rounded-lg border-none bg-white/95 dark:bg-zinc-950/90 text-stone-850 dark:text-stone-100 shadow-xs focus:outline-none focus:ring-2 focus:ring-rose-300"
                         />

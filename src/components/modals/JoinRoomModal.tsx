@@ -42,7 +42,6 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
   const roomPinInputRef = useRef<HTMLInputElement>(null);
   const lookupSeqRef = useRef(0);
   const [isRoomCodeFocused, setIsRoomCodeFocused] = React.useState(false);
-  const [isRoomPinFocused, setIsRoomPinFocused] = React.useState(false);
   const [roomLockState, setRoomLockState] = useState<"idle" | "checking" | "locked" | "unlocked" | "fallback">("idle");
 
   const handleRoomCodeChange = useCallback((cleaned: string) => {
@@ -117,7 +116,8 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
 
   const hasValidCode = roomCodeInput.trim().length === 6;
   const requiresPin = roomLockState === "locked";
-  const hasValidPin = !requiresPin || roomPinInput.trim().length === 4;
+  const cleanPinLength = roomPinInput.trim().length;
+  const hasValidPin = !requiresPin || (cleanPinLength >= 1 && cleanPinLength <= 4);
   const canJoin = hasValidCode && hasValidPin && !isJoiningRoomLoading;
 
   if (!isOpen) return null;
@@ -261,7 +261,10 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
       {hasValidCode && (roomLockState === "locked" || roomLockState === "fallback") && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between gap-2">
-            <label className="font-sans font-bold text-2xs uppercase tracking-wider text-stone-400 dark:text-stone-500 flex items-center gap-1.5">
+            <label
+              htmlFor="join-room-pin-input"
+              className="font-sans font-bold text-2xs uppercase tracking-wider text-stone-400 dark:text-stone-500 flex items-center gap-1.5"
+            >
               <Lock className="w-3 h-3 opacity-60" />
               <span>{t("pinInputLabel")}</span>
               {requiresPin && (
@@ -276,27 +279,19 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
                 </span>
               )}
             </label>
-            {roomPinInput.length > 0 && (
-              <span className="text-[10px] font-mono text-stone-400 dark:text-stone-500">
-                {roomPinInput.length}/4
-              </span>
-            )}
           </div>
 
-          <div 
-            onClick={() => roomPinInputRef.current?.focus()}
-            className="relative w-full max-w-[240px] mx-auto cursor-pointer"
-          >
-            {/* Overlaid hidden password input */}
+          <div className="relative w-full">
             <input
+              id="join-room-pin-input"
               ref={roomPinInputRef}
-              type="password"
+              type="tel"
               inputMode="numeric"
               pattern="[0-9]*"
               maxLength={4}
+              autoComplete="one-time-code"
+              placeholder="••••"
               value={roomPinInput}
-              onFocus={() => setIsRoomPinFocused(true)}
-              onBlur={() => setIsRoomPinFocused(false)}
               onKeyDown={(e) => {
                 if (handleNumericInputKeyDown(e, roomPinInput, 4, handleRoomPinChange)) {
                   return;
@@ -310,46 +305,26 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
                 const cleaned = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
                 handleRoomPinChange(cleaned);
               }}
-              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
               aria-label={t("pinInputLabel")}
+              className={`w-full py-3 pl-4 pr-12 rounded-2xl border-none font-mono font-black text-base sm:text-lg tracking-widest text-center transition-all duration-150 focus:outline-none ${
+                requiresPin
+                  ? (darkMode
+                      ? "bg-[#4c0519]/45 focus:bg-[#4c0519]/65 text-[#fecdd3] placeholder-[#fecdd3]/35 shadow-[0_4px_12px_rgba(0,0,0,0.35)] focus:ring-2 focus:ring-rose-400/50"
+                      : "bg-[#FFE4E6]/55 focus:bg-[#FFE4E6]/75 text-[#9D174D] placeholder-[#9D174D]/35 shadow-[0_4px_14px_rgba(157,23,77,0.05)] focus:ring-2 focus:ring-rose-300/70")
+                  : (darkMode
+                      ? "bg-zinc-900/75 text-stone-100 placeholder-stone-600 shadow-[0_4px_12px_rgba(0,0,0,0.3)] focus:ring-2 focus:ring-sky-500/40"
+                      : "bg-stone-100/85 text-stone-850 placeholder-stone-400/70 shadow-[0_4px_14px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-sky-300/70")
+              }`}
             />
-
-            {/* 4 Segmented PIN Slots */}
-            <div className="grid grid-cols-4 gap-2.5 sm:gap-3 w-full">
-              {[0, 1, 2, 3].map((idx) => {
-                const hasDigit = idx < roomPinInput.length;
-                const isSlotActive = isRoomPinFocused && (idx === roomPinInput.length || (idx === 3 && roomPinInput.length === 4));
-
-                return (
-                  <div
-                    key={`pin-slot-${idx}`}
-                    className={`h-11 sm:h-12 rounded-xl flex items-center justify-center font-mono text-base sm:text-lg transition-all duration-150 select-none ${
-                      isSlotActive
-                        ? "ring-2 ring-sky-400/70 bg-sky-500/15 dark:bg-sky-500/20 scale-[1.03] shadow-[0_4px_12px_rgba(14,165,233,0.12)]"
-                        : hasDigit
-                        ? (darkMode 
-                            ? "bg-zinc-900 shadow-[0_2px_8px_rgba(0,0,0,0.35)]" 
-                            : "bg-stone-100 shadow-[0_2px_8px_rgba(0,0,0,0.05)]")
-                        : (darkMode
-                            ? "bg-zinc-900/50 shadow-inner"
-                            : "bg-stone-100/70 shadow-inner")
-                    }`}
-                  >
-                    {hasDigit ? (
-                      <span className="text-stone-900 dark:text-white font-bold text-lg">
-                        ●
-                      </span>
-                    ) : (
-                      <span className={`opacity-25 text-slate-500/30 dark:text-slate-500/30 font-black text-sm ${
-                        isSlotActive ? "animate-pulse text-sky-400/60 opacity-40" : ""
-                      }`}>
-                        •
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <span
+              className={`pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] font-mono font-bold ${
+                requiresPin
+                  ? (darkMode ? "text-[#fecdd3]/75" : "text-[#9D174D]/70")
+                  : "text-stone-400 dark:text-stone-500"
+              }`}
+            >
+              {roomPinInput.length}/4
+            </span>
           </div>
         </div>
       )}
