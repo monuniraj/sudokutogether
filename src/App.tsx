@@ -15371,28 +15371,29 @@ export default function App() {
     };
 
     const setupDeepLinkListener = async () => {
+      let lastHandledUrl = "";
+      let lastHandledAt = 0;
+      const handleIncomingOnce = (url: string) => {
+        const now = Date.now();
+        if (url === lastHandledUrl && now - lastHandledAt < 2000) return;
+        lastHandledUrl = url;
+        lastHandledAt = now;
+        processIncomingDeepLinkUrl(url);
+      };
+
       try {
         try {
           const launchInfo = await CapApp.getLaunchUrl();
           if (isSubscribed && launchInfo?.url) {
-            const launchObj = new URL(launchInfo.url);
-            const launchPath = launchObj.protocol === "sudokusync:" ? `/${launchObj.host}${launchObj.pathname}` : launchObj.pathname;
-            const coldLegalRoute = parseComplianceRoute(launchPath) || parseComplianceRoute(launchObj.pathname);
-            const coldGuideSlug = parseGuideSlugFromPath(launchPath) || parseGuideSlugFromPath(launchObj.pathname);
-            if (coldLegalRoute) {
-              navigateToScreen(coldLegalRoute);
-            } else if (coldGuideSlug) {
-              navigateToScreen(toGuideScreen(coldGuideSlug));
-            } else if (isRulesPath(launchPath) || isRulesPath(launchObj.pathname)) {
-              navigateToScreen("rules");
-            }
+            console.log('App cold-launched with URL:', launchInfo.url);
+            handleIncomingOnce(launchInfo.url);
           }
         } catch { }
 
         urlListener = await CapApp.addListener('appUrlOpen', (event: any) => {
           if (!isSubscribed || !event?.url) return;
           console.log('App opened with URL:', event.url);
-          processIncomingDeepLinkUrl(event.url);
+          handleIncomingOnce(event.url);
         });
       } catch (e) {
         console.error("Failed to register App appUrlOpen listener:", e);
