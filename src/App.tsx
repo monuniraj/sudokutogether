@@ -9236,18 +9236,22 @@ export default function App() {
     );
 
     const currentLocalName = (userProfile?.name && userProfile.name.trim()) || getActiveDisplayName();
+    const isActiveRoomMatch = Boolean(challengeMode && activeGameId === cleanRoomCode && boardState && !boardState.isGameOver);
     const initialParticipants = (cachedMatch?.participants && Array.isArray(cachedMatch.participants) && cachedMatch.participants.length > 0)
       ? cachedMatch.participants
       : [{
-          userId: userProfile?.id || "me",
+          userId: userProfile?.id || auth.currentUser?.uid || getOrCreateGuestIdentity().id || "me",
+          authUid: auth.currentUser?.uid || authUser?.uid,
+          guestId: userProfile?.id,
           playerName: currentLocalName,
-          timeSec: cachedMatch?.timeSec || 0,
-          elapsedTime: cachedMatch?.timeSec || 0,
-          mistakes: cachedMatch?.mistakes || 0,
-          hints: cachedMatch?.hints || 0,
-          isWon: cachedMatch ? Boolean(cachedMatch.isWon) : true,
-          status: "completed",
-          isPending: false
+          timeSec: isActiveRoomMatch ? sessionSeconds : 0,
+          elapsedTime: isActiveRoomMatch ? sessionSeconds : 0,
+          mistakes: isActiveRoomMatch ? (boardState?.currentMistakesCount || 0) : 0,
+          hints: isActiveRoomMatch ? (boardState?.hintsCount || 0) : 0,
+          hintsUsed: isActiveRoomMatch ? (boardState?.hintsCount || 0) : 0,
+          isWon: false,
+          status: "active",
+          isPending: true
         }];
 
     const matchDiff = ((cachedMatch?.difficulty || "EASY") as string).toUpperCase() as Difficulty;
@@ -9320,9 +9324,14 @@ export default function App() {
         playersSnap.docs.forEach((d: any) => {
           const pData = d.data();
           const pId = pData.id || d.id;
-          const isLeft = pData.status === "left" || pData.status === "abandoned" || pData.status === "disconnected" || pData.status === "forfeited";
-          const isFinished = pData.status === "completed" || pData.status === "won" || pData.status === "victory" || pData.status === "mistake_game_over" || pData.status === "failed";
-          const isWon = pData.status === "won" || pData.status === "completed" || pData.status === "victory" || Boolean(pData.isWon);
+          const maxMistakes = roomData?.mistakesLimit !== undefined ? Number(roomData.mistakesLimit) : 3;
+          const pMistakes = pData.mistakes !== undefined ? Number(pData.mistakes) : 0;
+          const pStatus = String(pData.status || "").toLowerCase();
+          const isMistakeFailed = pStatus === "mistake_game_over" || pStatus === "failed" || (maxMistakes < 999 && (maxMistakes === 0 ? pMistakes > 0 : pMistakes >= maxMistakes));
+          const isLeft = !isMistakeFailed && (pStatus === "left" || pStatus === "abandoned" || pStatus === "disconnected" || pStatus === "forfeited" || Boolean(pData.isAbandoned));
+          const isWon = !isMistakeFailed && !isLeft && (pStatus === "won" || pStatus === "completed" || pStatus === "victory" || Boolean(pData.isWon));
+          const isFinished = isMistakeFailed || isWon;
+          const pHints = pData.hints !== undefined ? Number(pData.hints) : (pData.hintsUsed !== undefined ? Number(pData.hintsUsed) : 0);
           mergedMap.set(pId, {
             userId: pId,
             authUid: pData.authUid || (!pId.startsWith("GUEST_") ? pId : undefined),
@@ -9330,11 +9339,14 @@ export default function App() {
             playerName: pData.name || pData.playerName || "Player",
             timeSec: pData.timeSec !== undefined ? Number(pData.timeSec) : (pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : 0),
             elapsedTime: pData.elapsedTime !== undefined ? Number(pData.elapsedTime) : (pData.timeSec !== undefined ? Number(pData.timeSec) : 0),
-            mistakes: pData.mistakes !== undefined ? Number(pData.mistakes) : 0,
-            hints: pData.hints !== undefined ? Number(pData.hints) : (pData.hintsUsed !== undefined ? Number(pData.hintsUsed) : 0),
+            mistakes: pMistakes,
+            hints: pHints,
+            hintsUsed: pHints,
             isWon: isWon,
+            ...(isMistakeFailed ? { failed: true } : {}),
+            ...(isLeft ? { isAbandoned: true } : {}),
             ...(typeof pData.isExhibition === "boolean" ? { isExhibition: pData.isExhibition } : {}),
-            status: pData.status || (isWon ? "completed" : "active"),
+            status: isMistakeFailed ? "mistake_game_over" : (isLeft ? "left" : (pData.status || (isWon ? "completed" : "active"))),
             isPending: !isLeft && !isFinished
           });
         });
@@ -9346,8 +9358,14 @@ export default function App() {
             const rId = rData.userId || rData.authUid || d.id;
             if (rId) {
               const existing = mergedMap.get(rId);
-              const rFinished = rData.status === "completed" || rData.status === "won" || rData.status === "victory" || rData.status === "mistake_game_over" || rData.status === "failed" || (!rData.isPending && (rData.isWon !== undefined || rData.timeSec !== undefined));
-              const rWon = rData.status === "won" || rData.status === "completed" || rData.status === "victory" || Boolean(rData.isWon) || Boolean(existing?.isWon);
+              const maxMistakes = roomData?.mistakesLimit !== undefined ? Number(roomData.mistakesLimit) : 3;
+              const rMistakes = rData.mistakes !== undefined ? Number(rData.mistakes) : (existing?.mistakes || 0);
+              const rStatus = String(rData.status || "").toLowerCase();
+              const rFailed = rStatus === "mistake_game_over" || rStatus === "failed" || (maxMistakes < 999 && (maxMistakes === 0 ? rMistakes > 0 : rMistakes >= maxMistakes));
+              const rLeft = !rFailed && (rStatus === "left" || rStatus === "abandoned" || rStatus === "forfeited" || rStatus === "disconnected" || Boolean(rData.isAbandoned));
+              const rFinished = rFailed || rStatus === "completed" || rStatus === "won" || rStatus === "victory" || (!rData.isPending && (rData.isWon !== undefined || rData.timeSec !== undefined));
+              const rWon = !rFailed && !rLeft && (rStatus === "won" || rStatus === "completed" || rStatus === "victory" || Boolean(rData.isWon) || (!rData.status && Boolean(existing?.isWon)));
+              const rHints = rData.hints !== undefined ? Number(rData.hints) : (rData.hintsUsed !== undefined ? Number(rData.hintsUsed) : (existing?.hints ?? 0));
               mergedMap.set(rId, {
                 ...existing,
                 ...rData,
@@ -9357,12 +9375,15 @@ export default function App() {
                 playerName: rData.playerName || existing?.playerName || "Player",
                 timeSec: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.timeSec || 0),
                 elapsedTime: rData.timeSec !== undefined ? Number(rData.timeSec) : (existing?.elapsedTime || 0),
-                mistakes: rData.mistakes !== undefined ? Number(rData.mistakes) : (existing?.mistakes || 0),
-                hints: rData.hints !== undefined ? Number(rData.hints) : (rData.hintsUsed !== undefined ? Number(rData.hintsUsed) : (existing?.hints ?? 0)),
+                mistakes: rMistakes,
+                hints: rHints,
+                hintsUsed: rHints,
                 isWon: rWon,
+                failed: rFailed,
+                isAbandoned: rLeft,
                 ...(typeof (rData.isExhibition ?? existing?.isExhibition) === "boolean" ? { isExhibition: Boolean(rData.isExhibition ?? existing?.isExhibition) } : {}),
-                status: rData.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
-                isPending: rFinished ? false : (rData.isPending !== undefined ? Boolean(rData.isPending) : (existing ? existing.isPending : false))
+                status: rFailed ? "mistake_game_over" : (rLeft ? "left" : (rData.status || existing?.status || (rWon ? "completed" : "active"))),
+                isPending: (rFinished || rLeft) ? false : (rData.isPending !== undefined ? Boolean(rData.isPending) : (existing ? existing.isPending : false))
               });
             }
           });
@@ -9495,20 +9516,28 @@ export default function App() {
       latestRoomPlayers.forEach(p => {
         const pId = p.id || p.userId;
         if (!pId) return;
-        const isLeft = p.status === "left" || p.status === "abandoned" || p.status === "disconnected" || p.status === "forfeited";
-        const isFinished = p.status === "completed" || p.status === "won" || p.status === "victory" || p.status === "mistake_game_over" || p.status === "failed";
-        const isWon = p.status === "won" || p.status === "completed" || p.status === "victory" || Boolean(p.isWon);
+        const maxMistakes = notificationResultModal?.mistakesLimit ?? 3;
+        const pMistakes = p.mistakes !== undefined ? Number(p.mistakes) : 0;
+        const pStatus = String(p.status || "").toLowerCase();
+        const isMistakeFailed = pStatus === "mistake_game_over" || pStatus === "failed" || (maxMistakes < 999 && (maxMistakes === 0 ? pMistakes > 0 : pMistakes >= maxMistakes));
+        const isLeft = !isMistakeFailed && (pStatus === "left" || pStatus === "abandoned" || pStatus === "disconnected" || pStatus === "forfeited" || Boolean(p.isAbandoned));
+        const isWon = !isMistakeFailed && !isLeft && (pStatus === "won" || pStatus === "completed" || pStatus === "victory" || Boolean(p.isWon));
+        const isFinished = isMistakeFailed || isWon;
+        const pHints = p.hints !== undefined ? Number(p.hints) : (p.hintsUsed !== undefined ? Number(p.hintsUsed) : 0);
         mergedMap.set(pId, {
           userId: pId,
           authUid: p.authUid || (!pId.startsWith("GUEST_") ? pId : undefined),
           playerName: p.name || p.playerName || "Player",
           timeSec: p.timeSec !== undefined ? Number(p.timeSec) : (p.elapsedTime !== undefined ? Number(p.elapsedTime) : 0),
           elapsedTime: p.elapsedTime !== undefined ? Number(p.elapsedTime) : (p.timeSec !== undefined ? Number(p.timeSec) : 0),
-          mistakes: p.mistakes !== undefined ? Number(p.mistakes) : 0,
-          hints: p.hints !== undefined ? Number(p.hints) : (p.hintsUsed !== undefined ? Number(p.hintsUsed) : 0),
+          mistakes: pMistakes,
+          hints: pHints,
+          hintsUsed: pHints,
           isWon: isWon,
+          ...(isMistakeFailed ? { failed: true } : {}),
+          ...(isLeft ? { isAbandoned: true } : {}),
           ...(typeof p.isExhibition === "boolean" ? { isExhibition: p.isExhibition } : {}),
-          status: p.status || (isWon ? "completed" : "active"),
+          status: isMistakeFailed ? "mistake_game_over" : (isLeft ? "left" : (p.status || (isWon ? "completed" : "active"))),
           isPending: !isLeft && !isFinished
         });
       });
@@ -9517,8 +9546,14 @@ export default function App() {
         const rId = r.userId || r.authUid || r.id;
         if (!rId) return;
         const existing = mergedMap.get(rId);
-        const rFinished = r.status === "completed" || r.status === "won" || r.status === "victory" || r.status === "mistake_game_over" || r.status === "failed" || (!r.isPending && (r.isWon !== undefined || r.timeSec !== undefined));
-        const rWon = r.status === "won" || r.status === "completed" || r.status === "victory" || Boolean(r.isWon) || Boolean(existing?.isWon);
+        const maxMistakes = notificationResultModal?.mistakesLimit ?? 3;
+        const rMistakes = r.mistakes !== undefined ? Number(r.mistakes) : (existing?.mistakes || 0);
+        const rStatus = String(r.status || "").toLowerCase();
+        const rFailed = rStatus === "mistake_game_over" || rStatus === "failed" || (maxMistakes < 999 && (maxMistakes === 0 ? rMistakes > 0 : rMistakes >= maxMistakes));
+        const rLeft = !rFailed && (rStatus === "left" || rStatus === "abandoned" || rStatus === "forfeited" || rStatus === "disconnected" || Boolean(r.isAbandoned));
+        const rFinished = rFailed || rStatus === "completed" || rStatus === "won" || rStatus === "victory" || (!r.isPending && (r.isWon !== undefined || r.timeSec !== undefined));
+        const rWon = !rFailed && !rLeft && (rStatus === "won" || rStatus === "completed" || rStatus === "victory" || Boolean(r.isWon) || (!r.status && Boolean(existing?.isWon)));
+        const rHints = r.hints !== undefined ? Number(r.hints) : (r.hintsUsed !== undefined ? Number(r.hintsUsed) : (existing?.hints ?? 0));
         mergedMap.set(rId, {
           ...existing,
           ...r,
@@ -9527,12 +9562,15 @@ export default function App() {
           playerName: r.playerName || existing?.playerName || "Player",
           timeSec: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.timeSec || 0),
           elapsedTime: r.timeSec !== undefined ? Number(r.timeSec) : (existing?.elapsedTime || 0),
-          mistakes: r.mistakes !== undefined ? Number(r.mistakes) : (existing?.mistakes || 0),
-          hints: r.hints !== undefined ? Number(r.hints) : (r.hintsUsed !== undefined ? Number(r.hintsUsed) : (existing?.hints ?? 0)),
+          mistakes: rMistakes,
+          hints: rHints,
+          hintsUsed: rHints,
           isWon: rWon,
+          failed: rFailed,
+          isAbandoned: rLeft,
           ...(typeof (r.isExhibition ?? existing?.isExhibition) === "boolean" ? { isExhibition: Boolean(r.isExhibition ?? existing?.isExhibition) } : {}),
-          status: r.status || existing?.status || (rWon ? "completed" : (rFinished ? "mistake_game_over" : "active")),
-          isPending: rFinished ? false : (r.isPending !== undefined ? Boolean(r.isPending) : (existing ? existing.isPending : false))
+          status: rFailed ? "mistake_game_over" : (rLeft ? "left" : (r.status || existing?.status || (rWon ? "completed" : "active"))),
+          isPending: (rFinished || rLeft) ? false : (r.isPending !== undefined ? Boolean(r.isPending) : (existing ? existing.isPending : false))
         });
       });
 
@@ -14017,6 +14055,7 @@ export default function App() {
         timeSec: effTimeSec,
         mistakes: effMistakes,
         hints: effHints,
+        hintsUsed: effHints,
         ...(hasMaxHints ? { maxHints: rawMaxHints } : {}),
         isWon: effIsWon,
         isPending: false,
@@ -14048,6 +14087,7 @@ export default function App() {
           roomPlayerPayload.timeSec = effTimeSec;
           roomPlayerPayload.mistakes = effMistakes;
           roomPlayerPayload.hints = effHints;
+          roomPlayerPayload.hintsUsed = effHints;
           if (hasMaxHints) {
             roomPlayerPayload.maxHints = rawMaxHints;
           }
@@ -14286,17 +14326,26 @@ export default function App() {
       latestRoomPlayers.forEach(p => {
         const uId = p.id || p.userId;
         if (uId) {
-          const isLeft = p.status === "left" || p.status === "abandoned" || p.status === "disconnected" || p.status === "forfeited";
-          const isFinished = p.status === "completed" || p.status === "victory" || p.status === "mistake_game_over";
+          const maxM = challengeMistakeLimit || 3;
+          const pMistakes = p.mistakes !== undefined ? Number(p.mistakes) : 0;
+          const pStatus = String(p.status || "").toLowerCase();
+          const isMistakeFailed = pStatus === "mistake_game_over" || pStatus === "failed" || (maxM < 999 && (maxM === 0 ? pMistakes > 0 : pMistakes >= maxM));
+          const isLeft = !isMistakeFailed && (pStatus === "left" || pStatus === "abandoned" || pStatus === "disconnected" || pStatus === "forfeited" || Boolean(p.isAbandoned));
+          const isWon = !isMistakeFailed && !isLeft && (pStatus === "won" || pStatus === "completed" || pStatus === "victory" || Boolean(p.isWon));
+          const isFinished = isMistakeFailed || isWon;
+          const resolvedHints = p.hints !== undefined ? Number(p.hints) : (p.hintsUsed !== undefined ? Number(p.hintsUsed) : 0);
           mergedMap.set(uId, {
             userId: uId,
             playerName: p.name || p.playerName || "Player",
-            status: p.status || "active",
+            status: isMistakeFailed ? "mistake_game_over" : (isLeft ? "left" : (p.status || "active")),
             isPending: !isLeft && !isFinished,
-            mistakes: p.mistakes !== undefined ? Number(p.mistakes) : 0,
-            hints: p.hints !== undefined ? Number(p.hints) : (p.hintsUsed !== undefined ? Number(p.hintsUsed) : 0),
+            mistakes: pMistakes,
+            hints: resolvedHints,
+            hintsUsed: resolvedHints,
             timeSec: p.timeSec !== undefined ? Number(p.timeSec) : (p.elapsedTime !== undefined ? Number(p.elapsedTime) : 0),
-            isWon: p.status === "won" || p.status === "completed" || p.status === "victory" || Boolean(p.isWon),
+            isWon: isWon,
+            ...(isMistakeFailed ? { failed: true } : {}),
+            ...(isLeft ? { isAbandoned: true } : {}),
             ...(typeof p.isExhibition === "boolean" ? { isExhibition: p.isExhibition } : {}),
             updatedAt: p.updatedAt
           });
@@ -14308,19 +14357,31 @@ export default function App() {
         const uId = r.userId || r.id;
         if (uId) {
           const existing = mergedMap.get(uId);
+          const maxM = challengeMistakeLimit || 3;
+          const rMistakes = r.mistakes !== undefined ? Number(r.mistakes) : (existing?.mistakes ?? 0);
+          const rStatus = String(r.status || "").toLowerCase();
+          const rFailed = rStatus === "mistake_game_over" || rStatus === "failed" || (maxM < 999 && (maxM === 0 ? rMistakes > 0 : rMistakes >= maxM));
+          const rLeft = !rFailed && (rStatus === "left" || rStatus === "abandoned" || rStatus === "forfeited" || rStatus === "disconnected" || Boolean(r.isAbandoned));
+          const rWon = !rFailed && !rLeft && (rStatus === "won" || rStatus === "completed" || rStatus === "victory" || Boolean(r.isWon));
           const resolvedHints = r.hints !== undefined
             ? Number(r.hints)
             : (r.hintsUsed !== undefined ? Number(r.hintsUsed) : (existing?.hints ?? 0));
           mergedMap.set(uId, {
             ...existing,
             ...r,
+            mistakes: rMistakes,
             hints: resolvedHints,
+            hintsUsed: resolvedHints,
+            isWon: rWon,
+            failed: rFailed,
+            isAbandoned: rLeft,
             userId: uId,
             playerName: r.playerName || existing?.playerName || "Player",
             ...(typeof (r.isExhibition ?? existing?.isExhibition) === "boolean"
               ? { isExhibition: Boolean(r.isExhibition ?? existing?.isExhibition) }
               : {}),
-            status: r.status || existing?.status || (r.isWon ? "completed" : (!r.isPending ? "mistake_game_over" : "active"))
+            status: rFailed ? "mistake_game_over" : (rLeft ? "left" : (r.status || existing?.status || (rWon ? "completed" : "active"))),
+            isPending: (rFailed || rLeft || rWon) ? false : Boolean(r.isPending)
           });
         }
       });
@@ -20155,9 +20216,13 @@ export default function App() {
                     (myAuthUid && (p.userId === myAuthUid || p.authUid === myAuthUid)) ||
                     (userProfile?.id && p.guestId === userProfile.id)
                   );
+                  const entryStatus = String(myEntry?.status || "").toLowerCase();
+                  const entryFailed = Boolean(myEntry && (entryStatus === "mistake_game_over" || entryStatus === "failed" || Boolean(myEntry.failed) || (challengeMistakeLimit < 999 && (challengeMistakeLimit === 0 ? Number(myEntry.mistakes || 0) > 0 : Number(myEntry.mistakes || 0) >= challengeMistakeLimit))));
+                  const entryLeft = Boolean(myEntry && !entryFailed && (entryStatus === "left" || entryStatus === "abandoned" || entryStatus === "forfeited" || Boolean(myEntry.isAbandoned)));
+                  const entryWon = Boolean(myEntry && !entryFailed && !entryLeft && !myEntry.isPending && (Boolean(myEntry.isWon) || entryStatus === "won" || entryStatus === "completed" || entryStatus === "victory"));
                   return {
                     seed: challengeSeed,
-                    isGameOver: true,
+                    isGameOver: entryWon || entryFailed || entryLeft,
                     maxMistakesLimit: challengeMistakeLimit,
                     currentMistakesCount: myEntry ? Number(myEntry.mistakes || 0) : 0,
                     hintsCount: myEntry ? Number(myEntry.hints ?? myEntry.hintsUsed ?? 0) : 0
@@ -20165,6 +20230,17 @@ export default function App() {
                 })() : null)}
                 mistakeLimitEnabled={mistakeLimitEnabled}
                 sessionSeconds={sessionSeconds}
+                solutionGrid={solutionGrid}
+                roomCode={(activeGameId && /^\d{6}$/.test(activeGameId)) ? activeGameId : (rematchGameId && /^\d{6}$/.test(rematchGameId) ? rematchGameId : undefined)}
+                language={language}
+                onEnsureRoomCreated={async () => {
+                  return ensureCanonicalRoomProvisioned(
+                    boardState?.seed ?? challengeSeed,
+                    (boardState?.difficulty || difficulty) as Difficulty,
+                    boardState,
+                    solutionGrid
+                  );
+                }}
                 syncedLeaderboard={syncedLeaderboard}
                 onLoadMoreStandings={handleLoadMoreInGameStandings}
                 hasMoreStandings={leaderboardHasMore}
@@ -22608,7 +22684,64 @@ export default function App() {
       </AnimatePresence>
 
       {/* 🏆 ISOLATED NOTIFICATION MULTIPLAYER RESULT MODAL */}
-      {Boolean(notificationResultModal) && (
+      {Boolean(notificationResultModal) && (() => {
+        const selfCandidateIds = new Set(
+          [
+            userProfile?.id,
+            auth.currentUser?.uid,
+            authUser?.uid,
+            getActiveAuthUid(),
+            getOrCreateGuestIdentity().id
+          ].filter(Boolean)
+        );
+        const myResult = notificationResultModal?.participants?.find((p: any) =>
+          [p.userId, p.uid, p.id, p.authUid, p.guestId].some((id) => id && selfCandidateIds.has(id))
+        );
+        const isActiveMatchingRoom = Boolean(
+          challengeMode &&
+          activeGameId === notificationResultModal?.roomCode &&
+          boardState &&
+          !boardState.isGameOver
+        );
+        const mLim = notificationResultModal?.mistakesLimit ?? 3;
+        const myMistakes = myResult
+          ? Number(myResult.mistakes || 0)
+          : (isActiveMatchingRoom && boardState ? boardState.currentMistakesCount : 0);
+        const myStatus = String(myResult?.status || "").toLowerCase();
+        const myMistakeFailed = Boolean(
+          myResult && (
+            myStatus === "mistake_game_over" ||
+            myStatus === "failed" ||
+            Boolean(myResult.failed) ||
+            (mLim < 999 && (mLim === 0 ? myMistakes > 0 : myMistakes >= mLim))
+          )
+        );
+        const myLeft = Boolean(
+          myResult && !myMistakeFailed && (
+            myStatus === "left" ||
+            myStatus === "abandoned" ||
+            myStatus === "forfeited" ||
+            myStatus === "disconnected" ||
+            Boolean(myResult.isAbandoned)
+          )
+        );
+        const myWon = Boolean(
+          myResult && !myMistakeFailed && !myLeft && !myResult.isPending && (
+            Boolean(myResult.isWon) ||
+            myStatus === "won" ||
+            myStatus === "completed" ||
+            myStatus === "victory"
+          )
+        );
+        const myIsTerminal = myWon || myMistakeFailed || myLeft;
+        const resolvedHints = myResult
+          ? Number(myResult.hints ?? myResult.hintsUsed ?? 0)
+          : (isActiveMatchingRoom && boardState ? boardState.hintsCount : 0);
+        const resolvedSeconds = myIsTerminal
+          ? Number(myResult?.timeSec || myResult?.elapsedTime || 0)
+          : (isActiveMatchingRoom ? sessionSeconds : 0);
+
+        return (
         <GameOverModal
           isOpen={Boolean(notificationResultModal)}
           isMultiplayer={true}
@@ -22631,35 +22764,28 @@ export default function App() {
           }}
           darkMode={darkMode}
           difficulty={notificationResultModal?.difficulty || "EASY"}
-          boardState={(() => {
-            const myUid = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid();
-            const myAuthUid = auth.currentUser?.uid || authUser?.uid;
-            const myResult = notificationResultModal?.participants?.find((p: any) =>
-              p.userId === myUid ||
-              p.id === myUid ||
-              (myAuthUid && (p.userId === myAuthUid || p.authUid === myAuthUid)) ||
-              (userProfile?.id && p.guestId === userProfile.id)
-            );
-            return {
-              seed: notificationResultModal?.seed,
-              isGameOver: true,
-              maxMistakesLimit: notificationResultModal?.mistakesLimit || 3,
-              currentMistakesCount: myResult ? Number(myResult.mistakes || 0) : 0,
-              hintsCount: myResult ? Number(myResult.hints ?? myResult.hintsUsed ?? 0) : 0
-            };
-          })()}
+          boardState={{
+            seed: notificationResultModal?.seed,
+            ...(isActiveMatchingRoom && boardState?.grid ? { grid: boardState.grid } : {}),
+            isGameOver: myIsTerminal,
+            maxMistakesLimit: mLim,
+            currentMistakesCount: myMistakes,
+            hintsCount: resolvedHints
+          }}
+          solutionGrid={isActiveMatchingRoom ? solutionGrid : undefined}
+          roomCode={notificationResultModal?.roomCode}
+          language={language}
+          onContinueSolving={!myIsTerminal ? () => {
+            const targetCode = notificationResultModal?.roomCode;
+            setNotificationResultModal(null);
+            if (isActiveMatchingRoom) {
+              if (currentScreen !== "game") navigateToScreen("game");
+            } else if (targetCode) {
+              executeJoinRoom(targetCode, { isDirectInvite: true });
+            }
+          } : undefined}
           mistakeLimitEnabled={Boolean(notificationResultModal?.mistakesLimit && notificationResultModal.mistakesLimit <= 3)}
-          sessionSeconds={(() => {
-            const myUid = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid();
-            const myAuthUid = auth.currentUser?.uid || authUser?.uid;
-            const myResult = notificationResultModal?.participants?.find((p: any) =>
-              p.userId === myUid ||
-              p.id === myUid ||
-              (myAuthUid && (p.userId === myAuthUid || p.authUid === myAuthUid)) ||
-              (userProfile?.id && p.guestId === userProfile.id)
-            );
-            return myResult ? Number(myResult.timeSec || myResult.elapsedTime || 0) : 0;
-          })()}
+          sessionSeconds={resolvedSeconds}
           syncedLeaderboard={notificationResultModal?.participants || []}
           onLoadMoreStandings={handleLoadMoreNotificationStandings}
           hasMoreStandings={notificationResultModal?.hasMore ?? false}
@@ -22842,7 +22968,8 @@ export default function App() {
             showToast(t("matchStartedToast"));
           }}
         />
-      )}
+        );
+      })()}
 
       {/* DAILY CHALLENGE RESULT, LEADERBOARD & CALENDAR MODALS */}
       {Boolean(dailyResultModalState?.isOpen) && dailyResultModalState && (

@@ -16,7 +16,8 @@ import {
   Users,
   Share2,
   ArrowLeft,
-  Play
+  Play,
+  Pin
 } from "lucide-react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
@@ -24,6 +25,7 @@ import { formatActiveStatus } from "../../utils/formatTimestamp";
 import { auth } from "../../firebase";
 import { getActiveAuthUid, loadVault } from "../../utils/storageEngine";
 import { handleNumericInputKeyDown } from "../../utils/keyboardControls";
+import { ShareActionWrapper } from "../share/ShareActionWrapper";
 
 export interface GameOverModalProps {
   isOpen: boolean;
@@ -68,10 +70,15 @@ export interface GameOverModalProps {
   shareChallengeLink: (roomCode: string, msg: string) => Promise<void>;
   onStartRematchGame: () => void;
 
-  // Standings Pagination (Optional)
+  // Standings Pagination & End-Game Share/Resume (Optional)
   onLoadMoreStandings?: () => void;
   hasMoreStandings?: boolean;
   isLoadingMoreStandings?: boolean;
+  solutionGrid?: number[][];
+  roomCode?: string;
+  onEnsureRoomCreated?: () => Promise<string | null>;
+  language?: string;
+  onContinueSolving?: () => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -114,9 +121,15 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   completedGames,
   onLoadMoreStandings,
   hasMoreStandings = false,
-  isLoadingMoreStandings = false
+  isLoadingMoreStandings = false,
+  solutionGrid,
+  roomCode,
+  onEnsureRoomCreated,
+  language,
+  onContinueSolving
 }) => {
-  const { t } = useTranslation();
+  const { t, language: hookLanguage } = useTranslation();
+  const activeLang = language || hookLanguage || "en";
   const [activeListTab, setActiveListTab] = useState<'recent' | 'friends'>('recent');
   const sanitizedPlayers = useMemo(() => {
     const myId: string | null = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || loadVault("guest").profile?.id;
@@ -155,6 +168,8 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
       elapsedTime: sessionSeconds,
       mistakes: boardState?.currentMistakesCount || 0,
       hints: boardState?.hintsCount || 0,
+      hintsUsed: boardState?.hintsCount || 0,
+      isWon: isCurrentPlayerWon,
       failed: didCurrentPlayerFail,
       isAbandoned: false,
       status: didCurrentPlayerFail ? "mistake_game_over" : (isCurrentPlayerWon ? "completed" : "solving"),
@@ -204,51 +219,79 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           ? Number(r.hintsUsed)
           : (existingEntry?.hints ?? (isCurrentUser ? (boardState?.hintsCount ?? aliasHintsFallback ?? 0) : 0)));
 
+      const maxMistakeCap = boardState?.maxMistakesLimit ?? 3;
+      const rawStatus = String(r.status || "").toLowerCase();
       const isExceededMistakes = Boolean(
-        mistakeLimitEnabled && (
-          (boardState?.maxMistakesLimit === 0 ? playerMistakes > 0 : playerMistakes >= (boardState?.maxMistakesLimit ?? 3)) ||
-          r.status === "mistake_game_over"
+        mistakeLimitEnabled && maxMistakeCap < 999 && (
+          maxMistakeCap === 0 ? playerMistakes > 0 : playerMistakes >= maxMistakeCap
         )
       );
-      const isAbandoned = r.status === "abandoned" || r.status === "left" || r.status === "forfeited" || Boolean(r.isAbandoned);
-      const isWon = !isAbandoned && !isExceededMistakes && (
-        r.status === "won" || r.status === "completed" || r.status === "victory" || Boolean(r.isWon) ||
+      const isMistakeFailed = Boolean(
+        isExceededMistakes ||
+        rawStatus === "mistake_game_over" ||
+        rawStatus === "failed" ||
+        (Boolean(r.failed) && rawStatus !== "abandoned" && rawStatus !== "left" && rawStatus !== "forfeited" && rawStatus !== "disconnected") ||
+        (isCurrentUser && didCurrentPlayerFail)
+      );
+      const isAbandoned = !isMistakeFailed && Boolean(
+        rawStatus === "abandoned" ||
+        rawStatus === "left" ||
+        rawStatus === "forfeited" ||
+        rawStatus === "disconnected" ||
+        Boolean(r.isAbandoned)
+      );
+      const isWon = !isMistakeFailed && !isAbandoned && (
+        rawStatus === "won" ||
+        rawStatus === "completed" ||
+        rawStatus === "victory" ||
+        Boolean(r.isWon) ||
         (isCurrentUser && isCurrentPlayerWon)
       );
-      const isFailed = isAbandoned || isExceededMistakes || r.status === "failed";
-      const isPending = !isWon && !isFailed;
+      const isPending = !isWon && !isMistakeFailed && !isAbandoned;
 
       resultsMap.set(uId, {
         id: uId,
         name: isCurrentUser
           ? (r.playerName || r.name || r.displayName || currentLocalName)
           : (r.playerName || r.name || r.displayName || "Player"),
-        time: isAbandoned ? 99999 : !isWon ? 9999 : (isCurrentUser && Number(r.timeSec) === 0 ? localMe.time : Number(r.timeSec)),
+        time: isAbandoned || isMistakeFailed ? 99999 : !isWon ? 9999 : (isCurrentUser && Number(r.timeSec) === 0 ? localMe.time : Number(r.timeSec)),
         elapsedTime:
           Number(r.timeSec) > 0 && Number(r.timeSec) < 9999
             ? Number(r.timeSec)
             : Number(r.elapsedTime) || 0,
         mistakes: playerMistakes,
         hints: playerHints,
-        failed: isFailed,
+        hintsUsed: playerHints,
+        isWon: isWon,
+        failed: isMistakeFailed,
         isAbandoned: isAbandoned,
-        status: r.status || (isAbandoned ? "left" : isWon ? "completed" : isPending ? "solving" : "failed"),
+        status: isMistakeFailed ? "mistake_game_over" : (isAbandoned ? "left" : isWon ? "completed" : "solving"),
         isMe: isCurrentUser,
         isReal: true,
         isPending: isPending
       });
     });
 
+    const getRankTier = (entry: any): number => {
+      if (entry.isWon && !entry.failed && !entry.isAbandoned && !entry.isPending) return 0; // Won
+      if (entry.isPending) return 1; // Solving...
+      if (entry.failed) return 2; // Failed
+      return 3; // Left
+    };
+
     const list = Array.from(resultsMap.values());
     list.sort((a, b) => {
-      if (a.isAbandoned !== b.isAbandoned) return a.isAbandoned ? 1 : -1;
-      if (a.failed !== b.failed) return a.failed ? 1 : -1;
-      const aPending = !!a.isPending;
-      const bPending = !!b.isPending;
-      if (aPending !== bPending) return aPending ? 1 : -1;
-      if (a.time !== b.time) return a.time - b.time;
+      const tierA = getRankTier(a);
+      const tierB = getRankTier(b);
+      if (tierA !== tierB) return tierA - tierB;
+      if (tierA === 0) {
+        if (a.time !== b.time) return a.time - b.time;
+        if (a.mistakes !== b.mistakes) return a.mistakes - b.mistakes;
+        if ((a.hints ?? 0) !== (b.hints ?? 0)) return (a.hints ?? 0) - (b.hints ?? 0);
+        return (a.elapsedTime || 0) - (b.elapsedTime || 0);
+      }
       if (a.mistakes !== b.mistakes) return a.mistakes - b.mistakes;
-      return (a.elapsedTime || 0) - (b.elapsedTime || 0);
+      return (a.hints ?? 0) - (b.hints ?? 0);
     });
     return list;
   }, [
@@ -331,10 +374,36 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
     }
   };
 
+  const renderMistakesAndHints = (
+    mistakesCount: number,
+    hintsCount: number,
+    extraTextClass = "text-stone-500 dark:text-zinc-400",
+    hintsTextClass = "text-amber-600/85 dark:text-amber-400/85"
+  ) => (
+    <span className={`font-sans text-[9px] inline-flex items-center justify-end gap-1 ${extraTextClass}`}>
+      <span>
+        {mistakesCount === 0
+          ? t("zeroErrorsCount")
+          : mistakesCount === 1
+          ? t("singleErrorCount")
+          : t("multiErrorsCount", { count: mistakesCount })}
+      </span>
+      <span className="opacity-45">•</span>
+      <span className={hintsTextClass}>
+        {hintsCount === 0
+          ? t("zeroHintsCount")
+          : hintsCount === 1
+          ? t("singleHintCount")
+          : t("multiHintsCount", { count: hintsCount })}
+      </span>
+    </span>
+  );
+
   const renderStickySelfAnchor = (position: 'top' | 'bottom') => {
     if (!myPlayer) return null;
     const isPending = !!myPlayer.isPending;
-    const rankStr = myRankNum
+    const isMyWinner = Boolean(myPlayer.isWon && !myPlayer.failed && !myPlayer.isAbandoned && !isPending);
+    const rankStr = isMyWinner && myRankNum
       ? myRankNum === 1
         ? t("podium1st")
         : myRankNum === 2
@@ -342,7 +411,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         : myRankNum === 3
         ? t("podium3rd")
         : `${myRankNum}th`
-      : "—";
+      : null;
 
     return (
       <div
@@ -352,25 +421,38 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             : "bg-[#FFFBF5]/95 backdrop-blur-md text-stone-900 shadow-amber-900/15"
         }`}
       >
-        {/* Left: Pin + Rank + Name + You Badge */}
+        {/* Left: Rank/Status Icon + Name + You Badge */}
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <span
             className={`font-mono text-xs font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shrink-0 ${
-              myRankNum === 1
+              myPlayer.failed || myPlayer.isAbandoned
+                ? darkMode ? "bg-rose-500/15 text-rose-300" : "bg-rose-100 text-rose-600"
+                : isPending
+                ? darkMode ? "bg-amber-400/15 text-amber-300" : "bg-amber-100 text-amber-700"
+                : isMyWinner && myRankNum === 1
                 ? darkMode ? "bg-amber-400/20 text-amber-300" : "bg-amber-100 text-amber-700"
-                : myRankNum === 2
+                : isMyWinner && myRankNum === 2
                 ? darkMode ? "bg-sky-400/20 text-sky-300" : "bg-sky-100 text-sky-700"
-                : myRankNum === 3
+                : isMyWinner && myRankNum === 3
                 ? darkMode ? "bg-orange-400/20 text-orange-300" : "bg-orange-100 text-orange-700"
                 : darkMode ? "bg-zinc-700/60 text-zinc-300" : "bg-stone-200/80 text-stone-700"
             }`}
           >
-            {myRankNum === 1 ? (
-              <Trophy className="w-3.5 h-3.5 stroke-[2.5]" />
+            {myPlayer.failed || myPlayer.isAbandoned ? (
+              <XCircle className="w-3.5 h-3.5 stroke-[2.5]" />
+            ) : isPending ? (
+              <Clock className="w-3.5 h-3.5 stroke-[2.5] animate-spin" />
+            ) : isMyWinner && myRankNum === 1 ? (
+              <>
+                <Trophy className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>{rankStr}</span>
+              </>
             ) : (
-              <span>📌</span>
+              <>
+                <Pin className="w-3 h-3 stroke-[2.5]" />
+                {rankStr && <span>{rankStr}</span>}
+              </>
             )}
-            <span>{rankStr}</span>
           </span>
 
           <span className="font-sans font-bold text-sm truncate">
@@ -387,40 +469,28 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           </span>
         </div>
 
-        {/* Right: Time / Status + Mistakes */}
+        {/* Right: Status (Failed -> Solving -> Left -> Won Time) + Mistakes & Hints */}
         <div className="flex flex-col items-end shrink-0 text-right">
-          {myPlayer.isAbandoned ? (
-            <span className="font-mono text-xs font-semibold text-rose-500">{t("statusLeft")}</span>
+          {myPlayer.failed ? (
+            <span className="font-mono font-semibold text-xs text-rose-500">{t("statusFailed")}</span>
           ) : isPending ? (
             <span className="font-mono text-xs text-amber-500 dark:text-amber-400 flex items-center gap-1 font-bold">
               <span>{t("statusSolving")}</span>
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-pulse" />
             </span>
-          ) : myPlayer.failed ? (
-            <span className="font-mono font-semibold text-xs text-rose-500">{t("statusFailed")}</span>
+          ) : myPlayer.isAbandoned ? (
+            <span className="font-mono text-xs font-semibold text-rose-500">{t("statusLeft")}</span>
           ) : (
             <span className="font-mono font-bold text-sm sm:text-base text-purple-700 dark:text-purple-300">
               {formatTimer(myPlayer.time < 9999 ? myPlayer.time : myPlayer.elapsedTime || 0)}
             </span>
           )}
 
-          <span className="font-sans text-[9px] text-stone-400 dark:text-zinc-500 inline-flex items-center justify-end gap-1">
-            <span>
-              {myPlayer.mistakes === 0
-                ? t("zeroErrorsCount")
-                : myPlayer.mistakes === 1
-                ? t("singleErrorCount")
-                : t("multiErrorsCount", { count: myPlayer.mistakes })}
-            </span>
-            <span className="opacity-45">•</span>
-            <span className="text-amber-600/85 dark:text-amber-400/85">
-              {(myPlayer.hints ?? 0) === 0
-                ? t("zeroHintsCount")
-                : myPlayer.hints === 1
-                ? t("singleHintCount")
-                : t("multiHintsCount", { count: myPlayer.hints ?? 0 })}
-            </span>
-          </span>
+          {renderMistakesAndHints(
+            myPlayer.mistakes ?? 0,
+            myPlayer.hints ?? 0,
+            "text-stone-400 dark:text-zinc-500"
+          )}
         </div>
       </div>
     );
@@ -436,7 +506,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   }, [isOpen, endGameStep]);
 
   const winnerTime = useMemo(() => {
-    if (results.length > 0 && !results[0].failed && !results[0].isAbandoned && !results[0].isPending && results[0].time < 9999) {
+    if (results.length > 0 && results[0].isWon && !results[0].failed && !results[0].isAbandoned && !results[0].isPending && results[0].time < 9999) {
       return results[0].time;
     }
     return null;
@@ -508,6 +578,31 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 </span>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2">
+                {boardState?.grid && (
+                  <ShareActionWrapper
+                    boardState={boardState}
+                    solutionGrid={solutionGrid}
+                    difficulty={boardState?.difficulty || difficulty}
+                    time={formatTimer(
+                      myPlayer?.isWon && myPlayer.time < 9999 ? myPlayer.time : sessionSeconds
+                    )}
+                    sessionSeconds={
+                      myPlayer?.isWon && myPlayer.time < 9999 ? myPlayer.time : sessionSeconds
+                    }
+                    playerName={myPlayer?.name || getActiveDisplayName()}
+                    isNewRecord={Boolean(isNewRecordAchieved && myPlayer?.isWon && !myPlayer?.failed)}
+                    isWon={Boolean(myPlayer?.isWon && !myPlayer?.failed && !myPlayer?.isAbandoned)}
+                    darkMode={darkMode}
+                    roomCode={
+                      activeRematchRoomCode !== "OFFLINE"
+                        ? activeRematchRoomCode
+                        : roomCode
+                    }
+                    onEnsureRoomCreated={onEnsureRoomCreated}
+                    playClickSound={playClickSound}
+                    language={activeLang}
+                  />
+                )}
                 <button
                   onClick={() => {
                     playClickSound();
@@ -550,11 +645,12 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               >
               {results.map((player, idx) => {
                 const isPending = !!player.isPending;
-                const isPodium1 = isMultiplayerCompetitive && idx === 0 && !player.failed && !player.isAbandoned && !isPending;
-                const isPodium2 = isMultiplayerCompetitive && idx === 1 && !player.failed && !player.isAbandoned && !isPending;
-                const isPodium3 = isMultiplayerCompetitive && idx === 2 && !player.failed && !player.isAbandoned && !isPending;
-                const isLowerRank = isMultiplayerCompetitive && idx >= 3;
-                const positionStr = isMultiplayerCompetitive
+                const isWinner = Boolean(player.isWon && !player.failed && !player.isAbandoned && !isPending);
+                const isPodium1 = isMultiplayerCompetitive && isWinner && idx === 0;
+                const isPodium2 = isMultiplayerCompetitive && isWinner && idx === 1;
+                const isPodium3 = isMultiplayerCompetitive && isWinner && idx === 2;
+                const isLowerRank = isMultiplayerCompetitive && isWinner && idx >= 3;
+                const positionStr = isMultiplayerCompetitive && isWinner
                   ? idx === 0
                     ? t("podium1st")
                     : idx === 1
@@ -562,9 +658,9 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     : idx === 2
                     ? t("podium3rd")
                     : `${idx + 1}th`
-                  : "—";
-                const isMeNewPB = Boolean(player.isMe && isNewRecordAchieved && !player.failed);
-                const gapDelta = (isPodium2 || isPodium3) && !player.failed && !player.isAbandoned && !isPending
+                  : "";
+                const isMeNewPB = Boolean(player.isMe && isNewRecordAchieved && isWinner);
+                const gapDelta = (isPodium2 || isPodium3)
                   ? formatGapDelta(player.time)
                   : null;
 
@@ -655,7 +751,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 relative z-10">
                       <span
                         className={`font-mono text-sm sm:text-base font-black w-7 sm:w-8 text-center flex items-center justify-center shrink-0 ${
-                          player.isAbandoned
+                          player.failed || player.isAbandoned
                             ? "text-rose-500"
                             : isPending
                             ? "text-amber-500 animate-pulse"
@@ -676,7 +772,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                             : "text-stone-400 text-xs font-bold"
                         }`}
                       >
-                        {player.isAbandoned ? (
+                        {player.failed || player.isAbandoned ? (
                           <XCircle className="w-4 h-4 text-rose-500 stroke-[2.5]" />
                         ) : isPending ? (
                           <Clock className="w-4 h-4 text-amber-500 animate-spin" />
@@ -690,8 +786,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                           <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-sky-300" : "text-sky-600"}`} />
                         ) : isPodium3 ? (
                           <Award className={`w-4.5 h-4.5 stroke-[2.5] shrink-0 ${darkMode ? "text-orange-300" : "text-orange-600"}`} />
-                        ) : (
+                        ) : isWinner && positionStr ? (
                           positionStr
+                        ) : (
+                          <Trophy className={`w-4 h-4 stroke-[2.5] shrink-0 ${darkMode ? "text-amber-300" : "text-amber-600"}`} />
                         )}
                       </span>
 
@@ -742,7 +840,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                           </span>
                         )}
 
-                        {player.isMe && isNewRecordAchieved && !player.failed && (
+                        {player.isMe && isNewRecordAchieved && isWinner && (
                           <span className="text-[8.5px] bg-amber-400/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-sans font-medium uppercase tracking-wider flex items-center gap-1 shrink-0 animate-pulse">
                             <Sparkles className="w-2.5 h-2.5 text-amber-500" />
                             <span>{t("newPersonalBestBadge")}</span>
@@ -751,31 +849,13 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Right: Clean Time + Gap Delta Badge + error count */}
+                    {/* Right: Clean Status (Failed -> Solving -> Left -> Won Time) + error/hints count */}
                     <div className="flex flex-col items-end justify-center shrink-0 whitespace-nowrap text-right relative z-10">
-                      {player.isAbandoned ? (
-                        <div className="flex flex-col items-end">
-                          <span className="font-mono text-xs font-semibold text-rose-500">
-                            {t("statusLeft")}
-                          </span>
-                          {(player.mistakes > 0 || (player.hints ?? 0) > 0) && (
-                            <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400 inline-flex items-center justify-end gap-1">
-                              {player.mistakes > 0 && (
-                                <span>
-                                  {player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
-                                </span>
-                              )}
-                              {player.mistakes > 0 && (player.hints ?? 0) > 0 && (
-                                <span className="opacity-45">•</span>
-                              )}
-                              {(player.hints ?? 0) > 0 && (
-                                <span className="text-amber-600/85 dark:text-amber-400/85">
-                                  {player.hints === 1 ? t("singleHintCount") : t("multiHintsCount", { count: player.hints })}
-                                </span>
-                              )}
-                            </span>
-                          )}
-                        </div>
+                      {player.failed ? (
+                        <>
+                          <span className="font-mono font-semibold text-xs sm:text-sm text-rose-500">{t("statusFailed")}</span>
+                          {renderMistakesAndHints(player.mistakes ?? 0, player.hints ?? 0)}
+                        </>
                       ) : isPending ? (
                         <div className="flex flex-col items-end">
                           <span className="font-mono text-xs sm:text-sm text-amber-500 dark:text-amber-400 flex items-center gap-1 font-bold">
@@ -795,41 +875,15 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                               />
                             </span>
                           </span>
-                          {(player.mistakes > 0 || (player.hints ?? 0) > 0) && (
-                            <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400 inline-flex items-center justify-end gap-1">
-                              {player.mistakes > 0 && (
-                                <span>
-                                  {player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
-                                </span>
-                              )}
-                              {player.mistakes > 0 && (player.hints ?? 0) > 0 && (
-                                <span className="opacity-45">•</span>
-                              )}
-                              {(player.hints ?? 0) > 0 && (
-                                <span className="text-amber-600/85 dark:text-amber-400/85">
-                                  {player.hints === 1 ? t("singleHintCount") : t("multiHintsCount", { count: player.hints })}
-                                </span>
-                              )}
-                            </span>
-                          )}
+                          {renderMistakesAndHints(player.mistakes ?? 0, player.hints ?? 0)}
                         </div>
-                      ) : player.failed ? (
-                        <>
-                          <span className="font-mono font-semibold text-xs sm:text-sm text-rose-500">{t("statusFailed")}</span>
-                          <span className="font-mono text-[9px] text-stone-500 dark:text-zinc-400 inline-flex items-center justify-end gap-1">
-                            <span>
-                              {player.mistakes === 0 ? t("zeroErrorsCount") : player.mistakes === 1 ? t("singleErrorCount") : t("multiErrorsCount", { count: player.mistakes })}
-                            </span>
-                            <span className="opacity-45">•</span>
-                            <span className="text-amber-600/85 dark:text-amber-400/85">
-                              {(player.hints ?? 0) === 0
-                                ? t("zeroHintsCount")
-                                : player.hints === 1
-                                ? t("singleHintCount")
-                                : t("multiHintsCount", { count: player.hints ?? 0 })}
-                            </span>
+                      ) : player.isAbandoned ? (
+                        <div className="flex flex-col items-end">
+                          <span className="font-mono text-xs font-semibold text-rose-500">
+                            {t("statusLeft")}
                           </span>
-                        </>
+                          {renderMistakesAndHints(player.mistakes ?? 0, player.hints ?? 0)}
+                        </div>
                       ) : (
                         <>
                           <div className="flex items-center gap-1.5">
@@ -874,49 +928,20 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                               {formatTimer(player.time < 9999 ? player.time : player.elapsedTime || 0)}
                             </span>
                           </div>
-                          <span
-                            className={`font-sans text-[9px] inline-flex items-center justify-end gap-1 ${
-                              isPodium1
-                                ? darkMode
-                                  ? "text-amber-300/70"
-                                  : "text-amber-900/70"
-                                : isPodium2
-                                ? darkMode
-                                  ? "text-sky-300/70"
-                                  : "text-sky-800/70"
-                                : isPodium3
-                                ? darkMode
-                                  ? "text-orange-300/70"
-                                  : "text-orange-800/70"
-                                : darkMode
-                                ? "text-zinc-400"
-                                : "text-stone-500"
-                            }`}
-                          >
-                            <span>
-                              {player.mistakes === 0
-                                ? t("zeroErrorsCount")
-                                : player.mistakes === 1
-                                ? t("singleErrorCount")
-                                : t("multiErrorsCount", { count: player.mistakes })}
-                            </span>
-                            <span className="opacity-45">•</span>
-                            <span
-                              className={
-                                isPodium1
-                                  ? darkMode
-                                    ? "text-amber-200/85"
-                                    : "text-amber-900/85"
-                                  : "text-amber-600/85 dark:text-amber-400/85"
-                              }
-                            >
-                              {(player.hints ?? 0) === 0
-                                ? t("zeroHintsCount")
-                                : player.hints === 1
-                                ? t("singleHintCount")
-                                : t("multiHintsCount", { count: player.hints ?? 0 })}
-                            </span>
-                          </span>
+                          {renderMistakesAndHints(
+                            player.mistakes ?? 0,
+                            player.hints ?? 0,
+                            isPodium1
+                              ? darkMode ? "text-amber-300/70" : "text-amber-900/70"
+                              : isPodium2
+                              ? darkMode ? "text-sky-300/70" : "text-sky-800/70"
+                              : isPodium3
+                              ? darkMode ? "text-orange-300/70" : "text-orange-800/70"
+                              : darkMode ? "text-zinc-400" : "text-stone-500",
+                            isPodium1
+                              ? darkMode ? "text-amber-200/85" : "text-amber-900/85"
+                              : "text-amber-600/85 dark:text-amber-400/85"
+                          )}
                         </>
                       )}
                     </div>
@@ -950,39 +975,58 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             </AnimatePresence>
           </div>
 
-            {/* SCREEN 1: Action buttons — SAME GAME | NEW GAME — Evenly Sharing Footer */}
+            {/* SCREEN 1: Action buttons — Continue Solving (incomplete notification) OR SAME GAME | NEW GAME */}
             <div className="flex gap-2.5 w-full pt-3 border-t border-stone-200/50 dark:border-zinc-800/50 shrink-0">
-              {/* [ SAME GAME ] — Replay same board and parameters */}
-              <button
-                onClick={async () => {
-                  playClickSound();
-                  await onSameGameReplay();
-                }}
-                className={`flex-1 py-3 px-2 rounded-2xl flex items-center justify-center gap-1.5 text-xs font-mono font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 border-none cursor-pointer ${
-                  darkMode
-                    ? "bg-[#022c22] hover:bg-[#022c22]/80 text-[#d1fae5]"
-                    : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"
-                }`}
-              >
-                <RotateCcw className="w-4 h-4 stroke-[2.5]" />
-                <span>{t("sameGame")}</span>
-              </button>
+              {myPlayer?.isPending && onContinueSolving ? (
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    onContinueSolving();
+                  }}
+                  className={`w-full py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 text-xs sm:text-sm font-sans font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 border-none cursor-pointer ${
+                    darkMode
+                      ? "bg-[#022c22] hover:bg-[#064e3b] text-[#d1fae5]"
+                      : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"
+                  }`}
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>{t("continueSolvingAction")}</span>
+                </button>
+              ) : (
+                <>
+                  {/* [ SAME GAME ] — Replay same board and parameters */}
+                  <button
+                    onClick={async () => {
+                      playClickSound();
+                      await onSameGameReplay();
+                    }}
+                    className={`flex-1 py-3 px-2 rounded-2xl flex items-center justify-center gap-1.5 text-xs font-mono font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 border-none cursor-pointer ${
+                      darkMode
+                        ? "bg-[#022c22] hover:bg-[#022c22]/80 text-[#d1fae5]"
+                        : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"
+                    }`}
+                  >
+                    <RotateCcw className="w-4 h-4 stroke-[2.5]" />
+                    <span>{t("sameGame")}</span>
+                  </button>
 
-              {/* [ NEW GAME ] — Fresh board seed and parameters via full Create Room modal */}
-              <button
-                onClick={() => {
-                  playClickSound();
-                  onNewGameClick();
-                }}
-                className={`flex-1 py-3 px-2 rounded-2xl flex items-center justify-center gap-1.5 text-xs font-mono font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 border-none cursor-pointer ${
-                  darkMode
-                    ? "bg-[#2e1065] hover:bg-[#2e1065]/80 text-[#e9d5ff]"
-                    : "bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8]"
-                }`}
-              >
-                <Sparkles className="w-4 h-4 stroke-[2.5]" />
-                <span>{t("newGame")}</span>
-              </button>
+                  {/* [ NEW GAME ] — Fresh board seed and parameters via full Create Room modal */}
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      onNewGameClick();
+                    }}
+                    className={`flex-1 py-3 px-2 rounded-2xl flex items-center justify-center gap-1.5 text-xs font-mono font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 border-none cursor-pointer ${
+                      darkMode
+                        ? "bg-[#2e1065] hover:bg-[#2e1065]/80 text-[#e9d5ff]"
+                        : "bg-[#F3E8FF] hover:bg-[#E9D5FF] text-[#6B21A8]"
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4 stroke-[2.5]" />
+                    <span>{t("newGame")}</span>
+                  </button>
+                </>
+              )}
             </div>
           </>
         ) : (

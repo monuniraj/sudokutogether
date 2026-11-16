@@ -12,7 +12,7 @@ import {
   ShareDifficulty,
   buildFreshChallengeUrl,
   evaluateBoardDidWin,
-  SHARE_I18N,
+  getLocalizedDifficulty,
   getShareI18n,
 } from "../../utils/canvasShare";
 import { getCrazyGamesInviteLink } from "../../services/CrazyGamesSDK";
@@ -180,13 +180,22 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
     if (playClickSound) playClickSound();
     if (isGenerating || !generatedImage) return;
 
-    let challengeUrl =
-      buildFreshChallengeUrl(challengeId, playerName) || window.location.href;
-    const cgInvite = await getCrazyGamesInviteLink({ challenge: challengeId, sender: playerName });
+    let challengeUrl = fullUrl || (typeof window !== "undefined" ? window.location.href : "https://sudokusync.com/");
+    const cgInvite = await getCrazyGamesInviteLink(
+      extractedRoomCode
+        ? { roomId: extractedRoomCode, sender: playerName }
+        : { challenge: challengeId, sender: playerName }
+    );
     if (cgInvite) {
       challengeUrl = cgInvite;
     }
-    const shareText = i18n.modal.share_msg(challengeUrl);
+    const localizedDiff = getLocalizedDifficulty(normalizedDiff, activeLang);
+    const shareText = i18n.modal.share_msg(
+      challengeUrl,
+      localizedDiff,
+      didWin ? time : undefined,
+      didWin
+    );
     const base64Data = generatedImage.replace(/^data:image\/png;base64,/, "");
 
     const triggerClipboardToast = () => {
@@ -235,8 +244,8 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
         await Share.share({
           title: i18n.modal.share_title,
           text: shareText,
-          url: savedFile.uri,
-          dialogTitle: "Share this Screenshot",
+          files: [savedFile.uri],
+          dialogTitle: i18n.modal.btn_share,
         });
       } else {
         const blob = await dataUrlToBlob(generatedImage);
@@ -247,8 +256,7 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
         const shareData: ShareData = {
           files: [imageFile],
           title: i18n.modal.share_title,
-          text: `Can you beat my game? Play here: ${challengeUrl}`,
-          url: challengeUrl,
+          text: shareText,
         };
 
         if (typeof navigator !== "undefined" && navigator.share) {
@@ -430,54 +438,54 @@ export const SharePreviewModal: React.FC<SharePreviewModalProps> = ({
                   <span>{clipboardToast}</span>
                 </motion.div>
               )}
-              <button
-                type="button"
-                disabled={isActionDisabled}
-                onClick={handleShareScreenshot}
-                className={`w-full py-3.5 px-4 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center border-none transition-all shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
-                  isActionDisabled
-                    ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer active:scale-95"
-                } ${primaryShareBtnClass}`}
-              >
-                <Share2 className="w-5 h-5 mr-2 shrink-0" />
-                <span>
-                  {isGenerating ? i18n.modal.generating : i18n.modal.btn_share}
-                </span>
-                {isGenerating && (
-                  <Loader2 className="animate-spin w-4 h-4 ml-2 inline shrink-0" />
-                )}
-              </button>
+              <div className="grid grid-cols-2 gap-2.5 w-full">
+                <button
+                  type="button"
+                  disabled={isActionDisabled}
+                  onClick={handleSaveToGallery}
+                  className={`w-full py-3.5 px-3 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center gap-2 border-none transition-all shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
+                    isActionDisabled
+                      ? "opacity-50 cursor-not-allowed"
+                      : "cursor-pointer active:scale-95"
+                  } ${
+                    darkMode
+                      ? "bg-zinc-800 hover:bg-zinc-700 text-stone-200"
+                      : "bg-stone-100 hover:bg-stone-200 text-stone-800"
+                  }`}
+                >
+                  {isSavedSuccess ? (
+                    <>
+                      <Check className="w-4 h-4 shrink-0 text-emerald-500 stroke-[2.5]" />
+                      <span className="truncate">{i18n.modal.btn_save}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 shrink-0 stroke-[2.4]" />
+                      <span className="truncate">{i18n.modal.btn_save}</span>
+                    </>
+                  )}
+                </button>
 
-              <button
-                type="button"
-                disabled={isActionDisabled}
-                onClick={handleSaveToGallery}
-                className={`w-full py-3.5 px-4 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center border-none transition-all shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
-                  isActionDisabled
-                    ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer active:scale-95"
-                } ${
-                  darkMode
-                    ? "bg-zinc-800 hover:bg-zinc-700 text-stone-200"
-                    : "bg-stone-100 hover:bg-stone-200 text-stone-800"
-                }`}
-              >
-                {isSavedSuccess ? (
-                  <>
-                    <Check className="w-5 h-5 mr-2 shrink-0 text-emerald-500" />
-                    <span>{i18n.modal.btn_save}</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-5 h-5 mr-2 shrink-0" />
-                    <span>{i18n.modal.btn_save}</span>
-                    {isGenerating && (
-                      <Loader2 className="animate-spin w-4 h-4 ml-2 inline shrink-0" />
-                    )}
-                  </>
-                )}
-              </button>
+                <button
+                  type="button"
+                  disabled={isActionDisabled}
+                  onClick={handleShareScreenshot}
+                  className={`w-full py-3.5 px-3 rounded-2xl font-sans font-black text-xs sm:text-sm tracking-wide flex items-center justify-center gap-2 border-none transition-all shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
+                    isActionDisabled
+                      ? "opacity-50 cursor-not-allowed"
+                      : "cursor-pointer active:scale-95"
+                  } ${primaryShareBtnClass}`}
+                >
+                  {isGenerating ? (
+                    <Loader2 className="animate-spin w-4 h-4 shrink-0" />
+                  ) : (
+                    <Share2 className="w-4 h-4 shrink-0 stroke-[2.4]" />
+                  )}
+                  <span className="truncate">
+                    {isGenerating ? i18n.modal.generating : i18n.modal.btn_share}
+                  </span>
+                </button>
+              </div>
             </div>
           </motion.div>
         </motion.div>

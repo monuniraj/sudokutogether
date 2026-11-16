@@ -169,6 +169,7 @@ export type TranslationKey =
   | "backAction"
   | "joiningText"
   | "joinGameAction"
+  | "continueSolvingAction"
   | "multiplayerUnavailable"
   | "youAreOffline"
   | "offlineNoticeSub"
@@ -718,6 +719,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     backAction: "Back",
     joiningText: "Joining...",
     joinGameAction: "Join Game",
+    continueSolvingAction: "Continue Solving",
     multiplayerUnavailable: "Multiplayer Unavailable",
     youAreOffline: "You're Offline",
     offlineNoticeSub: "Please connect to the internet to play multiplayer.",
@@ -1265,6 +1267,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     backAction: "वापस",
     joiningText: "शामिल हो रहे हैं...",
     joinGameAction: "खेल में शामिल हों",
+    continueSolvingAction: "सॉल्व जारी रखें",
     multiplayerUnavailable: "मल्टीप्लेयर अनुपलब्ध",
     youAreOffline: "आप ऑफ़लाइन हैं",
     offlineNoticeSub: "मल्टीप्लेयर खेलने के लिए कृपया इंटरनेट से जुड़ें।",
@@ -1812,6 +1815,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     backAction: "Zurück",
     joiningText: "Beitreten...",
     joinGameAction: "Spiel beitreten",
+    continueSolvingAction: "Weiterspielen",
     multiplayerUnavailable: "Multiplayer nicht verfügbar",
     youAreOffline: "Du bist offline",
     offlineNoticeSub: "Bitte verbinde dich mit dem Internet.",
@@ -2359,6 +2363,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     backAction: "戻る",
     joiningText: "参加中...",
     joinGameAction: "対戦に参加",
+    continueSolvingAction: "プレイを続ける",
     multiplayerUnavailable: "マルチ対戦利用不可",
     youAreOffline: "オフラインです",
     offlineNoticeSub: "対戦するにはインターネットに接続してください。",
@@ -2906,6 +2911,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     backAction: "뒤로",
     joiningText: "참가 중...",
     joinGameAction: "게임 참가",
+    continueSolvingAction: "계속 풀기",
     multiplayerUnavailable: "멀티플레이어 이용 불가",
     youAreOffline: "오프라인 상태입니다",
     offlineNoticeSub: "멀티플레이어를 이용하려면 인터넷에 연결하세요.",
@@ -3453,6 +3459,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     backAction: "Volver",
     joiningText: "Entrando...",
     joinGameAction: "Entrar al juego",
+    continueSolvingAction: "Seguir jugando",
     multiplayerUnavailable: "Multijugador no disponible",
     youAreOffline: "Estás desconectado",
     offlineNoticeSub: "Conéctate a internet para jugar en multijugador.",
@@ -4000,6 +4007,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     backAction: "Retour",
     joiningText: "Connexion...",
     joinGameAction: "Rejoindre",
+    continueSolvingAction: "Continuer la partie",
     multiplayerUnavailable: "Multijoueur indisponible",
     youAreOffline: "Vous êtes hors ligne",
     offlineNoticeSub: "Connectez-vous à internet pour le multijoueur.",
@@ -4547,6 +4555,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     backAction: "Indietro",
     joiningText: "Ingresso...",
     joinGameAction: "Entra in gioco",
+    continueSolvingAction: "Continua a risolvere",
     multiplayerUnavailable: "Multigiocatore non disponibile",
     youAreOffline: "Sei offline",
     offlineNoticeSub: "Connettiti a internet per il multigiocatore.",
@@ -5094,6 +5103,7 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     backAction: "Voltar",
     joiningText: "Entrando...",
     joinGameAction: "Entrar no Jogo",
+    continueSolvingAction: "Continuar resolvendo",
     multiplayerUnavailable: "Multijogador Indisponível",
     youAreOffline: "Você está offline",
     offlineNoticeSub: "Conecte-se à internet para jogar multijogador.",

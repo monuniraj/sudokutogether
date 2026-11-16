@@ -57,7 +57,7 @@ export interface ShareI18nStrings {
     btn_save: string;
     toast_copied: string;
     share_title: string;
-    share_msg: (url: string) => string;
+    share_msg: (url: string, difficultyLabel?: string, time?: string, isWon?: boolean) => string;
   };
 }
 
@@ -85,13 +85,16 @@ export const SHARE_I18N: Record<string, ShareI18nStrings> = {
       room_code: "Room Code: ",
     },
     modal: {
-      title: "SHARE SCREENSHOT",
+      title: "INVITE FRIEND",
       generating: "Generating Screenshot...",
-      btn_share: "Share this Screenshot",
-      btn_save: "Save to Gallery",
-      toast_copied: "Link copied to clipboard! Paste it alongside your image.",
+      btn_share: "Invite Friend",
+      btn_save: "Save Image",
+      toast_copied: "Invite link copied! Share it alongside your image.",
       share_title: "Sudoku Sync Challenge",
-      share_msg: (url) => `Can you beat my game? Play here: ${url}`,
+      share_msg: (url, diff, time, isWon) =>
+        isWon === false
+          ? `Stuck on ${diff || "Sudoku"}! Can you finish this puzzle? Play here: ${url}`
+          : `Can you beat my time${time ? ` (${time})` : ""} on ${diff || "Sudoku"}? Play here: ${url}`,
     },
   },
   hi: {
@@ -117,13 +120,16 @@ export const SHARE_I18N: Record<string, ShareI18nStrings> = {
       room_code: "कमरा कोड: ",
     },
     modal: {
-      title: "स्क्रीनशॉट शेयर करें",
+      title: "दोस्त को इनवाइट करें",
       generating: "स्क्रीनशॉट बन रहा है...",
-      btn_share: "स्क्रीनशॉट शेयर करें",
-      btn_save: "गैलरी में सेव करें",
-      toast_copied: "लिंक कॉपी हो गया! इमेज के साथ पेस्ट करें।",
+      btn_share: "दोस्त को इनवाइट करें",
+      btn_save: "इमेज सेव करें",
+      toast_copied: "इनवाइट लिंक कॉपी हो गया! इमेज के साथ शेयर करें।",
       share_title: "सुडोकू सिंक चैलेंज",
-      share_msg: (url) => `क्या तुम मेरा स्कोर हरा सकते हो? यहाँ खेलो: ${url}`,
+      share_msg: (url, diff, time, isWon) =>
+        isWon === false
+          ? `मैं ${diff || "सुडोकू"} पर अटक गया! क्या तुम यह पज़ल पूरा कर सकते हो? यहाँ खेलो: ${url}`
+          : `क्या तुम ${diff || "सुडोकू"} पर मेरा टाइम${time ? ` (${time})` : ""} बीट कर सकते हो? यहाँ खेलो: ${url}`,
     },
   },
   de: {
@@ -149,13 +155,16 @@ export const SHARE_I18N: Record<string, ShareI18nStrings> = {
       room_code: "Raum-Code: ",
     },
     modal: {
-      title: "SCREENSHOT TEILEN",
+      title: "FREUND EINLADEN",
       generating: "Erstelle Screenshot...",
-      btn_share: "Screenshot teilen",
-      btn_save: "In Galerie speichern",
-      toast_copied: "Link kopiert! Zusammen mit dem Bild einfügen.",
+      btn_share: "Freund einladen",
+      btn_save: "Bild speichern",
+      toast_copied: "Einladungslink kopiert! Zusammen mit dem Bild teilen.",
       share_title: "Sudoku Sync Challenge",
-      share_msg: (url) => `Schlägst du meine Zeit? Jetzt spielen: ${url}`,
+      share_msg: (url, diff, time, isWon) =>
+        isWon === false
+          ? `Ich hänge bei ${diff || "Sudoku"} fest! Kannst du dieses Rätsel lösen? ${url}`
+          : `Kannst du meine Zeit${time ? ` (${time})` : ""} bei ${diff || "Sudoku"} schlagen? Jetzt spielen: ${url}`,
     },
   },
   ja: {
@@ -181,13 +190,16 @@ export const SHARE_I18N: Record<string, ShareI18nStrings> = {
       room_code: "ルームコード: ",
     },
     modal: {
-      title: "スクリーンショット共有",
+      title: "友達を招待",
       generating: "画像を生成中...",
-      btn_share: "スクショをシェア",
-      btn_save: "アルバムに保存",
-      toast_copied: "リンクをコピーしました！画像と一緒にシェアしてね。",
+      btn_share: "友達を招待",
+      btn_save: "画像を保存",
+      toast_copied: "招待リンクをコピーしました！画像と一緒にシェアしてね。",
       share_title: "数独シンク 対戦チャレンジ",
-      share_msg: (url) => `私のタイムに勝てるかな？ここから挑戦：${url}`,
+      share_msg: (url, diff, time, isWon) =>
+        isWon === false
+          ? `${diff || "数独"}で手詰まり！代わりにクリアできる？ ${url}`
+          : `${diff || "数独"}のタイム${time ? `（${time}）` : ""}を超えられる？ここから挑戦：${url}`,
     },
   },
   ko: {
@@ -213,13 +225,16 @@ export const SHARE_I18N: Record<string, ShareI18nStrings> = {
       room_code: "방 코드: ",
     },
     modal: {
-      title: "스크린샷 공유",
+      title: "친구 초대",
       generating: "이미지 생성 중...",
-      btn_share: "스크린샷 공유하기",
-      btn_save: "갤러리에 저장",
-      toast_copied: "링크 복사 완료! 이미지와 함께 붙여넣으세요.",
+      btn_share: "친구 초대",
+      btn_save: "이미지 저장",
+      toast_copied: "초대 링크 복사 완료! 이미지와 함께 공유하세요.",
       share_title: "스도쿠 싱크 챌린지",
-      share_msg: (url) => `내 기록 넘을 수 있어? 도전해봐: ${url}`,
+      share_msg: (url, diff, time, isWon) =>
+        isWon === false
+          ? `${diff || "스도쿠"}에서 막혔어요! 대신 풀어줄 수 있나요? ${url}`
+          : `${diff || "스도쿠"} 내 기록${time ? ` (${time})` : ""} 깰 수 있어? 여기서 도전: ${url}`,
     },
   },
   es: {
@@ -245,13 +260,16 @@ export const SHARE_I18N: Record<string, ShareI18nStrings> = {
       room_code: "Código de sala: ",
     },
     modal: {
-      title: "COMPARTIR CAPTURA",
+      title: "INVITAR AMIGO",
       generating: "Generando captura...",
-      btn_share: "Compartir captura",
-      btn_save: "Guardar en galería",
-      toast_copied: "¡Enlace copiado! Pégalo junto con tu imagen.",
+      btn_share: "Invitar amigo",
+      btn_save: "Guardar imagen",
+      toast_copied: "¡Enlace de invitación copiado! Compártelo junto con tu imagen.",
       share_title: "Desafío Sudoku Sync",
-      share_msg: (url) => `¿Puedes ganarme? Juega aquí: ${url}`,
+      share_msg: (url, diff, time, isWon) =>
+        isWon === false
+          ? `¡Me quedé atascado en ${diff || "Sudoku"}! ¿Puedes terminarlo? Juega aquí: ${url}`
+          : `¿Puedes superar mi tiempo${time ? ` (${time})` : ""} en ${diff || "Sudoku"}? Juega aquí: ${url}`,
     },
   },
   fr: {
@@ -277,13 +295,16 @@ export const SHARE_I18N: Record<string, ShareI18nStrings> = {
       room_code: "Code de salon : ",
     },
     modal: {
-      title: "PARTAGER LA CAPTURE",
+      title: "INVITER UN AMI",
       generating: "Génération en cours...",
-      btn_share: "Partager la capture",
-      btn_save: "Enregistrer dans la galerie",
-      toast_copied: "Lien copié ! Colle-le avec ton image.",
+      btn_share: "Inviter un ami",
+      btn_save: "Enregistrer l'image",
+      toast_copied: "Lien d'invitation copié ! Partage-le avec ton image.",
       share_title: "Défi Sudoku Sync",
-      share_msg: (url) => `Tu peux battre mon score ? Reçois le défi : ${url}`,
+      share_msg: (url, diff, time, isWon) =>
+        isWon === false
+          ? `Je bloque sur ${diff || "Sudoku"} ! Peux-tu finir cette grille ? Joue ici : ${url}`
+          : `Peux-tu battre mon chrono${time ? ` (${time})` : ""} en ${diff || "Sudoku"} ? Joue ici : ${url}`,
     },
   },
   it: {
@@ -309,13 +330,16 @@ export const SHARE_I18N: Record<string, ShareI18nStrings> = {
       room_code: "Codice stanza: ",
     },
     modal: {
-      title: "CONDIVIDI SCREENSHOT",
+      title: "INVITA AMICO",
       generating: "Creazione in corso...",
-      btn_share: "Condividi screenshot",
-      btn_save: "Salva nella galleria",
-      toast_copied: "Link copiato! Incollalo insieme alla tua immagine.",
+      btn_share: "Invita amico",
+      btn_save: "Salva immagine",
+      toast_copied: "Link d'invito copiato! Condividilo insieme alla tua immagine.",
       share_title: "Sfida Sudoku Sync",
-      share_msg: (url) => `Riesci a battermi? Gioca qui: ${url}`,
+      share_msg: (url, diff, time, isWon) =>
+        isWon === false
+          ? `Mi sono bloccato su ${diff || "Sudoku"}! Riesci a finirlo? Gioca qui: ${url}`
+          : `Riesci a battere il mio tempo${time ? ` (${time})` : ""} in ${diff || "Sudoku"}? Gioca qui: ${url}`,
     },
   },
   pt: {
@@ -341,13 +365,16 @@ export const SHARE_I18N: Record<string, ShareI18nStrings> = {
       room_code: "Código da sala: ",
     },
     modal: {
-      title: "COMPARTILHAR CAPTURA",
+      title: "CONVIDAR AMIGO",
       generating: "Gerando captura...",
-      btn_share: "Compartilhar captura",
-      btn_save: "Salvar na galeria",
-      toast_copied: "Link copiado! Cole junto com a sua imagem.",
+      btn_share: "Convidar amigo",
+      btn_save: "Salvar imagem",
+      toast_copied: "Link de convite copiado! Compartilhe junto com sua imagem.",
       share_title: "Desafio Sudoku Sync",
-      share_msg: (url) => `Consegue me vencer? Jogue aqui: ${url}`,
+      share_msg: (url, diff, time, isWon) =>
+        isWon === false
+          ? `Travei no ${diff || "Sudoku"}! Consegue terminar este jogo? Jogue aqui: ${url}`
+          : `Consegue bater meu tempo${time ? ` (${time})` : ""} no ${diff || "Sudoku"}? Jogue aqui: ${url}`,
     },
   },
 };
@@ -1088,9 +1115,12 @@ export function buildFreshChallengeUrl(
   const hasVerifiedRoom = Boolean(verifiedRoomCode && verifiedRoomCode.length > 0);
   const domainText = isCrazyGamesActive() ? "Play on CrazyGames.com" : "sudokusync.com";
   const displayUrl = hasVerifiedRoom ? `${domainText} | Room Code: ${verifiedRoomCode}` : domainText;
+  const shareUrl = hasVerifiedRoom
+    ? `${origin}/?room=${verifiedRoomCode}${senderQuery}`
+    : `${origin}/?challenge=${challengeId}${senderQuery}`;
 
   return {
-    fullUrl: `${origin}/?challenge=${challengeId}${senderQuery}`,
+    fullUrl: shareUrl,
     displayUrl,
     extractedRoomCode: verifiedRoomCode,
     challengeId,

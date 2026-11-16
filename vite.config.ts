@@ -101,12 +101,20 @@ function applyMetadataToHtmlShell(
       `<meta property="og:image" content="${SEO_SITE_ORIGIN}/logo.png" />`
     )
     .replace(
+      /<meta\s+property="og:image:secure_url"\s+content="[^"]*"\s*\/?>/i,
+      `<meta property="og:image:secure_url" content="${SEO_SITE_ORIGIN}/logo.png" />`
+    )
+    .replace(
       /<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/?>/i,
       `<meta name="twitter:title" content="${safeTitle}" />`
     )
     .replace(
       /<meta\s+name="twitter:description"[\s\S]*?content="[^"]*"\s*\/?>/i,
       `<meta name="twitter:description"\n    content="${safeDesc}" />`
+    )
+    .replace(
+      /<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/?>/i,
+      `<meta name="twitter:image" content="${SEO_SITE_ORIGIN}/logo.png" />`
     )
     .replace(
       /href="\.\/(favicon[^"]*|logo[^"]*|apple-touch-icon[^"]*|manifest\.json)"/gi,

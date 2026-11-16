@@ -3,6 +3,7 @@ import { ShareIcon } from "./ShareIcon";
 import { ShareDifficulty } from "../../utils/canvasShare";
 import { SharePreviewModal } from "./SharePreviewModal";
 import { SudokuBoardState } from "../game/SudokuBoard";
+import { useTranslation } from "../../i18n/useTranslation";
 
 export interface ShareActionWrapperProps {
   boardState: SudokuBoardState | null;
@@ -20,6 +21,7 @@ export interface ShareActionWrapperProps {
   playClickSound?: () => void;
   className?: string;
   onEnsureRoomCreated?: () => Promise<string | null>;
+  language?: string;
 }
 
 export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
@@ -38,7 +40,10 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
   playClickSound,
   className = "",
   onEnsureRoomCreated,
+  language: propLanguage,
 }) => {
+  const { language: hookLanguage } = useTranslation();
+  const activeLang = propLanguage || hookLanguage || "en";
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isProvisioning, setIsProvisioning] = useState<boolean>(false);
   const [verifiedRoomCode, setVerifiedRoomCode] = useState<string | undefined>(() =>
@@ -122,6 +127,7 @@ export const ShareActionWrapper: React.FC<ShareActionWrapperProps> = ({
         darkMode={darkMode}
         roomCode={verifiedRoomCode}
         playClickSound={playClickSound}
+        language={activeLang}
       />
     </>
   );
