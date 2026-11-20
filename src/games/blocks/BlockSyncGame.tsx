@@ -3430,7 +3430,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             filled === 1 ? (
               <div
                 key={`${piece.uid}-${r}-${c}`}
-                className={`w-full h-full aspect-square rounded-[18%] ${tileClasses[piece.color]}`}
+                className={`w-full h-full aspect-square rounded-[24%] ${tileClasses[piece.color]}`}
               />
             ) : (
               <div
@@ -3755,7 +3755,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             {/* Left (1fr): Current Score Card */}
             <div
               aria-label="Current Score"
-              className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-2xl border-none flex flex-col items-center justify-center transition-colors duration-300 ${darkMode
+              className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-[clamp(10px,3vw,16px)] border-none flex flex-col items-center justify-center transition-colors duration-300 ${darkMode
                 ? "bg-[#1B242E] shadow-[0_6px_18px_rgba(0,0,0,0.34)]"
                 : "bg-[#E6F1F8]/95 shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
                 }`}
@@ -3777,7 +3777,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
             {/* Center (auto): Soft Dock for Sound, Multiplayer & Help */}
             <div
-              className={`h-[48px] px-1.5 rounded-2xl border-none flex items-center justify-center gap-1 shrink-0 transition-colors duration-300 ${darkMode
+              className={`h-[48px] px-1.5 rounded-[clamp(10px,3vw,16px)] border-none flex items-center justify-center gap-1 shrink-0 transition-colors duration-300 ${darkMode
                 ? "bg-[#1B242E] shadow-[0_6px_18px_rgba(0,0,0,0.34)]"
                 : "bg-[#E6F1F8]/95 shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
                 }`}
@@ -3828,7 +3828,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             <div
               id="block-sync-best-card"
               aria-label="Best Score"
-              className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-2xl border-none flex flex-col items-center justify-center transition-all duration-[260ms] ${bestCardGoldPulse
+              className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-[clamp(10px,3vw,16px)] border-none flex flex-col items-center justify-center transition-all duration-[260ms] ${bestCardGoldPulse
                 ? darkMode
                   ? "bg-[#2B2618] ring-2 ring-[#F9CF43]/70 shadow-[0_0_20px_rgba(249,207,67,0.28)] scale-[1.03]"
                   : "bg-amber-100/95 ring-2 ring-amber-400/75 shadow-[0_6px_20px_rgba(245,158,11,0.25)] scale-[1.03]"
@@ -3862,9 +3862,9 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           {/* Centered 9x9 Board with Crisp Outer Border & 3x3 Sub-Grid Tinting */}
           <section
             aria-label="Block Sync 9 by 9 Board"
-            className={`relative w-full aspect-square p-2.5 sm:p-3.5 rounded-3xl backdrop-blur-md transition-colors duration-300 ${darkMode
-              ? "bg-[#1B2530] border border-[#6C8BA8]/30 shadow-[0_14px_38px_rgba(0,0,0,0.52)]"
-              : "bg-[#E2EFF8]/95 border border-[#96BCD9]/55 shadow-[0_12px_36px_rgba(44,62,80,0.08)]"
+            className={`relative w-full aspect-square p-2.5 sm:p-3.5 rounded-[clamp(16px,4.8vw,24px)] backdrop-blur-md transition-colors duration-300 ${darkMode
+              ? "bg-[#212D3A] border border-slate-600/35 shadow-[0_14px_38px_rgba(0,0,0,0.52)]"
+              : "bg-[#D1E4F3]/95 border border-[#B7D2E8]/60 shadow-[0_12px_36px_rgba(44,62,80,0.08)]"
               }`}
           >
             {/* Non-shifting Floating Combo / Clear Points Pill */}
@@ -3907,7 +3907,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
             <div
               ref={boardGridRef}
-              className="relative w-full h-full grid grid-cols-9 grid-rows-9 gap-1 sm:gap-1.5"
+              className="w-full h-full grid grid-cols-9 grid-rows-9 gap-1 sm:gap-1.5"
             >
               {boardState.map((rowArr, rowIdx) =>
                 rowArr.map((cell, colIdx) => {
@@ -3935,18 +3935,16 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
                   const emptyCellClass = darkMode
                     ? isAltSudokuBox
-                      ? "bg-[#253545] border border-[#8CB4D9]/28 shadow-[inset_0_2px_6px_rgba(0,0,0,0.52)]"
-                      : "bg-[#16202B] border border-[#5F7E9C]/26 shadow-[inset_0_2px_6px_rgba(0,0,0,0.62)]"
+                      ? "border-none bg-[#2B3B4C] shadow-[inset_0_2px_6px_rgba(0,0,0,0.50)]"
+                      : "border-none bg-[#11171F] shadow-[inset_0_3px_7px_rgba(0,0,0,0.72)]"
                     : isAltSudokuBox
-                      ? "bg-[#CEE3F3]/90 border border-[#6E9EC8]/42 shadow-[inset_0_2px_5px_rgba(78,120,160,0.26)]"
-                      : "bg-white/95 border border-[#8EB4D4]/45 shadow-[inset_0_2px_5px_rgba(92,134,172,0.22)]";
+                      ? "border-none bg-[#BDD9EE]/95 shadow-[inset_0_2px_6px_rgba(88,128,166,0.30)]"
+                      : "border-none bg-white shadow-[inset_0_2px_6px_rgba(116,154,186,0.28)]";
 
                   return (
                     <div
                       key={`block-sync-cell-${rowIdx}-${colIdx}`}
-                      className={`relative w-full h-full aspect-square rounded-[18%] transition-all duration-150 ${
-                        cell || isHovered ? "z-[2]" : ""
-                      } ${cell
+                      className={`relative w-full h-full aspect-square rounded-[24%] transition-all duration-150 ${cell
                         ? `${tileClasses[cell.color]} ${cell.isClearing
                           ? `${cell.isComboClear
                             ? "block-sync-combo-vanishing-cell"
@@ -3973,30 +3971,6 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                   );
                 })
               )}
-
-              {/* Zero-layout-shift 3x3 Sub-Grid Hairline Overlay */}
-              <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1]">
-                <div
-                  className={`absolute inset-y-0.5 left-[33.3333%] -translate-x-1/2 w-[1px] rounded-full ${
-                    darkMode ? "bg-[#7DA6CC]/22" : "bg-[#5A8FBE]/28"
-                  }`}
-                />
-                <div
-                  className={`absolute inset-y-0.5 left-[66.6667%] -translate-x-1/2 w-[1px] rounded-full ${
-                    darkMode ? "bg-[#7DA6CC]/22" : "bg-[#5A8FBE]/28"
-                  }`}
-                />
-                <div
-                  className={`absolute inset-x-0.5 top-[33.3333%] -translate-y-1/2 h-[1px] rounded-full ${
-                    darkMode ? "bg-[#7DA6CC]/22" : "bg-[#5A8FBE]/28"
-                  }`}
-                />
-                <div
-                  className={`absolute inset-x-0.5 top-[66.6667%] -translate-y-1/2 h-[1px] rounded-full ${
-                    darkMode ? "bg-[#7DA6CC]/22" : "bg-[#5A8FBE]/28"
-                  }`}
-                />
-              </div>
             </div>
           </section>
         </div>
@@ -4005,7 +3979,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         <section
           ref={trayContainerRef}
           aria-label="Block Sync Piece Spawner Tray"
-          className={`w-full max-w-[min(92vw,424px,47dvh)] h-24 sm:h-28 px-2.5 sm:px-3.5 py-2 rounded-3xl border-none backdrop-blur-md flex items-center justify-between gap-2 sm:gap-2.5 overflow-hidden shrink-0 transition-colors duration-300 ${darkMode
+          className={`w-full max-w-[min(92vw,424px,47dvh)] h-24 sm:h-28 px-2.5 sm:px-3.5 py-2 rounded-[clamp(16px,4.8vw,24px)] border-none backdrop-blur-md flex items-center justify-between gap-2 sm:gap-2.5 overflow-hidden shrink-0 transition-colors duration-300 ${darkMode
             ? "bg-[#1B242E] shadow-[0_10px_30px_rgba(0,0,0,0.42)]"
             : "bg-[#E6F1F8]/85 shadow-[0_10px_30px_rgba(44,62,80,0.06)]"
             }`}
