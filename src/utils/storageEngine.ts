@@ -82,6 +82,11 @@ export const STORAGE_KEYS = {
   ACTIVE_USER: "sudoku_active_user",
   VAULT_GUEST: "sudoku_vault_guest",
   VAULT_PREFIX: "sudoku_vault_",
+  BLOCKS_VAULT_GUEST: "blocks_guest_vault",
+  BLOCKS_VAULT_PREFIX: "blocks_vault_",
+  BLOCKS_SAVED_SESSION_GUEST: "blocks_guest_savedSession",
+  BLOCKS_SAVED_SESSION_PREFIX: "blocks_user_",
+  BLOCKS_SAVED_SESSION_SUFFIX: "_savedSession",
   LAST_AUTH_UID: "sudoku_last_auth_uid",
   ACTIVE_GAME: "sudoku_active_game",
   SAVED_SESSION: "sudoku_savedSession",
@@ -92,29 +97,44 @@ export const STORAGE_KEYS = {
 } as const;
 
 /**
- * Returns the scoped vault storage key for a given user identifier.
- * Guests and anonymous un-synced sessions resolve to 'sudoku_vault_guest'.
+ * Resolves whether an identifier belongs to a guest/anonymous session so
+ * guest data never writes into an authenticated UID namespace.
  */
-export function getVaultKey(uid?: string | null): string {
-  if (!uid || uid === "guest" || uid === "GUEST" || uid.startsWith("GUEST_") || uid === "GUEST_ANON") {
-    return STORAGE_KEYS.VAULT_GUEST;
+function isGuestVaultIdentity(uid?: string | null): boolean {
+  if (
+    !uid ||
+    uid === "guest" ||
+    uid === "GUEST" ||
+    uid.startsWith("GUEST_") ||
+    uid === "GUEST_ANON"
+  ) {
+    return true;
   }
 
-  // Strictly enforce guest vault isolation:
-  // If the uid matches an anonymous Firebase user or has no email, resolve strictly to guest vault.
-  // Authenticated Google users (user.email && !user.isAnonymous) resolve to sudoku_vault_${googleUid}.
   try {
     const currentAuthUser = auth?.currentUser;
     if (currentAuthUser && currentAuthUser.uid === uid) {
       if (currentAuthUser.isAnonymous || !currentAuthUser.email) {
-        return STORAGE_KEYS.VAULT_GUEST;
+        return true;
       }
     }
     const activeAuthUid = getActiveAuthUid();
-    if (!activeAuthUid && uid && currentAuthUser?.isAnonymous) {
-      return STORAGE_KEYS.VAULT_GUEST;
+    if (!activeAuthUid && currentAuthUser?.isAnonymous) {
+      return true;
     }
   } catch {}
+
+  return false;
+}
+
+/**
+ * Returns the scoped vault storage key for a given user identifier.
+ * Guests and anonymous un-synced sessions resolve to 'sudoku_vault_guest'.
+ */
+export function getVaultKey(uid?: string | null): string {
+  if (isGuestVaultIdentity(uid)) {
+    return STORAGE_KEYS.VAULT_GUEST;
+  }
 
   return `${STORAGE_KEYS.VAULT_PREFIX}${uid}`;
 }
@@ -861,6 +881,640 @@ export function saveSettings(settings: Partial<DeviceSettings>): DeviceSettings 
   } catch (err) {
     console.error("[StorageEngine] Failed to save settings:", err);
     return settings as DeviceSettings;
+  }
+}
+
+// ============================================================================
+// 6. BLOCK SYNC VAULT (blocks_vault_${uid} / blocks_guest_vault)
+// ============================================================================
+
+export interface BlocksRunEntry {
+  id: string;
+  score: number;
+  achievedAt: number;
+}
+
+export interface BlocksMatchStandingEntry {
+  uid: string;
+  name: string;
+  score: number;
+  isCurrentUser?: boolean;
+}
+
+export interface BlocksMatchRecord {
+  id: string;
+  score: number;
+  bestAtTime: number;
+  isNewBest: boolean;
+  percentile: number;
+  mode: "solo" | "multiplayer";
+  boardSnapshot: (string | null)[][];
+  roomCode?: string;
+  roomStandings?: BlocksMatchStandingEntry[];
+  playedAt: string;
+}
+
+export interface BlocksVault {
+  bestScore: number;
+  updatedAt: number;
+  gamesPlayed?: number;
+  topRuns?: BlocksRunEntry[];
+  recentMatches?: BlocksMatchRecord[];
+}
+
+const MAX_BLOCKS_TOP_RUNS = 15;
+const MAX_BLOCKS_RECENT_MATCHES = 20;
+
+function sanitizeBlocksTopRuns(raw: unknown): BlocksRunEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const valid: BlocksRunEntry[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const candidate = item as Record<string, unknown>;
+    const score = Math.max(0, Math.floor(Number(candidate.score) || 0));
+    const achievedAt = Math.max(0, Number(candidate.achievedAt) || 0);
+    const id =
+      typeof candidate.id === "string" && candidate.id.trim().length > 0
+        ? candidate.id
+        : `run-${achievedAt}-${score}-${valid.length}`;
+    valid.push({ id, score, achievedAt });
+  }
+  valid.sort((a, b) => b.score - a.score || b.achievedAt - a.achievedAt);
+  return valid.slice(0, MAX_BLOCKS_TOP_RUNS);
+}
+
+function sanitizeBlocksBoardSnapshot(raw: unknown): (string | null)[][] {
+  if (!Array.isArray(raw) || raw.length !== 9) return [];
+  const rows: (string | null)[][] = [];
+  for (const rawRow of raw) {
+    if (!Array.isArray(rawRow) || rawRow.length !== 9) return [];
+    rows.push(
+      rawRow.map((cell) =>
+        typeof cell === "string" && cell.trim().length > 0 ? cell : null
+      )
+    );
+  }
+  return rows;
+}
+
+function sanitizeBlocksRoomStandings(
+  raw: unknown
+): BlocksMatchStandingEntry[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const entries: BlocksMatchStandingEntry[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const candidate = item as Record<string, unknown>;
+    const uid =
+      typeof candidate.uid === "string" ? candidate.uid.trim() : "";
+    const name =
+      typeof candidate.name === "string" && candidate.name.trim().length > 0
+        ? candidate.name.trim()
+        : "Player";
+    const score = Math.max(0, Math.floor(Number(candidate.score) || 0));
+    entries.push({
+      uid,
+      name,
+      score,
+      ...(candidate.isCurrentUser ? { isCurrentUser: true } : {}),
+    });
+  }
+  return entries.length > 0 ? entries : undefined;
+}
+
+function sanitizeBlocksRecentMatches(raw: unknown): BlocksMatchRecord[] {
+  if (!Array.isArray(raw)) return [];
+  const valid: BlocksMatchRecord[] = [];
+  const seenIds = new Set<string>();
+
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const candidate = item as Record<string, unknown>;
+    const score = Math.max(0, Math.floor(Number(candidate.score) || 0));
+    const bestAtTime = Math.max(
+      score,
+      Math.floor(Number(candidate.bestAtTime) || 0)
+    );
+    const percentile = Math.min(
+      99,
+      Math.max(0, Math.round(Number(candidate.percentile) || 0))
+    );
+    const mode: "solo" | "multiplayer" =
+      candidate.mode === "multiplayer" ? "multiplayer" : "solo";
+    const playedAt =
+      typeof candidate.playedAt === "string" &&
+      !Number.isNaN(Date.parse(candidate.playedAt))
+        ? candidate.playedAt
+        : new Date().toISOString();
+    const id =
+      typeof candidate.id === "string" && candidate.id.trim().length > 0
+        ? candidate.id
+        : `match-${Date.parse(playedAt) || Date.now()}-${score}-${valid.length}`;
+
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+
+    const roomCode =
+      typeof candidate.roomCode === "string" && candidate.roomCode.trim().length > 0
+        ? candidate.roomCode.trim()
+        : undefined;
+    const roomStandings = sanitizeBlocksRoomStandings(candidate.roomStandings);
+
+    valid.push({
+      id,
+      score,
+      bestAtTime,
+      isNewBest: Boolean(candidate.isNewBest),
+      percentile,
+      mode,
+      boardSnapshot: sanitizeBlocksBoardSnapshot(candidate.boardSnapshot),
+      ...(roomCode ? { roomCode } : {}),
+      ...(roomStandings ? { roomStandings } : {}),
+      playedAt,
+    });
+  }
+
+  valid.sort((a, b) => {
+    const timeDiff = (Date.parse(b.playedAt) || 0) - (Date.parse(a.playedAt) || 0);
+    return timeDiff;
+  });
+
+  return valid.slice(0, MAX_BLOCKS_RECENT_MATCHES);
+}
+
+/**
+ * Returns the UID-isolated Block Sync vault key (`blocks_vault_${uid}` or `blocks_guest_vault`).
+ */
+export function getBlocksVaultKey(uid?: string | null): string {
+  if (isGuestVaultIdentity(uid)) {
+    return STORAGE_KEYS.BLOCKS_VAULT_GUEST;
+  }
+  return `${STORAGE_KEYS.BLOCKS_VAULT_PREFIX}${uid}`;
+}
+
+/**
+ * Loads the persisted Block Sync vault for the given user or guest identity.
+ */
+export function loadBlocksVault(uid?: string | null): BlocksVault {
+  if (typeof window === "undefined") {
+    return { bestScore: 0, updatedAt: 0, gamesPlayed: 0, topRuns: [], recentMatches: [] };
+  }
+
+  const key = getBlocksVaultKey(uid);
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        const bestScore = Math.max(0, Math.floor(Number(parsed.bestScore) || 0));
+        const updatedAt = Math.max(0, Number(parsed.updatedAt) || 0);
+        const gamesPlayed = Math.max(0, Math.floor(Number(parsed.gamesPlayed) || 0));
+        const topRuns = sanitizeBlocksTopRuns(parsed.topRuns);
+        const recentMatches = sanitizeBlocksRecentMatches(parsed.recentMatches);
+        return { bestScore, updatedAt, gamesPlayed, topRuns, recentMatches };
+      }
+    }
+  } catch (err) {
+    console.warn(`[StorageEngine] Error loading blocks vault for key "${key}":`, err);
+  }
+
+  return { bestScore: 0, updatedAt: 0, gamesPlayed: 0, topRuns: [], recentMatches: [] };
+}
+
+/**
+ * Saves the Block Sync vault cleanly under the UID-isolated storage key.
+ */
+export function saveBlocksVault(vault: BlocksVault, uid?: string | null): boolean {
+  if (typeof window === "undefined") return false;
+  const key = getBlocksVaultKey(uid);
+  const topRuns = sanitizeBlocksTopRuns(vault.topRuns);
+  const recentMatches = sanitizeBlocksRecentMatches(vault.recentMatches);
+  const highestRunScore = topRuns[0]?.score ?? 0;
+  const gamesPlayed = Math.max(
+    0,
+    Math.floor(Number(vault.gamesPlayed) || 0),
+    recentMatches.length
+  );
+  const sanitized: BlocksVault = {
+    bestScore: Math.max(0, Math.floor(Number(vault.bestScore) || 0), highestRunScore),
+    updatedAt: Number(vault.updatedAt) || Date.now(),
+    gamesPlayed,
+    topRuns,
+    recentMatches,
+  };
+
+  try {
+    localStorage.setItem(key, JSON.stringify(sanitized));
+    return true;
+  } catch (err) {
+    console.error(`[StorageEngine] Failed to save blocks vault "${key}":`, err);
+    return false;
+  }
+}
+
+/**
+ * Compares a finished game's score against the persisted Best Score, records the
+ * completed run in the UID-isolated top runs list (preserving legacy prior best if
+ * runs history was empty), and updates the Block Sync vault without clobbering
+ * `gamesPlayed` or `recentMatches`.
+ */
+export function updateBlocksBestScore(
+  score: number,
+  uid?: string | null
+): {
+  previousBestScore: number;
+  bestScore: number;
+  isNewBest: boolean;
+  currentRunId: string;
+  topRuns: BlocksRunEntry[];
+} {
+  const safeScore = Math.max(0, Math.floor(Number(score) || 0));
+  const current = loadBlocksVault(uid);
+  const previousBestScore = current.bestScore;
+  const now = Date.now();
+  const currentRunId = `run-${now}-${Math.random().toString(36).slice(2, 7)}`;
+
+  const existingRuns = [...(current.topRuns ?? [])];
+  if (existingRuns.length === 0 && previousBestScore > 0) {
+    existingRuns.push({
+      id: `legacy-best-${current.updatedAt || 0}`,
+      score: previousBestScore,
+      achievedAt: current.updatedAt || 0,
+    });
+  }
+  existingRuns.push({
+    id: currentRunId,
+    score: safeScore,
+    achievedAt: now,
+  });
+
+  const sortedRuns = sanitizeBlocksTopRuns(existingRuns);
+  const nextBestScore = Math.max(previousBestScore, safeScore);
+  const isNewBest = safeScore > previousBestScore;
+
+  saveBlocksVault(
+    {
+      bestScore: nextBestScore,
+      updatedAt: now,
+      gamesPlayed: current.gamesPlayed,
+      topRuns: sortedRuns,
+      recentMatches: current.recentMatches,
+    },
+    uid
+  );
+
+  return {
+    previousBestScore,
+    bestScore: nextBestScore,
+    isNewBest,
+    currentRunId,
+    topRuns: sortedRuns,
+  };
+}
+
+/**
+ * Records a completed Block Sync match into UID-isolated `recentMatches` (up to 20
+ * reverse-chronological entries) without breaking `bestScore`, `gamesPlayed`, or `topRuns`.
+ */
+export function recordBlocksMatchHistory(
+  uid: string | null | undefined,
+  record: Omit<BlocksMatchRecord, "id" | "playedAt"> & {
+    id?: string;
+    playedAt?: string;
+  }
+): BlocksMatchRecord[] {
+  const current = loadBlocksVault(uid);
+  const existingMatches = current.recentMatches ?? [];
+  const entryId =
+    typeof record.id === "string" && record.id.trim().length > 0
+      ? record.id.trim()
+      : `match-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+  if (existingMatches.some((m) => m.id === entryId)) {
+    return existingMatches;
+  }
+
+  const normalizedRecord: BlocksMatchRecord = {
+    id: entryId,
+    score: Math.max(0, Math.floor(Number(record.score) || 0)),
+    bestAtTime: Math.max(
+      Math.floor(Number(record.score) || 0),
+      Math.floor(Number(record.bestAtTime) || 0)
+    ),
+    isNewBest: Boolean(record.isNewBest),
+    percentile: Math.min(99, Math.max(0, Math.round(Number(record.percentile) || 0))),
+    mode: record.mode === "multiplayer" ? "multiplayer" : "solo",
+    boardSnapshot: sanitizeBlocksBoardSnapshot(record.boardSnapshot),
+    ...(record.roomCode ? { roomCode: record.roomCode } : {}),
+    ...(record.roomStandings && record.roomStandings.length > 0
+      ? { roomStandings: record.roomStandings }
+      : {}),
+    playedAt:
+      typeof record.playedAt === "string" &&
+      !Number.isNaN(Date.parse(record.playedAt))
+        ? record.playedAt
+        : new Date().toISOString(),
+  };
+
+  const nextMatches = sanitizeBlocksRecentMatches([
+    normalizedRecord,
+    ...existingMatches,
+  ]);
+  const nextBestScore = Math.max(
+    current.bestScore,
+    normalizedRecord.score,
+    normalizedRecord.bestAtTime
+  );
+
+  saveBlocksVault(
+    {
+      bestScore: nextBestScore,
+      updatedAt: Date.now(),
+      gamesPlayed: (current.gamesPlayed ?? 0) + 1,
+      topRuns: current.topRuns,
+      recentMatches: nextMatches,
+    },
+    uid
+  );
+
+  return nextMatches;
+}
+
+/**
+ * Returns up to 20 recent Block Sync matches in reverse-chronological order for the UID.
+ */
+export function getBlocksMatchHistory(uid?: string | null): BlocksMatchRecord[] {
+  return loadBlocksVault(uid).recentMatches ?? [];
+}
+
+// ============================================================================
+// 7. BLOCK SYNC RESUME SESSION (blocks_user_${uid}_savedSession / blocks_guest_savedSession)
+// ============================================================================
+
+export interface BlocksSavedBoardCell {
+  color: string;
+  isClearing?: boolean;
+}
+
+export interface BlocksSavedPiece {
+  uid: string;
+  shapeId: string;
+  variantId: string;
+  shape: readonly (readonly (0 | 1)[])[];
+  color: string;
+}
+
+export interface BlocksSavedMoveSnapshot {
+  boardState: (BlocksSavedBoardCell | null)[][];
+  currentBlocks: (BlocksSavedPiece | null)[];
+  score: number;
+  clearStreak: number;
+  lastTrayShapeIds: string[];
+}
+
+export interface BlocksSavedSession {
+  boardState: (BlocksSavedBoardCell | null)[][];
+  currentBlocks: (BlocksSavedPiece | null)[];
+  score: number;
+  clearStreak: number;
+  lastTrayShapeIds: string[];
+  historyStack: BlocksSavedMoveSnapshot[];
+  updatedAt: number;
+}
+
+const BLOCKS_BOARD_DIM = 9;
+const BLOCKS_TRAY_COUNT = 3;
+const BLOCKS_MAX_HISTORY = 25;
+
+function sanitizeBlocksBoard(rawBoard: unknown): (BlocksSavedBoardCell | null)[][] | null {
+  if (!Array.isArray(rawBoard) || rawBoard.length !== BLOCKS_BOARD_DIM) return null;
+
+  const cleanBoard: (BlocksSavedBoardCell | null)[][] = [];
+  for (let r = 0; r < BLOCKS_BOARD_DIM; r += 1) {
+    const rawRow = rawBoard[r];
+    if (!Array.isArray(rawRow) || rawRow.length !== BLOCKS_BOARD_DIM) return null;
+
+    const cleanRow: (BlocksSavedBoardCell | null)[] = [];
+    for (let c = 0; c < BLOCKS_BOARD_DIM; c += 1) {
+      const cell = rawRow[c];
+      if (cell === null) {
+        cleanRow.push(null);
+      } else if (
+        cell &&
+        typeof cell === "object" &&
+        typeof (cell as { color?: unknown }).color === "string"
+      ) {
+        const typedCell = cell as { color: string; isClearing?: unknown };
+        // Strip transient vanish animation cells cleanly so resumed boards never freeze
+        cleanRow.push(
+          typedCell.isClearing === true
+            ? null
+            : { color: typedCell.color, isClearing: false }
+        );
+      } else {
+        return null;
+      }
+    }
+    cleanBoard.push(cleanRow);
+  }
+  return cleanBoard;
+}
+
+function sanitizeBlocksPiece(rawPiece: unknown): BlocksSavedPiece | null | undefined {
+  if (rawPiece === null) return null;
+  if (!rawPiece || typeof rawPiece !== "object") return undefined;
+
+  const p = rawPiece as Record<string, unknown>;
+  if (
+    typeof p.uid !== "string" ||
+    typeof p.shapeId !== "string" ||
+    typeof p.variantId !== "string" ||
+    typeof p.color !== "string" ||
+    !Array.isArray(p.shape) ||
+    p.shape.length === 0
+  ) {
+    return undefined;
+  }
+
+  const colCount = Array.isArray(p.shape[0]) ? p.shape[0].length : 0;
+  if (colCount === 0) return undefined;
+
+  const cleanShape: (0 | 1)[][] = [];
+  for (let r = 0; r < p.shape.length; r += 1) {
+    const row = p.shape[r];
+    if (!Array.isArray(row) || row.length !== colCount) return undefined;
+    const cleanRow: (0 | 1)[] = [];
+    for (let c = 0; c < row.length; c += 1) {
+      const bit = row[c];
+      if (bit !== 0 && bit !== 1) return undefined;
+      cleanRow.push(bit);
+    }
+    cleanShape.push(cleanRow);
+  }
+
+  return {
+    uid: p.uid,
+    shapeId: p.shapeId,
+    variantId: p.variantId,
+    shape: cleanShape,
+    color: p.color,
+  };
+}
+
+function sanitizeBlocksTray(rawTray: unknown): (BlocksSavedPiece | null)[] | null {
+  if (!Array.isArray(rawTray) || rawTray.length !== BLOCKS_TRAY_COUNT) return null;
+  const cleanTray: (BlocksSavedPiece | null)[] = [];
+  let hasPiece = false;
+
+  for (let i = 0; i < BLOCKS_TRAY_COUNT; i += 1) {
+    const cleanPiece = sanitizeBlocksPiece(rawTray[i]);
+    if (cleanPiece === undefined) return null;
+    if (cleanPiece !== null) hasPiece = true;
+    cleanTray.push(cleanPiece);
+  }
+
+  return hasPiece ? cleanTray : null;
+}
+
+function sanitizeBlocksSnapshot(rawSnap: unknown): BlocksSavedMoveSnapshot | null {
+  if (!rawSnap || typeof rawSnap !== "object") return null;
+  const s = rawSnap as Record<string, unknown>;
+  const boardState = sanitizeBlocksBoard(s.boardState);
+  const currentBlocks = sanitizeBlocksTray(s.currentBlocks);
+  if (!boardState || !currentBlocks) return null;
+  if (typeof s.score !== "number" || !Number.isFinite(s.score) || s.score < 0) return null;
+
+  return {
+    boardState,
+    currentBlocks,
+    score: Math.floor(s.score),
+    clearStreak: Math.max(0, Math.floor(Number(s.clearStreak) || 0)),
+    lastTrayShapeIds: Array.isArray(s.lastTrayShapeIds)
+      ? s.lastTrayShapeIds.filter((id): id is string => typeof id === "string")
+      : [],
+  };
+}
+
+/**
+ * Returns the UID-isolated Block Sync saved session key
+ * (`blocks_user_${uid}_savedSession` or `blocks_guest_savedSession`).
+ */
+export function getBlocksSavedSessionKey(uid?: string | null): string {
+  if (isGuestVaultIdentity(uid)) {
+    return STORAGE_KEYS.BLOCKS_SAVED_SESSION_GUEST;
+  }
+  return `${STORAGE_KEYS.BLOCKS_SAVED_SESSION_PREFIX}${uid}${STORAGE_KEYS.BLOCKS_SAVED_SESSION_SUFFIX}`;
+}
+
+/**
+ * Persists the active in-progress Block Sync game session for resume continuity.
+ */
+export function saveBlocksSavedSession(
+  session: BlocksSavedSession,
+  uid?: string | null
+): boolean {
+  if (typeof window === "undefined") return false;
+  const key = getBlocksSavedSessionKey(uid);
+  const cleanBoard = sanitizeBlocksBoard(session.boardState);
+  const cleanTray = sanitizeBlocksTray(session.currentBlocks);
+  if (
+    !cleanBoard ||
+    !cleanTray ||
+    typeof session.score !== "number" ||
+    !Number.isFinite(session.score) ||
+    session.score < 0
+  ) {
+    return false;
+  }
+
+  const cleanHistory: BlocksSavedMoveSnapshot[] = Array.isArray(session.historyStack)
+    ? session.historyStack
+        .slice(-BLOCKS_MAX_HISTORY)
+        .map(sanitizeBlocksSnapshot)
+        .filter((snap): snap is BlocksSavedMoveSnapshot => snap !== null)
+    : [];
+
+  const sanitized: BlocksSavedSession = {
+    boardState: cleanBoard,
+    currentBlocks: cleanTray,
+    score: Math.floor(session.score),
+    clearStreak: Math.max(0, Math.floor(Number(session.clearStreak) || 0)),
+    lastTrayShapeIds: Array.isArray(session.lastTrayShapeIds)
+      ? session.lastTrayShapeIds.filter((id): id is string => typeof id === "string")
+      : [],
+    historyStack: cleanHistory,
+    updatedAt: Number(session.updatedAt) || Date.now(),
+  };
+
+  try {
+    localStorage.setItem(key, JSON.stringify(sanitized));
+    return true;
+  } catch (err) {
+    console.error(`[StorageEngine] Failed to save blocks session "${key}":`, err);
+    return false;
+  }
+}
+
+/**
+ * Loads and validates a saved in-progress Block Sync session, returning null when
+ * absent or malformed.
+ */
+export function loadBlocksSavedSession(uid?: string | null): BlocksSavedSession | null {
+  if (typeof window === "undefined") return null;
+  const key = getBlocksSavedSessionKey(uid);
+
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown> | null;
+    if (!parsed || typeof parsed !== "object") return null;
+
+    const boardState = sanitizeBlocksBoard(parsed.boardState);
+    const currentBlocks = sanitizeBlocksTray(parsed.currentBlocks);
+    if (
+      !boardState ||
+      !currentBlocks ||
+      typeof parsed.score !== "number" ||
+      !Number.isFinite(parsed.score) ||
+      parsed.score < 0
+    ) {
+      return null;
+    }
+
+    const historyStack: BlocksSavedMoveSnapshot[] = Array.isArray(parsed.historyStack)
+      ? parsed.historyStack
+          .slice(-BLOCKS_MAX_HISTORY)
+          .map(sanitizeBlocksSnapshot)
+          .filter((snap): snap is BlocksSavedMoveSnapshot => snap !== null)
+      : [];
+
+    return {
+      boardState,
+      currentBlocks,
+      score: Math.floor(parsed.score),
+      clearStreak: Math.max(0, Math.floor(Number(parsed.clearStreak) || 0)),
+      lastTrayShapeIds: Array.isArray(parsed.lastTrayShapeIds)
+        ? parsed.lastTrayShapeIds.filter((id): id is string => typeof id === "string")
+        : [],
+      historyStack,
+      updatedAt: Math.max(0, Number(parsed.updatedAt) || 0),
+    };
+  } catch (err) {
+    console.warn(`[StorageEngine] Error loading blocks session for key "${key}":`, err);
+    return null;
+  }
+}
+
+/**
+ * Clears the persisted in-progress Block Sync session for the active identity.
+ */
+export function clearBlocksSavedSession(uid?: string | null): void {
+  if (typeof window === "undefined") return;
+  const key = getBlocksSavedSessionKey(uid);
+  try {
+    localStorage.removeItem(key);
+  } catch (err) {
+    console.warn(`[StorageEngine] Failed to clear blocks session "${key}":`, err);
   }
 }
 

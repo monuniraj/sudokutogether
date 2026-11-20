@@ -27,6 +27,7 @@ import { saveDailyProgressToCloud, recordDailyCompletionToCloud, checkPlayerDail
 import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./features/dailyChallenge/types/daily.types";
 import { SudokuSolverScreen } from "./features/sudokuSolver/components/SudokuSolverScreen";
 import { SudokuRulesScreen } from "./features/sudokuRules/components/SudokuRulesScreen";
+import { BlockSyncGame } from "./games/blocks/BlockSyncGame";
 import { getRulesArticleCopy } from "./utils/rulesArticleTranslations";
 import { GuideArticleScreen } from "./features/guides/components/GuideArticleScreen";
 import {
@@ -61,6 +62,9 @@ const isSolverPath = (pathname?: string | null): boolean =>
 
 const isRulesPath = (pathname?: string | null): boolean =>
   Boolean(pathname && pathname.trim().replace(/\/+$/, "").toLowerCase() === "/rules");
+
+const isBlocksPath = (pathname?: string | null): boolean =>
+  Boolean(pathname && pathname.trim().toLowerCase().includes("/blocks"));
 import { solveCustomBoard } from "./features/sudokuSolver/services/solverEngine";
 import { updateCustomHistoryTime } from "./features/sudokuSolver/services/customHistoryService";
 import { countSolutionsBitmaskMRV, generateHumanGradedBoard } from "./services/humanDifficultyEngine";
@@ -1942,7 +1946,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<"sudoku" | "sandbox" | "kotlin-code" | "spec-docs">("sudoku");
   const [currentScreen, setCurrentScreen] = useState<
-    "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | "rules" | CompliancePageType | GuideScreenId
+    "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | "rules" | "blocks" | CompliancePageType | GuideScreenId
   >(() => {
     if (
       typeof window !== "undefined" &&
@@ -1952,6 +1956,7 @@ export default function App() {
       if (isDailyChallengePath(window.location.pathname)) return "daily-challenge";
       if (isSolverPath(window.location.pathname)) return "solver";
       if (isRulesPath(window.location.pathname)) return "rules";
+      if (isBlocksPath(window.location.pathname)) return "blocks";
       const guideSlug = parseGuideSlugFromPath(window.location.pathname);
       if (guideSlug) return toGuideScreen(guideSlug);
       const legalRoute = parseComplianceRoute(window.location.pathname);
@@ -2088,6 +2093,7 @@ export default function App() {
       if (isDailyChallengePath(window.location.pathname)) return ["daily-challenge"];
       if (isSolverPath(window.location.pathname)) return ["solver"];
       if (isRulesPath(window.location.pathname)) return ["rules"];
+      if (isBlocksPath(window.location.pathname)) return ["blocks"];
       const guideSlug = parseGuideSlugFromPath(window.location.pathname);
       if (guideSlug) return [toGuideScreen(guideSlug)];
       const legalRoute = parseComplianceRoute(window.location.pathname);
@@ -2098,7 +2104,7 @@ export default function App() {
   const isProgrammaticBackRef = useRef<boolean>(false);
 
   const navigateToScreen = (
-    screen: "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | "rules" | CompliancePageType | GuideScreenId
+    screen: "home" | "status" | "settings" | "game" | "login" | "together" | "solver" | "daily-challenge" | "rules" | "blocks" | CompliancePageType | GuideScreenId
   ) => {
     setCurrentScreen(screen);
     setNavigationHistory(prev => {
@@ -2118,6 +2124,9 @@ export default function App() {
         } else if (screen === "rules") {
           nextUrl = "/rules";
           setRoutePathname("/rules");
+        } else if (screen === "blocks") {
+          nextUrl = "/blocks";
+          setRoutePathname("/blocks");
         } else if (targetGuideSlug) {
           nextUrl = GUIDE_PATHS[targetGuideSlug];
           setRoutePathname(nextUrl);
@@ -2128,6 +2137,7 @@ export default function App() {
           isDailyChallengePath(window.location.pathname) ||
           isSolverPath(window.location.pathname) ||
           isRulesPath(window.location.pathname) ||
+          isBlocksPath(window.location.pathname) ||
           Boolean(parseGuideSlugFromPath(window.location.pathname)) ||
           Boolean(parseComplianceRoute(window.location.pathname))
         ) {
@@ -2151,6 +2161,7 @@ export default function App() {
           (isDailyChallengePath(window.location.pathname) ||
             isSolverPath(window.location.pathname) ||
             isRulesPath(window.location.pathname) ||
+            isBlocksPath(window.location.pathname) ||
             Boolean(parseGuideSlugFromPath(window.location.pathname)) ||
             Boolean(parseComplianceRoute(window.location.pathname)))
         ) {
@@ -2172,6 +2183,7 @@ export default function App() {
         | "solver"
         | "daily-challenge"
         | "rules"
+        | "blocks"
         | CompliancePageType
         | GuideScreenId;
 
@@ -3340,7 +3352,14 @@ export default function App() {
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState<boolean>(false);
   const [showResetSettingsModal, setShowResetSettingsModal] = useState<boolean>(false);
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
+  const [showBlockSyncSettings, setShowBlockSyncSettings] = useState<boolean>(false);
   const [showDifficultySheet, setShowDifficultySheet] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (currentScreen !== "blocks") {
+      setShowBlockSyncSettings(false);
+    }
+  }, [currentScreen]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
   const [isConfirmingFactoryReset, setIsConfirmingFactoryReset] = useState<boolean>(false);
@@ -6847,11 +6866,14 @@ export default function App() {
       }
     })();
 
+    const isBlocksPath = typeof window !== "undefined" && window.location.pathname.includes('/blocks');
+
     const isStandaloneRoute =
       typeof window !== "undefined" &&
       (currentScreenRef.current === "rules" ||
         currentScreenRef.current === "solver" ||
         currentScreenRef.current === "daily-challenge" ||
+        currentScreenRef.current === "blocks" ||
         currentScreenRef.current === "privacy" ||
         currentScreenRef.current === "terms" ||
         currentScreenRef.current === "contact" ||
@@ -6860,6 +6882,7 @@ export default function App() {
         isRulesPath(window.location.pathname) ||
         isSolverPath(window.location.pathname) ||
         isDailyChallengePath(window.location.pathname) ||
+        isBlocksPath ||
         Boolean(parseGuideSlugFromPath(window.location.pathname)) ||
         Boolean(parseComplianceRoute(window.location.pathname)));
 
@@ -8415,6 +8438,13 @@ export default function App() {
       ) {
         setCurrentScreen("rules");
         setRoutePathname("/rules");
+      } else if (
+        !Capacitor.isNativePlatform() &&
+        !isCrazyGamesActive() &&
+        isBlocksPath(window.location.pathname)
+      ) {
+        setCurrentScreen("blocks");
+        setRoutePathname("/blocks");
       } else {
         if (!Capacitor.isNativePlatform() && !isCrazyGamesActive()) {
           setRoutePathname(window.location.pathname || "/");
@@ -15363,6 +15393,8 @@ export default function App() {
             navigateToScreen(toGuideScreen(guideSlug));
           } else if (isRulesPath(customSchemePath) || isRulesPath(urlObj.pathname)) {
             navigateToScreen("rules");
+          } else if (isBlocksPath(customSchemePath) || isBlocksPath(urlObj.pathname)) {
+            navigateToScreen("blocks");
           }
         }
       } catch (e) {
@@ -15973,6 +16005,24 @@ export default function App() {
       return;
     }
 
+    if (currentScreen === "blocks" || isBlocksPath(routePathname)) {
+      const blocksTitle = "Block Sync — Zen Block Puzzle | Mo Logic";
+      const blocksDesc = "Play Block Sync, a calm pastel 9x9 block puzzle by Mo Logic.";
+      const blocksCanonical = "https://sudokusync.com/blocks";
+      document.documentElement.lang = "en";
+      document.title = blocksTitle;
+      setMetaTag("name", "description", blocksDesc);
+      setMetaTag("property", "og:title", blocksTitle);
+      setMetaTag("property", "og:description", blocksDesc);
+      setMetaTag("property", "og:url", blocksCanonical);
+      setMetaTag("name", "twitter:title", blocksTitle);
+      setMetaTag("name", "twitter:description", blocksDesc);
+      const canonicalEl = document.querySelector('link[rel="canonical"]');
+      if (canonicalEl) canonicalEl.setAttribute("href", blocksCanonical);
+      clearHreflangLinks();
+      return;
+    }
+
     const activeGuideSlug = parseGuideScreen(currentScreen) || parseGuideSlugFromPath(routePathname);
     if (activeGuideSlug) {
       const guideMeta = getGuideCopy(language, activeGuideSlug);
@@ -16486,6 +16536,22 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [boardState, activeTab, currentScreen, pencilMode, visualizingBacktrack, isNumberFirstInputMode, lockedNum, activeKeypadNum, history.length, isPauseModalOpen, showHintRewardModal, showDifficultySheet, showMultiplayerForkModal, showCreateChallengeModal, showJoinRoomModal]);
 
+  // Global/Sudoku sound mute shortcut (M) — ignores text inputs and /blocks (handled inside BlockSyncGame)
+  useEffect(() => {
+    const handleMuteKey = (e: KeyboardEvent) => {
+      if (currentScreen === "blocks") return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (isEditableEventTarget(e.target)) return;
+      if (e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        handleToggleSoundEffects(!soundEffects);
+      }
+    };
+
+    window.addEventListener("keydown", handleMuteKey);
+    return () => window.removeEventListener("keydown", handleMuteKey);
+  }, [currentScreen, soundEffects, handleToggleSoundEffects]);
+
   const pushToHistory = () => {
     if (!boardState) return;
     const gridClone = boardState.grid.map(row => row.map(c => ({
@@ -16811,9 +16877,11 @@ export default function App() {
   // Web Instant-Play Auto-Start on initial mount (all web viewports, desktop & mobile web)
   useEffect(() => {
     if (webAutoStartedRef.current) return;
+    const isBlocksPath = typeof window !== "undefined" && window.location.pathname.includes('/blocks');
     if (
       hasInitialInviteRef.current ||
       currentScreenRef.current !== "home" ||
+      isBlocksPath ||
       (typeof window !== "undefined" &&
         (isDailyChallengePath(window.location.pathname) ||
           isSolverPath(window.location.pathname) ||
@@ -18877,11 +18945,25 @@ export default function App() {
             paddingTop: "env(safe-area-inset-top, 0px)",
             zIndex: 9999,
           }}
-          className={`select-none grid grid-cols-[auto_minmax(0,1fr)_auto] items-center px-2.5 sm:px-4 gap-1 sm:gap-2 transition-colors duration-200 touch-none overscroll-none ${darkMode
-            ? "bg-[#121212] shadow-[0_2px_12px_rgba(0,0,0,0.3)]"
-            : "bg-[#FDFBF7] shadow-[0_2px_12px_rgba(0,0,0,0.03)]"
+          className={`select-none grid grid-cols-[auto_minmax(0,1fr)_auto] items-center px-2.5 sm:px-4 gap-1 sm:gap-2 transition-colors duration-200 touch-none overscroll-none ${
+            currentScreen === "blocks"
+              ? darkMode
+                ? "bg-[#141A21] border-none shadow-none"
+                : "bg-[#F4F8FB] border-none shadow-none"
+              : darkMode
+                ? "bg-[#121212] shadow-[0_2px_12px_rgba(0,0,0,0.3)]"
+                : "bg-[#FDFBF7] shadow-[0_2px_12px_rgba(0,0,0,0.03)]"
             }`}
         >
+          {currentScreen === "blocks" && (
+            <div
+              aria-hidden="true"
+              className={`pointer-events-none absolute inset-x-0 top-full h-7 transition-colors duration-200 ${darkMode
+                ? "bg-gradient-to-b from-[#141A21] via-[#141A21]/70 to-transparent"
+                : "bg-gradient-to-b from-[#F4F8FB] via-[#F4F8FB]/70 to-transparent"
+                }`}
+            />
+          )}
           {/* Left Actions: Symmetrical 2-button container (Statistics/Back + Theme Quick-Toggle) */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 z-10 justify-start">
             {/* Button 1: Statistics Modal Trigger / Back button */}
@@ -18914,6 +18996,7 @@ export default function App() {
                   currentScreen === "solver" ||
                   currentScreen === "daily-challenge" ||
                   currentScreen === "rules" ||
+                  currentScreen === "blocks" ||
                   Boolean(parseGuideScreen(currentScreen)) ||
                   currentScreen === "privacy" ||
                   currentScreen === "terms" ||
@@ -18929,6 +19012,7 @@ export default function App() {
                       (isDailyChallengePath(window.location.pathname) ||
                         isSolverPath(window.location.pathname) ||
                         isRulesPath(window.location.pathname) ||
+                        isBlocksPath(window.location.pathname) ||
                         Boolean(parseGuideSlugFromPath(window.location.pathname)) ||
                         Boolean(parseComplianceRoute(window.location.pathname)))
                         ? "/"
@@ -19000,27 +19084,40 @@ export default function App() {
                 e.preventDefault();
                 handleNavigateHome();
               }}
-              aria-label="SudokuSync — Home"
+              aria-label={currentScreen === "blocks" ? "Block Sync — Home" : "SudokuSync — Home"}
               className="group max-w-full flex flex-col items-center justify-center rounded-xl border-none px-2 py-0.5 no-underline cursor-pointer select-none transition-opacity duration-150 hover:opacity-85 active:scale-[0.98]"
             >
-              <span className="text-[clamp(1rem,4.2vw,1.35rem)] font-black tracking-tight uppercase font-sans select-none leading-none pt-0.5 truncate max-w-full block">
-                <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
-                <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
-              </span>
-              {(() => {
-                const activeBadgeDiff = currentScreen === "home" ? homeContextDifficulty : (boardState?.difficulty || difficulty);
-                return (
-                  <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? (activeBadgeDiff === "EASY" ? "text-[#d1fae5]" : activeBadgeDiff === "MEDIUM" ? "text-[#fef08a]" : activeBadgeDiff === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : (activeBadgeDiff === "EASY" ? "text-[#065F46]" : activeBadgeDiff === "MEDIUM" ? "text-[#854D0E]" : activeBadgeDiff === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
-                    {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : currentScreen === "daily-challenge" ? t("dailyChallengeLabel") : currentScreen === "rules" ? t("sudokuRulesLabel") : parseGuideScreen(currentScreen) ? getGuideCopy(language, parseGuideScreen(currentScreen)!).badge : currentScreen === "privacy" ? t("privacyPolicy") : currentScreen === "terms" ? t("termsOfService") : currentScreen === "contact" ? t("contactUs") : currentScreen === "about" ? t("aboutUs") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
+              {currentScreen === "blocks" ? (
+                <>
+                  <span className="text-[clamp(1rem,4.2vw,1.35rem)] font-black tracking-tight uppercase font-sans select-none leading-none pt-0.5 truncate max-w-full block">
+                    <span className={`font-sans font-black transition-colors ${darkMode ? "text-slate-100" : "text-[#2C3E50]"}`}>BLOCK</span>
+                    <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#93C5FD]" : "text-[#5B92BF]"}`}>SYNC</span>
                   </span>
-                );
-              })()}
+                  <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${darkMode ? "text-slate-400" : "text-[#5E748A]"}`}>
+                    MO LOGIC
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-[clamp(1rem,4.2vw,1.35rem)] font-black tracking-tight uppercase font-sans select-none leading-none pt-0.5 truncate max-w-full block">
+                    <span className={`font-sans font-black transition-colors ${darkMode ? "text-white" : "text-black"}`}>SUDOKU</span>
+                    <span className={`ml-1 font-sans font-black transition-colors ${darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]"}`}>SYNC</span>
+                  </span>
+                  {(() => {
+                    const activeBadgeDiff = currentScreen === "home" ? homeContextDifficulty : (boardState?.difficulty || difficulty);
+                    return (
+                      <span className={`text-[11px] tracking-widest font-semibold uppercase leading-none select-none mt-1 text-center truncate max-w-full block ${(currentScreen === "home" || currentScreen === "game") ? (darkMode ? (activeBadgeDiff === "EASY" ? "text-[#d1fae5]" : activeBadgeDiff === "MEDIUM" ? "text-[#fef08a]" : activeBadgeDiff === "HARD" ? "text-[#e9d5ff]" : "text-[#fecdd3]") : (activeBadgeDiff === "EASY" ? "text-[#065F46]" : activeBadgeDiff === "MEDIUM" ? "text-[#854D0E]" : activeBadgeDiff === "HARD" ? "text-[#6B21A8]" : "text-[#9D174D]")) : (darkMode ? "text-[#38bdf8]" : "text-[#2B6CB0]")}`}>
+                        {currentScreen === "together" ? t("multiplayerLobby") : currentScreen === "settings" ? t("settings") : currentScreen === "login" ? t("authorization") : currentScreen === "status" ? t("playerInsights") : currentScreen === "solver" ? t("sudokuSolverLabel") : currentScreen === "daily-challenge" ? t("dailyChallengeLabel") : currentScreen === "rules" ? t("sudokuRulesLabel") : parseGuideScreen(currentScreen) ? getGuideCopy(language, parseGuideScreen(currentScreen)!).badge : currentScreen === "privacy" ? t("privacyPolicy") : currentScreen === "terms" ? t("termsOfService") : currentScreen === "contact" ? t("contactUs") : currentScreen === "about" ? t("aboutUs") : (activeBadgeDiff === "EASY" ? t("easy") : activeBadgeDiff === "MEDIUM" ? t("medium") : activeBadgeDiff === "HARD" ? t("hard") : t("expert"))}
+                      </span>
+                    );
+                  })()}
+                </>
+              )}
             </a>
           </div>
 
-          {/* Right Actions: Responsive cluster (Notification Bell, Settings) */}
+          {/* Right Actions: Responsive cluster (Global Bell Notification + Settings) */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 z-10 justify-end">
-            {/* Button 1: Notification Bell (Permanently visible across all screens) */}
             <button
               onClick={() => {
                 playClickSound();
@@ -19051,6 +19148,11 @@ export default function App() {
             {/* Button 3: Settings Gear */}
             <button
               onClick={() => {
+                if (currentScreen === "blocks") {
+                  triggerHapticTap(vibrations);
+                  setShowBlockSyncSettings((prev) => !prev);
+                  return;
+                }
                 playClickSound();
                 triggerHapticTap(vibrations);
                 if (currentScreen === "settings") {
@@ -19364,6 +19466,63 @@ export default function App() {
                   <Play className="w-5 h-5 md:w-6 md:h-6 fill-current stroke-[2.5]" />
                   <span>{t("playNewGame")}</span>
                 </button>
+
+                {/* Mo Logic Arcade Shelf: Subtle divider + horizontal pastel game cards */}
+                <section aria-label="More from Mo Logic" className="w-full mt-5 sm:mt-6 lg:mt-4">
+                  <div className="flex items-center gap-3 px-2 mb-3 select-none">
+                    <span className={`h-px flex-1 ${darkMode ? "bg-zinc-800/80" : "bg-stone-200/80"}`} />
+                    <span className={`text-[10px] font-sans font-bold tracking-[0.2em] uppercase whitespace-nowrap ${darkMode ? "text-zinc-500" : "text-stone-400"}`}>
+                      MORE FROM MO LOGIC
+                    </span>
+                    <span className={`h-px flex-1 ${darkMode ? "bg-zinc-800/80" : "bg-stone-200/80"}`} />
+                  </div>
+
+                  <div className="overflow-x-auto flex gap-4 px-4 pb-6 scrollbar-hide no-scrollbar">
+                    <button
+                      type="button"
+                      id="home-block-sync-card"
+                      onClick={() => {
+                        playClickSound();
+                        triggerHapticTap(vibrations);
+                        navigateToScreen("blocks");
+                      }}
+                      className={`w-48 h-28 sm:h-32 shrink-0 rounded-3xl border-none p-4 flex flex-col items-start justify-between text-left cursor-pointer select-none transition-all duration-200 active:scale-[0.98] ${
+                        darkMode
+                          ? "bg-[#1E2936] hover:bg-[#243242] shadow-[0_6px_20px_rgba(0,0,0,0.28)]"
+                          : "bg-[#EAF4FB] hover:bg-[#DCEEF9] shadow-[0_6px_20px_rgba(30,41,59,0.05)]"
+                      }`}
+                    >
+                      {/* Minimal flat 3x3 pastel block grid vector icon */}
+                      <div
+                        className={`w-9 h-9 rounded-2xl flex items-center justify-center ${
+                          darkMode ? "bg-white/[0.06]" : "bg-white/75"
+                        }`}
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                          className="w-5 h-5"
+                          fill="none"
+                        >
+                          <rect x="3" y="3" width="5" height="5" rx="1.5" fill={darkMode ? "#7EB3DC" : "#78ADD4"} />
+                          <rect x="9.5" y="3" width="5" height="5" rx="1.5" fill={darkMode ? "#93C5FD" : "#96C3E4"} />
+                          <rect x="16" y="3" width="5" height="5" rx="1.5" fill={darkMode ? "#5D8FB5" : "#649CC7"} />
+                          <rect x="3" y="9.5" width="5" height="5" rx="1.5" fill={darkMode ? "#93C5FD" : "#96C3E4"} />
+                          <rect x="9.5" y="9.5" width="5" height="5" rx="1.5" fill={darkMode ? "#7EB3DC" : "#78ADD4"} />
+                          <rect x="16" y="9.5" width="5" height="5" rx="1.5" fill={darkMode ? "#7EB3DC" : "#78ADD4"} />
+                          <rect x="3" y="16" width="5" height="5" rx="1.5" fill={darkMode ? "#5D8FB5" : "#649CC7"} />
+                          <rect x="9.5" y="16" width="5" height="5" rx="1.5" fill={darkMode ? "#93C5FD" : "#96C3E4"} />
+                        </svg>
+                      </div>
+
+                      <span className={`font-sans font-black text-xs sm:text-sm tracking-wider uppercase leading-none ${
+                        darkMode ? "text-[#E2EEF7]" : "text-[#2C3E50]"
+                      }`}>
+                        BLOCK SYNC
+                      </span>
+                    </button>
+                  </div>
+                </section>
 
               </div>
             </div>
@@ -21620,6 +21779,35 @@ export default function App() {
             onStartDailyChallenge={handleLaunchDailyChallenge}
             onOpenSolver={() => navigateToScreen("solver")}
             onOpenRules={() => navigateToScreen("rules")}
+          />
+        )}
+
+        {/* PANE: BLOCK SYNC (/blocks) */}
+        {currentScreen === "blocks" && (
+          <BlockSyncGame
+            key={`blocks-${isGuestSession ? "guest" : (authUser?.uid || "guest")}`}
+            darkMode={darkMode}
+            uid={isGuestSession ? null : (authUser?.uid ?? null)}
+            soundEffects={soundEffects}
+            vibrations={vibrations}
+            language={language}
+            isSettingsOpen={showBlockSyncSettings}
+            onCloseSettings={() => setShowBlockSyncSettings(false)}
+            onToggleSoundEffects={handleToggleSoundEffects}
+            onToggleVibrations={handleToggleVibrations}
+            onLanguageChange={handleLanguageChange}
+            onBackHome={() => handleNavigateHome()}
+            onOpenMoreGames={() => {
+              handleNavigateHome();
+              if (typeof window !== "undefined") {
+                window.setTimeout(() => {
+                  document
+                    .getElementById("home-block-sync-card")
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }, 120);
+              }
+            }}
+            onOpenMultiplayer={() => setShowMultiplayerForkModal(true)}
           />
         )}
 
