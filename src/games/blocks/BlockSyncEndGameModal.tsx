@@ -1,5 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Grid3X3, Home, RotateCcw, Star, TrendingUp, Trophy, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Clock,
+  Copy,
+  Crown,
+  Grid3X3,
+  Home,
+  Medal,
+  RotateCcw,
+  Star,
+  TrendingUp,
+  Trophy,
+  X,
+} from "lucide-react";
+import { ConfettiBurst } from "../../components/common/ConfettiBurst";
 
 export interface BlockSyncMiniBoardCell {
   color: string;
@@ -36,6 +51,8 @@ export interface BlockSyncEndGameModalProps {
   tileClasses: Record<string, string>;
   soloRuns?: BlockSyncSoloRunEntry[];
   roomMode?: boolean;
+  roomCode?: string;
+  endReason?: "out_of_moves" | "time_up";
   standings?: BlockSyncRoomStandingEntry[];
   onPlayAgain?: () => void;
   onBackHome?: () => void;
@@ -44,38 +61,15 @@ export interface BlockSyncEndGameModalProps {
   onCloseReview?: () => void;
   onScoreTick?: (tickIndex: number) => void;
   onNewBestReveal?: () => void;
+  onPodiumReveal?: (rank: number) => void;
   onModalSettledChange?: (settled: boolean) => void;
   onButtonTapCue?: (action: "playAgain" | "backHome") => void;
   registerPlayAgainTrigger?: (triggerFn: (() => void) | null) => void;
 }
 
-interface ConfettiParticleSpec {
-  id: number;
-  color: string;
-  startX: number;
-  dx: number;
-  dy: number;
-  rot: number;
-  width: number;
-  height: number;
-  delayMs: number;
-  rounded: boolean;
-}
-
-const JUICY_CONFETTI_COLORS = [
-  "#F9CF43",
-  "#3AD994",
-  "#47BBF5",
-  "#26D2E6",
-  "#F04D70",
-  "#935DF0",
-] as const;
-
-const CONFETTI_PARTICLE_COUNT = 28;
 const EXIT_DURATION_MS = 180;
 const REVIEW_EXIT_DURATION_MS = 160;
 const COUNT_UP_DURATION_MS = 420;
-const CONFETTI_DURATION_MS = 1400;
 
 function checkPrefersReducedMotion(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -108,29 +102,6 @@ function hasValid9x9Snapshot(
   );
 }
 
-function buildConfettiParticles(): ConfettiParticleSpec[] {
-  const particles: ConfettiParticleSpec[] = [];
-  for (let i = 0; i < CONFETTI_PARTICLE_COUNT; i += 1) {
-    const angle = (-Math.PI * 0.88) + (i / (CONFETTI_PARTICLE_COUNT - 1)) * (Math.PI * 0.76);
-    const speed = 110 + ((i * 37) % 125);
-    const dx = Math.cos(angle) * speed + (((i % 3) - 1) * 18);
-    const dy = Math.sin(angle) * speed * 0.75 + 145 + ((i * 23) % 85);
-    particles.push({
-      id: i,
-      color: JUICY_CONFETTI_COLORS[i % JUICY_CONFETTI_COLORS.length],
-      startX: ((i % 7) - 3) * 16,
-      dx: Math.round(dx),
-      dy: Math.round(dy),
-      rot: ((i % 2 === 0 ? 1 : -1) * (140 + ((i * 53) % 240))),
-      width: i % 4 === 0 ? 9 : 7,
-      height: i % 4 === 0 ? 9 : 11,
-      delayMs: (i % 5) * 28,
-      rounded: i % 3 === 0,
-    });
-  }
-  return particles;
-}
-
 export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
   darkMode,
   finalScore,
@@ -142,6 +113,8 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
   tileClasses,
   soloRuns = [],
   roomMode = false,
+  roomCode,
+  endReason = "out_of_moves",
   standings = [],
   onPlayAgain,
   onBackHome,
@@ -150,13 +123,27 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
   onCloseReview,
   onScoreTick,
   onNewBestReveal,
+  onPodiumReveal,
   onModalSettledChange,
   onButtonTapCue,
   registerPlayAgainTrigger,
 }) => {
   const reducedMotion = useMemo(() => checkPrefersReducedMotion(), []);
-  const confettiParticles = useMemo(() => buildConfettiParticles(), []);
   const instantReveal = reducedMotion || reviewMode;
+
+  const hasMultiplayerStandings = roomMode && standings.length > 0;
+  const selfStandingIdx = hasMultiplayerStandings
+    ? standings.findIndex((entry) => entry.isSelf)
+    : -1;
+  const selfRank = selfStandingIdx >= 0 ? selfStandingIdx + 1 : null;
+  const allPlayersFinished =
+    hasMultiplayerStandings && standings.every((entry) => !entry.statusLabel);
+  const isFirstPlaceFinish = Boolean(roomMode && selfRank === 1);
+  const isPodiumTwoOrThreeFinish = Boolean(
+    roomMode &&
+      ((selfRank === 2 && standings.length >= 2) ||
+        (selfRank === 3 && standings.length >= 3))
+  );
 
   const [backdropVisible, setBackdropVisible] = useState<boolean>(reducedMotion);
   const [cardVisible, setCardVisible] = useState<boolean>(reducedMotion);
@@ -167,24 +154,43 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
   const [newBestPopped, setNewBestPopped] = useState<boolean>(
     instantReveal && isNewBest
   );
-  const [confettiActive, setConfettiActive] = useState<boolean>(false);
+  const [confettiMode, setConfettiMode] = useState<
+    "all" | "top-only" | "cannon-only" | "top-two-waves" | null
+  >(null);
+  const [copiedRoomCode, setCopiedRoomCode] = useState<boolean>(false);
   const [detailsVisible, setDetailsVisible] = useState<boolean>(instantReveal);
   const [isExiting, setIsExiting] = useState<boolean>(false);
 
   const timersRef = useRef<Set<number>>(new Set());
   const rafRef = useRef<number | null>(null);
   const exitLockRef = useRef<boolean>(false);
+  const celebrationFiredRef = useRef<boolean>(false);
 
   const onScoreTickRef = useRef(onScoreTick);
   const onNewBestRevealRef = useRef(onNewBestReveal);
+  const onPodiumRevealRef = useRef(onPodiumReveal);
   const onModalSettledChangeRef = useRef(onModalSettledChange);
   const onButtonTapCueRef = useRef(onButtonTapCue);
   const onPlayAgainRef = useRef(onPlayAgain);
   const onBackHomeRef = useRef(onBackHome);
   const onCloseReviewRef = useRef(onCloseReview);
 
+  const celebrationStateRef = useRef({
+    isNewBest,
+    isFirstPlaceFinish,
+    isPodiumTwoOrThreeFinish,
+    selfRank,
+  });
+  celebrationStateRef.current = {
+    isNewBest,
+    isFirstPlaceFinish,
+    isPodiumTwoOrThreeFinish,
+    selfRank,
+  };
+
   onScoreTickRef.current = onScoreTick;
   onNewBestRevealRef.current = onNewBestReveal;
+  onPodiumRevealRef.current = onPodiumReveal;
   onModalSettledChangeRef.current = onModalSettledChange;
   onButtonTapCueRef.current = onButtonTapCue;
   onPlayAgainRef.current = onPlayAgain;
@@ -214,6 +220,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
   // Staggered GPU-only modal entry & score count-up choreography (bypassed cleanly in reviewMode)
   useEffect(() => {
     exitLockRef.current = false;
+    celebrationFiredRef.current = false;
     onModalSettledChangeRef.current?.(false);
 
     if (reviewMode) {
@@ -224,7 +231,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
       setSnapshotVisible(true);
       setDisplayedScore(finalScore);
       setNewBestPopped(isNewBest);
-      setConfettiActive(false);
+      setConfettiMode(null);
       setDetailsVisible(true);
       onModalSettledChangeRef.current?.(true);
       return () => {
@@ -240,11 +247,16 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
       setSnapshotVisible(true);
       setDisplayedScore(finalScore);
       setNewBestPopped(isNewBest);
-      setConfettiActive(false);
+      setConfettiMode(null);
       setDetailsVisible(true);
       onModalSettledChangeRef.current?.(true);
-      if (isNewBest) {
+      const cState = celebrationStateRef.current;
+      if (cState.isNewBest) {
         onNewBestRevealRef.current?.();
+      } else if (cState.isFirstPlaceFinish) {
+        onPodiumRevealRef.current?.(1);
+      } else if (cState.isPodiumTwoOrThreeFinish && cState.selfRank) {
+        onPodiumRevealRef.current?.(cState.selfRank);
       }
       return () => {
         onModalSettledChangeRef.current?.(false);
@@ -298,18 +310,26 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
       rafRef.current = window.requestAnimationFrame(stepCountUp);
     }, 160);
 
-    // 300ms (only if new personal best): ★ NEW BEST pill pop + Juicy confetti burst
-    if (isNewBest) {
-      scheduleTimer(() => {
-        if (exitLockRef.current) return;
+    // 300ms: Celebratory full-viewport Confetti & Audio/Haptic trigger (New Best / #1 / #2-#3 Podium)
+    scheduleTimer(() => {
+      if (exitLockRef.current || celebrationFiredRef.current) return;
+      const cState = celebrationStateRef.current;
+      if (!cState.isNewBest && !cState.isFirstPlaceFinish && !cState.isPodiumTwoOrThreeFinish) {
+        return;
+      }
+      celebrationFiredRef.current = true;
+      if (cState.isNewBest) {
         setNewBestPopped(true);
-        setConfettiActive(true);
+        setConfettiMode("all");
         onNewBestRevealRef.current?.();
-        scheduleTimer(() => {
-          setConfettiActive(false);
-        }, CONFETTI_DURATION_MS);
-      }, 300);
-    }
+      } else if (cState.isFirstPlaceFinish) {
+        setConfettiMode("top-two-waves");
+        onPodiumRevealRef.current?.(1);
+      } else if (cState.isPodiumTwoOrThreeFinish && cState.selfRank) {
+        setConfettiMode("top-only");
+        onPodiumRevealRef.current?.(cState.selfRank);
+      }
+    }, 300);
 
     // 360ms: Percentile bar fill + staggered standings + footer settle
     scheduleTimer(() => {
@@ -321,6 +341,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
     return () => {
       window.cancelAnimationFrame(rafBackdrop);
       cancelChoreographyTimers();
+      setConfettiMode(null);
       onModalSettledChangeRef.current?.(false);
     };
   }, [
@@ -337,6 +358,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
       if (exitLockRef.current) return;
       exitLockRef.current = true;
       onModalSettledChangeRef.current?.(false);
+      setConfettiMode(null);
       cancelChoreographyTimers();
 
       if (action !== "closeReview") {
@@ -410,7 +432,6 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
         ? "text-[clamp(28px,8vw,36px)]"
         : "text-[clamp(38px,10.5vw,44px)]";
 
-  const hasMultiplayerStandings = roomMode && standings.length > 0;
   const hasSnapshotGrid = hasValid9x9Snapshot(finalBoardState);
   const isFirstSoloRecord =
     !reviewMode &&
@@ -450,50 +471,15 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
           62% { transform: scale(1.06); opacity: 1; }
           100% { transform: scale(1); opacity: 1; }
         }
-        @keyframes bsEndConfettiFall {
-          0% {
-            transform: translate3d(var(--bs-cx0), 0px, 0) rotate(0deg) scale(0.75);
-            opacity: 0;
-          }
-          14% {
-            opacity: 1;
-          }
-          100% {
-            transform: translate3d(var(--bs-cx1), var(--bs-cy1), 0) rotate(var(--bs-crot)) scale(0.9);
-            opacity: 0;
-          }
-        }
       `}</style>
 
-      {/* GPU-Safe Juicy Silicone Confetti Burst (~1400ms, skipped in reviewMode) */}
-      {confettiActive && !reducedMotion && !reviewMode && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none fixed inset-0 z-[55] flex items-center justify-center overflow-hidden"
-        >
-          <div className="relative -translate-y-24">
-            {confettiParticles.map((p) => (
-              <span
-                key={p.id}
-                style={
-                  {
-                    width: `${p.width}px`,
-                    height: `${p.height}px`,
-                    backgroundColor: p.color,
-                    borderRadius: p.rounded ? "9999px" : "3px",
-                    "--bs-cx0": `${p.startX}px`,
-                    "--bs-cx1": `${p.dx}px`,
-                    "--bs-cy1": `${p.dy}px`,
-                    "--bs-crot": `${p.rot}deg`,
-                    animation: `bsEndConfettiFall ${CONFETTI_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1) ${p.delayMs}ms forwards`,
-                    willChange: "transform, opacity",
-                  } as React.CSSProperties
-                }
-                className="block absolute left-0 top-0 opacity-0"
-              />
-            ))}
-          </div>
-        </div>
+      {/* Full-Viewport Celebratory Confetti Canvas (outside modal overflow-hidden bounds, skipped in reviewMode) */}
+      {confettiMode !== null && !reducedMotion && !reviewMode && (
+        <ConfettiBurst
+          darkMode={darkMode}
+          mode={confettiMode}
+          onComplete={() => setConfettiMode(null)}
+        />
       )}
 
       <div
@@ -527,23 +513,68 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
             </span>
             <h2
               id="block-sync-gameover-title"
-              className={`text-[22px] leading-tight font-bold tracking-[-0.02em] ${
+              className={`text-[22px] leading-tight font-bold tracking-[-0.02em] inline-flex items-center gap-2 ${
                 darkMode ? "text-slate-100" : "text-[#2C3E50]"
               }`}
             >
-              {reviewMode
-                ? isNewBest
-                  ? "NEW RECORD!"
-                  : roomMode
-                    ? "MULTIPLAYER MATCH"
-                    : "SOLO MATCH"
-                : isNewRecordHeadline
-                  ? "NEW RECORD!"
-                  : "OUT OF MOVES"}
+              {!reviewMode && endReason === "time_up" && (
+                <Clock
+                  className={`w-5 h-5 shrink-0 ${
+                    darkMode ? "text-[#FBBF24]" : "text-[#D97706]"
+                  }`}
+                  aria-hidden="true"
+                />
+              )}
+              <span>
+                {reviewMode
+                  ? isNewBest
+                    ? "NEW RECORD!"
+                    : roomMode
+                      ? "MULTIPLAYER MATCH"
+                      : "SOLO MATCH"
+                  : endReason === "time_up"
+                    ? "TIME'S UP!"
+                    : isNewRecordHeadline
+                      ? "NEW RECORD!"
+                      : "OUT OF MOVES"}
+              </span>
             </h2>
           </div>
 
-          <div className="shrink-0 flex items-center gap-1.5">
+          <div className="shrink-0 flex flex-wrap items-center justify-end gap-1.5">
+            {(isFirstPlaceFinish || isPodiumTwoOrThreeFinish) && (
+              <span
+                className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] leading-none font-bold uppercase tracking-[0.08em] ${
+                  selfRank === 1
+                    ? darkMode
+                      ? "bg-[#FBBF24]/22 text-[#FDE047] border border-[#FBBF24]/40"
+                      : "bg-amber-200/95 text-[#78350F] border border-amber-400/50"
+                    : selfRank === 2
+                      ? darkMode
+                        ? "bg-slate-300/20 text-slate-100 border border-slate-300/35"
+                        : "bg-slate-200/95 text-slate-800 border border-slate-300"
+                      : darkMode
+                        ? "bg-orange-400/22 text-orange-200 border border-orange-400/40"
+                        : "bg-orange-200/90 text-[#9A3412] border border-orange-300"
+                }`}
+              >
+                {selfRank === 1 ? (
+                  <Crown className="w-3 h-3 shrink-0" aria-hidden="true" />
+                ) : (
+                  <Medal className="w-3 h-3 shrink-0" aria-hidden="true" />
+                )}
+                <span>
+                  {selfRank === 1
+                    ? allPlayersFinished && standings.length > 1
+                      ? "#1 WINNER"
+                      : "#1 LEADER"
+                    : selfRank === 2
+                      ? "#2 PODIUM"
+                      : "#3 PODIUM"}
+                </span>
+              </span>
+            )}
+
             {isNewBest && (
               <span
                 id="block-sync-new-best-badge"
@@ -763,23 +794,51 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
               : "opacity-0 translate-y-2"
           } ${darkMode ? "bg-[#1B242E]" : "bg-[#E6F1F8]/90"}`}
         >
-          <div className="px-3.5 pt-2.5 pb-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-[0.10em] opacity-55">
-            <span>
+          <div className="px-3.5 pt-2.5 pb-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-[0.10em]">
+            <span className="opacity-55">
               {hasMultiplayerStandings
                 ? "ROOM STANDINGS"
                 : reviewMode && soloRuns.length === 0
                   ? "MATCH SUMMARY"
                   : "TOP RUNS"}
             </span>
-            <span>
-              {hasMultiplayerStandings
-                ? "LOCKED"
-                : isFirstSoloRecord
-                  ? "FIRST RUN"
-                  : reviewMode && soloRuns.length === 0
-                    ? "SOLO"
-                    : `${soloRuns.length} RECORDED`}
-            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {roomCode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      navigator.clipboard?.writeText(roomCode);
+                    } catch { }
+                    setCopiedRoomCode(true);
+                    window.setTimeout(() => setCopiedRoomCode(false), 1400);
+                  }}
+                  title={`Copy Room Code ${roomCode}`}
+                  aria-label={`Copy Room Code ${roomCode}`}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-semibold uppercase tracking-wider tabular-nums border-none cursor-pointer transition-all active:scale-95 ${
+                    darkMode
+                      ? "bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 text-[#38BDF8]"
+                      : "bg-[#2B8CEE]/12 hover:bg-[#2B8CEE]/20 text-[#2B8CEE]"
+                  }`}
+                >
+                  <span>ROOM · {roomCode}</span>
+                  {copiedRoomCode ? (
+                    <Check className="w-2.5 h-2.5 stroke-[2.8]" aria-hidden="true" />
+                  ) : (
+                    <Copy className="w-2.5 h-2.5 stroke-[2.3]" aria-hidden="true" />
+                  )}
+                </button>
+              )}
+              <span className="opacity-55">
+                {hasMultiplayerStandings
+                  ? "RANKED"
+                  : isFirstSoloRecord
+                    ? "FIRST RUN"
+                    : reviewMode && soloRuns.length === 0
+                      ? "SOLO"
+                      : `${soloRuns.length} RECORDED`}
+              </span>
+            </div>
           </div>
 
           {hasMultiplayerStandings ? (
@@ -787,45 +846,98 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
               id="block-sync-standings-list"
               className="max-h-[156px] overflow-y-auto overscroll-contain px-2.5 pb-3.5 space-y-1.5"
             >
-              {standings.map((entry, idx) => (
-                <div
-                  key={entry.id}
-                  style={{
-                    transitionDelay:
-                      detailsVisible && !instantReveal
-                        ? `${Math.min(idx, 6) * 40}ms`
-                        : "0ms",
-                  }}
-                  className={`px-3 py-2 rounded-xl flex items-center justify-between gap-2 text-xs transition-[transform,opacity] duration-[200ms] ease-out ${
-                    detailsVisible
-                      ? "opacity-100 translate-y-0"
-                      : "opacity-0 translate-y-2"
-                  } ${
-                    entry.isSelf
+              {standings.map((entry, idx) => {
+                const isCompletedRow = !entry.statusLabel;
+                const podiumTier = isCompletedRow && idx < 3 ? idx + 1 : 0;
+                const rowThemeClass =
+                  podiumTier === 1
+                    ? darkMode
+                      ? "bg-[#FBBF24]/16 text-amber-100 border border-[#FBBF24]/35"
+                      : "bg-amber-50/95 text-[#78350F] border border-amber-300/80 shadow-[0_2px_10px_rgba(245,158,11,0.12)]"
+                    : podiumTier === 2
                       ? darkMode
-                        ? "bg-[#243445] text-slate-50"
-                        : "bg-white/95 text-[#223447] shadow-[0_2px_8px_rgba(44,62,80,0.06)]"
-                      : darkMode
-                        ? "bg-[#141A21]/75 text-slate-300"
-                        : "bg-white/60 text-[#49637A]"
-                  }`}
-                >
-                  <div className="min-w-0 flex items-center gap-2">
-                    <span className="w-5 text-[11px] font-bold tabular-nums opacity-65 shrink-0">
-                      #{idx + 1}
+                        ? "bg-slate-300/12 text-slate-100 border border-slate-300/25"
+                        : "bg-white/95 text-slate-800 border border-slate-300/80 shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
+                      : podiumTier === 3
+                        ? darkMode
+                          ? "bg-orange-400/12 text-orange-100 border border-orange-400/25"
+                          : "bg-orange-50/85 text-[#9A3412] border border-orange-300/70"
+                        : entry.isSelf
+                          ? darkMode
+                            ? "bg-[#243445] text-slate-50"
+                            : "bg-white/95 text-[#223447] shadow-[0_2px_8px_rgba(44,62,80,0.06)]"
+                          : darkMode
+                            ? "bg-[#141A21]/75 text-slate-300"
+                            : "bg-white/60 text-[#49637A]";
+
+                return (
+                  <div
+                    key={entry.id}
+                    style={{
+                      transitionDelay:
+                        detailsVisible && !instantReveal
+                          ? `${Math.min(idx, 6) * 40}ms`
+                          : "0ms",
+                    }}
+                    className={`px-3 py-2 rounded-xl flex items-center justify-between gap-2 text-xs transition-[transform,opacity] duration-[200ms] ease-out ${
+                      detailsVisible
+                        ? "opacity-100 translate-y-0"
+                        : "opacity-0 translate-y-2"
+                    } ${rowThemeClass}`}
+                  >
+                    <div className="min-w-0 flex items-center gap-2">
+                      {podiumTier > 0 ? (
+                        <span
+                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-extrabold tabular-nums shrink-0 ${
+                            podiumTier === 1
+                              ? darkMode
+                                ? "bg-[#FBBF24]/25 text-[#FDE047]"
+                                : "bg-amber-200 text-[#78350F]"
+                              : podiumTier === 2
+                                ? darkMode
+                                  ? "bg-slate-300/22 text-slate-100"
+                                  : "bg-slate-200 text-slate-800"
+                                : darkMode
+                                  ? "bg-orange-400/22 text-orange-200"
+                                  : "bg-orange-200 text-[#9A3412]"
+                          }`}
+                        >
+                          {podiumTier === 1 ? (
+                            <Crown className="w-3 h-3 shrink-0" aria-hidden="true" />
+                          ) : (
+                            <Medal className="w-3 h-3 shrink-0" aria-hidden="true" />
+                          )}
+                          <span>#{podiumTier}</span>
+                        </span>
+                      ) : (
+                        <span className="w-5 text-[11px] font-bold tabular-nums opacity-65 shrink-0">
+                          #{idx + 1}
+                        </span>
+                      )}
+                      <span className="font-semibold truncate">{entry.name}</span>
+                      {entry.isSelf && (
+                        <span
+                          className={`shrink-0 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider ${
+                            darkMode
+                              ? "bg-[#38BDF8]/20 text-[#38BDF8]"
+                              : "bg-[#2B8CEE]/15 text-[#2B8CEE]"
+                          }`}
+                        >
+                          You
+                        </span>
+                      )}
+                      {entry.statusLabel && (
+                        <span className="shrink-0 text-[10px] font-medium opacity-65">
+                          {entry.statusLabel}
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-bold tabular-nums shrink-0">
+                      {entry.score.toLocaleString()}
                     </span>
-                    <span className="font-semibold truncate">{entry.name}</span>
-                    {entry.statusLabel && (
-                      <span className="shrink-0 text-[10px] font-medium opacity-65">
-                        {entry.statusLabel}
-                      </span>
-                    )}
                   </div>
-                  <span className="font-bold tabular-nums shrink-0">
-                    {entry.score.toLocaleString()}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : isFirstSoloRecord ? (
             <div id="block-sync-first-record-card" className="px-3.5 pb-3.5 pt-1">

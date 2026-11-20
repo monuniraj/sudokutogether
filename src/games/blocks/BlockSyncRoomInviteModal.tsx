@@ -48,7 +48,7 @@ export interface BlockSyncRoomInviteModalProps {
   isOpen: boolean;
   roomCode: string;
   roomMode: BlockSyncRoomMode;
-  roomTimeLimitSec?: 120 | 180 | 300;
+  roomTimeLimitSec?: 120 | 180 | 300 | 600;
   isRoomLocked: boolean;
   isHost: boolean;
   roomPin?: string;

@@ -1180,10 +1180,23 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                               <span className="text-[17px] leading-tight font-extrabold tabular-nums truncate">
                                 {match.score.toLocaleString()}
                               </span>
-                              <span className="mt-0.5 text-[11px] opacity-65 truncate">
-                                {formatMatchDateTime(match.playedAt)} ·{" "}
-                                {match.mode === "multiplayer" ? "Room" : "Solo"}
-                              </span>
+                              <div className="mt-0.5 flex items-center gap-1.5 min-w-0">
+                                <span className="text-[11px] opacity-65 truncate">
+                                  {formatMatchDateTime(match.playedAt)}
+                                  {match.mode !== "multiplayer" ? " · Solo" : ""}
+                                </span>
+                                {match.mode === "multiplayer" && (
+                                  <span
+                                    className={`shrink-0 px-1.5 py-0.5 rounded-full text-[9.5px] font-semibold uppercase tracking-wider tabular-nums ${
+                                      darkMode
+                                        ? "bg-[#38BDF8]/15 text-[#38BDF8]"
+                                        : "bg-[#2B8CEE]/12 text-[#2B8CEE]"
+                                    }`}
+                                  >
+                                    {match.roomCode ? `ROOM · ${match.roomCode}` : "ROOM"}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -1523,6 +1536,7 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
           finalBoardState={selectedMatch.boardSnapshot}
           tileClasses={tileClasses}
           roomMode={selectedMatch.mode === "multiplayer"}
+          roomCode={selectedMatch.roomCode}
           standings={selectedMatch.roomStandings?.map((entry) => ({
             id: entry.uid || entry.name,
             name: entry.name,

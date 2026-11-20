@@ -7,13 +7,14 @@
 import { loadBlocksSavedSession } from "../../utils/storageEngine";
 
 export type BlockSyncRoomMode = "classic" | "rush";
+export type BlockSyncRoomTimeLimitSec = 120 | 180 | 300 | 600;
 
 export interface BlockSyncRoomConfig {
   roomCode: string;
   roomSeed: number;
   mode: BlockSyncRoomMode;
   undoAllowed: boolean;
-  timeLimitSec: 120 | 180 | 300;
+  timeLimitSec: BlockSyncRoomTimeLimitSec;
   isHost?: boolean;
   isLocked?: boolean;
 }
@@ -596,8 +597,8 @@ function sanitizePendingRoomSession(raw: unknown): BlockSyncPendingRoomSession |
   const mode: BlockSyncRoomMode = rawConfig.mode === "rush" ? "rush" : "classic";
   const undoAllowed = Boolean(rawConfig.undoAllowed);
   const rawLimit = Number(rawConfig.timeLimitSec);
-  const timeLimitSec: 120 | 180 | 300 =
-    rawLimit === 120 || rawLimit === 300 ? rawLimit : 180;
+  const timeLimitSec: BlockSyncRoomTimeLimitSec =
+    rawLimit === 120 || rawLimit === 300 || rawLimit === 600 ? rawLimit : 180;
 
   if (!roomCode || !Number.isFinite(roomSeed)) return null;
 

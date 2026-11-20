@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
 import {
+  Clock,
   Hand,
   HelpCircle,
   Sparkles,
@@ -157,6 +158,8 @@ interface GameOverSummary {
   bestScore: number;
   initialSessionBest: number;
   isNewBest: boolean;
+  endReason: "out_of_moves" | "time_up";
+  roomCode?: string;
   soloRuns: BlockSyncSoloRunEntry[];
 }
 
@@ -1543,6 +1546,130 @@ function playNewBestChordSound(soundEnabled = true): void {
 }
 
 /**
+ * Soft silicone double-tick cue fired on Time Rush completed minute / 1:00 marks.
+ */
+function playRushMinuteMarkerSound(soundEnabled = true): void {
+  if (!soundEnabled || getSettings().soundEffects === false) return;
+  const ctx = getBlocksAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    const output = getBlocksAudioOutput(ctx);
+    [784, 987.77].forEach((freq, idx) => {
+      const start = now + idx * 0.085;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.linearRampToValueAtTime(0.075, start + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.065);
+
+      osc.connect(gain);
+      gain.connect(output);
+      osc.start(start);
+      osc.stop(start + 0.07);
+    });
+  } catch { }
+}
+
+/**
+ * Crisp tactile Time Rush final-15s per-second tick (gently stepping pitch up on final 5s).
+ */
+function playRushFinalTickSound(remainingSec: number, soundEnabled = true): void {
+  if (!soundEnabled || getSettings().soundEffects === false) return;
+  const ctx = getBlocksAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    const output = getBlocksAudioOutput(ctx);
+    const freq = remainingSec <= 5 ? 740 + (5 - remainingSec) * 75 : 640;
+    const peakGain = remainingSec <= 5 ? 0.095 : 0.062;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, now);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(peakGain, now + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.048);
+
+    osc.connect(gain);
+    gain.connect(output);
+    osc.start(now);
+    osc.stop(now + 0.055);
+  } catch { }
+}
+
+/**
+ * Decisive soft chime on 0:00 Time's Up expiration.
+ */
+function playRushTimeUpChimeSound(soundEnabled = true): void {
+  if (!soundEnabled || getSettings().soundEffects === false) return;
+  const ctx = getBlocksAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    const output = getBlocksAudioOutput(ctx);
+    [523.25, 392.0].forEach((freq, idx) => {
+      const start = now + idx * 0.06;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.linearRampToValueAtTime(0.12, start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.34);
+
+      osc.connect(gain);
+      gain.connect(output);
+      osc.start(start);
+      osc.stop(start + 0.36);
+    });
+  } catch { }
+}
+
+/**
+ * Bright positive Zen silicone chime for #2 / #3 Podium finishes (#1 uses playNewBestChordSound fanfare).
+ */
+function playPodiumChimeSound(rank: number, soundEnabled = true): void {
+  if (rank <= 1) {
+    playNewBestChordSound(soundEnabled);
+    return;
+  }
+  if (!soundEnabled || getSettings().soundEffects === false) return;
+  const ctx = getBlocksAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    const output = getBlocksAudioOutput(ctx);
+    [523.25, 659.25].forEach((freq, idx) => {
+      const start = now + idx * 0.075;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.linearRampToValueAtTime(0.13, start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.36);
+
+      osc.connect(gain);
+      gain.connect(output);
+      osc.start(start);
+      osc.stop(start + 0.38);
+    });
+  } catch { }
+}
+
+/**
  * Fire-and-forget Block Sync settings/history UI audio cues with ±3% pitch variation.
  */
 function playBlockSyncSettingsUiSound(
@@ -1908,6 +2035,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       ? (restoredPendingRoom?.rushEndAt ?? Date.now() + multiplayerRoom.timeLimitSec * 1000)
       : null
   );
+  const [rushMinutePulse, setRushMinutePulse] = useState<boolean>(false);
+  const rushMinutePulseTimerRef = useRef<number | null>(null);
+  const lastRushWholeSecRef = useRef<number | null>(null);
+  const lastRushMinuteMarkTriggeredRef = useRef<number | null>(null);
 
   const dragStateRef = useRef<ActiveDragState | null>(null);
   const boardStateRef = useRef<BoardState>(boardState);
@@ -2279,12 +2410,45 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         });
       }
 
+      const existingStandings = activeRoom ? roomStandingsRef.current || [] : [];
+      const mergedStandingsForHistory = activeRoom
+        ? (() => {
+            const list = existingStandings.map((entry) =>
+              entry.isSelf
+                ? {
+                    ...entry,
+                    score: Math.max(entry.score, finalScore),
+                    statusLabel: undefined,
+                  }
+                : { ...entry }
+            );
+            if (!list.some((entry) => entry.isSelf)) {
+              list.push({
+                id: uidRef.current || "self",
+                name: "You",
+                score: finalScore,
+                isSelf: true,
+                statusLabel: undefined,
+              });
+            }
+            list.sort((a, b) => {
+              const aDone = !a.statusLabel;
+              const bDone = !b.statusLabel;
+              if (aDone !== bDone) return aDone ? -1 : 1;
+              return b.score - a.score;
+            });
+            return list;
+          })()
+        : [];
+      const selfOptimisticRank =
+        mergedStandingsForHistory.findIndex((entry) => entry.isSelf) + 1;
+
       if (!matchRecordedForCurrentRunRef.current) {
         matchRecordedForCurrentRunRef.current = true;
         const percentile = calculateBlockSyncPercentile(finalScore).higherThanPercent;
         const mappedStandings: BlocksMatchStandingEntry[] | undefined =
-          activeRoom && roomStandingsRef.current && roomStandingsRef.current.length > 0
-            ? roomStandingsRef.current.map((entry) => ({
+          activeRoom && mergedStandingsForHistory.length > 0
+            ? mergedStandingsForHistory.map((entry) => ({
                 uid: entry.id,
                 name: entry.name,
                 score: entry.score,
@@ -2305,7 +2469,14 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         });
       }
 
-      if (!vaultOutcome.isNewBest) {
+      const willCelebratePodium = Boolean(
+        activeRoom &&
+          (selfOptimisticRank === 1 ||
+            (selfOptimisticRank === 2 && mergedStandingsForHistory.length >= 2) ||
+            (selfOptimisticRank === 3 && mergedStandingsForHistory.length >= 3))
+      );
+
+      if (!vaultOutcome.isNewBest && !willCelebratePodium && endReason !== "time_up") {
         playOutOfMovesSighSound(soundOnRef.current);
         triggerBlockSyncHaptic("warning");
       }
@@ -2327,17 +2498,22 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         bestScore: vaultOutcome.bestScore,
         initialSessionBest: initialSessionBestRef.current,
         isNewBest: vaultOutcome.isNewBest,
+        endReason,
+        roomCode: activeRoom?.roomCode,
         soloRuns,
       });
     },
     []
   );
 
-  // Wall-clock Time Rush countdown (`mode === "rush"`): cannot be paused or cheated by minimizing
+  // Wall-clock Time Rush countdown (`mode === "rush"`) + behavioral tension psychology
   useEffect(() => {
     if (!multiplayerRoom || multiplayerRoom.mode !== "rush" || isGameOver) {
       if (!multiplayerRoom || multiplayerRoom.mode !== "rush") {
         setRushRemainingSec(null);
+        setRushMinutePulse(false);
+        lastRushWholeSecRef.current = null;
+        lastRushMinuteMarkTriggeredRef.current = null;
       }
       return;
     }
@@ -2346,14 +2522,61 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       rushEndAtRef.current = Date.now() + multiplayerRoom.timeLimitSec * 1000;
     }
 
+    // Seed initial baseline second cleanly so mount doesn't false-fire minute mark at T=0
+    if (lastRushWholeSecRef.current === null) {
+      lastRushWholeSecRef.current = Math.ceil(
+        Math.max(0, rushEndAtRef.current - Date.now()) / 1000
+      );
+    }
+
     const syncClock = () => {
       if (isGameOverRef.current || rushEndAtRef.current === null) return;
       const remainingMs = Math.max(0, rushEndAtRef.current - Date.now());
       const nextSec = Math.ceil(remainingMs / 1000);
+      const prevSec = lastRushWholeSecRef.current;
+
       setRushRemainingSec((prev) => (prev === nextSec ? prev : nextSec));
+
+      if (prevSec !== null && nextSec < prevSec) {
+        // Check crossed whole-minute marks & final 1:00 threshold cleanly
+        for (let s = prevSec - 1; s >= nextSec; s -= 1) {
+          if (
+            s > 0 &&
+            s < multiplayerRoom.timeLimitSec &&
+            s % 60 === 0 &&
+            lastRushMinuteMarkTriggeredRef.current !== s
+          ) {
+            lastRushMinuteMarkTriggeredRef.current = s;
+            setRushMinutePulse(true);
+            if (rushMinutePulseTimerRef.current !== null) {
+              window.clearTimeout(rushMinutePulseTimerRef.current);
+            }
+            rushMinutePulseTimerRef.current = window.setTimeout(() => {
+              setRushMinutePulse(false);
+              rushMinutePulseTimerRef.current = null;
+            }, 340);
+            playRushMinuteMarkerSound(soundOnRef.current);
+          }
+        }
+
+        // Peak escalation in final 15s (gentle pitch step-up & light haptics in final 5s)
+        if (nextSec >= 1 && nextSec <= 15) {
+          playRushFinalTickSound(nextSec, soundOnRef.current);
+          if (nextSec <= 5) {
+            triggerBlockSyncHaptic("light");
+          }
+        }
+
+        lastRushWholeSecRef.current = nextSec;
+      }
 
       if (remainingMs <= 0) {
         isGameOverRef.current = true;
+        if (rushMinutePulseTimerRef.current !== null) {
+          window.clearTimeout(rushMinutePulseTimerRef.current);
+          rushMinutePulseTimerRef.current = null;
+        }
+        setRushMinutePulse(false);
         if (clarityBeatTimerRef.current !== null) {
           window.clearTimeout(clarityBeatTimerRef.current);
           clarityBeatTimerRef.current = null;
@@ -2364,6 +2587,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         setDragState(null);
         setIsBoardLockedBeat(false);
         isBoardLockedBeatRef.current = false;
+        playRushTimeUpChimeSound(soundOnRef.current);
+        triggerBlockSyncHaptic("warning");
         finalizeGameOver(scoreRef.current, "time_up");
       }
     };
@@ -2378,6 +2603,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
       window.removeEventListener("focus", handleVisibilityOrFocus);
+      if (rushMinutePulseTimerRef.current !== null) {
+        window.clearTimeout(rushMinutePulseTimerRef.current);
+        rushMinutePulseTimerRef.current = null;
+      }
     };
   }, [
     multiplayerRoom?.roomCode,
@@ -2423,10 +2652,17 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     if (activeRoom?.mode === "rush") {
       rushEndAtRef.current = Date.now() + activeRoom.timeLimitSec * 1000;
       setRushRemainingSec(activeRoom.timeLimitSec);
+      lastRushWholeSecRef.current = activeRoom.timeLimitSec;
     } else {
       rushEndAtRef.current = null;
+      lastRushWholeSecRef.current = null;
+      lastRushMinuteMarkTriggeredRef.current = null;
+      setRushMinutePulse(false);
       setRushRemainingSec(null);
+      lastRushWholeSecRef.current = null;
     }
+    lastRushMinuteMarkTriggeredRef.current = null;
+    setRushMinutePulse(false);
 
     stableBoardRef.current = emptyBoard;
     boardStateRef.current = emptyBoard;
@@ -2516,6 +2752,9 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       linesClearedRef.current = 0;
       bestComboRef.current = 0;
       rushEndAtRef.current = null;
+      lastRushWholeSecRef.current = null;
+      lastRushMinuteMarkTriggeredRef.current = null;
+      setRushMinutePulse(false);
       isGameOverRef.current = false;
       isBoardLockedBeatRef.current = false;
       endGameModalSettledRef.current = false;
@@ -2594,6 +2833,12 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           ? Math.max(0, Math.ceil((rushEndAtRef.current - Date.now()) / 1000))
           : null
       );
+      lastRushWholeSecRef.current =
+        rushEndAtRef.current !== null
+          ? Math.max(0, Math.ceil((rushEndAtRef.current - Date.now()) / 1000))
+          : null;
+      lastRushMinuteMarkTriggeredRef.current = null;
+      setRushMinutePulse(false);
       return;
     }
 
@@ -3228,6 +3473,32 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             transform: scale(1);
           }
         }
+        @keyframes bsRushMinutePop {
+          0% { transform: scale(1); }
+          45% { transform: scale(1.09); }
+          100% { transform: scale(1); }
+        }
+        @keyframes bsRushHeartbeat {
+          0%, 100% { transform: scale(1); }
+          14% { transform: scale(1.07); }
+          28% { transform: scale(1); }
+          42% { transform: scale(1.045); }
+          70% { transform: scale(1); }
+        }
+        .bs-rush-minute-pop {
+          animation: bsRushMinutePop 320ms cubic-bezier(0.22, 1, 0.36, 1);
+          will-change: transform;
+        }
+        .bs-rush-heartbeat {
+          animation: bsRushHeartbeat 1s ease-in-out infinite;
+          will-change: transform;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .bs-rush-minute-pop,
+          .bs-rush-heartbeat {
+            animation: none !important;
+          }
+        }
         @keyframes bsTutPiece {
           0%, 10% { transform: translate(0, 0) scale(1); opacity: 1; }
           18% { transform: translate(10px, -16px) scale(1.06); opacity: 1; }
@@ -3423,21 +3694,29 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                   const mins = Math.floor(displaySec / 60);
                   const secs = displaySec % 60;
                   const formattedClock = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-                  const isLowTime = displaySec <= 15;
+                  const isCriticalTime = displaySec <= 15;
+                  const isWarmUrgency = displaySec > 15 && displaySec <= 30;
                   return (
                     <span
                       id="block-sync-rush-timer-pill"
                       aria-live="off"
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-2xl text-[10.5px] font-mono font-extrabold tracking-wider uppercase tabular-nums shrink-0 transition-colors duration-200 ${
-                        isLowTime
-                          ? darkMode
-                            ? "bg-[#4c0519]/90 text-[#fda4af] ring-1 ring-rose-400/50 animate-pulse"
-                            : "bg-[#FFE4E6] text-[#9D174D] ring-1 ring-rose-400/50 animate-pulse"
-                          : darkMode
-                            ? "bg-[#1B242E] text-[#38BDF8] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-                            : "bg-[#E6F1F8]/95 text-[#0369A1] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
-                      }`}
+                        isCriticalTime
+                          ? `${
+                              darkMode
+                                ? "bg-[#4c0519]/90 text-[#fda4af] ring-1 ring-rose-400/60 shadow-[0_0_16px_rgba(244,63,94,0.28)]"
+                                : "bg-[#FFE4E6] text-[#9D174D] ring-1 ring-rose-400/60 shadow-[0_0_14px_rgba(244,63,94,0.20)]"
+                            } ${displaySec > 0 && !isGameOver ? "bs-rush-heartbeat" : ""}`
+                          : isWarmUrgency
+                            ? darkMode
+                              ? "bg-[#F59E0B]/20 text-[#FBBF24] ring-1 ring-[#F59E0B]/45"
+                              : "bg-amber-100/95 text-[#D97706] ring-1 ring-[#F59E0B]/55"
+                            : darkMode
+                              ? "bg-[#1B242E] text-[#38BDF8] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                              : "bg-[#E6F1F8]/95 text-[#0369A1] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
+                      } ${rushMinutePulse && !isCriticalTime ? "bs-rush-minute-pop" : ""}`}
                     >
+                      <Clock className="w-3 h-3 shrink-0" aria-hidden="true" />
                       <span>RUSH</span>
                       <span>{formattedClock}</span>
                     </span>
@@ -3829,7 +4108,39 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           tileClasses={tileClasses}
           soloRuns={gameOverSummary.soloRuns}
           roomMode={isRoomMode}
-          standings={roomStandings}
+          roomCode={gameOverSummary.roomCode}
+          endReason={gameOverSummary.endReason}
+          standings={
+            isRoomMode
+              ? (() => {
+                  const base = (roomStandings || []).map((entry) =>
+                    entry.isSelf
+                      ? {
+                          ...entry,
+                          score: Math.max(entry.score, gameOverSummary.finalScore),
+                          statusLabel: undefined,
+                        }
+                      : { ...entry }
+                  );
+                  if (!base.some((entry) => entry.isSelf)) {
+                    base.push({
+                      id: uidRef.current || "self",
+                      name: "You",
+                      score: gameOverSummary.finalScore,
+                      isSelf: true,
+                      statusLabel: undefined,
+                    });
+                  }
+                  base.sort((a, b) => {
+                    const aDone = !a.statusLabel;
+                    const bDone = !b.statusLabel;
+                    if (aDone !== bDone) return aDone ? -1 : 1;
+                    return b.score - a.score;
+                  });
+                  return base;
+                })()
+              : roomStandings
+          }
           onPlayAgain={handlePlayAgain}
           onBackHome={handleNavigateHomeClick}
           onScoreTick={(tickIndex) =>
@@ -3838,6 +4149,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           onNewBestReveal={() => {
             playNewBestChordSound(soundOnRef.current);
             triggerBlockSyncHaptic("success-double");
+          }}
+          onPodiumReveal={(rank) => {
+            playPodiumChimeSound(rank, soundOnRef.current);
+            triggerBlockSyncHaptic(rank === 1 ? "success-double" : "medium");
           }}
           onModalSettledChange={(settled) => {
             endGameModalSettledRef.current = settled;

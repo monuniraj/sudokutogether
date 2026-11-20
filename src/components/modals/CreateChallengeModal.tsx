@@ -121,8 +121,8 @@ export interface CreateChallengeModalProps {
   onChangeBlocksRoomMode?: (mode: BlocksRoomMode) => void;
   blocksRoomUndo?: boolean;
   onChangeBlocksRoomUndo?: (allowUndo: boolean) => void;
-  blocksRoomTimeLimitSec?: 120 | 180 | 300;
-  onChangeBlocksRoomTimeLimitSec?: (seconds: 120 | 180 | 300) => void;
+  blocksRoomTimeLimitSec?: 120 | 180 | 300 | 600;
+  onChangeBlocksRoomTimeLimitSec?: (seconds: 120 | 180 | 300 | 600) => void;
 }
 
 type CreateRoomSubView = "main" | "selectGame" | "rules";
@@ -193,14 +193,14 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
   const [localSelectedGame, setLocalSelectedGame] = useState<CreateRoomGameId>("sudoku");
   const [localBlocksMode, setLocalBlocksMode] = useState<BlocksRoomMode>("classic");
   const [localBlocksUndo, setLocalBlocksUndo] = useState<boolean>(false);
-  const [localBlocksTimeLimitSec, setLocalBlocksTimeLimitSec] = useState<120 | 180 | 300>(180);
+  const [localBlocksTimeLimitSec, setLocalBlocksTimeLimitSec] = useState<120 | 180 | 300 | 600>(180);
 
   const effectiveSelectedGame: CreateRoomGameId = isDailyChallenge
     ? "sudoku"
     : selectedGame ?? localSelectedGame;
   const effectiveBlocksMode: BlocksRoomMode = blocksRoomMode ?? localBlocksMode;
   const effectiveBlocksUndo: boolean = blocksRoomUndo ?? localBlocksUndo;
-  const effectiveBlocksTimeLimitSec: 120 | 180 | 300 =
+  const effectiveBlocksTimeLimitSec: 120 | 180 | 300 | 600 =
     blocksRoomTimeLimitSec ?? localBlocksTimeLimitSec;
 
   const isBlocksTheme = effectiveSelectedGame === "blocks";
@@ -351,7 +351,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
     onChangeBlocksRoomUndo?.(allowUndo);
   };
 
-  const handleSetBlocksTimeLimit = (sec: 120 | 180 | 300) => {
+  const handleSetBlocksTimeLimit = (sec: 120 | 180 | 300 | 600) => {
     setLocalBlocksTimeLimitSec(sec);
     onChangeBlocksRoomTimeLimitSec?.(sec);
   };
@@ -1097,8 +1097,8 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                     <span className="text-[10.5px] font-mono font-black uppercase tracking-wider opacity-65">
                       Time Limit
                     </span>
-                    <div data-kbd-row="rules-blocks-time" className="grid grid-cols-3 gap-2">
-                      {([120, 180, 300] as const).map((sec) => {
+                    <div data-kbd-row="rules-blocks-time" className="grid grid-cols-4 gap-2">
+                      {([120, 180, 300, 600] as const).map((sec) => {
                         const active = effectiveBlocksTimeLimitSec === sec;
                         const label = `${Math.round(sec / 60)}m`;
                         return (

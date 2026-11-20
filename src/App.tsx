@@ -3353,7 +3353,7 @@ export default function App() {
   const [selectedCreateRoomGame, setSelectedCreateRoomGame] = useState<"sudoku" | "blocks">("sudoku");
   const [blocksRoomMode, setBlocksRoomMode] = useState<"classic" | "rush">("classic");
   const [blocksRoomUndo, setBlocksRoomUndo] = useState<boolean>(false);
-  const [blocksRoomTimeLimitSec, setBlocksRoomTimeLimitSec] = useState<120 | 180 | 300>(180);
+  const [blocksRoomTimeLimitSec, setBlocksRoomTimeLimitSec] = useState<120 | 180 | 300 | 600>(180);
   const [activeBlockSyncRoom, setActiveBlockSyncRoom] = useState<BlockSyncRoomConfig | null>(null);
   const [blockSyncRoomStandings, setBlockSyncRoomStandings] = useState<BlockSyncRoomStandingEntry[]>([]);
   const [showBlockSyncRoomInviteModal, setShowBlockSyncRoomInviteModal] = useState<boolean>(false);
@@ -3375,7 +3375,7 @@ export default function App() {
   blocksRoomModeRef.current = blocksRoomMode;
   const blocksRoomUndoRef = useRef<boolean>(blocksRoomUndo);
   blocksRoomUndoRef.current = blocksRoomUndo;
-  const blocksRoomTimeLimitSecRef = useRef<120 | 180 | 300>(blocksRoomTimeLimitSec);
+  const blocksRoomTimeLimitSecRef = useRef<120 | 180 | 300 | 600>(blocksRoomTimeLimitSec);
   blocksRoomTimeLimitSecRef.current = blocksRoomTimeLimitSec;
 
   const handleOpenBlockSyncEntry = () => {
@@ -9116,8 +9116,10 @@ export default function App() {
         const resolvedMode: "classic" | "rush" =
           rData.blocksMode === "rush" ? "rush" : "classic";
         const resolvedUndoAllowed = Boolean(rData.blocksUndoAllowed);
-        const resolvedTimeLimitSec: 120 | 180 | 300 =
-          rData.blocksTimeLimitSec === 120 || rData.blocksTimeLimitSec === 300
+        const resolvedTimeLimitSec: 120 | 180 | 300 | 600 =
+          rData.blocksTimeLimitSec === 120 ||
+          rData.blocksTimeLimitSec === 300 ||
+          rData.blocksTimeLimitSec === 600
             ? rData.blocksTimeLimitSec
             : 180;
         const isRoomHost = Boolean(
@@ -12870,7 +12872,7 @@ export default function App() {
     roomSeed?: number;
     blocksMode?: "classic" | "rush";
     blocksUndoAllowed?: boolean;
-    blocksTimeLimitSec?: 120 | 180 | 300;
+    blocksTimeLimitSec?: 120 | 180 | 300 | 600;
     difficulty?: Difficulty;
     mistakesLimit?: number;
     hintsLimit?: number;
@@ -14650,6 +14652,8 @@ export default function App() {
           durationSec: number;
         }> = [];
 
+        const roomOpponents: Array<{ id: string; name: string; authUid?: string }> = [];
+
         snapshot.forEach((docSnap) => {
           const d = docSnap.data() as Record<string, any>;
           const docId = String(d.id || d.uid || docSnap.id);
@@ -14663,6 +14667,19 @@ export default function App() {
           const displayName = String(
             d.displayName || d.name || d.playerName || "Player"
           );
+
+          if (!isSelf) {
+            const effectiveOppId = d.authUid ? String(d.authUid) : docId;
+            roomOpponents.push({
+              id: effectiveOppId,
+              authUid: d.authUid
+                ? String(d.authUid)
+                : !effectiveOppId.startsWith("GUEST_")
+                  ? effectiveOppId
+                  : undefined,
+              name: displayName,
+            });
+          }
 
           rows.push({
             entry: {
@@ -14689,6 +14706,9 @@ export default function App() {
         });
 
         setBlockSyncRoomStandings(rows.map((r) => r.entry));
+        if (roomOpponents.length > 0) {
+          void saveOpponentsToPastPlayers(roomOpponents);
+        }
       },
       (err) => {
         console.warn(
@@ -14772,6 +14792,29 @@ export default function App() {
           },
           { merge: true }
         );
+
+        // Sync room participants (including Guest_* accounts) into shared Recent Players pipeline
+        try {
+          const playersSnap = await getDocs(collection(db, "rooms", roomCode, "players"));
+          const roomOpponents = playersSnap.docs.map((pDoc) => {
+            const pData = pDoc.data() as Record<string, any>;
+            const rawId = String(pData.authUid || pData.id || pData.uid || pDoc.id);
+            return {
+              id: rawId,
+              authUid: pData.authUid
+                ? String(pData.authUid)
+                : !rawId.startsWith("GUEST_")
+                  ? rawId
+                  : undefined,
+              name: String(pData.displayName || pData.name || pData.playerName || "Player"),
+            };
+          });
+          if (roomOpponents.length > 0) {
+            await saveOpponentsToPastPlayers(roomOpponents);
+          }
+        } catch (oppErr) {
+          console.warn("[Firestore] Block Sync past_players sync notice:", oppErr);
+        }
       } catch (err) {
         console.error(
           `[Firestore] Failed to submit Block Sync room result for ${roomCode}:`,
