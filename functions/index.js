@@ -11,6 +11,10 @@ const PUSH_TRANSLATIONS = {
     duelInviteBody: (from) => `${from} challenged you to a Sudoku duel!`,
     duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} finished your challenge! Tap to see who won.`,
+    blocksInviteTitle: "Block Sync Challenge!",
+    blocksInviteBody: (from, mode) => `${from} challenged you to Block Sync (${mode})!`,
+    blocksCompleteTitle: "Block Sync Finished",
+    blocksCompleteBody: (name) => `${name} finished the Block Sync match! Tap to see standings.`,
     defaultPlayer: "A player"
   },
   hi: {
@@ -18,6 +22,10 @@ const PUSH_TRANSLATIONS = {
     duelInviteBody: (from) => `${from} ने आपको सुडोकू मुकाबले का चैलेंज भेजा है!`,
     duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} ने चैलेंज पूरा कर लिया! देखें कौन जीता।`,
+    blocksInviteTitle: "Block Sync चैलेंज!",
+    blocksInviteBody: (from, mode) => `${from} ने आपको Block Sync (${mode}) के लिए चैलेंज किया है!`,
+    blocksCompleteTitle: "Block Sync पूरा हुआ",
+    blocksCompleteBody: (name) => `${name} ने Block Sync मैच पूरा कर लिया! रैंकिंग देखें।`,
     defaultPlayer: "एक खिलाड़ी"
   },
   de: {
@@ -25,6 +33,10 @@ const PUSH_TRANSLATIONS = {
     duelInviteBody: (from) => `${from} fordert dich zu einem Sudoku-Duell heraus!`,
     duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} hat die Challenge beendet! Tippe, um das Ergebnis zu sehen.`,
+    blocksInviteTitle: "Block Sync Herausforderung!",
+    blocksInviteBody: (from, mode) => `${from} fordert dich zu Block Sync (${mode}) heraus!`,
+    blocksCompleteTitle: "Block Sync Beendet",
+    blocksCompleteBody: (name) => `${name} hat das Block-Sync-Match beendet! Tippe für die Rangliste.`,
     defaultPlayer: "Ein Spieler"
   },
   ja: {
@@ -32,6 +44,10 @@ const PUSH_TRANSLATIONS = {
     duelInviteBody: (from) => `${from}さんから数独の対戦を挑まれました！`,
     duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name}さんがパズルを解き終えました！結果を確認しましょう。`,
+    blocksInviteTitle: "Block Sync 対戦リクエスト！",
+    blocksInviteBody: (from, mode) => `${from}さんから Block Sync（${mode}）の招待が届きました！`,
+    blocksCompleteTitle: "Block Sync 終了",
+    blocksCompleteBody: (name) => `${name}さんが Block Sync を完了しました！順位を確認しましょう。`,
     defaultPlayer: "プレイヤー"
   },
   ko: {
@@ -39,6 +55,10 @@ const PUSH_TRANSLATIONS = {
     duelInviteBody: (from) => `${from}님이 스도쿠 대결을 신청했습니다!`,
     duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name}님이 퍼즐을 완료했습니다! 승자를 확인해 보세요.`,
+    blocksInviteTitle: "Block Sync 대결 신청!",
+    blocksInviteBody: (from, mode) => `${from}님이 Block Sync (${mode}) 대결에 초대했습니다!`,
+    blocksCompleteTitle: "Block Sync 종료",
+    blocksCompleteBody: (name) => `${name}님이 Block Sync 경기를 마쳤습니다! 순위를 확인하세요.`,
     defaultPlayer: "플레이어"
   },
   es: {
@@ -46,6 +66,10 @@ const PUSH_TRANSLATIONS = {
     duelInviteBody: (from) => `¡${from} te ha desafiado a un duelo de Sudoku!`,
     duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `¡${name} terminó el desafío! Toca para ver quién ganó.`,
+    blocksInviteTitle: "¡Desafío Block Sync!",
+    blocksInviteBody: (from, mode) => `¡${from} te desafió a Block Sync (${mode})!`,
+    blocksCompleteTitle: "Block Sync Finalizado",
+    blocksCompleteBody: (name) => `¡${name} terminó la partida de Block Sync! Toca para ver la tabla.`,
     defaultPlayer: "Un jugador"
   },
   fr: {
@@ -53,6 +77,10 @@ const PUSH_TRANSLATIONS = {
     duelInviteBody: (from) => `${from} vous a défié en duel de Sudoku !`,
     duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} a terminé le défi ! Appuyez pour voir le vainqueur.`,
+    blocksInviteTitle: "Défi Block Sync !",
+    blocksInviteBody: (from, mode) => `${from} vous défie sur Block Sync (${mode}) !`,
+    blocksCompleteTitle: "Block Sync Terminé",
+    blocksCompleteBody: (name) => `${name} a terminé la partie Block Sync ! Touchez pour voir le classement.`,
     defaultPlayer: "Un joueur"
   },
   it: {
@@ -60,6 +88,10 @@ const PUSH_TRANSLATIONS = {
     duelInviteBody: (from) => `${from} ti ha sfidato a un duello di Sudoku!`,
     duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} ha completato la sfida! Tocca per scoprire chi ha vinto.`,
+    blocksInviteTitle: "Sfida Block Sync!",
+    blocksInviteBody: (from, mode) => `${from} ti ha sfidato a Block Sync (${mode})!`,
+    blocksCompleteTitle: "Block Sync Terminato",
+    blocksCompleteBody: (name) => `${name} ha completato la partita di Block Sync! Tocca per la classifica.`,
     defaultPlayer: "Un giocatore"
   },
   "pt-BR": {
@@ -67,6 +99,10 @@ const PUSH_TRANSLATIONS = {
     duelInviteBody: (from) => `${from} desafiou você para um duelo de Sudoku!`,
     duelCompleteTitle: "Puzzle Race Finished",
     duelCompleteBody: (name) => `${name} concluiu o desafio! Toque para ver quem venceu.`,
+    blocksInviteTitle: "Desafio Block Sync!",
+    blocksInviteBody: (from, mode) => `${from} desafiou você no Block Sync (${mode})!`,
+    blocksCompleteTitle: "Block Sync Finalizado",
+    blocksCompleteBody: (name) => `${name} concluiu a partida de Block Sync! Toque para ver o placar.`,
     defaultPlayer: "Um jogador"
   }
 };
@@ -189,9 +225,14 @@ exports.onInviteCreated = onDocumentCreated("invites/{inviteId}", async (event) 
     const targetLang = resolveLanguage(userData.language || userData.lang || userData.locale || invite.language || invite.lang);
     const t = PUSH_TRANSLATIONS[targetLang] || PUSH_TRANSLATIONS.en;
     const fromName = String(invite.fromName || t.defaultPlayer);
+    const isBlocks = invite.gameType === "blocks";
+    const blocksMode = invite.blocksMode === "rush" ? "rush" : "classic";
+    const blocksModeLabel = blocksMode === "rush" ? "Time Rush" : "Classic";
 
-    const notifTitle = t.duelInviteTitle;
-    const notifBody = t.duelInviteBody(fromName);
+    const notifTitle = isBlocks ? t.blocksInviteTitle : t.duelInviteTitle;
+    const notifBody = isBlocks
+      ? t.blocksInviteBody(fromName, blocksModeLabel)
+      : t.duelInviteBody(fromName);
 
     const message = {
       tokens: tokens,
@@ -210,6 +251,14 @@ exports.onInviteCreated = onDocumentCreated("invites/{inviteId}", async (event) 
         maxMistakes: String(invite.maxMistakes !== undefined ? invite.maxMistakes : 3),
         hintLimit: String(invite.hintLimit !== undefined ? invite.hintLimit : 3),
         timerEnabled: String(invite.timerEnabled !== undefined ? invite.timerEnabled : true),
+        ...(isBlocks
+          ? {
+              gameType: "blocks",
+              blocksMode: String(invite.blocksMode || "classic"),
+              blocksUndoAllowed: String(invite.blocksUndoAllowed === true),
+              blocksTimeLimitSec: String(invite.blocksTimeLimitSec || 180)
+            }
+          : {}),
         title: notifTitle,
         body: notifBody,
         lang: targetLang
@@ -236,7 +285,7 @@ exports.onInviteCreated = onDocumentCreated("invites/{inviteId}", async (event) 
           vibrate: [200, 100, 200],
           renotify: true,
           requireInteraction: false,
-          tag: "sudoku-invite"
+          tag: isBlocks ? "blocks-invite" : "sudoku-invite"
         },
         fcmOptions: {
           link: `/?room=${encodeURIComponent(roomCode)}&toUserId=${encodeURIComponent(toUserId)}&inviteId=${encodeURIComponent(inviteId)}`
@@ -263,11 +312,15 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
     const recipientUids = new Set();
 
     // 1. Check room document
+    let isBlocks = false;
+    let blocksMode = "classic";
     const roomDoc = await db.collection("rooms").doc(roomCode).get();
     if (roomDoc.exists) {
       const roomData = roomDoc.data() || {};
       const hostId = roomData.hostId || roomData.creatorId || roomData.createdBy || roomData.userId;
       if (hostId && hostId !== finisherUid) recipientUids.add(hostId);
+      isBlocks = roomData.gameType === "blocks";
+      blocksMode = roomData.blocksMode === "rush" ? "rush" : "classic";
     }
 
     // 2. Check players in /rooms/{roomCode}/players
@@ -310,8 +363,10 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
       const t = PUSH_TRANSLATIONS[targetLang] || PUSH_TRANSLATIONS.en;
       const cleanFinisher = String(finisherName || t.defaultPlayer);
 
-      const notifTitle = t.duelCompleteTitle;
-      const notifBody = t.duelCompleteBody(cleanFinisher);
+      const notifTitle = isBlocks ? t.blocksCompleteTitle : t.duelCompleteTitle;
+      const notifBody = isBlocks
+        ? t.blocksCompleteBody(cleanFinisher)
+        : t.duelCompleteBody(cleanFinisher);
 
       const message = {
         tokens: tokens,
@@ -326,6 +381,12 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
           completedByUid: String(finisherUid),
           finisherUid: String(finisherUid),
           recipientUid: String(recipientId),
+          ...(isBlocks
+            ? {
+                gameType: "blocks",
+                blocksMode: String(blocksMode)
+              }
+            : {}),
           title: notifTitle,
           body: notifBody,
           lang: targetLang
@@ -340,7 +401,7 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
             defaultVibrateTimings: true,
             priority: "max",
             visibility: "public",
-            tag: "sudoku_result_" + roomCode
+            tag: (isBlocks ? "blocks_result_" : "sudoku_result_") + roomCode
           }
         },
         webpush: {
@@ -353,7 +414,7 @@ async function processChallengeCompleted(roomCode, finisherUid, finisherName) {
             vibrate: [200, 100, 200],
             renotify: true,
             requireInteraction: false,
-            tag: "sudoku-result-" + roomCode
+            tag: (isBlocks ? "blocks-result-" : "sudoku-result-") + roomCode
           },
           fcmOptions: {
             link: `/?room=${encodeURIComponent(roomCode)}&view=results`

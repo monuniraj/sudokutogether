@@ -160,6 +160,8 @@ interface GameOverSummary {
   isNewBest: boolean;
   endReason: "out_of_moves" | "time_up";
   roomCode?: string;
+  savedRoomBestScore?: number;
+  didImproveRoomScore?: boolean;
   soloRuns: BlockSyncSoloRunEntry[];
 }
 
@@ -627,13 +629,13 @@ function spawnThreeBlocks(
       if (specProfile.clearVariants.length > 0 && Math.random() < 0.7) {
         const picked =
           specProfile.clearVariants[
-            Math.floor(Math.random() * specProfile.clearVariants.length)
+          Math.floor(Math.random() * specProfile.clearVariants.length)
           ];
         variant = chosenSpec.variants[picked.variantIndex];
       } else {
         const picked =
           specProfile.fitVariants[
-            Math.floor(Math.random() * specProfile.fitVariants.length)
+          Math.floor(Math.random() * specProfile.fitVariants.length)
           ];
         variant = chosenSpec.variants[picked.variantIndex];
       }
@@ -804,7 +806,7 @@ function getAnticipatedClearWaves(
     touchedCols.add(col);
     touchedBoxes.add(
       Math.floor(row / SUBGRID_SIZE) * SUBGRID_SIZE +
-        Math.floor(col / SUBGRID_SIZE)
+      Math.floor(col / SUBGRID_SIZE)
     );
   }
 
@@ -902,9 +904,9 @@ function cloneTrayBlocks(
   return trayBlocks.map((piece) =>
     piece
       ? {
-          ...piece,
-          shape: piece.shape.map((row) => [...row]),
-        }
+        ...piece,
+        shape: piece.shape.map((row) => [...row]),
+      }
       : null
   );
 }
@@ -1832,8 +1834,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       const candidateRoom = getPendingBlocksRoomSession(uid, multiplayerRoom.roomCode);
       initialPendingRoomRef.current =
         candidateRoom &&
-        candidateRoom.config.roomSeed === multiplayerRoom.roomSeed &&
-        candidateRoom.config.mode === multiplayerRoom.mode
+          candidateRoom.config.roomSeed === multiplayerRoom.roomSeed &&
+          candidateRoom.config.mode === multiplayerRoom.mode
           ? candidateRoom
           : null;
     } else {
@@ -1841,10 +1843,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       const candidate = loadBlocksSavedSession(uid);
       initialSessionRef.current =
         candidate &&
-        candidate.boardState.every((row) =>
-          row.every((cell) => !cell || cell.color in PASTEL_TILE_CLASSES_LIGHT)
-        ) &&
-        candidate.currentBlocks.every((p) => !p || p.color in PASTEL_TILE_CLASSES_LIGHT)
+          candidate.boardState.every((row) =>
+            row.every((cell) => !cell || cell.color in PASTEL_TILE_CLASSES_LIGHT)
+          ) &&
+          candidate.currentBlocks.every((p) => !p || p.color in PASTEL_TILE_CLASSES_LIGHT)
           ? candidate
           : null;
     }
@@ -2000,21 +2002,21 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     restoredSession && restoredSession.lastTrayShapeIds.length > 0
       ? (restoredSession.lastTrayShapeIds as BlockShapeId[])
       : currentBlocks
-          .filter((p): p is PolyominoPiece => p !== null)
-          .map((p) => p.shapeId)
+        .filter((p): p is PolyominoPiece => p !== null)
+        .map((p) => p.shapeId)
   );
   const historyStackRef = useRef<MoveSnapshot[]>(
     restoredSession
       ? restoredSession.historyStack.map((snap) => ({
-          boardState: cloneStableBoard(snap.boardState as BoardState),
-          currentBlocks: cloneTrayBlocks(snap.currentBlocks as (PolyominoPiece | null)[]),
-          score: snap.score,
-          clearStreak: snap.clearStreak,
-          lastTrayShapeIds: [...snap.lastTrayShapeIds] as BlockShapeId[],
-          roomTrayIndex: 0,
-          linesCleared: 0,
-          bestCombo: 0,
-        }))
+        boardState: cloneStableBoard(snap.boardState as BoardState),
+        currentBlocks: cloneTrayBlocks(snap.currentBlocks as (PolyominoPiece | null)[]),
+        score: snap.score,
+        clearStreak: snap.clearStreak,
+        lastTrayShapeIds: [...snap.lastTrayShapeIds] as BlockShapeId[],
+        roomTrayIndex: 0,
+        linesCleared: 0,
+        bestCombo: 0,
+      }))
       : []
   );
   const stableBoardRef = useRef<BoardState>(
@@ -2295,11 +2297,11 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         currentBlocksRef.current.map((piece) =>
           piece
             ? {
-                id: piece.uid,
-                shapeId: piece.shapeId,
-                cells: piece.shape.map((r) => [...r]),
-                colorKey: piece.color,
-              }
+              id: piece.uid,
+              shapeId: piece.shapeId,
+              cells: piece.shape.map((r) => [...r]),
+              colorKey: piece.color,
+            }
             : null
         );
       savePendingBlocksRoomSession(uidRef.current, {
@@ -2411,34 +2413,48 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       }
 
       const existingStandings = activeRoom ? roomStandingsRef.current || [] : [];
+      const existingCompletedSelf = activeRoom
+        ? existingStandings.find((entry) => entry.isSelf && !entry.statusLabel)
+        : undefined;
+      const previousSavedRoomScore = existingCompletedSelf
+        ? existingCompletedSelf.score
+        : null;
+      const didImproveRoomScore = activeRoom
+        ? previousSavedRoomScore === null || finalScore > previousSavedRoomScore
+        : false;
+      const savedRoomBestScore =
+        activeRoom && previousSavedRoomScore !== null
+          ? Math.max(previousSavedRoomScore, finalScore)
+          : undefined;
+
       const mergedStandingsForHistory = activeRoom
         ? (() => {
-            const list = existingStandings.map((entry) =>
-              entry.isSelf
-                ? {
-                    ...entry,
-                    score: Math.max(entry.score, finalScore),
-                    statusLabel: undefined,
-                  }
-                : { ...entry }
-            );
-            if (!list.some((entry) => entry.isSelf)) {
-              list.push({
-                id: uidRef.current || "self",
-                name: "You",
-                score: finalScore,
-                isSelf: true,
+          const list = existingStandings.map((entry) =>
+            entry.isSelf
+              ? {
+                ...entry,
+                score: Math.max(entry.score, finalScore),
                 statusLabel: undefined,
-              });
-            }
-            list.sort((a, b) => {
-              const aDone = !a.statusLabel;
-              const bDone = !b.statusLabel;
-              if (aDone !== bDone) return aDone ? -1 : 1;
-              return b.score - a.score;
+              }
+              : { ...entry }
+          );
+          if (!list.some((entry) => entry.isSelf)) {
+            list.push({
+              id: uidRef.current || "self",
+              name: "You",
+              score: finalScore,
+              isSelf: true,
+              statusLabel: undefined,
             });
-            return list;
-          })()
+          }
+          list.sort((a, b) => {
+            const aDone = !a.statusLabel;
+            const bDone = !b.statusLabel;
+            if (aDone !== bDone) return aDone ? -1 : 1;
+            return b.score - a.score;
+          });
+          return list;
+        })()
         : [];
       const selfOptimisticRank =
         mergedStandingsForHistory.findIndex((entry) => entry.isSelf) + 1;
@@ -2449,11 +2465,11 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         const mappedStandings: BlocksMatchStandingEntry[] | undefined =
           activeRoom && mergedStandingsForHistory.length > 0
             ? mergedStandingsForHistory.map((entry) => ({
-                uid: entry.id,
-                name: entry.name,
-                score: entry.score,
-                isCurrentUser: entry.isSelf,
-              }))
+              uid: entry.id,
+              name: entry.name,
+              score: entry.score,
+              isCurrentUser: entry.isSelf,
+            }))
             : undefined;
 
         recordBlocksMatchHistory(uidRef.current, {
@@ -2471,9 +2487,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
       const willCelebratePodium = Boolean(
         activeRoom &&
-          (selfOptimisticRank === 1 ||
-            (selfOptimisticRank === 2 && mergedStandingsForHistory.length >= 2) ||
-            (selfOptimisticRank === 3 && mergedStandingsForHistory.length >= 3))
+          didImproveRoomScore &&
+        (selfOptimisticRank === 1 ||
+          (selfOptimisticRank === 2 && mergedStandingsForHistory.length >= 2) ||
+          (selfOptimisticRank === 3 && mergedStandingsForHistory.length >= 3))
       );
 
       if (!vaultOutcome.isNewBest && !willCelebratePodium && endReason !== "time_up") {
@@ -2500,6 +2517,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         isNewBest: vaultOutcome.isNewBest,
         endReason,
         roomCode: activeRoom?.roomCode,
+        savedRoomBestScore,
+        didImproveRoomScore,
         soloRuns,
       });
     },
@@ -2708,10 +2727,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       const savedSolo = loadBlocksSavedSession(uidRef.current);
       const validSolo =
         savedSolo &&
-        savedSolo.boardState.every((row) =>
-          row.every((cell) => !cell || cell.color in PASTEL_TILE_CLASSES_LIGHT)
-        ) &&
-        savedSolo.currentBlocks.every((p) => !p || p.color in PASTEL_TILE_CLASSES_LIGHT)
+          savedSolo.boardState.every((row) =>
+            row.every((cell) => !cell || cell.color in PASTEL_TILE_CLASSES_LIGHT)
+          ) &&
+          savedSolo.currentBlocks.every((p) => !p || p.color in PASTEL_TILE_CLASSES_LIGHT)
           ? savedSolo
           : null;
 
@@ -2738,15 +2757,15 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       clearStreakRef.current = validSolo?.clearStreak ?? 0;
       historyStackRef.current = validSolo
         ? validSolo.historyStack.map((snap) => ({
-            boardState: cloneStableBoard(snap.boardState as BoardState),
-            currentBlocks: cloneTrayBlocks(snap.currentBlocks as (PolyominoPiece | null)[]),
-            score: snap.score,
-            clearStreak: snap.clearStreak,
-            lastTrayShapeIds: [...snap.lastTrayShapeIds] as BlockShapeId[],
-            roomTrayIndex: 0,
-            linesCleared: 0,
-            bestCombo: 0,
-          }))
+          boardState: cloneStableBoard(snap.boardState as BoardState),
+          currentBlocks: cloneTrayBlocks(snap.currentBlocks as (PolyominoPiece | null)[]),
+          score: snap.score,
+          clearStreak: snap.clearStreak,
+          lastTrayShapeIds: [...snap.lastTrayShapeIds] as BlockShapeId[],
+          roomTrayIndex: 0,
+          linesCleared: 0,
+          bestCombo: 0,
+        }))
         : [];
       roomTrayIndexRef.current = 0;
       linesClearedRef.current = 0;
@@ -3638,17 +3657,16 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
               reducedMotion
                 ? undefined
                 : {
-                    animation: midGameBestBanner.exiting
-                      ? "bsMidBestExit 180ms ease-in forwards"
-                      : "bsMidBestEnter 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
-                    willChange: "transform, opacity",
-                  }
+                  animation: midGameBestBanner.exiting
+                    ? "bsMidBestExit 180ms ease-in forwards"
+                    : "bsMidBestEnter 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
+                  willChange: "transform, opacity",
+                }
             }
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border-none text-xs font-extrabold uppercase tracking-[0.08em] whitespace-nowrap ${
-              darkMode
-                ? "bg-[#1B242E] text-[#F9CF43] ring-1 ring-[#F9CF43]/40 shadow-[0_12px_28px_rgba(0,0,0,0.48)]"
-                : "bg-amber-100/95 text-[#7A5208] shadow-[0_12px_26px_rgba(245,158,11,0.22)]"
-            }`}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border-none text-xs font-extrabold uppercase tracking-[0.08em] whitespace-nowrap ${darkMode
+              ? "bg-[#1B242E] text-[#F9CF43] ring-1 ring-[#F9CF43]/40 shadow-[0_12px_28px_rgba(0,0,0,0.48)]"
+              : "bg-amber-100/95 text-[#7A5208] shadow-[0_12px_26px_rgba(245,158,11,0.22)]"
+              }`}
           >
             <Star className="w-3.5 h-3.5 fill-current shrink-0" aria-hidden="true" />
             <span>NEW BEST!</span>
@@ -3672,11 +3690,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
               className="w-full flex items-center justify-between gap-2 px-0.5 min-w-0"
             >
               <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-2xl text-[10.5px] font-mono font-bold tracking-wider uppercase truncate ${
-                  darkMode
-                    ? "bg-[#1B242E] text-slate-200 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-                    : "bg-[#E6F1F8]/95 text-[#2C3E50] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
-                }`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-2xl text-[10.5px] font-mono font-bold tracking-wider uppercase truncate ${darkMode
+                  ? "bg-[#1B242E] text-slate-200 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                  : "bg-[#E6F1F8]/95 text-[#2C3E50] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
+                  }`}
               >
                 <span className="opacity-60">ROOM</span>
                 <span aria-hidden="true" className="opacity-40">
@@ -3700,21 +3717,19 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                     <span
                       id="block-sync-rush-timer-pill"
                       aria-live="off"
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-2xl text-[10.5px] font-mono font-extrabold tracking-wider uppercase tabular-nums shrink-0 transition-colors duration-200 ${
-                        isCriticalTime
-                          ? `${
-                              darkMode
-                                ? "bg-[#4c0519]/90 text-[#fda4af] ring-1 ring-rose-400/60 shadow-[0_0_16px_rgba(244,63,94,0.28)]"
-                                : "bg-[#FFE4E6] text-[#9D174D] ring-1 ring-rose-400/60 shadow-[0_0_14px_rgba(244,63,94,0.20)]"
-                            } ${displaySec > 0 && !isGameOver ? "bs-rush-heartbeat" : ""}`
-                          : isWarmUrgency
-                            ? darkMode
-                              ? "bg-[#F59E0B]/20 text-[#FBBF24] ring-1 ring-[#F59E0B]/45"
-                              : "bg-amber-100/95 text-[#D97706] ring-1 ring-[#F59E0B]/55"
-                            : darkMode
-                              ? "bg-[#1B242E] text-[#38BDF8] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-                              : "bg-[#E6F1F8]/95 text-[#0369A1] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
-                      } ${rushMinutePulse && !isCriticalTime ? "bs-rush-minute-pop" : ""}`}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-2xl text-[10.5px] font-mono font-extrabold tracking-wider uppercase tabular-nums shrink-0 transition-colors duration-200 ${isCriticalTime
+                        ? `${darkMode
+                          ? "bg-[#4c0519]/90 text-[#fda4af] ring-1 ring-rose-400/60 shadow-[0_0_16px_rgba(244,63,94,0.28)]"
+                          : "bg-[#FFE4E6] text-[#9D174D] ring-1 ring-rose-400/60 shadow-[0_0_14px_rgba(244,63,94,0.20)]"
+                        } ${displaySec > 0 && !isGameOver ? "bs-rush-heartbeat" : ""}`
+                        : isWarmUrgency
+                          ? darkMode
+                            ? "bg-[#F59E0B]/20 text-[#FBBF24] ring-1 ring-[#F59E0B]/45"
+                            : "bg-amber-100/95 text-[#D97706] ring-1 ring-[#F59E0B]/55"
+                          : darkMode
+                            ? "bg-[#1B242E] text-[#38BDF8] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                            : "bg-[#E6F1F8]/95 text-[#0369A1] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
+                        } ${rushMinutePulse && !isCriticalTime ? "bs-rush-minute-pop" : ""}`}
                     >
                       <Clock className="w-3 h-3 shrink-0" aria-hidden="true" />
                       <span>RUSH</span>
@@ -3724,11 +3739,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 })()
               ) : (
                 <span
-                  className={`inline-flex items-center px-2.5 py-1 rounded-2xl text-[10.5px] font-mono font-extrabold tracking-wider uppercase shrink-0 ${
-                    darkMode
-                      ? "bg-[#1B242E] text-[#34D399] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-                      : "bg-[#E6F1F8]/95 text-[#065F46] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
-                  }`}
+                  className={`inline-flex items-center px-2.5 py-1 rounded-2xl text-[10.5px] font-mono font-extrabold tracking-wider uppercase shrink-0 ${darkMode
+                    ? "bg-[#1B242E] text-[#34D399] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                    : "bg-[#E6F1F8]/95 text-[#065F46] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
+                    }`}
                 >
                   CLASSIC
                 </span>
@@ -3814,15 +3828,14 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             <div
               id="block-sync-best-card"
               aria-label="Best Score"
-              className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-2xl border-none flex flex-col items-center justify-center transition-all duration-[260ms] ${
-                bestCardGoldPulse
-                  ? darkMode
-                    ? "bg-[#2B2618] ring-2 ring-[#F9CF43]/70 shadow-[0_0_20px_rgba(249,207,67,0.28)] scale-[1.03]"
-                    : "bg-amber-100/95 ring-2 ring-amber-400/75 shadow-[0_6px_20px_rgba(245,158,11,0.25)] scale-[1.03]"
-                  : darkMode
-                    ? "bg-[#1B242E] shadow-[0_6px_18px_rgba(0,0,0,0.34)]"
-                    : "bg-[#E6F1F8]/95 shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
-              }`}
+              className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-2xl border-none flex flex-col items-center justify-center transition-all duration-[260ms] ${bestCardGoldPulse
+                ? darkMode
+                  ? "bg-[#2B2618] ring-2 ring-[#F9CF43]/70 shadow-[0_0_20px_rgba(249,207,67,0.28)] scale-[1.03]"
+                  : "bg-amber-100/95 ring-2 ring-amber-400/75 shadow-[0_6px_20px_rgba(245,158,11,0.25)] scale-[1.03]"
+                : darkMode
+                  ? "bg-[#1B242E] shadow-[0_6px_18px_rgba(0,0,0,0.34)]"
+                  : "bg-[#E6F1F8]/95 shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
+                }`}
             >
               <span
                 className={`text-[9.5px] leading-none font-semibold tracking-[0.10em] uppercase whitespace-nowrap truncate max-w-full opacity-55 ${darkMode ? "text-slate-100" : "text-[#2C3E50]"
@@ -3832,15 +3845,14 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
               </span>
               <span
                 id="block-sync-best-value"
-                className={`mt-0.5 text-[16px] sm:text-[18px] leading-tight font-extrabold tabular-nums tracking-tight whitespace-nowrap truncate max-w-full ${
-                  bestCardGoldPulse
-                    ? darkMode
-                      ? "text-[#F9CF43]"
-                      : "text-[#925808]"
-                    : darkMode
-                      ? "text-slate-200"
-                      : "text-[#3B556C]"
-                }`}
+                className={`mt-0.5 text-[16px] sm:text-[18px] leading-tight font-extrabold tabular-nums tracking-tight whitespace-nowrap truncate max-w-full ${bestCardGoldPulse
+                  ? darkMode
+                    ? "text-[#F9CF43]"
+                    : "text-[#925808]"
+                  : darkMode
+                    ? "text-slate-200"
+                    : "text-[#3B556C]"
+                  }`}
               >
                 {Math.max(bestScore, score).toLocaleString()}
               </span>
@@ -3915,11 +3927,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
                   const activeHoverClass =
                     isHovered && dragState
-                      ? `${
-                          (darkMode
-                            ? HOVER_PREVIEW_CLASSES_DARK
-                            : HOVER_PREVIEW_CLASSES_LIGHT)[dragState.piece.color]
-                        } scale-[0.98]`
+                      ? `${(darkMode
+                        ? HOVER_PREVIEW_CLASSES_DARK
+                        : HOVER_PREVIEW_CLASSES_LIGHT)[dragState.piece.color]
+                      } scale-[0.98]`
                       : "";
 
                   const emptyCellClass = darkMode
@@ -4050,15 +4061,14 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
               title="Undo last move"
               disabled={isGameOver || isBoardLockedBeat || !canUndo}
               onClick={handleUndo}
-              className={`h-8 sm:h-9 px-3.5 rounded-2xl border-none inline-flex items-center justify-center gap-1.5 max-w-full overflow-hidden text-xs font-semibold transition-all duration-150 ${
-                isGameOver || isBoardLockedBeat || !canUndo
-                  ? darkMode
-                    ? "bg-[#1B242E]/65 text-slate-500 opacity-50 cursor-not-allowed shadow-[0_3px_10px_rgba(0,0,0,0.22)]"
-                    : "bg-[#E6F1F8]/65 text-[#8AA0B5] opacity-60 cursor-not-allowed shadow-[0_3px_10px_rgba(44,62,80,0.03)]"
-                  : darkMode
-                    ? "bg-[#1B242E] text-slate-200 shadow-[0_4px_12px_rgba(0,0,0,0.38)] cursor-pointer active:scale-[0.97] hover:scale-[1.02]"
-                    : "bg-[#E6F1F8]/95 text-[#3B556C] shadow-[0_4px_12px_rgba(44,62,80,0.06)] cursor-pointer active:scale-[0.97] hover:scale-[1.02]"
-              }`}
+              className={`h-8 sm:h-9 px-3.5 rounded-2xl border-none inline-flex items-center justify-center gap-1.5 max-w-full overflow-hidden text-xs font-semibold transition-all duration-150 ${isGameOver || isBoardLockedBeat || !canUndo
+                ? darkMode
+                  ? "bg-[#1B242E]/65 text-slate-500 opacity-50 cursor-not-allowed shadow-[0_3px_10px_rgba(0,0,0,0.22)]"
+                  : "bg-[#E6F1F8]/65 text-[#8AA0B5] opacity-60 cursor-not-allowed shadow-[0_3px_10px_rgba(44,62,80,0.03)]"
+                : darkMode
+                  ? "bg-[#1B242E] text-slate-200 shadow-[0_4px_12px_rgba(0,0,0,0.38)] cursor-pointer active:scale-[0.97] hover:scale-[1.02]"
+                  : "bg-[#E6F1F8]/95 text-[#3B556C] shadow-[0_4px_12px_rgba(44,62,80,0.06)] cursor-pointer active:scale-[0.97] hover:scale-[1.02]"
+                }`}
             >
               <Undo2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
               <span className="truncate">Undo</span>
@@ -4109,36 +4119,38 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           soloRuns={gameOverSummary.soloRuns}
           roomMode={isRoomMode}
           roomCode={gameOverSummary.roomCode}
+          savedRoomBestScore={gameOverSummary.savedRoomBestScore}
+          didImproveRoomScore={gameOverSummary.didImproveRoomScore}
           endReason={gameOverSummary.endReason}
           standings={
             isRoomMode
               ? (() => {
-                  const base = (roomStandings || []).map((entry) =>
-                    entry.isSelf
-                      ? {
-                          ...entry,
-                          score: Math.max(entry.score, gameOverSummary.finalScore),
-                          statusLabel: undefined,
-                        }
-                      : { ...entry }
-                  );
-                  if (!base.some((entry) => entry.isSelf)) {
-                    base.push({
-                      id: uidRef.current || "self",
-                      name: "You",
-                      score: gameOverSummary.finalScore,
-                      isSelf: true,
+                const base = (roomStandings || []).map((entry) =>
+                  entry.isSelf
+                    ? {
+                      ...entry,
+                      score: Math.max(entry.score, gameOverSummary.finalScore),
                       statusLabel: undefined,
-                    });
-                  }
-                  base.sort((a, b) => {
-                    const aDone = !a.statusLabel;
-                    const bDone = !b.statusLabel;
-                    if (aDone !== bDone) return aDone ? -1 : 1;
-                    return b.score - a.score;
+                    }
+                    : { ...entry }
+                );
+                if (!base.some((entry) => entry.isSelf)) {
+                  base.push({
+                    id: uidRef.current || "self",
+                    name: "You",
+                    score: gameOverSummary.finalScore,
+                    isSelf: true,
+                    statusLabel: undefined,
                   });
-                  return base;
-                })()
+                }
+                base.sort((a, b) => {
+                  const aDone = !a.statusLabel;
+                  const bDone = !b.statusLabel;
+                  if (aDone !== bDone) return aDone ? -1 : 1;
+                  return b.score - a.score;
+                });
+                return base;
+              })()
               : roomStandings
           }
           onPlayAgain={handlePlayAgain}

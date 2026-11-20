@@ -4839,7 +4839,39 @@ export default function App() {
       }
       const dedupeKey = String(payload.id || payload.roomCode || payload.gameId || "");
       if (dedupeKey) {
-        if (surfacedInviteIdsRef.current.has(dedupeKey)) return;
+        if (surfacedInviteIdsRef.current.has(dedupeKey)) {
+          // Belt-and-suspenders enrichment: if push arrived first without Block Sync metadata
+          // and Firestore /invites snapshot arrives moments later WITH metadata, patch Bell + live
+          // toast in-place without replaying sound or resetting the countdown timer.
+          if (
+            payload.gameType === "blocks" ||
+            payload.blocksMode ||
+            payload.blocksUndoAllowed !== undefined ||
+            payload.blocksTimeLimitSec !== undefined
+          ) {
+            upsertBellChallenge(payload);
+            const incomingCode = extractRoomCodeFromChallenge(payload);
+            setActiveInviteNotification((prev: any) => {
+              if (!prev) return prev;
+              const prevCode = extractRoomCodeFromChallenge(prev);
+              const matchesId = prev.id === dedupeKey || prev.inviteId === dedupeKey;
+              const matchesRoom = Boolean(incomingCode && prevCode && incomingCode === prevCode);
+              if (!matchesId && !matchesRoom) return prev;
+              return {
+                ...prev,
+                ...(payload.gameType ? { gameType: payload.gameType } : {}),
+                ...(payload.blocksMode ? { blocksMode: payload.blocksMode } : {}),
+                ...(payload.blocksUndoAllowed !== undefined
+                  ? { blocksUndoAllowed: payload.blocksUndoAllowed }
+                  : {}),
+                ...(payload.blocksTimeLimitSec !== undefined
+                  ? { blocksTimeLimitSec: payload.blocksTimeLimitSec }
+                  : {}),
+              };
+            });
+          }
+          return;
+        }
         surfacedInviteIdsRef.current.add(dedupeKey);
       }
     }
@@ -10555,9 +10587,34 @@ export default function App() {
 
               // Suppress foreground audio chime & duplicate banner if user is on Game Screen or results modal is open for matching room
               const isSuppressed = shouldSuppressToastForRoom(targetCode);
+              const notifData = (notification.data as any) || {};
+              const pushRawLimit = Number(notifData.blocksTimeLimitSec);
+              const pushBlocksMeta: Partial<
+                Pick<
+                  PendingChallenge,
+                  "gameType" | "blocksMode" | "blocksUndoAllowed" | "blocksTimeLimitSec"
+                >
+              > =
+                notifData.gameType === "blocks"
+                  ? {
+                      gameType: "blocks",
+                      blocksMode: notifData.blocksMode === "rush" ? "rush" : "classic",
+                      ...(notifData.blocksUndoAllowed !== undefined
+                        ? {
+                            blocksUndoAllowed:
+                              String(notifData.blocksUndoAllowed) === "true",
+                          }
+                        : {}),
+                      ...(pushRawLimit === 120 ||
+                      pushRawLimit === 180 ||
+                      pushRawLimit === 300 ||
+                      pushRawLimit === 600
+                        ? { blocksTimeLimitSec: pushRawLimit as BlockSyncRoomTimeLimitSec }
+                        : {}),
+                    }
+                  : {};
 
               if (type === 'challenge_completed') {
-                const notifData = (notification.data as any) || {};
                 const completedByUid = notifData.completedByUid || notifData.finisherUid || notifData.senderId || notifData.fromUserId;
                 const recipientUid = authUser?.uid || notifData.recipientUid || notifData.toUserId || notifData.targetUid || userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || "";
                 if (completedByUid && recipientUid && completedByUid === recipientUid) {
@@ -10578,12 +10635,13 @@ export default function App() {
                   id: canonicalId,
                   inviteId: canonicalId,
                   type: 'challenge_completed',
-                  title: "Puzzle Race Finished",
+                  title: pushBlocksMeta.gameType === "blocks" ? "Block Sync Finished" : "Puzzle Race Finished",
                   fromName: fromName || senderName || "Opponent",
                   senderName: fromName || senderName || "Opponent",
                   roomCode: targetCode,
                   gameId: targetCode,
-                  sentAt: Date.now()
+                  sentAt: Date.now(),
+                  ...pushBlocksMeta,
                 });
 
                 if (isSuppressed) {
@@ -10604,10 +10662,11 @@ export default function App() {
                   setActiveInviteNotification({
                     id: canonicalId,
                     type: 'challenge_completed',
-                    title: "Puzzle Race Finished",
+                    title: pushBlocksMeta.gameType === "blocks" ? "Block Sync Finished" : "Puzzle Race Finished",
                     fromName: fromName || senderName || "Opponent",
                     roomCode: targetCode,
-                    gameId: targetCode
+                    gameId: targetCode,
+                    ...pushBlocksMeta,
                   });
                 } else {
                   console.log(`[Push] Room ${targetCode} toast banner muted on non-game screen.`);
@@ -10635,7 +10694,8 @@ export default function App() {
                   toUserId: (notification.data as any)?.toUserId || (notification.data as any)?.targetUid,
                   difficulty: normalizeDifficulty((notification.data as any)?.difficulty),
                   seed: (notification.data as any)?.seed,
-                  sentAt: Date.now()
+                  sentAt: Date.now(),
+                  ...pushBlocksMeta,
                 });
               }
             }
@@ -10700,6 +10760,31 @@ export default function App() {
               const targetCode = roomCode || gameId || "";
               const cleanCode = (targetCode || "").toUpperCase().trim();
               const canonicalId = `puzzle_race_${cleanCode}`;
+              const swRawLimit = Number(event.data.blocksTimeLimitSec);
+              const swBlocksMeta: Partial<
+                Pick<
+                  PendingChallenge,
+                  "gameType" | "blocksMode" | "blocksUndoAllowed" | "blocksTimeLimitSec"
+                >
+              > =
+                event.data.gameType === "blocks"
+                  ? {
+                      gameType: "blocks",
+                      blocksMode: event.data.blocksMode === "rush" ? "rush" : "classic",
+                      ...(event.data.blocksUndoAllowed !== undefined
+                        ? {
+                            blocksUndoAllowed:
+                              String(event.data.blocksUndoAllowed) === "true",
+                          }
+                        : {}),
+                      ...(swRawLimit === 120 ||
+                      swRawLimit === 180 ||
+                      swRawLimit === 300 ||
+                      swRawLimit === 600
+                        ? { blocksTimeLimitSec: swRawLimit as BlockSyncRoomTimeLimitSec }
+                        : {}),
+                    }
+                  : {};
 
               if (showGameOverModalRef.current && isMatchingRoom(cleanCode)) {
                 console.log(`[Push] Suppressed secondary challenge_completed SW message for ${cleanCode} because GameOverModal is active.`);
@@ -10710,12 +10795,13 @@ export default function App() {
                 id: canonicalId,
                 inviteId: canonicalId,
                 type: 'challenge_completed',
-                title: "Puzzle Race Finished",
+                title: swBlocksMeta.gameType === "blocks" ? "Block Sync Finished" : "Puzzle Race Finished",
                 fromName: fromName || senderName || "Opponent",
                 senderName: fromName || senderName || "Opponent",
                 roomCode: targetCode,
                 gameId: targetCode,
-                sentAt: Date.now()
+                sentAt: Date.now(),
+                ...swBlocksMeta,
               });
 
               const isSuppressed = shouldSuppressToastForRoom(targetCode);
@@ -10738,10 +10824,11 @@ export default function App() {
                 setActiveInviteNotification({
                   id: canonicalId,
                   type: 'challenge_completed',
-                  title: "Puzzle Race Finished",
+                  title: swBlocksMeta.gameType === "blocks" ? "Block Sync Finished" : "Puzzle Race Finished",
                   fromName: fromName || senderName || "Opponent",
                   roomCode: targetCode,
-                  gameId: targetCode
+                  gameId: targetCode,
+                  ...swBlocksMeta,
                 });
               } else {
                 console.log(`[Push] Room ${targetCode} SW toast banner muted on non-game screen.`);
@@ -10767,6 +10854,31 @@ export default function App() {
                 const type = data.type || (notif as any)?.type;
                 const roomCode = data.roomCode || data.gameId || "";
                 const finisherName = data.finisherName || data.fromName || data.senderName || notif.title || "Opponent";
+                const fcmRawLimit = Number(data.blocksTimeLimitSec);
+                const fcmBlocksMeta: Partial<
+                  Pick<
+                    PendingChallenge,
+                    "gameType" | "blocksMode" | "blocksUndoAllowed" | "blocksTimeLimitSec"
+                  >
+                > =
+                  data.gameType === "blocks"
+                    ? {
+                        gameType: "blocks",
+                        blocksMode: data.blocksMode === "rush" ? "rush" : "classic",
+                        ...(data.blocksUndoAllowed !== undefined
+                          ? {
+                              blocksUndoAllowed:
+                                String(data.blocksUndoAllowed) === "true",
+                            }
+                          : {}),
+                        ...(fcmRawLimit === 120 ||
+                        fcmRawLimit === 180 ||
+                        fcmRawLimit === 300 ||
+                        fcmRawLimit === 600
+                          ? { blocksTimeLimitSec: fcmRawLimit as BlockSyncRoomTimeLimitSec }
+                          : {}),
+                      }
+                    : {};
 
                 if (type === 'challenge_completed') {
                   const completedByUid = data.completedByUid || data.finisherUid || data.senderId || data.fromUserId;
@@ -10789,12 +10901,13 @@ export default function App() {
                     id: canonicalId,
                     inviteId: canonicalId,
                     type: 'challenge_completed',
-                    title: "Puzzle Race Finished",
+                    title: fcmBlocksMeta.gameType === "blocks" ? "Block Sync Finished" : "Puzzle Race Finished",
                     fromName: finisherName,
                     senderName: finisherName,
                     roomCode: targetCode,
                     gameId: targetCode,
-                    sentAt: Date.now()
+                    sentAt: Date.now(),
+                    ...fcmBlocksMeta,
                   });
 
                   const isSuppressed = shouldSuppressToastForRoom(roomCode);
@@ -10818,10 +10931,11 @@ export default function App() {
                     setActiveInviteNotification({
                       id: canonicalId,
                       type: 'challenge_completed',
-                      title: "Puzzle Race Finished",
+                      title: fcmBlocksMeta.gameType === "blocks" ? "Block Sync Finished" : "Puzzle Race Finished",
                       fromName: finisherName,
                       roomCode: roomCode,
-                      gameId: roomCode
+                      gameId: roomCode,
+                      ...fcmBlocksMeta,
                     });
                   } else {
                     console.log(`[Push] Room ${cleanCode} FCM toast banner muted on non-game screen.`);
@@ -10843,7 +10957,8 @@ export default function App() {
                     toUserId: data.toUserId || data.targetUid,
                     difficulty: normalizeDifficulty(data.difficulty),
                     seed: data.seed,
-                    sentAt: Date.now()
+                    sentAt: Date.now(),
+                    ...fcmBlocksMeta,
                   });
                 }
               });
@@ -23978,6 +24093,7 @@ export default function App() {
               onJoinRoom={handleExecuteJoinRoomByCode}
               darkMode={darkMode}
               playClickSound={playClickSound}
+              activeGame={currentScreen === "blocks" ? "blocks" : "sudoku"}
             />
           )}
 
@@ -27400,8 +27516,8 @@ export default function App() {
               className={`relative w-full max-w-sm sm:max-w-md mx-auto p-3.5 sm:p-4 pt-3 rounded-2xl sm:rounded-3xl flex flex-col gap-3 backdrop-blur-md border shadow-2xl cursor-grab active:cursor-grabbing overflow-hidden select-none ${
                 isBlocksToast
                   ? (darkMode
-                      ? "bg-[#15202B]/95 border-[#38BDF8]/25 text-slate-100"
-                      : "bg-[#EDF6FD]/95 border-[#C8DFF3] text-slate-900")
+                      ? "bg-[#141A21]/95 border-white/12 text-slate-100"
+                      : "bg-[#F4F8FB]/95 border-[#D4E4F0] text-slate-900")
                   : (darkMode
                       ? "bg-zinc-900/95 border-zinc-800 text-stone-100"
                       : "bg-white/95 border-stone-200 text-stone-900")
@@ -27620,7 +27736,7 @@ export default function App() {
                         } ${
                           isBlocksToast
                             ? (darkMode
-                                ? "bg-[#0EA5E9] hover:bg-[#38BDF8] text-slate-950 focus-visible:ring-white/80"
+                                ? "bg-[#0EA5E9] hover:bg-[#38BDF8] text-white focus-visible:ring-white/80"
                                 : "bg-[#2B8CEE] hover:bg-[#1E7AD8] text-white focus-visible:ring-slate-900/35")
                             : notifTheme.primaryBtn
                         }`}

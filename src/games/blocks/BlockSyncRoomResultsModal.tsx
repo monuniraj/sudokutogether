@@ -171,7 +171,7 @@ export const BlockSyncRoomResultsModal: React.FC<BlockSyncRoomResultsModalProps>
   return (
     <div
       data-block-sync-dialog="true"
-      className={`fixed inset-0 z-[70] flex items-center justify-center p-3 transition-opacity duration-150 ${
+      className={`fixed inset-0 z-[10000] flex items-center justify-center p-3 transition-opacity duration-150 ${
         isDarkMode
           ? "bg-black/60 backdrop-blur-[3px]"
           : "bg-slate-900/25 backdrop-blur-[2px]"

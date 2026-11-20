@@ -26,6 +26,7 @@ export interface JoinRoomModalProps {
   onJoinRoom: () => void;
   darkMode: boolean;
   playClickSound: () => void;
+  activeGame?: "sudoku" | "blocks";
 }
 
 export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
@@ -41,8 +42,10 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
   isJoiningRoomLoading,
   onJoinRoom,
   darkMode,
-  playClickSound
+  playClickSound,
+  activeGame = "sudoku"
 }) => {
+  const isBlocksTheme = activeGame === "blocks";
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
   const roomCodeInputRef = useRef<HTMLInputElement>(null);
@@ -172,13 +175,18 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label={t("joinRoomTitle")}
+      data-block-sync-dialog={isBlocksTheme ? "true" : undefined}
       key="multiplayer-join-modal"
       initial={{ scale: 0.96, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       exit={{ scale: 0.96, opacity: 0 }}
       transition={{ duration: 0.15, ease: "easeOut" }}
-      className={`relative w-full max-w-[420px] rounded-3xl p-6 border-none flex flex-col gap-4 select-none z-[10001] text-left transition-colors duration-300 ${
-        darkMode ? "bg-[#1A1A1A] text-stone-200" : "bg-[#FDFBF7] text-stone-850"
+      className={`relative w-full max-w-[420px] rounded-3xl p-6 flex flex-col gap-4 select-none z-[10001] text-left transition-colors duration-300 ${
+        isBlocksTheme
+          ? (darkMode
+              ? "bg-[#141A21] text-slate-100 border border-white/10"
+              : "bg-[#F4F8FB] text-[#1E293B] border border-[#D4E4F0]")
+          : (darkMode ? "bg-[#1A1A1A] text-stone-200 border-none" : "bg-[#FDFBF7] text-stone-850 border-none")
       }`}
       style={{
         boxShadow: darkMode ? '0 10px 40px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.08)'
@@ -187,10 +195,20 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-0.5">
-          <span className={`text-[10px] font-sans font-black tracking-widest uppercase ${darkMode ? "text-sky-400" : "text-[#0369a1]"}`}>
-            SudokuSync
-          </span>
-          <h3 className="text-xl font-sans font-black tracking-tight leading-none text-stone-850 dark:text-stone-100">
+          {isBlocksTheme ? (
+            <span className={`text-[10px] font-sans font-black tracking-[0.18em] uppercase ${darkMode ? "text-slate-300" : "text-[#475569]"}`}>
+              BLOCK <span className={darkMode ? "text-[#38BDF8]" : "text-[#2B8CEE]"}>SYNC</span>
+            </span>
+          ) : (
+            <span className={`text-[10px] font-sans font-black tracking-widest uppercase ${darkMode ? "text-sky-400" : "text-[#0369a1]"}`}>
+              SudokuSync
+            </span>
+          )}
+          <h3 className={`text-xl font-sans font-black tracking-tight leading-none ${
+            isBlocksTheme
+              ? (darkMode ? "text-slate-100" : "text-[#1E293B]")
+              : "text-stone-850 dark:text-stone-100"
+          }`}>
             {t("joinRoomTitle")}
           </h3>
         </div>
@@ -199,23 +217,41 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
             playClickSound();
             onClose();
           }}
-          className="p-1.5 rounded-full text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
+          className={`p-1.5 rounded-full transition-colors border-none cursor-pointer focus-visible:outline-none ${
+            isBlocksTheme
+              ? (darkMode
+                  ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#38BDF8]"
+                  : "bg-[#E3EEF6] hover:bg-[#D5E6F3] text-[#475569] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2B8CEE]")
+              : "text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800"
+          }`}
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      <p className="text-xs font-sans text-stone-500 dark:text-stone-400">
+      <p className={`text-xs font-sans ${
+        isBlocksTheme
+          ? (darkMode ? "text-slate-400" : "text-[#64748B]")
+          : "text-stone-500 dark:text-stone-400"
+      }`}>
         {t("enterRoomCodeSub")}
       </p>
 
       {/* 6-digit room code input with segmented slots */}
       <div className="flex flex-col gap-1.5 mt-1">
         <div className="flex items-center justify-between">
-          <label className="font-sans font-bold text-2xs uppercase tracking-wider text-stone-400 dark:text-stone-500">
+          <label className={`font-sans font-bold text-2xs uppercase tracking-wider ${
+            isBlocksTheme
+              ? (darkMode ? "text-slate-400" : "text-[#64748B]")
+              : "text-stone-400 dark:text-stone-500"
+          }`}>
             {t("roomCodeInputLabel")}
           </label>
-          <span className="text-[10px] font-mono text-stone-400 dark:text-stone-500">
+          <span className={`text-[10px] font-mono ${
+            isBlocksTheme
+              ? (darkMode ? "text-slate-400" : "text-[#64748B]")
+              : "text-stone-400 dark:text-stone-500"
+          }`}>
             {roomCodeInput.length}/6
           </span>
         </div>
@@ -253,34 +289,42 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
           />
 
           {/* 6 Segmented Digit Slots */}
-          <div className="grid grid-cols-6 gap-2 sm:gap-2.5 w-full">
+          <div className={`grid grid-cols-6 gap-2 sm:gap-2.5 w-full ${isBlocksTheme ? "p-1 -m-1" : ""}`}>
             {[0, 1, 2, 3, 4, 5].map((idx) => {
               const hasDigit = idx < roomCodeInput.length;
               const isSlotActive = isRoomCodeFocused && (idx === roomCodeInput.length || (idx === 5 && roomCodeInput.length === 6));
               const digit = hasDigit ? roomCodeInput[idx] : null;
 
+              const slotClass = isBlocksTheme
+                ? (isSlotActive
+                    ? (darkMode
+                        ? "border-2 border-[#38BDF8] ring-2 ring-[#38BDF8]/30 bg-[#38BDF8]/12 scale-[1.03]"
+                        : "border-2 border-[#2B8CEE] ring-2 ring-[#2B8CEE]/25 bg-[#EBF4FB] scale-[1.03]")
+                    : (darkMode
+                        ? "border border-white/12 bg-[#1B242E] text-slate-100"
+                        : "border border-[#CBDCE9] bg-white text-[#1E293B] shadow-xs"))
+                : (isSlotActive
+                    ? "border-2 border-sky-500 ring-2 ring-sky-500/40 bg-sky-500/10 dark:bg-sky-500/15 scale-[1.03]"
+                    : hasDigit
+                    ? (darkMode 
+                        ? "border border-sky-500/40 bg-zinc-900 shadow-sm" 
+                        : "border border-sky-500/30 bg-stone-100 shadow-sm")
+                    : (darkMode
+                        ? "border border-zinc-800/80 bg-zinc-900/50"
+                        : "border border-stone-200/80 bg-stone-100/60 shadow-inner"));
+
               return (
                 <div
                   key={`room-slot-${idx}`}
-                  className={`h-12 sm:h-13 rounded-xl flex items-center justify-center font-mono text-lg sm:text-xl transition-all duration-150 select-none ${
-                    isSlotActive
-                      ? "border-2 border-sky-500 ring-2 ring-sky-500/40 bg-sky-500/10 dark:bg-sky-500/15 scale-[1.03]"
-                      : hasDigit
-                      ? (darkMode 
-                          ? "border border-sky-500/40 bg-zinc-900 shadow-sm" 
-                          : "border border-sky-500/30 bg-stone-100 shadow-sm")
-                      : (darkMode
-                          ? "border border-zinc-800/80 bg-zinc-900/50"
-                          : "border border-stone-200/80 bg-stone-100/60 shadow-inner")
-                  }`}
+                  className={`h-12 sm:h-13 rounded-xl flex items-center justify-center font-mono text-lg sm:text-xl transition-all duration-150 select-none ${slotClass}`}
                 >
                   {hasDigit ? (
-                    <span className="text-stone-900 dark:text-white font-bold">
+                    <span className={isBlocksTheme ? (darkMode ? "text-slate-100 font-bold" : "text-[#1E293B] font-bold") : "text-stone-900 dark:text-white font-bold"}>
                       {digit}
                     </span>
                   ) : (
                     <span className={`opacity-25 text-slate-500/30 dark:text-slate-500/30 font-black text-sm ${
-                      isSlotActive ? "animate-pulse text-sky-400/60 opacity-40" : ""
+                      isSlotActive ? (isBlocksTheme ? (darkMode ? "animate-pulse text-[#38BDF8]/70 opacity-60" : "animate-pulse text-[#2B8CEE]/70 opacity-60") : "animate-pulse text-sky-400/60 opacity-40") : ""
                     }`}>
                       –
                     </span>
@@ -354,14 +398,18 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
                 handleRoomPinChange(cleaned);
               }}
               aria-label={t("pinInputLabel")}
-              className={`w-full py-3 pl-4 pr-12 rounded-2xl border-none font-mono font-black text-base sm:text-lg tracking-widest text-center transition-all duration-150 focus:outline-none ${
+              className={`w-full py-3 pl-4 pr-12 rounded-2xl font-mono font-black text-base sm:text-lg tracking-widest text-center transition-all duration-150 focus:outline-none ${
                 requiresPin
                   ? (darkMode
-                      ? "bg-[#4c0519]/45 focus:bg-[#4c0519]/65 text-[#fecdd3] placeholder-[#fecdd3]/35 shadow-[0_4px_12px_rgba(0,0,0,0.35)] focus:ring-2 focus:ring-rose-400/50"
-                      : "bg-[#FFE4E6]/55 focus:bg-[#FFE4E6]/75 text-[#9D174D] placeholder-[#9D174D]/35 shadow-[0_4px_14px_rgba(157,23,77,0.05)] focus:ring-2 focus:ring-rose-300/70")
-                  : (darkMode
-                      ? "bg-zinc-900/75 text-stone-100 placeholder-stone-600 shadow-[0_4px_12px_rgba(0,0,0,0.3)] focus:ring-2 focus:ring-sky-500/40"
-                      : "bg-stone-100/85 text-stone-850 placeholder-stone-400/70 shadow-[0_4px_14px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-sky-300/70")
+                      ? "border-none bg-[#4c0519]/45 focus:bg-[#4c0519]/65 text-[#fecdd3] placeholder-[#fecdd3]/35 shadow-[0_4px_12px_rgba(0,0,0,0.35)] focus:ring-2 focus:ring-inset focus:ring-rose-400/50"
+                      : "border-none bg-[#FFE4E6]/55 focus:bg-[#FFE4E6]/75 text-[#9D174D] placeholder-[#9D174D]/35 shadow-[0_4px_14px_rgba(157,23,77,0.05)] focus:ring-2 focus:ring-inset focus:ring-rose-300/70")
+                  : isBlocksTheme
+                    ? (darkMode
+                        ? "bg-[#1B242E] border border-white/15 text-slate-100 placeholder-slate-500 focus:ring-2 focus:ring-inset focus:ring-[#38BDF8]/55"
+                        : "bg-white border border-[#C4D9EA] text-[#1E293B] placeholder-slate-400 focus:ring-2 focus:ring-inset focus:ring-[#2B8CEE]/45")
+                    : (darkMode
+                        ? "border-none bg-zinc-900/75 text-stone-100 placeholder-stone-600 shadow-[0_4px_12px_rgba(0,0,0,0.3)] focus:ring-2 focus:ring-sky-500/40"
+                        : "border-none bg-stone-100/85 text-stone-850 placeholder-stone-400/70 shadow-[0_4px_14px_rgba(0,0,0,0.04)] focus:ring-2 focus:ring-sky-300/70")
               }`}
             />
             <span
@@ -392,8 +440,12 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
             playClickSound();
             onBack();
           }}
-          className={`flex-1 py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer transition-all active:scale-98 truncate ${
-            darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-150 text-stone-700 hover:bg-stone-200"
+          className={`flex-1 py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer transition-all active:scale-98 truncate focus-visible:outline-none ${
+            isBlocksTheme
+              ? (darkMode
+                  ? "bg-[#1E2A36] hover:bg-[#273645] text-slate-200 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#38BDF8]"
+                  : "bg-[#E3EEF6] hover:bg-[#D5E6F3] text-[#475569] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#2B8CEE]")
+              : (darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-150 text-stone-700 hover:bg-stone-200")
           }`}
         >
           {t("backAction")}
@@ -404,10 +456,18 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
             playClickSound();
             onJoinRoom();
           }}
-          className={`flex-2 py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer transition-all shadow-none active:scale-98 flex items-center justify-center gap-2 ${
-            canJoin
-              ? (darkMode ? "bg-[#0c4a6e] hover:bg-[#0369a1] text-sky-100" : "bg-[#E0F2FE] hover:bg-[#bae6fd] text-[#0369a1]")
-              : "opacity-50 cursor-not-allowed bg-stone-200 dark:bg-zinc-800 text-stone-400"
+          className={`flex-2 py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider border-none cursor-pointer transition-all shadow-none active:scale-98 flex items-center justify-center gap-2 focus-visible:outline-none ${
+            isBlocksTheme
+              ? (canJoin
+                  ? (darkMode
+                      ? "bg-[#0EA5E9] hover:bg-[#38BDF8] text-white focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/80"
+                      : "bg-[#2B8CEE] hover:bg-[#1E7AD9] text-white focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-900/35")
+                  : (darkMode
+                      ? "opacity-50 cursor-not-allowed bg-[#1B242E] text-slate-500"
+                      : "opacity-55 cursor-not-allowed bg-[#DCE8F2] text-slate-400"))
+              : (canJoin
+                  ? (darkMode ? "bg-[#0c4a6e] hover:bg-[#0369a1] text-sky-100" : "bg-[#E0F2FE] hover:bg-[#bae6fd] text-[#0369a1]")
+                  : "opacity-50 cursor-not-allowed bg-stone-200 dark:bg-zinc-800 text-stone-400")
           }`}
         >
           {isJoiningRoomLoading ? (

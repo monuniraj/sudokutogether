@@ -266,7 +266,7 @@ export const BlockSyncRoomInviteModal: React.FC<BlockSyncRoomInviteModalProps> =
   return (
     <div
       data-block-sync-dialog="true"
-      className={`fixed inset-0 z-[60] flex items-center justify-center p-3 transition-opacity duration-150 ${
+      className={`fixed inset-0 z-[10000] flex items-center justify-center p-3 transition-opacity duration-150 ${
         darkMode
           ? "bg-black/60 backdrop-blur-[3px]"
           : "bg-slate-900/25 backdrop-blur-[2px]"
@@ -443,7 +443,7 @@ export const BlockSyncRoomInviteModal: React.FC<BlockSyncRoomInviteModalProps> =
             </button>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-2 p-1.5 -mx-1.5">
+          <div className="flex-1 min-h-0 max-h-[260px] overflow-y-auto no-scrollbar flex flex-col gap-2 p-1.5 -mx-1.5">
             {displayedList.length === 0 ? (
               <span
                 className={`text-xs italic py-6 text-center block ${
@@ -683,7 +683,7 @@ export const BlockSyncRoomInviteModal: React.FC<BlockSyncRoomInviteModalProps> =
                 : "bg-[#2B8CEE] hover:bg-[#1D7AD9] text-white shadow-[0_8px_20px_rgba(43,140,238,0.24)]"
             }`}
           >
-            {t("resumeAction")}
+            {t("resumeGame")}
           </button>
 
           <button

@@ -14,7 +14,7 @@ import {
   Trophy,
   X,
 } from "lucide-react";
-import { ConfettiBurst } from "../../components/common/ConfettiBurst";
+import { BlockSyncConfettiRain } from "./BlockSyncConfettiRain";
 
 export interface BlockSyncMiniBoardCell {
   color: string;
@@ -52,6 +52,8 @@ export interface BlockSyncEndGameModalProps {
   soloRuns?: BlockSyncSoloRunEntry[];
   roomMode?: boolean;
   roomCode?: string;
+  savedRoomBestScore?: number;
+  didImproveRoomScore?: boolean;
   endReason?: "out_of_moves" | "time_up";
   standings?: BlockSyncRoomStandingEntry[];
   onPlayAgain?: () => void;
@@ -114,6 +116,8 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
   soloRuns = [],
   roomMode = false,
   roomCode,
+  savedRoomBestScore,
+  didImproveRoomScore = true,
   endReason = "out_of_moves",
   standings = [],
   onPlayAgain,
@@ -138,9 +142,18 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
   const selfRank = selfStandingIdx >= 0 ? selfStandingIdx + 1 : null;
   const allPlayersFinished =
     hasMultiplayerStandings && standings.every((entry) => !entry.statusLabel);
-  const isFirstPlaceFinish = Boolean(roomMode && selfRank === 1);
-  const isPodiumTwoOrThreeFinish = Boolean(
+  const isLowerRoomReplay = Boolean(
     roomMode &&
+      !reviewMode &&
+      savedRoomBestScore != null &&
+      savedRoomBestScore > finalScore
+  );
+  const shouldCelebrateRoomPodium = Boolean(
+    roomMode && didImproveRoomScore && !isLowerRoomReplay
+  );
+  const isFirstPlaceFinish = Boolean(shouldCelebrateRoomPodium && selfRank === 1);
+  const isPodiumTwoOrThreeFinish = Boolean(
+    shouldCelebrateRoomPodium &&
       ((selfRank === 2 && standings.length >= 2) ||
         (selfRank === 3 && standings.length >= 3))
   );
@@ -154,9 +167,8 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
   const [newBestPopped, setNewBestPopped] = useState<boolean>(
     instantReveal && isNewBest
   );
-  const [confettiMode, setConfettiMode] = useState<
-    "all" | "top-only" | "cannon-only" | "top-two-waves" | null
-  >(null);
+  const [confettiActive, setConfettiActive] = useState<boolean>(false);
+  const [confettiBurstKey, setConfettiBurstKey] = useState<number>(0);
   const [copiedRoomCode, setCopiedRoomCode] = useState<boolean>(false);
   const [detailsVisible, setDetailsVisible] = useState<boolean>(instantReveal);
   const [isExiting, setIsExiting] = useState<boolean>(false);
@@ -231,7 +243,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
       setSnapshotVisible(true);
       setDisplayedScore(finalScore);
       setNewBestPopped(isNewBest);
-      setConfettiMode(null);
+      setConfettiActive(false);
       setDetailsVisible(true);
       onModalSettledChangeRef.current?.(true);
       return () => {
@@ -247,7 +259,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
       setSnapshotVisible(true);
       setDisplayedScore(finalScore);
       setNewBestPopped(isNewBest);
-      setConfettiMode(null);
+      setConfettiActive(false);
       setDetailsVisible(true);
       onModalSettledChangeRef.current?.(true);
       const cState = celebrationStateRef.current;
@@ -320,13 +332,16 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
       celebrationFiredRef.current = true;
       if (cState.isNewBest) {
         setNewBestPopped(true);
-        setConfettiMode("all");
+        setConfettiBurstKey((k) => k + 1);
+        setConfettiActive(true);
         onNewBestRevealRef.current?.();
       } else if (cState.isFirstPlaceFinish) {
-        setConfettiMode("top-two-waves");
+        setConfettiBurstKey((k) => k + 1);
+        setConfettiActive(true);
         onPodiumRevealRef.current?.(1);
       } else if (cState.isPodiumTwoOrThreeFinish && cState.selfRank) {
-        setConfettiMode("top-only");
+        setConfettiBurstKey((k) => k + 1);
+        setConfettiActive(true);
         onPodiumRevealRef.current?.(cState.selfRank);
       }
     }, 300);
@@ -341,7 +356,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
     return () => {
       window.cancelAnimationFrame(rafBackdrop);
       cancelChoreographyTimers();
-      setConfettiMode(null);
+      setConfettiActive(false);
       onModalSettledChangeRef.current?.(false);
     };
   }, [
@@ -358,7 +373,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
       if (exitLockRef.current) return;
       exitLockRef.current = true;
       onModalSettledChangeRef.current?.(false);
-      setConfettiMode(null);
+      setConfettiActive(false);
       cancelChoreographyTimers();
 
       if (action !== "closeReview") {
@@ -473,14 +488,18 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
         }
       `}</style>
 
-      {/* Full-Viewport Celebratory Confetti Canvas (outside modal overflow-hidden bounds, skipped in reviewMode) */}
-      {confettiMode !== null && !reducedMotion && !reviewMode && (
-        <ConfettiBurst
-          darkMode={darkMode}
-          mode={confettiMode}
-          onComplete={() => setConfettiMode(null)}
-        />
-      )}
+      {/* Full-Viewport 3D Crystal-Pastel Rain Canvas (strictly disabled in reviewMode & lower room replays) */}
+      <BlockSyncConfettiRain
+        active={confettiActive && !reducedMotion && !reviewMode && !isLowerRoomReplay}
+        burstKey={confettiBurstKey}
+        isDarkMode={darkMode}
+        intensity={
+          isNewBest ||
+          (roomMode && !isLowerRoomReplay && didImproveRoomScore && selfRank === 1)
+            ? "full"
+            : "podium"
+        }
+      />
 
       <div
         onClick={(e) => e.stopPropagation()}
@@ -542,7 +561,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
           </div>
 
           <div className="shrink-0 flex flex-wrap items-center justify-end gap-1.5">
-            {(isFirstPlaceFinish || isPodiumTwoOrThreeFinish) && (
+            {(isFirstPlaceFinish || isPodiumTwoOrThreeFinish) ? (
               <span
                 className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] leading-none font-bold uppercase tracking-[0.08em] ${
                   selfRank === 1
@@ -573,7 +592,17 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                       : "3RD"}
                 </span>
               </span>
-            )}
+            ) : isLowerRoomReplay && selfRank != null ? (
+              <span
+                className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] leading-none font-semibold uppercase tracking-[0.06em] tabular-nums ${
+                  darkMode
+                    ? "bg-[#1B242E] text-slate-300 border border-white/10"
+                    : "bg-[#E6F1F8] text-[#49637A] border border-[#D4E4F0]"
+                }`}
+              >
+                <span>ROOM #{selfRank}</span>
+              </span>
+            ) : null}
 
             {isNewBest && (
               <span
@@ -643,6 +672,18 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
             >
               {displayedScore.toLocaleString()}
             </span>
+            {isLowerRoomReplay && savedRoomBestScore != null && (
+              <span
+                id="block-sync-room-best-kept-pill"
+                className={`mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tabular-nums ${
+                  darkMode
+                    ? "bg-[#38BDF8]/12 text-[#38BDF8] border border-[#38BDF8]/25"
+                    : "bg-[#EBF4FB] text-[#2B8CEE] border border-[#BBD9F0]"
+                }`}
+              >
+                Room Best: {savedRoomBestScore.toLocaleString()} (kept)
+              </span>
+            )}
             <div
               className={`mt-2 inline-flex items-center gap-1.5 text-[11.5px] font-semibold tabular-nums ${
                 darkMode ? "text-slate-300/85" : "text-[#49637A]"
