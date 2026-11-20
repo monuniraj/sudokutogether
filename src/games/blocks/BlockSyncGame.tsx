@@ -15,6 +15,7 @@ import {
 import { isHapticsEnabled, setGlobalHapticsEnabled } from "../../utils/haptics";
 import { Language } from "../../i18n/translations";
 import {
+  BlocksMatchStandingEntry,
   BlocksSavedSession,
   clearBlocksSavedSession,
   getSettings,
@@ -27,12 +28,39 @@ import {
 } from "../../utils/storageEngine";
 import {
   BlockSyncEndGameModal,
+  BlockSyncRoomStandingEntry,
   BlockSyncSoloRunEntry,
 } from "./BlockSyncEndGameModal";
 import {
   BlockSyncSettingsAudioCue,
   BlockSyncSettingsModal,
 } from "./BlockSyncSettingsModal";
+import {
+  BLOCK_POLYOMINO_SHAPES,
+  clearPendingBlocksRoomSession,
+  EARLY_BLOCK_SHAPE_IDS,
+  generateSeededBlockTray,
+  getPendingBlocksRoomSession,
+  savePendingBlocksRoomSession,
+  type BlockShapeId,
+  type BlockShapeSpec,
+  type BlockSyncPendingRoomSession,
+  type BlockSyncPendingRoomTraySlot,
+  type BlockSyncRoomConfig,
+  type BlockSyncRoomMode,
+  type BlockSyncRoomResultPayload,
+  type BlockTier,
+  type PastelColorKey,
+  type PolyominoMatrix,
+  type PolyominoPiece,
+} from "./blocksRoomEngine";
+
+export type {
+  BlockSyncRoomConfig,
+  BlockSyncRoomMode,
+  BlockSyncRoomResultPayload,
+  PolyominoPiece,
+};
 
 const TUTORIAL_SEEN_KEY = "block_sync_tutorial_seen";
 
@@ -50,6 +78,11 @@ export interface BlockSyncGameProps {
   onBackHome?: () => void;
   onOpenMoreGames?: () => void;
   onOpenMultiplayer?: () => void;
+  // Optional Phase 3A Multiplayer Room props (Solo remains 100% unchanged when omitted)
+  multiplayerRoom?: BlockSyncRoomConfig | null;
+  roomStandings?: BlockSyncRoomStandingEntry[];
+  onSubmitRoomResult?: (payload: BlockSyncRoomResultPayload) => void;
+  onLeaveMultiplayerRoom?: () => void;
 }
 
 const BOARD_SIZE = 9;
@@ -62,57 +95,6 @@ const POINTS_PER_PLACED_SQUARE = 10;
 const POINTS_PER_CLEARED_GROUP = 100;
 const VANISH_DURATION_MS = 300;
 const MAX_UNDO_HISTORY = 25;
-
-type PolyominoMatrix = readonly (readonly (0 | 1)[])[];
-
-type BlockTier = "small" | "medium" | "heavy";
-
-type BlockShapeId =
-  | "dot-1x1"
-  | "line-2"
-  | "line-3"
-  | "line-4"
-  | "line-5"
-  | "box-2x2"
-  | "box-3x3"
-  | "small-l"
-  | "medium-l"
-  | "big-l"
-  | "t-shape"
-  | "z-shape"
-  | "s-shape"
-  | "plus-cross";
-
-type PastelColorKey =
-  | "yellow"
-  | "emerald"
-  | "emerald-mid"
-  | "teal"
-  | "emerald-rich"
-  | "orange"
-  | "amber"
-  | "orange-deep"
-  | "sky"
-  | "indigo"
-  | "cyan"
-  | "violet"
-  | "purple"
-  | "rose";
-
-interface BlockShapeSpec {
-  id: BlockShapeId;
-  color: PastelColorKey;
-  tier: BlockTier;
-  variants: readonly { id: string; shape: PolyominoMatrix }[];
-}
-
-export interface PolyominoPiece {
-  uid: string;
-  shapeId: BlockShapeId;
-  variantId: string;
-  shape: PolyominoMatrix;
-  color: PastelColorKey;
-}
 
 export interface BoardCell {
   color: PastelColorKey;
@@ -184,326 +166,12 @@ interface MoveSnapshot {
   score: number;
   clearStreak: number;
   lastTrayShapeIds: BlockShapeId[];
+  roomTrayIndex: number;
+  linesCleared: number;
+  bestCombo: number;
 }
 
-// 14 Core Polyomino Shapes & Complete Direction/Mirror Matrix with Base-Anchor Shading
-const POLYOMINO_SHAPES: readonly BlockShapeSpec[] = [
-  // 1. dot-1x1 -> Base Yellow (bg-yellow-300)
-  {
-    id: "dot-1x1",
-    color: "yellow",
-    tier: "small",
-    variants: [{ id: "dot-1x1", shape: [[1]] }],
-  },
-  // 2–5. Straight Lines -> Progressive Mint-to-Emerald Ramp (bg-emerald-300 -> bg-emerald-400 -> bg-teal-400 -> bg-emerald-500)
-  {
-    id: "line-2",
-    color: "emerald",
-    tier: "small",
-    variants: [
-      { id: "line-2-h", shape: [[1, 1]] },
-      { id: "line-2-v", shape: [[1], [1]] },
-    ],
-  },
-  {
-    id: "line-3",
-    color: "emerald-mid",
-    tier: "medium",
-    variants: [
-      { id: "line-3-h", shape: [[1, 1, 1]] },
-      { id: "line-3-v", shape: [[1], [1], [1]] },
-    ],
-  },
-  {
-    id: "line-4",
-    color: "teal",
-    tier: "heavy",
-    variants: [
-      { id: "line-4-h", shape: [[1, 1, 1, 1]] },
-      { id: "line-4-v", shape: [[1], [1], [1], [1]] },
-    ],
-  },
-  {
-    id: "line-5",
-    color: "emerald-rich",
-    tier: "heavy",
-    variants: [
-      { id: "line-5-h", shape: [[1, 1, 1, 1, 1]] },
-      { id: "line-5-v", shape: [[1], [1], [1], [1], [1]] },
-    ],
-  },
-  // 6–8. L-Shapes -> Small 3-Tile L (bg-orange-300), Medium 4-Tile L all 8 orientations (bg-amber-400), Big 5-Tile L (bg-orange-400)
-  {
-    id: "small-l",
-    color: "orange",
-    tier: "small",
-    variants: [
-      {
-        id: "small-l-tl",
-        shape: [
-          [1, 1],
-          [1, 0],
-        ],
-      },
-      {
-        id: "small-l-tr",
-        shape: [
-          [1, 1],
-          [0, 1],
-        ],
-      },
-      {
-        id: "small-l-bl",
-        shape: [
-          [1, 0],
-          [1, 1],
-        ],
-      },
-      {
-        id: "small-l-br",
-        shape: [
-          [0, 1],
-          [1, 1],
-        ],
-      },
-    ],
-  },
-  {
-    id: "medium-l",
-    color: "amber",
-    tier: "medium",
-    variants: [
-      // Upright & upside-down vertical 3x2 L/J variants
-      {
-        id: "medium-l-v-br",
-        shape: [
-          [1, 0],
-          [1, 0],
-          [1, 1],
-        ],
-      },
-      {
-        id: "medium-l-v-bl",
-        shape: [
-          [0, 1],
-          [0, 1],
-          [1, 1],
-        ],
-      },
-      {
-        id: "medium-l-v-tr",
-        shape: [
-          [1, 1],
-          [1, 0],
-          [1, 0],
-        ],
-      },
-      {
-        id: "medium-l-v-tl",
-        shape: [
-          [1, 1],
-          [0, 1],
-          [0, 1],
-        ],
-      },
-      // Horizontal left/right mirrored 2x3 L/J variants
-      {
-        id: "medium-l-h-bl",
-        shape: [
-          [1, 1, 1],
-          [1, 0, 0],
-        ],
-      },
-      {
-        id: "medium-l-h-br",
-        shape: [
-          [1, 1, 1],
-          [0, 0, 1],
-        ],
-      },
-      {
-        id: "medium-l-h-tl",
-        shape: [
-          [1, 0, 0],
-          [1, 1, 1],
-        ],
-      },
-      {
-        id: "medium-l-h-tr",
-        shape: [
-          [0, 0, 1],
-          [1, 1, 1],
-        ],
-      },
-    ],
-  },
-  {
-    id: "big-l",
-    color: "orange-deep",
-    tier: "heavy",
-    variants: [
-      {
-        id: "big-l-bl",
-        shape: [
-          [1, 0, 0],
-          [1, 0, 0],
-          [1, 1, 1],
-        ],
-      },
-      {
-        id: "big-l-br",
-        shape: [
-          [0, 0, 1],
-          [0, 0, 1],
-          [1, 1, 1],
-        ],
-      },
-      {
-        id: "big-l-tl",
-        shape: [
-          [1, 1, 1],
-          [1, 0, 0],
-          [1, 0, 0],
-        ],
-      },
-      {
-        id: "big-l-tr",
-        shape: [
-          [1, 1, 1],
-          [0, 0, 1],
-          [0, 0, 1],
-        ],
-      },
-    ],
-  },
-  // 9–12. Distinct T / Z / S / + Cross Shapes -> Sky (bg-sky-300), Indigo (bg-indigo-400), Cyan (bg-cyan-400), Violet (bg-violet-400)
-  {
-    id: "t-shape",
-    color: "sky",
-    tier: "medium",
-    variants: [
-      {
-        id: "t-shape-down",
-        shape: [
-          [1, 1, 1],
-          [0, 1, 0],
-        ],
-      },
-      {
-        id: "t-shape-up",
-        shape: [
-          [0, 1, 0],
-          [1, 1, 1],
-        ],
-      },
-      {
-        id: "t-shape-right",
-        shape: [
-          [1, 0],
-          [1, 1],
-          [1, 0],
-        ],
-      },
-      {
-        id: "t-shape-left",
-        shape: [
-          [0, 1],
-          [1, 1],
-          [0, 1],
-        ],
-      },
-    ],
-  },
-  {
-    id: "z-shape",
-    color: "indigo",
-    tier: "medium",
-    variants: [
-      {
-        id: "z-shape-h",
-        shape: [
-          [1, 1, 0],
-          [0, 1, 1],
-        ],
-      },
-      {
-        id: "z-shape-v",
-        shape: [
-          [0, 1],
-          [1, 1],
-          [1, 0],
-        ],
-      },
-    ],
-  },
-  {
-    id: "s-shape",
-    color: "cyan",
-    tier: "medium",
-    variants: [
-      {
-        id: "s-shape-h",
-        shape: [
-          [0, 1, 1],
-          [1, 1, 0],
-        ],
-      },
-      {
-        id: "s-shape-v",
-        shape: [
-          [1, 0],
-          [1, 1],
-          [0, 1],
-        ],
-      },
-    ],
-  },
-  {
-    id: "plus-cross",
-    color: "violet",
-    tier: "heavy",
-    variants: [
-      {
-        id: "plus-cross",
-        shape: [
-          [0, 1, 0],
-          [1, 1, 1],
-          [0, 1, 0],
-        ],
-      },
-    ],
-  },
-  // 13–14. Squares & Boxes -> Base Lavender (bg-purple-300) & Deep Rose Boss Block (bg-rose-400)
-  {
-    id: "box-2x2",
-    color: "purple",
-    tier: "small",
-    variants: [
-      {
-        id: "box-2x2",
-        shape: [
-          [1, 1],
-          [1, 1],
-        ],
-      },
-    ],
-  },
-  {
-    id: "box-3x3",
-    color: "rose",
-    tier: "heavy",
-    variants: [
-      {
-        id: "box-3x3-boss",
-        shape: [
-          [1, 1, 1],
-          [1, 1, 1],
-          [1, 1, 1],
-        ],
-      },
-    ],
-  },
-];
+const POLYOMINO_SHAPES: readonly BlockShapeSpec[] = BLOCK_POLYOMINO_SHAPES;
 
 // Vibrant saturated Soft-Square finishes (-300 lightest baseline stepping UP to -400/-500)
 const PASTEL_TILE_CLASSES_LIGHT: Record<PastelColorKey, string> = {
@@ -632,15 +300,7 @@ const HOVER_PREVIEW_CLASSES_DARK: Record<PastelColorKey, string> = {
     "bg-[#F04D70]/42 border border-[#F04D70]/60 shadow-[inset_0_2px_5px_rgba(255,255,255,0.22)]",
 };
 
-const EARLY_GAME_SHAPE_IDS: ReadonlySet<BlockShapeId> = new Set<BlockShapeId>([
-  "dot-1x1",
-  "line-2",
-  "line-3",
-  "small-l",
-  "medium-l",
-  "t-shape",
-  "box-2x2",
-]);
+const EARLY_GAME_SHAPE_IDS: ReadonlySet<BlockShapeId> = EARLY_BLOCK_SHAPE_IDS;
 
 let pieceSequenceCounter = 0;
 
@@ -2028,37 +1688,116 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
   onBackHome,
   onOpenMoreGames,
   onOpenMultiplayer,
+  multiplayerRoom = null,
+  roomStandings,
+  onSubmitRoomResult,
+  onLeaveMultiplayerRoom,
 }) => {
+  const isRoomMode = Boolean(multiplayerRoom);
+  const isUndoAllowed = !multiplayerRoom || multiplayerRoom.undoAllowed;
+
   const initialSessionRef = useRef<BlocksSavedSession | null | undefined>(undefined);
+  const initialPendingRoomRef = useRef<BlockSyncPendingRoomSession | null | undefined>(undefined);
   if (initialSessionRef.current === undefined) {
-    const candidate = loadBlocksSavedSession(uid);
-    initialSessionRef.current =
-      candidate &&
-      candidate.boardState.every((row) =>
-        row.every((cell) => !cell || cell.color in PASTEL_TILE_CLASSES_LIGHT)
-      ) &&
-      candidate.currentBlocks.every((p) => !p || p.color in PASTEL_TILE_CLASSES_LIGHT)
-        ? candidate
-        : null;
+    if (multiplayerRoom) {
+      // Never load or overwrite Solo saved session while inside a multiplayer room
+      initialSessionRef.current = null;
+      const candidateRoom = getPendingBlocksRoomSession(uid, multiplayerRoom.roomCode);
+      initialPendingRoomRef.current =
+        candidateRoom &&
+        candidateRoom.config.roomSeed === multiplayerRoom.roomSeed &&
+        candidateRoom.config.mode === multiplayerRoom.mode
+          ? candidateRoom
+          : null;
+    } else {
+      initialPendingRoomRef.current = null;
+      const candidate = loadBlocksSavedSession(uid);
+      initialSessionRef.current =
+        candidate &&
+        candidate.boardState.every((row) =>
+          row.every((cell) => !cell || cell.color in PASTEL_TILE_CLASSES_LIGHT)
+        ) &&
+        candidate.currentBlocks.every((p) => !p || p.color in PASTEL_TILE_CLASSES_LIGHT)
+          ? candidate
+          : null;
+    }
   }
   const restoredSession = initialSessionRef.current;
+  const restoredPendingRoom = initialPendingRoomRef.current ?? null;
 
-  const [boardState, setBoardState] = useState<BoardState>(() =>
-    restoredSession
-      ? cloneStableBoard(restoredSession.boardState as BoardState)
-      : createEmptyBoard()
-  );
-  const [currentBlocks, setCurrentBlocks] = useState<(PolyominoPiece | null)[]>(() =>
-    restoredSession
-      ? cloneTrayBlocks(restoredSession.currentBlocks as (PolyominoPiece | null)[])
-      : spawnThreeBlocks(0)
-  );
+  const restoreBoardFromPending = (rawBoard: (string | null)[][]): BoardState =>
+    rawBoard.map((row) =>
+      row.map((cellColor) =>
+        cellColor && cellColor in PASTEL_TILE_CLASSES_LIGHT
+          ? { color: cellColor as PastelColorKey }
+          : null
+      )
+    );
+
+  const restoreTrayFromPending = (
+    slots: Array<BlockSyncPendingRoomTraySlot | null>,
+    roomSeed?: number,
+    trayIndex?: number
+  ): (PolyominoPiece | null)[] => {
+    const mapped = slots.map((slot) => {
+      if (!slot) return null;
+      const color = (
+        slot.colorKey in PASTEL_TILE_CLASSES_LIGHT ? slot.colorKey : "sky"
+      ) as PastelColorKey;
+      return {
+        uid: slot.id,
+        shapeId: slot.shapeId as BlockShapeId,
+        variantId: slot.id,
+        shape: slot.cells.map((row) => row.map((v) => (v ? 1 : 0) as 0 | 1)),
+        color,
+      };
+    });
+    if (mapped.every((s) => s === null) && typeof roomSeed === "number") {
+      return generateSeededBlockTray(roomSeed, trayIndex ?? 0);
+    }
+    return mapped;
+  };
+
+  const [boardState, setBoardState] = useState<BoardState>(() => {
+    if (restoredSession) {
+      return cloneStableBoard(restoredSession.boardState as BoardState);
+    }
+    if (restoredPendingRoom) {
+      return restoreBoardFromPending(restoredPendingRoom.board);
+    }
+    return createEmptyBoard();
+  });
+  const [currentBlocks, setCurrentBlocks] = useState<(PolyominoPiece | null)[]>(() => {
+    if (restoredSession) {
+      return cloneTrayBlocks(restoredSession.currentBlocks as (PolyominoPiece | null)[]);
+    }
+    if (restoredPendingRoom && multiplayerRoom) {
+      return restoreTrayFromPending(
+        restoredPendingRoom.tray,
+        multiplayerRoom.roomSeed,
+        restoredPendingRoom.roomTrayIndex
+      );
+    }
+    if (multiplayerRoom) {
+      return generateSeededBlockTray(multiplayerRoom.roomSeed, 0);
+    }
+    return spawnThreeBlocks(0);
+  });
   const reducedMotion = useMemo(() => checkBlockSyncReducedMotion(), []);
-  const [score, setScore] = useState<number>(() => restoredSession?.score ?? 0);
+  const [score, setScore] = useState<number>(
+    () => restoredSession?.score ?? restoredPendingRoom?.score ?? 0
+  );
   const [bestScore, setBestScore] = useState<number>(() => loadBlocksVault(uid).bestScore);
   const [initialSessionBest, setInitialSessionBest] = useState<number>(
     () => loadBlocksVault(uid).bestScore
   );
+  const [rushRemainingSec, setRushRemainingSec] = useState<number | null>(() => {
+    if (multiplayerRoom?.mode !== "rush") return null;
+    if (restoredPendingRoom?.rushEndAt) {
+      return Math.max(0, Math.ceil((restoredPendingRoom.rushEndAt - Date.now()) / 1000));
+    }
+    return multiplayerRoom.timeLimitSec;
+  });
   const [clearFeedback, setClearFeedback] = useState<ClearFeedback | null>(null);
   const [isBoardLockedBeat, setIsBoardLockedBeat] = useState<boolean>(false);
   const [midGameBestBanner, setMidGameBestBanner] = useState<{
@@ -2145,13 +1884,29 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           score: snap.score,
           clearStreak: snap.clearStreak,
           lastTrayShapeIds: [...snap.lastTrayShapeIds] as BlockShapeId[],
+          roomTrayIndex: 0,
+          linesCleared: 0,
+          bestCombo: 0,
         }))
       : []
   );
   const stableBoardRef = useRef<BoardState>(
     restoredSession
       ? cloneStableBoard(restoredSession.boardState as BoardState)
-      : createEmptyBoard()
+      : restoredPendingRoom
+        ? restoreBoardFromPending(restoredPendingRoom.board)
+        : createEmptyBoard()
+  );
+
+  const roomTrayIndexRef = useRef<number>(restoredPendingRoom?.roomTrayIndex ?? 0);
+  const linesClearedRef = useRef<number>(restoredPendingRoom?.linesCleared ?? 0);
+  const bestComboRef = useRef<number>(restoredPendingRoom?.bestCombo ?? 0);
+  const roomStartedAtRef = useRef<number>(restoredPendingRoom?.startedAt ?? Date.now());
+  const roomSubmittedForCurrentRunRef = useRef<boolean>(false);
+  const rushEndAtRef = useRef<number | null>(
+    multiplayerRoom?.mode === "rush"
+      ? (restoredPendingRoom?.rushEndAt ?? Date.now() + multiplayerRoom.timeLimitSec * 1000)
+      : null
   );
 
   const dragStateRef = useRef<ActiveDragState | null>(null);
@@ -2170,6 +1925,11 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
   const gameOverSummaryRef = useRef<GameOverSummary | null>(gameOverSummary);
   const endGameModalSettledRef = useRef<boolean>(false);
   const endGamePlayAgainTriggerRef = useRef<(() => void) | null>(null);
+  const multiplayerRoomRef = useRef<BlockSyncRoomConfig | null>(multiplayerRoom);
+  const roomStandingsRef = useRef<BlockSyncRoomStandingEntry[] | undefined>(roomStandings);
+  const onSubmitRoomResultRef = useRef(onSubmitRoomResult);
+  const onLeaveMultiplayerRoomRef = useRef(onLeaveMultiplayerRoom);
+  const isUndoAllowedRef = useRef<boolean>(isUndoAllowed);
 
   dragStateRef.current = dragState;
   boardStateRef.current = boardState;
@@ -2185,6 +1945,11 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
   isSettingsOpenRef.current = isSettingsOpen;
   showTutorialRef.current = showTutorial;
   gameOverSummaryRef.current = gameOverSummary;
+  multiplayerRoomRef.current = multiplayerRoom;
+  roomStandingsRef.current = roomStandings;
+  onSubmitRoomResultRef.current = onSubmitRoomResult;
+  onLeaveMultiplayerRoomRef.current = onLeaveMultiplayerRoom;
+  isUndoAllowedRef.current = isUndoAllowed;
 
   const applySoundSetting = useCallback(
     (next: boolean, playBoardThud = false) => {
@@ -2388,6 +2153,39 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
   const persistActiveSession = useCallback(() => {
     if (isGameOverRef.current) return;
+
+    const activeRoom = multiplayerRoomRef.current;
+    if (activeRoom) {
+      // Save per-room pending state in isolated room vault; NEVER touch Solo savedSession
+      const boardSnapshot = stableBoardRef.current.map((row) =>
+        row.map((cell) => (cell ? cell.color : null))
+      );
+      const traySlots: Array<BlockSyncPendingRoomTraySlot | null> =
+        currentBlocksRef.current.map((piece) =>
+          piece
+            ? {
+                id: piece.uid,
+                shapeId: piece.shapeId,
+                cells: piece.shape.map((r) => [...r]),
+                colorKey: piece.color,
+              }
+            : null
+        );
+      savePendingBlocksRoomSession(uidRef.current, {
+        config: activeRoom,
+        board: boardSnapshot,
+        tray: traySlots,
+        roomTrayIndex: roomTrayIndexRef.current,
+        score: scoreRef.current,
+        linesCleared: linesClearedRef.current,
+        bestCombo: bestComboRef.current,
+        startedAt: roomStartedAtRef.current,
+        ...(rushEndAtRef.current !== null ? { rushEndAt: rushEndAtRef.current } : {}),
+        updatedAt: Date.now(),
+      });
+      return;
+    }
+
     if (historyStackRef.current.length === 0 && scoreRef.current === 0) return;
 
     saveBlocksSavedSession(
@@ -2414,10 +2212,17 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     const handlePageHide = () => {
       persistActiveSession();
     };
+    const handleVisibilitySave = () => {
+      if (document.visibilityState === "hidden") {
+        persistActiveSession();
+      }
+    };
     window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibilitySave);
 
     return () => {
       window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibilitySave);
       persistActiveSession();
       stopSustainedBlocksAudio(0.05);
       clearCelebrationTimers();
@@ -2433,64 +2238,167 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     persistActiveSession,
   ]);
 
-  const finalizeGameOver = useCallback((finalScore: number) => {
-    clearBlocksSavedSession(uidRef.current);
-    setIsBoardLockedBeat(false);
-    isBoardLockedBeatRef.current = false;
-    const vaultOutcome = updateBlocksBestScore(finalScore, uidRef.current);
-    setBestScore(vaultOutcome.bestScore);
-    isGameOverRef.current = true;
+  const finalizeGameOver = useCallback(
+    (finalScore: number, endReason: "out_of_moves" | "time_up" = "out_of_moves") => {
+      const activeRoom = multiplayerRoomRef.current;
+      if (activeRoom) {
+        clearPendingBlocksRoomSession(uidRef.current, activeRoom.roomCode);
+      } else {
+        clearBlocksSavedSession(uidRef.current);
+      }
+      setIsBoardLockedBeat(false);
+      isBoardLockedBeatRef.current = false;
+      const vaultOutcome = updateBlocksBestScore(finalScore, uidRef.current);
+      setBestScore(vaultOutcome.bestScore);
+      isGameOverRef.current = true;
 
-    if (!matchRecordedForCurrentRunRef.current) {
-      matchRecordedForCurrentRunRef.current = true;
       const boardSnapshot = stableBoardRef.current.map((row) =>
         row.map((cell) => (cell ? cell.color : null))
       );
-      const percentile = calculateBlockSyncPercentile(finalScore).higherThanPercent;
-      recordBlocksMatchHistory(uidRef.current, {
-        id: vaultOutcome.currentRunId,
-        score: finalScore,
-        bestAtTime: vaultOutcome.bestScore,
+
+      if (activeRoom && !roomSubmittedForCurrentRunRef.current) {
+        roomSubmittedForCurrentRunRef.current = true;
+        const elapsedSec = Math.max(
+          0,
+          Math.round((Date.now() - roomStartedAtRef.current) / 1000)
+        );
+        const durationSec =
+          activeRoom.mode === "rush"
+            ? Math.min(activeRoom.timeLimitSec, elapsedSec)
+            : elapsedSec;
+
+        onSubmitRoomResultRef.current?.({
+          roomCode: activeRoom.roomCode,
+          score: finalScore,
+          linesCleared: linesClearedRef.current,
+          bestCombo: bestComboRef.current,
+          mode: activeRoom.mode,
+          endReason,
+          durationSec,
+          boardSnapshot,
+        });
+      }
+
+      if (!matchRecordedForCurrentRunRef.current) {
+        matchRecordedForCurrentRunRef.current = true;
+        const percentile = calculateBlockSyncPercentile(finalScore).higherThanPercent;
+        const mappedStandings: BlocksMatchStandingEntry[] | undefined =
+          activeRoom && roomStandingsRef.current && roomStandingsRef.current.length > 0
+            ? roomStandingsRef.current.map((entry) => ({
+                uid: entry.id,
+                name: entry.name,
+                score: entry.score,
+                isCurrentUser: entry.isSelf,
+              }))
+            : undefined;
+
+        recordBlocksMatchHistory(uidRef.current, {
+          id: vaultOutcome.currentRunId,
+          score: finalScore,
+          bestAtTime: vaultOutcome.bestScore,
+          isNewBest: vaultOutcome.isNewBest,
+          percentile,
+          mode: activeRoom ? "multiplayer" : "solo",
+          ...(activeRoom ? { roomCode: activeRoom.roomCode } : {}),
+          ...(mappedStandings ? { roomStandings: mappedStandings } : {}),
+          boardSnapshot,
+        });
+      }
+
+      if (!vaultOutcome.isNewBest) {
+        playOutOfMovesSighSound(soundOnRef.current);
+        triggerBlockSyncHaptic("warning");
+      }
+      const soloRuns: BlockSyncSoloRunEntry[] = vaultOutcome.topRuns.map((entry) => ({
+        id: entry.id,
+        score: entry.score,
+        achievedAt: entry.achievedAt,
+        isCurrent: entry.id === vaultOutcome.currentRunId,
+        label:
+          entry.id === vaultOutcome.currentRunId
+            ? "This Run"
+            : entry.id.startsWith("legacy-best-")
+              ? "Prior Best"
+              : undefined,
+      }));
+      setGameOverSummary({
+        finalScore,
+        previousBestScore: vaultOutcome.previousBestScore,
+        bestScore: vaultOutcome.bestScore,
+        initialSessionBest: initialSessionBestRef.current,
         isNewBest: vaultOutcome.isNewBest,
-        percentile,
-        mode: "solo",
-        boardSnapshot,
+        soloRuns,
       });
+    },
+    []
+  );
+
+  // Wall-clock Time Rush countdown (`mode === "rush"`): cannot be paused or cheated by minimizing
+  useEffect(() => {
+    if (!multiplayerRoom || multiplayerRoom.mode !== "rush" || isGameOver) {
+      if (!multiplayerRoom || multiplayerRoom.mode !== "rush") {
+        setRushRemainingSec(null);
+      }
+      return;
     }
 
-    if (!vaultOutcome.isNewBest) {
-      playOutOfMovesSighSound(soundOnRef.current);
-      triggerBlockSyncHaptic("warning");
+    if (rushEndAtRef.current === null) {
+      rushEndAtRef.current = Date.now() + multiplayerRoom.timeLimitSec * 1000;
     }
-    const soloRuns: BlockSyncSoloRunEntry[] = vaultOutcome.topRuns.map((entry) => ({
-      id: entry.id,
-      score: entry.score,
-      achievedAt: entry.achievedAt,
-      isCurrent: entry.id === vaultOutcome.currentRunId,
-      label:
-        entry.id === vaultOutcome.currentRunId
-          ? "This Run"
-          : entry.id.startsWith("legacy-best-")
-            ? "Prior Best"
-            : undefined,
-    }));
-    setGameOverSummary({
-      finalScore,
-      previousBestScore: vaultOutcome.previousBestScore,
-      bestScore: vaultOutcome.bestScore,
-      initialSessionBest: initialSessionBestRef.current,
-      isNewBest: vaultOutcome.isNewBest,
-      soloRuns,
-    });
-  }, []);
+
+    const syncClock = () => {
+      if (isGameOverRef.current || rushEndAtRef.current === null) return;
+      const remainingMs = Math.max(0, rushEndAtRef.current - Date.now());
+      const nextSec = Math.ceil(remainingMs / 1000);
+      setRushRemainingSec((prev) => (prev === nextSec ? prev : nextSec));
+
+      if (remainingMs <= 0) {
+        isGameOverRef.current = true;
+        if (clarityBeatTimerRef.current !== null) {
+          window.clearTimeout(clarityBeatTimerRef.current);
+          clarityBeatTimerRef.current = null;
+        }
+        clearReturnTimer();
+        clearHoverPreview();
+        dragStateRef.current = null;
+        setDragState(null);
+        setIsBoardLockedBeat(false);
+        isBoardLockedBeatRef.current = false;
+        finalizeGameOver(scoreRef.current, "time_up");
+      }
+    };
+
+    syncClock();
+    const intervalId = window.setInterval(syncClock, 250);
+    const handleVisibilityOrFocus = () => syncClock();
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    window.addEventListener("focus", handleVisibilityOrFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+    };
+  }, [
+    multiplayerRoom?.roomCode,
+    multiplayerRoom?.mode,
+    multiplayerRoom?.timeLimitSec,
+    isGameOver,
+    clearHoverPreview,
+    clearReturnTimer,
+    finalizeGameOver,
+  ]);
 
   const handlePlayAgain = useCallback(() => {
+    const activeRoom = multiplayerRoomRef.current;
     stopSustainedBlocksAudio(0.05);
     clearCelebrationTimers();
     clearReturnTimer();
     clearAllVanishTimers();
     clearFeedbackTimer();
-    clearBlocksSavedSession(uidRef.current);
+    if (!activeRoom) {
+      clearBlocksSavedSession(uidRef.current);
+    }
 
     const freshVaultBest = loadBlocksVault(uidRef.current).bestScore;
     setBestScore(freshVaultBest);
@@ -2498,12 +2406,27 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     initialSessionBestRef.current = freshVaultBest;
     hasCrossedBestThisRunRef.current = false;
     matchRecordedForCurrentRunRef.current = false;
+    roomTrayIndexRef.current = 0;
+    linesClearedRef.current = 0;
+    bestComboRef.current = 0;
+    roomStartedAtRef.current = Date.now();
+    roomSubmittedForCurrentRunRef.current = false;
 
     const emptyBoard = createEmptyBoard();
-    const freshTray = spawnThreeBlocks(0, lastTrayShapeIdsRef.current);
+    const freshTray = activeRoom
+      ? generateSeededBlockTray(activeRoom.roomSeed, 0)
+      : spawnThreeBlocks(0, lastTrayShapeIdsRef.current);
     lastTrayShapeIdsRef.current = freshTray
       .filter((p): p is PolyominoPiece => p !== null)
       .map((p) => p.shapeId);
+
+    if (activeRoom?.mode === "rush") {
+      rushEndAtRef.current = Date.now() + activeRoom.timeLimitSec * 1000;
+      setRushRemainingSec(activeRoom.timeLimitSec);
+    } else {
+      rushEndAtRef.current = null;
+      setRushRemainingSec(null);
+    }
 
     stableBoardRef.current = emptyBoard;
     boardStateRef.current = emptyBoard;
@@ -2535,7 +2458,159 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     clearReturnTimer,
   ]);
 
+  // Restore saved per-room progress or reset cleanly if multiplayerRoom identity/config changes while mounted
+  const roomIdentityKey = multiplayerRoom
+    ? `${multiplayerRoom.roomCode}:${multiplayerRoom.roomSeed}:${multiplayerRoom.mode}:${multiplayerRoom.undoAllowed ? 1 : 0}:${multiplayerRoom.timeLimitSec}`
+    : "solo";
+  const prevRoomIdentityKeyRef = useRef<string>(roomIdentityKey);
+  useEffect(() => {
+    if (prevRoomIdentityKeyRef.current === roomIdentityKey) return;
+    prevRoomIdentityKeyRef.current = roomIdentityKey;
+
+    if (!multiplayerRoom) {
+      // Transitioning from Room -> Solo: restore saved Solo run safely without clearing blocks_*_savedSession
+      const savedSolo = loadBlocksSavedSession(uidRef.current);
+      const validSolo =
+        savedSolo &&
+        savedSolo.boardState.every((row) =>
+          row.every((cell) => !cell || cell.color in PASTEL_TILE_CLASSES_LIGHT)
+        ) &&
+        savedSolo.currentBlocks.every((p) => !p || p.color in PASTEL_TILE_CLASSES_LIGHT)
+          ? savedSolo
+          : null;
+
+      stopSustainedBlocksAudio(0.05);
+      clearCelebrationTimers();
+      clearReturnTimer();
+      clearAllVanishTimers();
+      clearFeedbackTimer();
+
+      const nextBoard = validSolo
+        ? cloneStableBoard(validSolo.boardState as BoardState)
+        : createEmptyBoard();
+      const nextTray = validSolo
+        ? cloneTrayBlocks(validSolo.currentBlocks as (PolyominoPiece | null)[])
+        : spawnThreeBlocks(0, lastTrayShapeIdsRef.current);
+
+      stableBoardRef.current = nextBoard;
+      boardStateRef.current = nextBoard;
+      currentBlocksRef.current = nextTray;
+      lastTrayShapeIdsRef.current = nextTray
+        .filter((p): p is PolyominoPiece => p !== null)
+        .map((p) => p.shapeId);
+      scoreRef.current = validSolo?.score ?? 0;
+      clearStreakRef.current = validSolo?.clearStreak ?? 0;
+      historyStackRef.current = validSolo
+        ? validSolo.historyStack.map((snap) => ({
+            boardState: cloneStableBoard(snap.boardState as BoardState),
+            currentBlocks: cloneTrayBlocks(snap.currentBlocks as (PolyominoPiece | null)[]),
+            score: snap.score,
+            clearStreak: snap.clearStreak,
+            lastTrayShapeIds: [...snap.lastTrayShapeIds] as BlockShapeId[],
+            roomTrayIndex: 0,
+            linesCleared: 0,
+            bestCombo: 0,
+          }))
+        : [];
+      roomTrayIndexRef.current = 0;
+      linesClearedRef.current = 0;
+      bestComboRef.current = 0;
+      rushEndAtRef.current = null;
+      isGameOverRef.current = false;
+      isBoardLockedBeatRef.current = false;
+      endGameModalSettledRef.current = false;
+
+      setBoardState(nextBoard);
+      setCurrentBlocks(nextTray);
+      setScore(scoreRef.current);
+      setCanUndo(historyStackRef.current.length > 0);
+      setRushRemainingSec(null);
+      setIsBoardLockedBeat(false);
+      setMidGameBestBanner(null);
+      setBestCardGoldPulse(false);
+      clearHoverPreview();
+      setClearFeedback(null);
+      setDragState(null);
+      setGameOverSummary(null);
+      return;
+    }
+
+    const pending = getPendingBlocksRoomSession(uidRef.current, multiplayerRoom.roomCode);
+    if (
+      pending &&
+      pending.config.roomSeed === multiplayerRoom.roomSeed &&
+      pending.config.mode === multiplayerRoom.mode
+    ) {
+      stopSustainedBlocksAudio(0.05);
+      clearCelebrationTimers();
+      clearReturnTimer();
+      clearAllVanishTimers();
+      clearFeedbackTimer();
+
+      const restoredBoard = restoreBoardFromPending(pending.board);
+      const restoredTray = restoreTrayFromPending(
+        pending.tray,
+        multiplayerRoom.roomSeed,
+        pending.roomTrayIndex
+      );
+
+      roomTrayIndexRef.current = pending.roomTrayIndex;
+      linesClearedRef.current = pending.linesCleared;
+      bestComboRef.current = pending.bestCombo;
+      roomStartedAtRef.current = pending.startedAt;
+      roomSubmittedForCurrentRunRef.current = false;
+      matchRecordedForCurrentRunRef.current = false;
+      rushEndAtRef.current =
+        multiplayerRoom.mode === "rush"
+          ? (pending.rushEndAt ?? Date.now() + multiplayerRoom.timeLimitSec * 1000)
+          : null;
+
+      stableBoardRef.current = restoredBoard;
+      boardStateRef.current = restoredBoard;
+      currentBlocksRef.current = restoredTray;
+      lastTrayShapeIdsRef.current = restoredTray
+        .filter((p): p is PolyominoPiece => p !== null)
+        .map((p) => p.shapeId);
+      scoreRef.current = pending.score;
+      clearStreakRef.current = 0;
+      historyStackRef.current = [];
+      isGameOverRef.current = false;
+      isBoardLockedBeatRef.current = false;
+      endGameModalSettledRef.current = false;
+
+      setBoardState(restoredBoard);
+      setCurrentBlocks(restoredTray);
+      setScore(pending.score);
+      setCanUndo(false);
+      setIsBoardLockedBeat(false);
+      setMidGameBestBanner(null);
+      setBestCardGoldPulse(false);
+      clearHoverPreview();
+      setClearFeedback(null);
+      setDragState(null);
+      setGameOverSummary(null);
+      setRushRemainingSec(
+        rushEndAtRef.current !== null
+          ? Math.max(0, Math.ceil((rushEndAtRef.current - Date.now()) / 1000))
+          : null
+      );
+      return;
+    }
+
+    handlePlayAgain();
+  }, [
+    roomIdentityKey,
+    multiplayerRoom,
+    handlePlayAgain,
+    clearAllVanishTimers,
+    clearCelebrationTimers,
+    clearFeedbackTimer,
+    clearHoverPreview,
+    clearReturnTimer,
+  ]);
+
   const handleUndo = useCallback(() => {
+    if (!isUndoAllowedRef.current) return;
     if (isGameOverRef.current || isBoardLockedBeatRef.current || dragStateRef.current) return;
     const prevSnapshot = historyStackRef.current.pop();
     if (!prevSnapshot) return;
@@ -2551,6 +2626,9 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     scoreRef.current = prevSnapshot.score;
     clearStreakRef.current = prevSnapshot.clearStreak;
     lastTrayShapeIdsRef.current = [...prevSnapshot.lastTrayShapeIds];
+    roomTrayIndexRef.current = prevSnapshot.roomTrayIndex;
+    linesClearedRef.current = prevSnapshot.linesCleared;
+    bestComboRef.current = prevSnapshot.bestCombo;
 
     setBoardState(restoredBoard);
     setCurrentBlocks(prevSnapshot.currentBlocks);
@@ -2571,6 +2649,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     clearReturnTimer();
     clearAllVanishTimers();
     clearFeedbackTimer();
+    if (multiplayerRoomRef.current && onLeaveMultiplayerRoomRef.current) {
+      onLeaveMultiplayerRoomRef.current();
+      return;
+    }
     if (onBackHome) {
       onBackHome();
       return;
@@ -2632,9 +2714,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
       const keyLower = e.key.toLowerCase();
 
-      // Ctrl+Z / Cmd+Z (without Shift): Undo last move when active
+      // Ctrl+Z / Cmd+Z (without Shift): Undo last move when active and allowed
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && keyLower === "z") {
         if (
+          isUndoAllowedRef.current &&
           !isGameOverRef.current &&
           !isBoardLockedBeatRef.current &&
           !dragStateRef.current &&
@@ -2823,6 +2906,9 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             score: scoreRef.current,
             clearStreak: clearStreakRef.current,
             lastTrayShapeIds: [...lastTrayShapeIdsRef.current],
+            roomTrayIndex: roomTrayIndexRef.current,
+            linesCleared: linesClearedRef.current,
+            bestCombo: bestComboRef.current,
           },
         ];
         setCanUndo(true);
@@ -2841,6 +2927,12 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         // 2. Analyze 3-Way Sudoku clears (Rows, Columns, 3x3 Sub-Grids)
         const clearAnalysis = analyzeSudokuClears(placedBoard);
         const groupsCleared = clearAnalysis.groupsClearedCount;
+        if (groupsCleared > 0) {
+          linesClearedRef.current += groupsCleared;
+          if (groupsCleared > bestComboRef.current) {
+            bestComboRef.current = groupsCleared;
+          }
+        }
         const nextStreak = groupsCleared > 0 ? clearStreakRef.current + 1 : 0;
         clearStreakRef.current = nextStreak;
         const isCelebrationClear =
@@ -2943,12 +3035,21 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         );
         let nextTray: (PolyominoPiece | null)[];
         if (consumedTray.every((slot) => slot === null)) {
-          nextTray = spawnThreeBlocks(
-            nextTotalScore,
-            lastTrayShapeIdsRef.current,
-            latestDrag.piece.shapeId,
-            logicalPostClearBoard
-          );
+          if (multiplayerRoomRef.current) {
+            const nextTrayIdx = roomTrayIndexRef.current + 1;
+            roomTrayIndexRef.current = nextTrayIdx;
+            nextTray = generateSeededBlockTray(
+              multiplayerRoomRef.current.roomSeed,
+              nextTrayIdx
+            );
+          } else {
+            nextTray = spawnThreeBlocks(
+              nextTotalScore,
+              lastTrayShapeIdsRef.current,
+              latestDrag.piece.shapeId,
+              logicalPostClearBoard
+            );
+          }
           lastTrayShapeIdsRef.current = nextTray
             .filter((p): p is PolyominoPiece => p !== null)
             .map((p) => p.shapeId);
@@ -2968,13 +3069,15 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           isGameOverRef.current = true;
           isBoardLockedBeatRef.current = true;
           setIsBoardLockedBeat(true);
-          clearBlocksSavedSession(uidRef.current);
+          if (!multiplayerRoomRef.current) {
+            clearBlocksSavedSession(uidRef.current);
+          }
           if (clarityBeatTimerRef.current !== null) {
             window.clearTimeout(clarityBeatTimerRef.current);
           }
           clarityBeatTimerRef.current = window.setTimeout(() => {
             clarityBeatTimerRef.current = null;
-            finalizeGameOver(nextTotalScore);
+            finalizeGameOver(nextTotalScore, "out_of_moves");
           }, 320);
         } else {
           persistActiveSession();
@@ -3290,8 +3393,70 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       />
 
       <div className="w-full max-w-[448px] mx-auto flex flex-col items-center justify-center gap-2.5 sm:gap-3 shrink-0">
-        {/* Sudoku-Aligned Board Group: Symmetric 3-Module Instrument HUD + 9x9 Board */}
+        {/* Sudoku-Aligned Board Group: Compact Room Badge (when active) + Symmetric 3-Module HUD + 9x9 Board */}
         <div className="w-full max-w-[min(92vw,424px,47dvh)] flex flex-col gap-1.5 shrink-0">
+          {multiplayerRoom && (
+            <div
+              id="block-sync-room-hud-bar"
+              className="w-full flex items-center justify-between gap-2 px-0.5 min-w-0"
+            >
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-2xl text-[10.5px] font-mono font-bold tracking-wider uppercase truncate ${
+                  darkMode
+                    ? "bg-[#1B242E] text-slate-200 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                    : "bg-[#E6F1F8]/95 text-[#2C3E50] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
+                }`}
+              >
+                <span className="opacity-60">ROOM</span>
+                <span aria-hidden="true" className="opacity-40">
+                  ·
+                </span>
+                <span className="tabular-nums">{multiplayerRoom.roomCode}</span>
+              </span>
+
+              {multiplayerRoom.mode === "rush" ? (
+                (() => {
+                  const displaySec = Math.max(
+                    0,
+                    rushRemainingSec ?? multiplayerRoom.timeLimitSec
+                  );
+                  const mins = Math.floor(displaySec / 60);
+                  const secs = displaySec % 60;
+                  const formattedClock = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+                  const isLowTime = displaySec <= 15;
+                  return (
+                    <span
+                      id="block-sync-rush-timer-pill"
+                      aria-live="off"
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-2xl text-[10.5px] font-mono font-extrabold tracking-wider uppercase tabular-nums shrink-0 transition-colors duration-200 ${
+                        isLowTime
+                          ? darkMode
+                            ? "bg-[#4c0519]/90 text-[#fda4af] ring-1 ring-rose-400/50 animate-pulse"
+                            : "bg-[#FFE4E6] text-[#9D174D] ring-1 ring-rose-400/50 animate-pulse"
+                          : darkMode
+                            ? "bg-[#1B242E] text-[#38BDF8] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                            : "bg-[#E6F1F8]/95 text-[#0369A1] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
+                      }`}
+                    >
+                      <span>RUSH</span>
+                      <span>{formattedClock}</span>
+                    </span>
+                  );
+                })()
+              ) : (
+                <span
+                  className={`inline-flex items-center px-2.5 py-1 rounded-2xl text-[10.5px] font-mono font-extrabold tracking-wider uppercase shrink-0 ${
+                    darkMode
+                      ? "bg-[#1B242E] text-[#34D399] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                      : "bg-[#E6F1F8]/95 text-[#065F46] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
+                  }`}
+                >
+                  CLASSIC
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Symmetric 3-Module Instrument HUD Bar Aligned 1:1 with 9x9 Board */}
           <div className="w-full grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 mb-0.5">
             {/* Left (1fr): Current Score Card */}
@@ -3596,29 +3761,31 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           })}
         </section>
 
-        {/* Bottom-Left Compact Undo Control Below Spawner Tray */}
-        <div className="w-full min-w-0 max-w-[min(92vw,424px,47dvh)] flex items-center justify-start shrink-0">
-          <button
-            id="block-sync-undo-button"
-            type="button"
-            aria-label="Undo last move"
-            title="Undo last move"
-            disabled={isGameOver || isBoardLockedBeat || !canUndo}
-            onClick={handleUndo}
-            className={`h-8 sm:h-9 px-3.5 rounded-2xl border-none inline-flex items-center justify-center gap-1.5 max-w-full overflow-hidden text-xs font-semibold transition-all duration-150 ${
-              isGameOver || isBoardLockedBeat || !canUndo
-                ? darkMode
-                  ? "bg-[#1B242E]/65 text-slate-500 opacity-50 cursor-not-allowed shadow-[0_3px_10px_rgba(0,0,0,0.22)]"
-                  : "bg-[#E6F1F8]/65 text-[#8AA0B5] opacity-60 cursor-not-allowed shadow-[0_3px_10px_rgba(44,62,80,0.03)]"
-                : darkMode
-                  ? "bg-[#1B242E] text-slate-200 shadow-[0_4px_12px_rgba(0,0,0,0.38)] cursor-pointer active:scale-[0.97] hover:scale-[1.02]"
-                  : "bg-[#E6F1F8]/95 text-[#3B556C] shadow-[0_4px_12px_rgba(44,62,80,0.06)] cursor-pointer active:scale-[0.97] hover:scale-[1.02]"
-            }`}
-          >
-            <Undo2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">Undo</span>
-          </button>
-        </div>
+        {/* Bottom-Left Compact Undo Control Below Spawner Tray (hidden when room disables Undo) */}
+        {isUndoAllowed && (
+          <div className="w-full min-w-0 max-w-[min(92vw,424px,47dvh)] flex items-center justify-start shrink-0">
+            <button
+              id="block-sync-undo-button"
+              type="button"
+              aria-label="Undo last move"
+              title="Undo last move"
+              disabled={isGameOver || isBoardLockedBeat || !canUndo}
+              onClick={handleUndo}
+              className={`h-8 sm:h-9 px-3.5 rounded-2xl border-none inline-flex items-center justify-center gap-1.5 max-w-full overflow-hidden text-xs font-semibold transition-all duration-150 ${
+                isGameOver || isBoardLockedBeat || !canUndo
+                  ? darkMode
+                    ? "bg-[#1B242E]/65 text-slate-500 opacity-50 cursor-not-allowed shadow-[0_3px_10px_rgba(0,0,0,0.22)]"
+                    : "bg-[#E6F1F8]/65 text-[#8AA0B5] opacity-60 cursor-not-allowed shadow-[0_3px_10px_rgba(44,62,80,0.03)]"
+                  : darkMode
+                    ? "bg-[#1B242E] text-slate-200 shadow-[0_4px_12px_rgba(0,0,0,0.38)] cursor-pointer active:scale-[0.97] hover:scale-[1.02]"
+                    : "bg-[#E6F1F8]/95 text-[#3B556C] shadow-[0_4px_12px_rgba(44,62,80,0.06)] cursor-pointer active:scale-[0.97] hover:scale-[1.02]"
+              }`}
+            >
+              <Undo2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">Undo</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Adaptive Optical Upper-Middle Bottom Spacer (~36/64 weighted split) */}
@@ -3661,6 +3828,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           finalBoardState={boardState}
           tileClasses={tileClasses}
           soloRuns={gameOverSummary.soloRuns}
+          roomMode={isRoomMode}
+          standings={roomStandings}
           onPlayAgain={handlePlayAgain}
           onBackHome={handleNavigateHomeClick}
           onScoreTick={(tickIndex) =>

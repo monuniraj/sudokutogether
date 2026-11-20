@@ -28,6 +28,17 @@ import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./featur
 import { SudokuSolverScreen } from "./features/sudokuSolver/components/SudokuSolverScreen";
 import { SudokuRulesScreen } from "./features/sudokuRules/components/SudokuRulesScreen";
 import { BlockSyncGame } from "./games/blocks/BlockSyncGame";
+import { BlockSyncResumeChoiceModal } from "./games/blocks/BlockSyncResumeChoiceModal";
+import {
+  getBlocksSavedSoloScore,
+  getMostRecentPendingBlocksRoom,
+  getPendingBlocksRoomSession,
+  hashRoomSeed,
+  type BlockSyncPendingRoomSession,
+  type BlockSyncRoomConfig,
+  type BlockSyncRoomResultPayload,
+} from "./games/blocks/blocksRoomEngine";
+import type { BlockSyncRoomStandingEntry } from "./games/blocks/BlockSyncEndGameModal";
 import { getRulesArticleCopy } from "./utils/rulesArticleTranslations";
 import { GuideArticleScreen } from "./features/guides/components/GuideArticleScreen";
 import {
@@ -54,6 +65,59 @@ const parseGuideScreen = (screen?: string | null): GuideSlug | null => {
   return parseGuideSlugFromPath(`/guides/${screen.slice("guide:".length)}`);
 };
 
+interface MoLogicLastActiveGame {
+  screen: "home" | "game" | "blocks";
+  blocksRoomCode?: string | null;
+  updatedAt: number;
+}
+
+const getLastActiveGameKey = (uid?: string | null): string => {
+  if (
+    !uid ||
+    uid === "guest" ||
+    uid === "GUEST" ||
+    uid === "GUEST_ANON" ||
+    uid.startsWith("GUEST_")
+  ) {
+    return "mologic_guest_lastActiveGame";
+  }
+  return `mologic_user_${uid}_lastActiveGame`;
+};
+
+const readLastActiveGame = (uid?: string | null): MoLogicLastActiveGame | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(getLastActiveGameKey(uid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<MoLogicLastActiveGame> | null;
+    if (
+      !parsed ||
+      (parsed.screen !== "home" && parsed.screen !== "game" && parsed.screen !== "blocks")
+    ) {
+      return null;
+    }
+    return {
+      screen: parsed.screen,
+      blocksRoomCode: typeof parsed.blocksRoomCode === "string" ? parsed.blocksRoomCode : null,
+      updatedAt: Number(parsed.updatedAt) || 0,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const writeLastActiveGame = (
+  uid: string | null | undefined,
+  record: MoLogicLastActiveGame
+): void => {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(getLastActiveGameKey(uid), JSON.stringify(record));
+  } catch {
+    // Ignore storage quota / privacy mode failures
+  }
+};
+
 const isDailyChallengePath = (pathname?: string | null): boolean =>
   Boolean(pathname && pathname.trim().replace(/\/+$/, "").toLowerCase() === "/daily-challenge");
 
@@ -72,6 +136,7 @@ import {
   getFocusableElements,
   getKeyboardDigit,
   handleRovingMenuArrowKey,
+  hasActiveModalKeyboardLayer,
   isEditableEventTarget,
 } from "./utils/keyboardControls";
 import { getKeyboardGuideCopy } from "./utils/keyboardGuideTranslations";
@@ -3284,6 +3349,117 @@ export default function App() {
   // Overlays / Modals and share states
   const [userLobbyStatus, setUserLobbyStatus] = useState<'online' | 'busy'>('online');
   const [showCreateChallengeModal, setShowCreateChallengeModal] = useState<boolean>(false);
+  const [selectedCreateRoomGame, setSelectedCreateRoomGame] = useState<"sudoku" | "blocks">("sudoku");
+  const [blocksRoomMode, setBlocksRoomMode] = useState<"classic" | "rush">("classic");
+  const [blocksRoomUndo, setBlocksRoomUndo] = useState<boolean>(false);
+  const [blocksRoomTimeLimitSec, setBlocksRoomTimeLimitSec] = useState<120 | 180 | 300>(180);
+  const [activeBlockSyncRoom, setActiveBlockSyncRoom] = useState<BlockSyncRoomConfig | null>(null);
+  const [blockSyncRoomStandings, setBlockSyncRoomStandings] = useState<BlockSyncRoomStandingEntry[]>([]);
+  const [blockSyncResumeChoiceState, setBlockSyncResumeChoiceState] = useState<{
+    pendingRoom: BlockSyncPendingRoomSession;
+    soloSavedScore: number | null;
+  } | null>(null);
+  const coldBootLastGameCheckedRef = useRef<boolean>(false);
+  const lastTrackedGameUidRef = useRef<string | null | undefined>(undefined);
+  const selectedCreateRoomGameRef = useRef<"sudoku" | "blocks">(selectedCreateRoomGame);
+  selectedCreateRoomGameRef.current = selectedCreateRoomGame;
+  const blocksRoomModeRef = useRef<"classic" | "rush">(blocksRoomMode);
+  blocksRoomModeRef.current = blocksRoomMode;
+  const blocksRoomUndoRef = useRef<boolean>(blocksRoomUndo);
+  blocksRoomUndoRef.current = blocksRoomUndo;
+  const blocksRoomTimeLimitSecRef = useRef<120 | 180 | 300>(blocksRoomTimeLimitSec);
+  blocksRoomTimeLimitSecRef.current = blocksRoomTimeLimitSec;
+
+  const handleOpenBlockSyncEntry = () => {
+    const effectiveBlocksUid = isGuestSession ? null : (authUser?.uid ?? null);
+    const pendingRoom = getMostRecentPendingBlocksRoom(effectiveBlocksUid);
+    if (pendingRoom) {
+      setBlockSyncResumeChoiceState({
+        pendingRoom,
+        soloSavedScore: getBlocksSavedSoloScore(effectiveBlocksUid),
+      });
+      return;
+    }
+    setActiveBlockSyncRoom(null);
+    navigateToScreen("blocks");
+  };
+
+  // Cold-start last-active-game auto-resume (strictly yields to deep-links, invites, and explicit URL routes)
+  useEffect(() => {
+    if (!isAppReady || coldBootLastGameCheckedRef.current) return;
+    coldBootLastGameCheckedRef.current = true;
+
+    const pathname = typeof window !== "undefined" ? window.location.pathname : "/";
+    const hasExplicitSubRoute =
+      isBlocksPath(pathname) ||
+      isDailyChallengePath(pathname) ||
+      isSolverPath(pathname) ||
+      isRulesPath(pathname) ||
+      Boolean(parseGuideSlugFromPath(pathname)) ||
+      Boolean(parseComplianceRoute(pathname)) ||
+      Boolean(initialRouteDifficultyRef.current);
+
+    if (hasInitialInviteRef.current || hasExplicitSubRoute || currentScreenRef.current !== "home") {
+      return;
+    }
+
+    const effectiveUid = isGuestSession ? null : (authUser?.uid ?? null);
+    const lastActive = readLastActiveGame(effectiveUid);
+    if (!lastActive || lastActive.screen !== "blocks") return;
+
+    if (lastActive.blocksRoomCode) {
+      const savedRoom = getPendingBlocksRoomSession(effectiveUid, lastActive.blocksRoomCode);
+      if (savedRoom) {
+        setActiveBlockSyncRoom(savedRoom.config);
+        navigateToScreen("blocks");
+        return;
+      }
+    }
+
+    if (getBlocksSavedSoloScore(effectiveUid) !== null) {
+      setActiveBlockSyncRoom(null);
+      navigateToScreen("blocks");
+    }
+  }, [isAppReady, isGuestSession, authUser?.uid]);
+
+  // Persist lightweight UID-isolated last-active-game pointer cleanly across Home / Game / Block Sync
+  useEffect(() => {
+    if (!isAppReady || !coldBootLastGameCheckedRef.current) return;
+    const effectiveUid = isGuestSession ? null : (authUser?.uid ?? null);
+
+    // Avoid overwriting another UID's pointer on account transition before user interacts
+    if (lastTrackedGameUidRef.current !== effectiveUid) {
+      lastTrackedGameUidRef.current = effectiveUid;
+      if (currentScreen === "home") {
+        return;
+      }
+    }
+
+    if (currentScreen === "home" || currentScreen === "game" || currentScreen === "blocks") {
+      writeLastActiveGame(effectiveUid, {
+        screen: currentScreen,
+        ...(currentScreen === "blocks"
+          ? { blocksRoomCode: activeBlockSyncRoom?.roomCode ?? null }
+          : {}),
+        updatedAt: Date.now(),
+      });
+    }
+  }, [
+    currentScreen,
+    activeBlockSyncRoom?.roomCode,
+    isGuestSession,
+    authUser?.uid,
+    isAppReady,
+  ]);
+
+  useEffect(() => {
+    if (!showCreateChallengeModal) return;
+    if (isDailyRoomActive) {
+      setSelectedCreateRoomGame("sudoku");
+      return;
+    }
+    setSelectedCreateRoomGame(currentScreen === "blocks" ? "blocks" : "sudoku");
+  }, [showCreateChallengeModal, currentScreen, isDailyRoomActive]);
   const [showGameOverModal, setShowGameOverModal] = useState<boolean>(false);
   const [showMidGameInviteModal, setShowMidGameInviteModal] = useState<boolean>(false);
   const [isHost, setIsHost] = useState<boolean>(true);
@@ -3354,10 +3530,16 @@ export default function App() {
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showBlockSyncSettings, setShowBlockSyncSettings] = useState<boolean>(false);
   const [showDifficultySheet, setShowDifficultySheet] = useState<boolean>(false);
+  const [isHomeKeyboardNavActive, setIsHomeKeyboardNavActive] = useState<boolean>(false);
+  const isHomeKeyboardNavActiveRef = useRef<boolean>(false);
+  isHomeKeyboardNavActiveRef.current = isHomeKeyboardNavActive;
+  const homeNavPreferredColRef = useRef<number>(0);
+  const homeLastPointerPosRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (currentScreen !== "blocks") {
       setShowBlockSyncSettings(false);
+      setActiveBlockSyncRoom(null);
     }
   }, [currentScreen]);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -8213,6 +8395,7 @@ export default function App() {
     if (showCreateChallengeModal) { setShowCreateChallengeModal(false); return true; }
     if (showJoinRoomModal) { setShowJoinRoomModal(false); return true; }
     if (showMultiplayerForkModal) { setShowMultiplayerForkModal(false); return true; }
+    if (blockSyncResumeChoiceState) { setBlockSyncResumeChoiceState(null); return true; }
     if (showDifficultySheet) { setShowDifficultySheet(false); return true; }
     if (showHintRewardModal) {
       setShowHintRewardModal(false);
@@ -8250,6 +8433,7 @@ export default function App() {
     if (showCreateChallengeModal) count++;
     if (showJoinRoomModal) count++;
     if (showMultiplayerForkModal) count++;
+    if (blockSyncResumeChoiceState) count++;
     if (showDifficultySheet) count++;
     if (showHintRewardModal) count++;
     if (showHowToPlayModal) count++;
@@ -8900,7 +9084,104 @@ export default function App() {
       setActiveInviteNotification(null);
       setEndGameStep(1);
 
+      const roomGameType = rData.gameType || "sudoku";
       const isLocked = Boolean(rData.isLocked || rData.pin);
+
+      // Branch cleanly for Block Sync rooms without mutating any Sudoku board/storage state
+      if (roomGameType === "blocks") {
+        isDailyBoardContextRef.current = false;
+        isDailyRoomRef.current = false;
+        setIsDailyRoomActive(false);
+        isDailyExhibitionRef.current = false;
+        setIsDailyExhibition(false);
+        dailyChallengeActiveDateRef.current = null;
+        setDailyChallengeActiveDate(null);
+
+        const parsedSeed = Number(rData.roomSeed);
+        const resolvedRoomSeed =
+          Number.isFinite(parsedSeed) && parsedSeed !== 0
+            ? parsedSeed
+            : hashRoomSeed(roomCode);
+        const resolvedMode: "classic" | "rush" =
+          rData.blocksMode === "rush" ? "rush" : "classic";
+        const resolvedUndoAllowed = Boolean(rData.blocksUndoAllowed);
+        const resolvedTimeLimitSec: 120 | 180 | 300 =
+          rData.blocksTimeLimitSec === 120 || rData.blocksTimeLimitSec === 300
+            ? rData.blocksTimeLimitSec
+            : 180;
+        const isRoomHost = Boolean(
+          rData.hostId && currentCandidateIds.has(String(rData.hostId))
+        );
+
+        const joinedBlockRoom: BlockSyncRoomConfig = {
+          roomCode,
+          roomSeed: resolvedRoomSeed,
+          mode: resolvedMode,
+          undoAllowed: resolvedUndoAllowed,
+          timeLimitSec: resolvedTimeLimitSec,
+          isHost: isRoomHost,
+          isLocked,
+        };
+
+        try {
+          const curAuth = await ensureActiveAuthUser().catch(() => auth.currentUser);
+          const participantId =
+            curAuth?.uid ||
+            userProfileRef.current?.id ||
+            userProfile?.id ||
+            getActiveAuthUid() ||
+            getOrCreateGuestIdentity().id;
+          const participantName =
+            getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
+          const playerRef = doc(db, "rooms", roomCode, "players", participantId);
+          const existingPlayerSnap = await getDoc(playerRef);
+          if (
+            !existingPlayerSnap.exists() ||
+            existingPlayerSnap.data()?.status !== "completed"
+          ) {
+            await setDoc(
+              playerRef,
+              {
+                id: participantId,
+                uid: participantId,
+                authUid: curAuth?.uid || authUser?.uid,
+                guestId: userProfile?.id,
+                displayName: participantName,
+                name: participantName,
+                status: "playing",
+                isPending: true,
+                score: 0,
+                gameType: "blocks",
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true }
+            );
+          }
+        } catch (err) {
+          console.warn("[Firestore] Failed to initialize Block Sync joiner player doc:", err);
+        }
+
+        setPendingChallenges((prev) => {
+          const updated = prev.filter(
+            (p) => p.id !== targetGameId && p.id !== roomCode
+          );
+          try {
+            localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+
+        try {
+          window.history.replaceState({ view: "blocks" }, "", "/blocks");
+        } catch {}
+
+        setIsRoomLocked(isLocked);
+        setRoomPin((rData.pin || rData.roomPin || "").trim());
+        setActiveBlockSyncRoom(joinedBlockRoom);
+        navigateToScreen("blocks");
+        return { success: true };
+      }
+
       const pin = (rData.pin || rData.roomPin || "").trim();
       const isDailyRoom = rData.gameMode === "daily" && Boolean(rData.dailyDate);
 
@@ -12466,6 +12747,10 @@ export default function App() {
 
     const canonicalSeed = Math.floor(100000 + Math.random() * 900000);
     const roomCode = canonicalSeed.toString();
+    const initialGameType: "sudoku" | "blocks" =
+      currentScreen === "blocks" ? "blocks" : "sudoku";
+    setSelectedCreateRoomGame(initialGameType);
+    const computedBlocksSeed = hashRoomSeed(`${roomCode}:${canonicalSeed}`);
 
     setChallengeDifficulty(initialDifficulty);
     setChallengeMistakeLimit(3);
@@ -12509,6 +12794,7 @@ export default function App() {
 
       setDoc(doc(db, "rooms", roomCode), {
         roomCode: roomCode,
+        gameType: initialGameType,
         seed: canonicalSeed,
         difficulty: initialDifficulty,
         hostId: activeHostId,
@@ -12519,6 +12805,14 @@ export default function App() {
         mistakesLimit: 3,
         hintsLimit: 3,
         timerEnabled: initialTimer,
+        ...(initialGameType === "blocks"
+          ? {
+              roomSeed: computedBlocksSeed,
+              blocksMode: blocksRoomModeRef.current,
+              blocksUndoAllowed: blocksRoomUndoRef.current,
+              blocksTimeLimitSec: blocksRoomTimeLimitSecRef.current,
+            }
+          : {}),
         isLocked: false,
         pinHash: "",
         status: "active",
@@ -12560,6 +12854,11 @@ export default function App() {
   };
 
   const updateRoomSettingsInFirestore = async (updates: {
+    gameType?: "sudoku" | "blocks";
+    roomSeed?: number;
+    blocksMode?: "classic" | "rush";
+    blocksUndoAllowed?: boolean;
+    blocksTimeLimitSec?: 120 | 180 | 300;
     difficulty?: Difficulty;
     mistakesLimit?: number;
     hintsLimit?: number;
@@ -12588,6 +12887,16 @@ export default function App() {
       payload.hintLimit = 3;
       payload.timerEnabled = true;
     } else {
+      const targetGameType = updates.gameType ?? selectedCreateRoomGameRef.current;
+      payload.gameType = targetGameType;
+      if (targetGameType === "blocks") {
+        payload.roomSeed = updates.roomSeed ?? hashRoomSeed(`${code}:${seed}`);
+        payload.blocksMode = updates.blocksMode ?? blocksRoomModeRef.current;
+        payload.blocksUndoAllowed =
+          updates.blocksUndoAllowed ?? blocksRoomUndoRef.current;
+        payload.blocksTimeLimitSec =
+          updates.blocksTimeLimitSec ?? blocksRoomTimeLimitSecRef.current;
+      }
       if (updates.difficulty !== undefined) {
         payload.difficulty = updates.difficulty;
         // Synchronously regenerate puzzleFlat matching the seed and new difficulty.
@@ -12852,6 +13161,75 @@ export default function App() {
       return;
     }
 
+    // ─── BLOCK SYNC MULTIPLAYER LAUNCH (completely decoupled from Sudoku board/state) ───
+    if (!isDailyRoomSession && selectedCreateRoomGameRef.current === "blocks") {
+      const resolvedSeed = hashRoomSeed(`${activeRoomCode}:${canonicalSeed}`);
+      const hostConfig: BlockSyncRoomConfig = {
+        roomCode: activeRoomCode,
+        roomSeed: resolvedSeed,
+        mode: blocksRoomModeRef.current,
+        undoAllowed: blocksRoomUndoRef.current,
+        timeLimitSec: blocksRoomTimeLimitSecRef.current,
+        isHost: true,
+        isLocked: isRoomLocked,
+      };
+
+      if (isOnline) {
+        updateRoomSettingsInFirestore({
+          gameType: "blocks",
+          roomSeed: resolvedSeed,
+          blocksMode: hostConfig.mode,
+          blocksUndoAllowed: hostConfig.undoAllowed,
+          blocksTimeLimitSec: hostConfig.timeLimitSec,
+        });
+
+        void (async () => {
+          try {
+            const curAuth = await ensureActiveAuthUser().catch(() => auth.currentUser);
+            const participantId =
+              curAuth?.uid ||
+              userProfileRef.current?.id ||
+              userProfile?.id ||
+              getActiveAuthUid() ||
+              getOrCreateGuestIdentity().id;
+            const participantName =
+              getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
+            const playerRef = doc(db, "rooms", activeRoomCode, "players", participantId);
+            const existingSnap = await getDoc(playerRef);
+            if (!existingSnap.exists() || existingSnap.data()?.status !== "completed") {
+              await setDoc(
+                playerRef,
+                {
+                  id: participantId,
+                  uid: participantId,
+                  authUid: curAuth?.uid || authUser?.uid,
+                  guestId: userProfile?.id,
+                  displayName: participantName,
+                  name: participantName,
+                  status: "playing",
+                  isPending: true,
+                  score: 0,
+                  gameType: "blocks",
+                  updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+              );
+            }
+          } catch (err) {
+            console.warn("[Firestore] Failed to initialize Block Sync host player doc:", err);
+          }
+        })();
+      }
+
+      setOpenedCreateFromMultiplayerResult(false);
+      setShowCreateChallengeModal(false);
+      setShowMultiplayerForkModal(false);
+      setShowJoinRoomModal(false);
+      setActiveBlockSyncRoom(hostConfig);
+      navigateToScreen("blocks");
+      return;
+    }
+
     // ─── ONLINE BRANCH: full multiplayer session (unchanged behavior) ───
     setOpenedCreateFromMultiplayerResult(false);
     setActiveGameId(activeRoomCode);
@@ -12980,12 +13358,26 @@ export default function App() {
     const currentUserId = activeAuth?.uid || userProfile?.id;
     const currentUserName = getActiveDisplayName() || userProfileRef.current?.displayName || userProfileRef.current?.name || getOrCreateGuestIdentity().displayName;
 
+    const isBlocksInvite =
+      !isDailyRoomSession && selectedCreateRoomGameRef.current === "blocks";
+
     // Ensure room is synced with current settings before invite is dispatched
     await updateRoomSettingsInFirestore({
-      difficulty: currentDifficulty,
-      mistakesLimit: isDailyRoomSession ? 3 : challengeMistakeLimit,
-      hintsLimit: isDailyRoomSession ? 3 : challengeHintLimit,
-      timerEnabled: isDailyRoomSession ? true : challengeTimerEnabled
+      ...(isBlocksInvite
+        ? {
+            gameType: "blocks" as const,
+            roomSeed: hashRoomSeed(`${activeRoomCode}:${seed}`),
+            blocksMode: blocksRoomModeRef.current,
+            blocksUndoAllowed: blocksRoomUndoRef.current,
+            blocksTimeLimitSec: blocksRoomTimeLimitSecRef.current,
+          }
+        : {
+            gameType: "sudoku" as const,
+            difficulty: currentDifficulty,
+            mistakesLimit: isDailyRoomSession ? 3 : challengeMistakeLimit,
+            hintsLimit: isDailyRoomSession ? 3 : challengeHintLimit,
+            timerEnabled: isDailyRoomSession ? true : challengeTimerEnabled,
+          }),
     });
 
     // Target the intact recipient playerId directly
@@ -13011,6 +13403,9 @@ export default function App() {
         gameId: activeRoomCode,
         difficulty: isDailyRoomSession ? dailyChallengeDifficultyRef.current : currentDifficulty,
         seed: seed,
+        ...(isBlocksInvite
+          ? { gameType: "blocks", blocksMode: blocksRoomModeRef.current }
+          : {}),
         ...(isDailyRoomSession && dailyChallengeActiveDateRef.current
           ? { gameMode: "daily", dailyDate: dailyChallengeActiveDateRef.current }
           : {}),
@@ -14184,6 +14579,167 @@ export default function App() {
     }
   };
 
+  // Live Block Sync Room Standings listener (strictly active ONLY while activeBlockSyncRoom is set)
+  useEffect(() => {
+    const roomCode = activeBlockSyncRoom?.roomCode;
+    if (!roomCode || !isOnline) {
+      setBlockSyncRoomStandings([]);
+      return;
+    }
+
+    const selfIds = new Set(
+      [
+        auth.currentUser?.uid,
+        authUser?.uid,
+        userProfile?.id,
+        userProfileRef.current?.id,
+        getActiveAuthUid(),
+      ].filter(Boolean) as string[]
+    );
+
+    const playersCol = collection(db, "rooms", roomCode, "players");
+    const unsub = onSnapshot(
+      playersCol,
+      (snapshot) => {
+        const rows: Array<{
+          entry: BlockSyncRoomStandingEntry;
+          isCompleted: boolean;
+          linesCleared: number;
+          durationSec: number;
+        }> = [];
+
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data() as Record<string, any>;
+          const docId = String(d.id || d.uid || docSnap.id);
+          const isSelf =
+            selfIds.has(docId) ||
+            (Boolean(d.authUid) && selfIds.has(String(d.authUid)));
+          const isCompleted = d.status === "completed" || d.isPending === false;
+          const scoreVal = Math.max(0, Math.floor(Number(d.score) || 0));
+          const linesVal = Math.max(0, Math.floor(Number(d.linesCleared) || 0));
+          const durationVal = Math.max(0, Math.floor(Number(d.durationSec) || 0));
+          const displayName = String(
+            d.displayName || d.name || d.playerName || "Player"
+          );
+
+          rows.push({
+            entry: {
+              id: docId,
+              name: displayName,
+              score: scoreVal,
+              isSelf,
+              statusLabel: isCompleted ? undefined : "Playing...",
+            },
+            isCompleted,
+            linesCleared: linesVal,
+            durationSec: durationVal,
+          });
+        });
+
+        rows.sort((a, b) => {
+          if (a.isCompleted !== b.isCompleted) return a.isCompleted ? -1 : 1;
+          if (a.isCompleted && b.isCompleted) {
+            if (b.entry.score !== a.entry.score) return b.entry.score - a.entry.score;
+            if (b.linesCleared !== a.linesCleared) return b.linesCleared - a.linesCleared;
+            if (a.durationSec !== b.durationSec) return a.durationSec - b.durationSec;
+          }
+          return a.entry.name.localeCompare(b.entry.name);
+        });
+
+        setBlockSyncRoomStandings(rows.map((r) => r.entry));
+      },
+      (err) => {
+        console.warn(
+          `[Firestore] Block Sync room standings listener warning for ${roomCode}:`,
+          err
+        );
+      }
+    );
+
+    return () => unsub();
+  }, [activeBlockSyncRoom?.roomCode, isOnline, authUser?.uid, userProfile?.id]);
+
+  // Dedicated Block Sync Firestore room result submitter (never alters Sudoku submitGameResult)
+  const handleSubmitBlockSyncRoomResult = useCallback(
+    async (payload: BlockSyncRoomResultPayload) => {
+      const roomCode = (payload?.roomCode || "").trim();
+      if (!roomCode) return;
+
+      const curAuth = isOnline
+        ? await ensureActiveAuthUser().catch(() => auth.currentUser)
+        : auth.currentUser;
+      const effectiveUserId =
+        curAuth?.uid ||
+        userProfileRef.current?.id ||
+        userProfile?.id ||
+        getActiveAuthUid() ||
+        getOrCreateGuestIdentity().id;
+      const displayName =
+        getActiveDisplayName() || getOrCreateGuestIdentity().displayName;
+
+      try {
+        const playerRef = doc(db, "rooms", roomCode, "players", effectiveUserId);
+        const existingSnap = await getDoc(playerRef);
+        let shouldWriteScore = true;
+        if (existingSnap.exists()) {
+          const prevData = existingSnap.data();
+          if (
+            prevData?.status === "completed" &&
+            Number(prevData?.score || 0) >= payload.score
+          ) {
+            shouldWriteScore = false;
+          }
+        }
+
+        if (shouldWriteScore) {
+          await setDoc(
+            playerRef,
+            {
+              id: effectiveUserId,
+              uid: effectiveUserId,
+              authUid: curAuth?.uid || authUser?.uid,
+              guestId: userProfile?.id,
+              displayName,
+              name: displayName,
+              score: payload.score,
+              linesCleared: payload.linesCleared,
+              bestCombo: payload.bestCombo,
+              mode: payload.mode,
+              endReason: payload.endReason,
+              durationSec: payload.durationSec,
+              status: "completed",
+              isPending: false,
+              gameType: "blocks",
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+        }
+
+        await setDoc(
+          doc(db, "rooms", roomCode),
+          {
+            status: "active",
+            gameType: "blocks",
+            updatedAt: serverTimestamp(),
+            lastCompletedUid: effectiveUserId,
+            lastCompletedBy: displayName,
+            lastCompletedScore: payload.score,
+            lastCompletedAt: serverTimestamp(),
+            expiresAt: 0,
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.error(
+          `[Firestore] Failed to submit Block Sync room result for ${roomCode}:`,
+          err
+        );
+      }
+    },
+    [isOnline, authUser?.uid, userProfile?.id]
+  );
+
   const processOfflineSyncQueue = async () => {
     if (isProcessingQueueRef.current) return;
     isProcessingQueueRef.current = true;
@@ -14971,7 +15527,8 @@ export default function App() {
     Boolean(notificationResultModal) ||
     isDailyCardModalOpen ||
     isPostGameDailyCalendarOpen ||
-    Boolean(dailyResultModalState?.isOpen)
+    Boolean(dailyResultModalState?.isOpen) ||
+    Boolean(blockSyncResumeChoiceState)
   );
   useLayoutEffect(() => {
     if (isPauseModalOpen) {
@@ -16536,10 +17093,21 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [boardState, activeTab, currentScreen, pencilMode, visualizingBacktrack, isNumberFirstInputMode, lockedNum, activeKeypadNum, history.length, isPauseModalOpen, showHintRewardModal, showDifficultySheet, showMultiplayerForkModal, showCreateChallengeModal, showJoinRoomModal]);
 
-  // Global/Sudoku sound mute shortcut (M) — ignores text inputs and /blocks (handled inside BlockSyncGame)
+  // Global/Sudoku sound mute shortcut (M) — ignores text inputs, blocking modals, and /blocks (handled inside BlockSyncGame)
   useEffect(() => {
     const handleMuteKey = (e: KeyboardEvent) => {
       if (currentScreen === "blocks") return;
+      if (
+        hasActiveModalKeyboardLayer() ||
+        isPauseModalOpen ||
+        showHintRewardModal ||
+        footerLangMenuOpen ||
+        Boolean(playerToUnfriend) ||
+        Boolean(viewingRankingsGame) ||
+        Boolean(activeCompliancePage)
+      ) {
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       if (isEditableEventTarget(e.target)) return;
       if (e.key.toLowerCase() === "m") {
@@ -16550,7 +17118,261 @@ export default function App() {
 
     window.addEventListener("keydown", handleMuteKey);
     return () => window.removeEventListener("keydown", handleMuteKey);
-  }, [currentScreen, soundEffects, handleToggleSoundEffects]);
+  }, [
+    currentScreen,
+    soundEffects,
+    handleToggleSoundEffects,
+    isPauseModalOpen,
+    showHintRewardModal,
+    footerLangMenuOpen,
+    playerToUnfriend,
+    viewingRankingsGame,
+    activeCompliancePage,
+  ]);
+
+  // Clear Home keyboard-only focus ring immediately on screen change, modal open, or pointer activity
+  useEffect(() => {
+    if (
+      currentScreen !== "home" ||
+      hasActiveModalKeyboardLayer() ||
+      isPauseModalOpen ||
+      showHintRewardModal ||
+      footerLangMenuOpen
+    ) {
+      if (isHomeKeyboardNavActiveRef.current) {
+        setIsHomeKeyboardNavActive(false);
+      }
+      return;
+    }
+
+    const clearKeyboardNav = () => {
+      if (!isHomeKeyboardNavActiveRef.current) return;
+      setIsHomeKeyboardNavActive(false);
+      const activeEl = document.activeElement;
+      const homeContainer = document.getElementById("home-screen-inner-container");
+      if (
+        activeEl instanceof HTMLElement &&
+        homeContainer?.contains(activeEl) &&
+        !isEditableEventTarget(activeEl)
+      ) {
+        activeEl.blur();
+      }
+    };
+
+    const handlePointerDown = () => {
+      clearKeyboardNav();
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") {
+        clearKeyboardNav();
+        return;
+      }
+      const prev = homeLastPointerPosRef.current;
+      homeLastPointerPosRef.current = { x: e.clientX, y: e.clientY };
+      if (!prev) return;
+      if (Math.abs(e.clientX - prev.x) > 2 || Math.abs(e.clientY - prev.y) > 2) {
+        clearKeyboardNav();
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+      window.removeEventListener("pointermove", handlePointerMove);
+    };
+  }, [
+    currentScreen,
+    isPauseModalOpen,
+    showHintRewardModal,
+    footerLangMenuOpen,
+  ]);
+
+  // Home screen mouse-free 2D Web keyboard navigation (Daily -> Resume/Multiplayer -> Play New Game -> Mo Logic Arcade Shelf)
+  useEffect(() => {
+    if (currentScreen !== "home") return;
+
+    const isVisibleEnabledControl = (el: HTMLElement | null): el is HTMLElement => {
+      if (!el || !el.isConnected) return false;
+      if (el.hasAttribute("disabled") || el.getAttribute("aria-disabled") === "true") {
+        return false;
+      }
+      const style = window.getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden") return false;
+      return el.getClientRects().length > 0;
+    };
+
+    const getHomeNavGrid = (): HTMLElement[][] => {
+      const rows: HTMLElement[][] = [];
+
+      // Row 1: Daily Challenge primary action CTA inside #home-daily-challenge-card
+      const dailyButtons = Array.from(
+        document.querySelectorAll<HTMLButtonElement>("#home-daily-challenge-card button")
+      ).filter(isVisibleEnabledControl);
+      if (dailyButtons.length > 0) {
+        rows.push([dailyButtons[dailyButtons.length - 1]]);
+      }
+
+      // Row 2: 2-column split (Resume/Review <-> Multiplayer)
+      const splitRow = [
+        document.getElementById("home-resume-review-action-button"),
+        document.getElementById("home-multiplayer-action-button"),
+      ].filter(isVisibleEnabledControl);
+      if (splitRow.length > 0) {
+        rows.push(splitRow);
+      }
+
+      // Row 3: Primary Play New Game CTA
+      const playNewBtn = document.getElementById("home-play-new-game-button");
+      if (isVisibleEnabledControl(playNewBtn)) {
+        rows.push([playNewBtn]);
+      }
+
+      // Row 4: "MORE FROM MO LOGIC" arcade shelf (scales automatically with additional game cards)
+      const shelfCards = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          "#home-mo-logic-shelf button:not([disabled]), #home-mo-logic-shelf a[href]"
+        )
+      ).filter(isVisibleEnabledControl);
+      if (shelfCards.length > 0) {
+        rows.push(shelfCards);
+      }
+
+      return rows;
+    };
+
+    const handleHomeKeyDown = (e: KeyboardEvent) => {
+      if (
+        hasActiveModalKeyboardLayer() ||
+        isPauseModalOpen ||
+        showHintRewardModal ||
+        footerLangMenuOpen ||
+        Boolean(playerToUnfriend) ||
+        Boolean(viewingRankingsGame) ||
+        Boolean(activeCompliancePage) ||
+        getOpenModalCountRef.current() > 0
+      ) {
+        return;
+      }
+      if (isEditableEventTarget(e.target)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      if (e.key === "Tab") {
+        setIsHomeKeyboardNavActive(true);
+        return;
+      }
+
+      const isArrowKey =
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight";
+
+      if (isArrowKey) {
+        const rows = getHomeNavGrid();
+        if (rows.length === 0) return;
+
+        e.preventDefault();
+        setIsHomeKeyboardNavActive(true);
+
+        const activeEl = document.activeElement as HTMLElement | null;
+        let curRow = -1;
+        let curCol = -1;
+        for (let r = 0; r < rows.length; r++) {
+          const c = activeEl ? rows[r].indexOf(activeEl) : -1;
+          if (c !== -1) {
+            curRow = r;
+            curCol = c;
+            break;
+          }
+        }
+
+        let targetRow = 0;
+        let targetCol = 0;
+
+        if (curRow === -1) {
+          if (e.key === "ArrowUp") {
+            targetRow = rows.length - 1;
+            targetCol = 0;
+          } else if (e.key === "ArrowLeft") {
+            targetRow = 0;
+            targetCol = rows[0].length - 1;
+          } else {
+            targetRow = 0;
+            targetCol = 0;
+          }
+          homeNavPreferredColRef.current = targetCol;
+        } else if (e.key === "ArrowDown") {
+          targetRow = (curRow + 1) % rows.length;
+          targetCol = Math.min(homeNavPreferredColRef.current, rows[targetRow].length - 1);
+        } else if (e.key === "ArrowUp") {
+          targetRow = (curRow - 1 + rows.length) % rows.length;
+          targetCol = Math.min(homeNavPreferredColRef.current, rows[targetRow].length - 1);
+        } else if (e.key === "ArrowRight") {
+          targetRow = curRow;
+          targetCol =
+            rows[curRow].length > 1
+              ? (curCol + 1) % rows[curRow].length
+              : curCol;
+          homeNavPreferredColRef.current = targetCol;
+        } else if (e.key === "ArrowLeft") {
+          targetRow = curRow;
+          targetCol =
+            rows[curRow].length > 1
+              ? (curCol - 1 + rows[curRow].length) % rows[curRow].length
+              : curCol;
+          homeNavPreferredColRef.current = targetCol;
+        }
+
+        const targetEl = rows[targetRow]?.[targetCol];
+        if (targetEl) {
+          targetEl.focus({ preventScroll: true });
+          targetEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+        return;
+      }
+
+      if (e.key === "Enter" || e.key === " ") {
+        const activeEl = document.activeElement as HTMLElement | null;
+        const rows = getHomeNavGrid();
+        const isFocusedOnHomeItem =
+          activeEl !== null && rows.some((row) => row.includes(activeEl));
+
+        // Native <button>/<a> elements already activate on Enter/Space without double-firing
+        if (
+          isFocusedOnHomeItem &&
+          activeEl &&
+          (activeEl.tagName === "BUTTON" || activeEl.tagName === "A")
+        ) {
+          setIsHomeKeyboardNavActive(true);
+          return;
+        }
+
+        // Support activating non-native focusables or starting from container if keyboard nav is active
+        const fallbackTarget =
+          (isFocusedOnHomeItem ? activeEl : null) ||
+          (isHomeKeyboardNavActiveRef.current ? rows[0]?.[0] : null);
+        if (fallbackTarget) {
+          e.preventDefault();
+          setIsHomeKeyboardNavActive(true);
+          fallbackTarget.focus({ preventScroll: true });
+          fallbackTarget.click();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleHomeKeyDown);
+    return () => window.removeEventListener("keydown", handleHomeKeyDown);
+  }, [
+    currentScreen,
+    isPauseModalOpen,
+    showHintRewardModal,
+    footerLangMenuOpen,
+    playerToUnfriend,
+    viewingRankingsGame,
+    activeCompliancePage,
+  ]);
 
   const pushToHistory = () => {
     if (!boardState) return;
@@ -16878,10 +17700,18 @@ export default function App() {
   useEffect(() => {
     if (webAutoStartedRef.current) return;
     const isBlocksPath = typeof window !== "undefined" && window.location.pathname.includes('/blocks');
+    const initialEffectiveUid = isGuestSession ? null : (authUser?.uid ?? null);
+    const savedLastActive = readLastActiveGame(initialEffectiveUid);
+    const shouldResumeBlocksOnBoot =
+      savedLastActive?.screen === "blocks" &&
+      (savedLastActive.blocksRoomCode
+        ? Boolean(getPendingBlocksRoomSession(initialEffectiveUid, savedLastActive.blocksRoomCode))
+        : getBlocksSavedSoloScore(initialEffectiveUid) !== null);
     if (
       hasInitialInviteRef.current ||
       currentScreenRef.current !== "home" ||
       isBlocksPath ||
+      shouldResumeBlocksOnBoot ||
       (typeof window !== "undefined" &&
         (isDailyChallengePath(window.location.pathname) ||
           isSolverPath(window.location.pathname) ||
@@ -19174,7 +20004,11 @@ export default function App() {
 
         {/* PANE 1: HOME DASHBOARD */}
         {currentScreen === "home" && (
-          <div id="home-scroll-container" className="flex-1 min-h-0 h-full w-full flex flex-col items-center justify-start overflow-y-auto overscroll-contain touch-pan-y select-none pt-[calc(70px+env(safe-area-inset-top,0px))]">
+          <div
+            id="home-scroll-container"
+            data-home-kbd-nav={isHomeKeyboardNavActive ? "true" : "false"}
+            className="flex-1 min-h-0 h-full w-full flex flex-col items-center justify-start overflow-y-auto overscroll-contain touch-pan-y select-none pt-[calc(70px+env(safe-area-inset-top,0px))]"
+          >
 
             {/* Inner Wrapper spanning 100vh minus header to center elements vertically and push AdSense below the fold */}
             <div className="w-full min-h-[calc(100vh-70px)] flex flex-col justify-center items-center p-3 md:p-6 shrink-0" id="home-screen-inner-wrapper">
@@ -19241,6 +20075,7 @@ export default function App() {
                     darkMode={darkMode}
                     onStartDailyChallenge={handleLaunchDailyChallenge}
                     onOpenDailyScreen={() => navigateToScreen("daily-challenge")}
+                    onModalOpenChange={setIsDailyCardModalOpen}
                     refreshTrigger={dailyRefreshCounter}
                   />
                 </div>
@@ -19477,14 +20312,17 @@ export default function App() {
                     <span className={`h-px flex-1 ${darkMode ? "bg-zinc-800/80" : "bg-stone-200/80"}`} />
                   </div>
 
-                  <div className="overflow-x-auto flex gap-4 px-4 pb-6 scrollbar-hide no-scrollbar">
+                  <div
+                    id="home-mo-logic-shelf"
+                    className="overflow-x-auto flex gap-4 px-4 pb-6 scrollbar-hide no-scrollbar"
+                  >
                     <button
                       type="button"
                       id="home-block-sync-card"
                       onClick={() => {
                         playClickSound();
                         triggerHapticTap(vibrations);
-                        navigateToScreen("blocks");
+                        handleOpenBlockSyncEntry();
                       }}
                       className={`w-48 h-28 sm:h-32 shrink-0 rounded-3xl border-none p-4 flex flex-col items-start justify-between text-left cursor-pointer select-none transition-all duration-200 active:scale-[0.98] ${
                         darkMode
@@ -21808,6 +22646,13 @@ export default function App() {
               }
             }}
             onOpenMultiplayer={() => setShowMultiplayerForkModal(true)}
+            multiplayerRoom={activeBlockSyncRoom}
+            roomStandings={blockSyncRoomStandings}
+            onSubmitRoomResult={handleSubmitBlockSyncRoomResult}
+            onLeaveMultiplayerRoom={() => {
+              setActiveBlockSyncRoom(null);
+              setCurrentScreen("home");
+            }}
           />
         )}
 
@@ -22508,6 +23353,17 @@ export default function App() {
                 setJoinRoomError(null);
                 setShowJoinRoomModal(true);
               }}
+              pendingBlocksRoom={getMostRecentPendingBlocksRoom(
+                isGuestSession ? null : (authUser?.uid ?? null)
+              )}
+              onResumePendingBlocksRoom={(session) => {
+                setShowMultiplayerForkModal(false);
+                setShowJoinRoomModal(false);
+                setShowCreateChallengeModal(false);
+                setOpenedCreateFromMultiplayerResult(false);
+                setActiveBlockSyncRoom(session.config);
+                navigateToScreen("blocks");
+              }}
               isOnline={isOnline}
               darkMode={darkMode}
               playClickSound={playClickSound}
@@ -22629,9 +23485,69 @@ export default function App() {
             isOnline={isOnline}
             darkMode={darkMode}
             playClickSound={playClickSound}
+            isDailyChallenge={isDailyRoomActive}
+            selectedGame={isDailyRoomActive ? "sudoku" : selectedCreateRoomGame}
+            onSelectGame={(game) => {
+              if (!isDailyRoomActive) {
+                setSelectedCreateRoomGame(game);
+                selectedCreateRoomGameRef.current = game;
+                if (isOnline) {
+                  void updateRoomSettingsInFirestore({ gameType: game });
+                }
+              }
+            }}
+            blocksRoomMode={blocksRoomMode}
+            onChangeBlocksRoomMode={(mode) => {
+              setBlocksRoomMode(mode);
+              blocksRoomModeRef.current = mode;
+              if (!isDailyRoomActive && isOnline) {
+                void updateRoomSettingsInFirestore({ gameType: "blocks", blocksMode: mode });
+              }
+            }}
+            blocksRoomUndo={blocksRoomUndo}
+            onChangeBlocksRoomUndo={(undoAllowed) => {
+              setBlocksRoomUndo(undoAllowed);
+              blocksRoomUndoRef.current = undoAllowed;
+              if (!isDailyRoomActive && isOnline) {
+                void updateRoomSettingsInFirestore({
+                  gameType: "blocks",
+                  blocksUndoAllowed: undoAllowed,
+                });
+              }
+            }}
+            blocksRoomTimeLimitSec={blocksRoomTimeLimitSec}
+            onChangeBlocksRoomTimeLimitSec={(sec) => {
+              setBlocksRoomTimeLimitSec(sec);
+              blocksRoomTimeLimitSecRef.current = sec;
+              if (!isDailyRoomActive && isOnline) {
+                void updateRoomSettingsInFirestore({
+                  gameType: "blocks",
+                  blocksTimeLimitSec: sec,
+                });
+              }
+            }}
           />
         </div>
       )}
+
+      {/* 🧩 BLOCK SYNC DUAL-TRACK RESUME CHOICE MODAL */}
+      <BlockSyncResumeChoiceModal
+        isOpen={Boolean(blockSyncResumeChoiceState)}
+        isDarkMode={darkMode}
+        pendingRoom={blockSyncResumeChoiceState?.pendingRoom ?? null}
+        soloSavedScore={blockSyncResumeChoiceState?.soloSavedScore ?? null}
+        onResumeMultiplayer={(session) => {
+          setBlockSyncResumeChoiceState(null);
+          setActiveBlockSyncRoom(session.config);
+          navigateToScreen("blocks");
+        }}
+        onPlaySoloClassic={() => {
+          setBlockSyncResumeChoiceState(null);
+          setActiveBlockSyncRoom(null);
+          navigateToScreen("blocks");
+        }}
+        onClose={() => setBlockSyncResumeChoiceState(null)}
+      />
 
       {/* 🔮 CUSTOM GAME HISTORY OR SAVED CHALLENGE LOBBY MODAL */}
       <AnimatePresence>

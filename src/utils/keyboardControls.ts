@@ -1,6 +1,9 @@
 /**
- * Pure keyboard event helpers shared across gameplay (`App.tsx`) and Solver (`SudokuSolverScreen.tsx`).
+ * Pure keyboard event helpers and shared topmost-modal keyboard coordinator
+ * shared across gameplay (`App.tsx`), Solver (`SudokuSolverScreen.tsx`), and modals.
  */
+
+import { useEffect, useRef, type RefObject } from "react";
 
 /**
  * Returns true when focus is inside an editable form field so global puzzle shortcuts do not hijack typing.
@@ -176,5 +179,303 @@ export function handleNumericInputKeyDown(
     }
   });
   return true;
+}
+
+export interface ModalKeyboardLayerOptions {
+  /** Unique identifier for this modal/overlay layer. */
+  id: string;
+  /** Optional stack priority; higher values always sit on top of lower priorities. Defaults to `0`. */
+  priority?: number;
+  /** Optional modal root ref for automatic Tab focus trapping and focus handoff/restoration. */
+  containerRef?: RefObject<HTMLElement | null>;
+  /** Restore focus to the opener (with preventScroll) when this layer closes. Defaults to `true`. */
+  restoreFocus?: boolean;
+  /** Trap Tab / Shift+Tab inside `containerRef` when present. Defaults to `true`. */
+  trapFocus?: boolean;
+  /** Focus the first focusable element inside `containerRef` on activation when needed. Defaults to `false`. */
+  autoFocus?: boolean;
+  /** Custom Escape handler for the topmost layer. Return `false` to decline handling. */
+  onEscape?: (e: KeyboardEvent) => boolean | void;
+  /** Custom Backspace handler when focus is NOT in an editable element. Return `false` to decline handling. */
+  onBackspace?: (e: KeyboardEvent) => boolean | void;
+  /** Optional custom capture-phase handler for keys on the topmost layer. Return `true` when consumed. */
+  onKeyDown?: (e: KeyboardEvent) => boolean | void;
+}
+
+interface InternalModalKeyboardLayer {
+  token: number;
+  seq: number;
+  previousFocus: HTMLElement | null;
+  getOptions: () => ModalKeyboardLayerOptions;
+}
+
+const modalKeyboardStack: InternalModalKeyboardLayer[] = [];
+let modalLayerTokenSeq = 0;
+let modalListenersAttached = false;
+
+function getSortedTopmostModalLayer(): InternalModalKeyboardLayer | null {
+  if (modalKeyboardStack.length === 0) return null;
+  let top = modalKeyboardStack[0];
+  let topPriority = top.getOptions().priority ?? 0;
+  for (let i = 1; i < modalKeyboardStack.length; i++) {
+    const candidate = modalKeyboardStack[i];
+    const candidatePriority = candidate.getOptions().priority ?? 0;
+    if (
+      candidatePriority > topPriority ||
+      (candidatePriority === topPriority && candidate.seq > top.seq)
+    ) {
+      top = candidate;
+      topPriority = candidatePriority;
+    }
+  }
+  return top;
+}
+
+function handleModalStackKeyDownCapture(e: KeyboardEvent): void {
+  const top = getSortedTopmostModalLayer();
+  if (!top) return;
+
+  const opts = top.getOptions();
+  const editable = isEditableEventTarget(e.target);
+
+  if (opts.onKeyDown) {
+    const consumed = opts.onKeyDown(e);
+    if (consumed === true) {
+      e.stopPropagation();
+      return;
+    }
+  }
+
+  if (e.key === "Escape") {
+    if (opts.onEscape) {
+      const handled = opts.onEscape(e);
+      if (handled !== false) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    }
+    // Always keep Escape scoped strictly to the topmost active layer
+    e.stopPropagation();
+    return;
+  }
+
+  if (e.key === "Backspace") {
+    // Never hijack Backspace while typing inside inputs/textareas/selects/contenteditable
+    if (editable) return;
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && opts.onBackspace) {
+      const handled = opts.onBackspace(e);
+      if (handled !== false) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.stopPropagation();
+    }
+    return;
+  }
+
+  if (e.key === "Tab") {
+    const container = opts.containerRef?.current ?? null;
+    if (opts.trapFocus !== false && container) {
+      trapFocusTabKey(e, container);
+    }
+    e.stopPropagation();
+    return;
+  }
+
+  // Prevent arrow/activation keys from reaching underlying listeners when focus is outside the modal container
+  const isNavOrActionKey =
+    e.key === "ArrowUp" ||
+    e.key === "ArrowDown" ||
+    e.key === "ArrowLeft" ||
+    e.key === "ArrowRight" ||
+    e.key === "Enter" ||
+    e.key === " ";
+
+  if (isNavOrActionKey) {
+    const container = opts.containerRef?.current ?? null;
+    const targetNode = e.target as Node | null;
+    if (!container || !targetNode || !container.contains(targetNode)) {
+      e.stopPropagation();
+    }
+  }
+}
+
+function handleModalStackKeyDownBubble(e: KeyboardEvent): void {
+  if (modalKeyboardStack.length === 0) return;
+  if (
+    e.key === "Escape" ||
+    e.key === "Tab" ||
+    e.key === "ArrowUp" ||
+    e.key === "ArrowDown" ||
+    e.key === "ArrowLeft" ||
+    e.key === "ArrowRight" ||
+    e.key === "Enter" ||
+    e.key === " " ||
+    (e.key === "Backspace" && !isEditableEventTarget(e.target))
+  ) {
+    e.stopPropagation();
+  }
+}
+
+function syncModalStackListeners(): void {
+  if (typeof window === "undefined") return;
+  if (modalKeyboardStack.length > 0 && !modalListenersAttached) {
+    window.addEventListener("keydown", handleModalStackKeyDownCapture, true);
+    window.addEventListener("keydown", handleModalStackKeyDownBubble, false);
+    modalListenersAttached = true;
+  } else if (modalKeyboardStack.length === 0 && modalListenersAttached) {
+    window.removeEventListener("keydown", handleModalStackKeyDownCapture, true);
+    window.removeEventListener("keydown", handleModalStackKeyDownBubble, false);
+    modalListenersAttached = false;
+  }
+}
+
+function safeFocusWithoutScroll(el: HTMLElement | null | undefined): void {
+  if (!el || !el.isConnected) return;
+  if (el.hasAttribute("disabled")) return;
+  try {
+    el.focus({ preventScroll: true });
+  } catch {
+    el.focus();
+  }
+}
+
+/**
+ * Returns `true` whenever at least one modal/overlay layer is registered on the shared keyboard stack.
+ */
+export function hasActiveModalKeyboardLayer(): boolean {
+  return modalKeyboardStack.length > 0;
+}
+
+/**
+ * Returns the `id` of the currently owning topmost modal keyboard layer, or `null` if empty.
+ */
+export function getTopmostModalKeyboardLayerId(): string | null {
+  const top = getSortedTopmostModalLayer();
+  return top ? top.getOptions().id : null;
+}
+
+/**
+ * Registers a modal/overlay layer on the shared topmost-modal keyboard stack and returns its cleanup function.
+ */
+export function registerModalKeyboardLayer(
+  options: ModalKeyboardLayerOptions | (() => ModalKeyboardLayerOptions)
+): () => void {
+  const getOptions = typeof options === "function" ? options : () => options;
+  const resolved = getOptions();
+  const activeEl =
+    typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  const previousFocus =
+    activeEl && typeof document !== "undefined" && activeEl !== document.body
+      ? activeEl
+      : null;
+
+  // Replace any stale entry with the same layer id
+  for (let i = modalKeyboardStack.length - 1; i >= 0; i--) {
+    if (modalKeyboardStack[i].getOptions().id === resolved.id) {
+      modalKeyboardStack.splice(i, 1);
+    }
+  }
+
+  modalLayerTokenSeq += 1;
+  const entry: InternalModalKeyboardLayer = {
+    token: modalLayerTokenSeq,
+    seq: modalLayerTokenSeq,
+    previousFocus,
+    getOptions,
+  };
+  modalKeyboardStack.push(entry);
+  syncModalStackListeners();
+
+  let unregistered = false;
+  return () => {
+    if (unregistered) return;
+    unregistered = true;
+
+    const idx = modalKeyboardStack.findIndex((item) => item.token === entry.token);
+    if (idx !== -1) {
+      modalKeyboardStack.splice(idx, 1);
+    }
+    syncModalStackListeners();
+
+    const closingOpts = entry.getOptions();
+    if (closingOpts.restoreFocus === false || typeof window === "undefined") {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const nextTop = getSortedTopmostModalLayer();
+      if (nextTop) {
+        const nextContainer = nextTop.getOptions().containerRef?.current ?? null;
+        const activeNow = document.activeElement as HTMLElement | null;
+        if (nextContainer && (!activeNow || !nextContainer.contains(activeNow))) {
+          if (entry.previousFocus && entry.previousFocus.isConnected && nextContainer.contains(entry.previousFocus)) {
+            safeFocusWithoutScroll(entry.previousFocus);
+          } else {
+            const firstFocusable = getFocusableElements(nextContainer)[0];
+            safeFocusWithoutScroll(firstFocusable);
+          }
+        }
+        return;
+      }
+
+      if (entry.previousFocus && entry.previousFocus.isConnected) {
+        const activeNow = document.activeElement;
+        const closingContainer = closingOpts.containerRef?.current ?? null;
+        const focusLostOrInsideClosing =
+          !activeNow ||
+          activeNow === document.body ||
+          !activeNow.isConnected ||
+          (closingContainer !== null && closingContainer.contains(activeNow));
+        if (focusLostOrInsideClosing) {
+          safeFocusWithoutScroll(entry.previousFocus);
+        }
+      }
+    });
+  };
+}
+
+/**
+ * React hook that binds an open modal/overlay to the shared topmost-modal keyboard stack
+ * with automatic handoff and non-scrolling focus restoration on close/unmount.
+ */
+export function useTopmostModalKeyboardLayer(
+  isOpen: boolean,
+  options: ModalKeyboardLayerOptions
+): void {
+  const optionsRef = useRef<ModalKeyboardLayerOptions>(options);
+  optionsRef.current = options;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const unregister = registerModalKeyboardLayer(() => optionsRef.current);
+
+    let rafId: number | null = null;
+    if (optionsRef.current.autoFocus && typeof window !== "undefined") {
+      rafId = window.requestAnimationFrame(() => {
+        const container = optionsRef.current.containerRef?.current ?? null;
+        if (!container) return;
+        const activeNow = document.activeElement as HTMLElement | null;
+        if (!activeNow || !container.contains(activeNow)) {
+          const firstFocusable = getFocusableElements(container)[0];
+          safeFocusWithoutScroll(firstFocusable);
+        }
+      });
+    }
+
+    return () => {
+      if (rafId !== null && typeof window !== "undefined") {
+        window.cancelAnimationFrame(rafId);
+      }
+      unregister();
+    };
+  }, [isOpen, options.id, options.priority]);
 }
 

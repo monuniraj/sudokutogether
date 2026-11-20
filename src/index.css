@@ -691,3 +691,53 @@ html.theme-snapshotting *::after {
   outline-offset: 2px !important;
   box-shadow: 0 0 0 4px rgba(165, 180, 252, 0.28) !important;
 }
+
+/* Home screen mouse-free keyboard navigation: show focus ring ONLY while keyboard mode is active */
+[data-home-kbd-nav="false"] :is(button, a[href], [role="button"]):focus,
+[data-home-kbd-nav="false"] :is(button, a[href], [role="button"]):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+[data-home-kbd-nav="true"] :is(button, a[href], [role="button"]):focus {
+  outline: 2.5px solid #4F46E5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.22) !important;
+}
+
+.dark [data-home-kbd-nav="true"] :is(button, a[href], [role="button"]):focus {
+  outline: 2.5px solid #A5B4FC !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(165, 180, 252, 0.28) !important;
+}
+
+/* CreateChallengeModal: show focus ring ONLY while keyboard navigation is active */
+[data-create-room-kbd="false"] :is(button, a[href], [role="button"]):focus,
+[data-create-room-kbd="false"] :is(button, a[href], [role="button"]):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+[data-create-room-kbd="true"] :is(button, a[href], [role="button"]):focus {
+  outline: 2.5px solid #4F46E5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.22) !important;
+}
+
+.dark [data-create-room-kbd="true"] :is(button, a[href], [role="button"]):focus {
+  outline: 2.5px solid #A5B4FC !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(165, 180, 252, 0.28) !important;
+}
+
+[data-create-room-kbd="true"][data-create-room-theme="blocks"] :is(button, a[href], [role="button"]):focus {
+  outline: 2.5px solid #0284C7 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.22) !important;
+}
+
+.dark [data-create-room-kbd="true"][data-create-room-theme="blocks"] :is(button, a[href], [role="button"]):focus {
+  outline: 2.5px solid #38BDF8 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.28) !important;
+}
