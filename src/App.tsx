@@ -27061,7 +27061,15 @@ export default function App() {
             >
               <div className="flex justify-between items-center pb-2 border-b border-stone-200/50 dark:border-zinc-800/50">
                 <div className="flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-indigo-500" />
+                  <Bell
+                    className={`w-5 h-5 ${
+                      currentScreen === "blocks"
+                        ? darkMode
+                          ? "text-[#38BDF8]"
+                          : "text-[#2B8CEE]"
+                        : "text-indigo-500"
+                    }`}
+                  />
                   <h3 className="font-sans font-black text-base uppercase tracking-wider">
                     {t("challenge_invites_title")}
                   </h3>

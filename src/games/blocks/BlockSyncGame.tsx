@@ -2487,7 +2487,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
       const willCelebratePodium = Boolean(
         activeRoom &&
-          didImproveRoomScore &&
+        didImproveRoomScore &&
         (selfOptimisticRank === 1 ||
           (selfOptimisticRank === 2 && mergedStandingsForHistory.length >= 2) ||
           (selfOptimisticRank === 3 && mergedStandingsForHistory.length >= 3))
@@ -3430,7 +3430,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             filled === 1 ? (
               <div
                 key={`${piece.uid}-${r}-${c}`}
-                className={`w-full h-full aspect-square rounded-xl ${tileClasses[piece.color]}`}
+                className={`w-full h-full aspect-square rounded-[18%] ${tileClasses[piece.color]}`}
               />
             ) : (
               <div
@@ -3863,8 +3863,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           <section
             aria-label="Block Sync 9 by 9 Board"
             className={`relative w-full aspect-square p-2.5 sm:p-3.5 rounded-3xl backdrop-blur-md transition-colors duration-300 ${darkMode
-              ? "bg-[#1B242E] border border-slate-700/60 shadow-[0_14px_38px_rgba(0,0,0,0.5)]"
-              : "bg-[#E6F1F8]/90 border border-slate-300/45 shadow-[0_12px_36px_rgba(44,62,80,0.07)]"
+              ? "bg-[#1B2530] border border-[#6C8BA8]/30 shadow-[0_14px_38px_rgba(0,0,0,0.52)]"
+              : "bg-[#E2EFF8]/95 border border-[#96BCD9]/55 shadow-[0_12px_36px_rgba(44,62,80,0.08)]"
               }`}
           >
             {/* Non-shifting Floating Combo / Clear Points Pill */}
@@ -3907,7 +3907,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
             <div
               ref={boardGridRef}
-              className="w-full h-full grid grid-cols-9 grid-rows-9 gap-1 sm:gap-1.5"
+              className="relative w-full h-full grid grid-cols-9 grid-rows-9 gap-1 sm:gap-1.5"
             >
               {boardState.map((rowArr, rowIdx) =>
                 rowArr.map((cell, colIdx) => {
@@ -3935,16 +3935,18 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
                   const emptyCellClass = darkMode
                     ? isAltSudokuBox
-                      ? "border-none bg-[#23303E] shadow-[inset_0_3px_7px_rgba(0,0,0,0.68)]"
-                      : "border-none bg-[#141A21] shadow-[inset_0_3px_7px_rgba(0,0,0,0.72)]"
+                      ? "bg-[#253545] border border-[#8CB4D9]/28 shadow-[inset_0_2px_6px_rgba(0,0,0,0.52)]"
+                      : "bg-[#16202B] border border-[#5F7E9C]/26 shadow-[inset_0_2px_6px_rgba(0,0,0,0.62)]"
                     : isAltSudokuBox
-                      ? "border-none bg-[#D7E8F5]/85 shadow-[inset_0_3px_7px_rgba(100,138,172,0.34)]"
-                      : "border-none bg-white/90 shadow-[inset_0_3px_7px_rgba(116,154,186,0.32)]";
+                      ? "bg-[#CEE3F3]/90 border border-[#6E9EC8]/42 shadow-[inset_0_2px_5px_rgba(78,120,160,0.26)]"
+                      : "bg-white/95 border border-[#8EB4D4]/45 shadow-[inset_0_2px_5px_rgba(92,134,172,0.22)]";
 
                   return (
                     <div
                       key={`block-sync-cell-${rowIdx}-${colIdx}`}
-                      className={`relative w-full h-full aspect-square rounded-xl transition-all duration-150 ${cell
+                      className={`relative w-full h-full aspect-square rounded-[18%] transition-all duration-150 ${
+                        cell || isHovered ? "z-[2]" : ""
+                      } ${cell
                         ? `${tileClasses[cell.color]} ${cell.isClearing
                           ? `${cell.isComboClear
                             ? "block-sync-combo-vanishing-cell"
@@ -3971,6 +3973,30 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                   );
                 })
               )}
+
+              {/* Zero-layout-shift 3x3 Sub-Grid Hairline Overlay */}
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1]">
+                <div
+                  className={`absolute inset-y-0.5 left-[33.3333%] -translate-x-1/2 w-[1px] rounded-full ${
+                    darkMode ? "bg-[#7DA6CC]/22" : "bg-[#5A8FBE]/28"
+                  }`}
+                />
+                <div
+                  className={`absolute inset-y-0.5 left-[66.6667%] -translate-x-1/2 w-[1px] rounded-full ${
+                    darkMode ? "bg-[#7DA6CC]/22" : "bg-[#5A8FBE]/28"
+                  }`}
+                />
+                <div
+                  className={`absolute inset-x-0.5 top-[33.3333%] -translate-y-1/2 h-[1px] rounded-full ${
+                    darkMode ? "bg-[#7DA6CC]/22" : "bg-[#5A8FBE]/28"
+                  }`}
+                />
+                <div
+                  className={`absolute inset-x-0.5 top-[66.6667%] -translate-y-1/2 h-[1px] rounded-full ${
+                    darkMode ? "bg-[#7DA6CC]/22" : "bg-[#5A8FBE]/28"
+                  }`}
+                />
+              </div>
             </div>
           </section>
         </div>
