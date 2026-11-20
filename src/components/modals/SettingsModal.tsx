@@ -7,7 +7,12 @@ import { translateForLanguage, useTranslation } from "../../i18n/useTranslation"
 import { Language, TranslationKey } from "../../i18n/translations";
 import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { isGenericDisplayName } from "../../utils/storageEngine";
-import { getFocusableElements, handleRovingMenuArrowKey } from "../../utils/keyboardControls";
+import {
+  getFocusableElements,
+  handleRovingMenuArrowKey,
+  isEditableEventTarget,
+  useTopmostModalKeyboardLayer,
+} from "../../utils/keyboardControls";
 
 export interface SettingsModalProps {
   fromGameplaySettings: boolean;
@@ -52,6 +57,7 @@ export interface SettingsModalProps {
   playClickSound: () => void;
   addLog: (msg: string) => void;
   onBackToGame: () => void;
+  onClose?: () => void;
   onOpenDisplayNameModal: () => void;
   onOpenHowToPlay: () => void;
   onOpenCompliancePage: (page: "terms" | "privacy" | "about" | "contact") => void;
@@ -106,6 +112,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   playClickSound,
   addLog,
   onBackToGame,
+  onClose,
   onOpenDisplayNameModal,
   onOpenHowToPlay,
   onOpenCompliancePage,
@@ -134,9 +141,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [highlightDeleteAccount, setHighlightDeleteAccount] = useState<boolean>(false);
   const [isCheckingAdPrivacy, setIsCheckingAdPrivacy] = useState<boolean>(false);
   const [adPrivacyNotice, setAdPrivacyNotice] = useState<AdPrivacyOptionsResult | null>(null);
+  const rootModalRef = useRef<HTMLDivElement | null>(null);
   const langTriggerRef = useRef<HTMLButtonElement | null>(null);
   const langMenuRef = useRef<HTMLDivElement | null>(null);
   const deleteAccountButtonRef = useRef<HTMLButtonElement | null>(null);
+  const onBackOrCloseRef = useRef(() => {
+    if (fromGameplaySettings) {
+      onBackToGame();
+    } else if (onClose) {
+      onClose();
+    } else {
+      onBackToGame();
+    }
+  });
+  onBackOrCloseRef.current = () => {
+    if (fromGameplaySettings) {
+      onBackToGame();
+    } else if (onClose) {
+      onClose();
+    } else {
+      onBackToGame();
+    }
+  };
 
   const handleOpenAdPrivacyPreferences = async () => {
     if (isCheckingAdPrivacy) return;
@@ -179,29 +205,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       (selected || items[0])?.focus();
     }, 10);
 
-    const handleLangKeyDown = (e: KeyboardEvent) => {
-      const items = getFocusableElements(langMenuRef.current);
-      if (handleRovingMenuArrowKey(e, items, "vertical")) {
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsLangOpen(false);
-        requestAnimationFrame(() => langTriggerRef.current?.focus());
-        return;
-      }
-      if (e.key === "Tab") {
-        setIsLangOpen(false);
-      }
-    };
-
-    window.addEventListener("keydown", handleLangKeyDown, true);
     return () => {
       window.clearTimeout(focusTimer);
-      window.removeEventListener("keydown", handleLangKeyDown, true);
     };
   }, [isLangOpen]);
+
+  useTopmostModalKeyboardLayer(true, {
+    id: "sudoku-settings-modal",
+    priority: fromGameplaySettings ? 26 : 15,
+    containerRef: rootModalRef,
+    restoreFocus: true,
+    trapFocus: fromGameplaySettings,
+    onEscape: () => {
+      if (isLangOpen) {
+        playClickSound();
+        setIsLangOpen(false);
+        requestAnimationFrame(() => langTriggerRef.current?.focus({ preventScroll: true }));
+        return true;
+      }
+      playClickSound();
+      onBackOrCloseRef.current();
+      return true;
+    },
+    onBackspace: () => {
+      if (isLangOpen) {
+        playClickSound();
+        setIsLangOpen(false);
+        requestAnimationFrame(() => langTriggerRef.current?.focus({ preventScroll: true }));
+        return true;
+      }
+      playClickSound();
+      onBackOrCloseRef.current();
+      return true;
+    },
+    onKeyDown: (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || isEditableEventTarget(e.target)) {
+        return false;
+      }
+      if (isLangOpen) {
+        const items = getFocusableElements(langMenuRef.current);
+        if (handleRovingMenuArrowKey(e, items, "vertical")) {
+          const nextEl = document.activeElement as HTMLElement | null;
+          nextEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          return true;
+        }
+        if (e.key === "Tab") {
+          setIsLangOpen(false);
+        }
+        return false;
+      }
+      if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "Home" ||
+        e.key === "End"
+      ) {
+        const items = getFocusableElements(rootModalRef.current);
+        if (handleRovingMenuArrowKey(e, items, "vertical")) {
+          const nextEl = document.activeElement as HTMLElement | null;
+          nextEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          return true;
+        }
+      }
+      return false;
+    },
+  });
 
   const toggleInfo = (id: string) => {
     setExpandedInfo(prev => ({ ...prev, [id]: !prev[id] }));
@@ -209,6 +277,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div
+      ref={rootModalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("settings")}
       className={`modal ${
         fromGameplaySettings
           ? `fixed inset-0 w-screen h-screen z-50 p-6 flex flex-col items-center justify-start overflow-y-auto pt-[calc(80px+env(safe-area-inset-top,0px))] lg:pt-[85px] ${
@@ -608,7 +680,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       />
                       <div
                         ref={langMenuRef}
-                        className={`absolute right-0 top-full mt-1.5 z-50 w-52 max-h-[320px] overflow-y-auto py-1.5 rounded-2xl shadow-2xl border flex flex-col backdrop-blur-md transition-all ${
+                        className={`absolute right-0 top-full mt-1.5 z-50 w-52 max-h-[320px] overflow-y-auto p-1.5 rounded-2xl shadow-2xl border flex flex-col backdrop-blur-md transition-all ${
                           darkMode
                             ? "bg-zinc-900 text-stone-100 border-zinc-800"
                             : "bg-white text-slate-900 border-slate-200/80"

@@ -28,8 +28,13 @@ import type { DailyDifficulty, DailyChallengeStatus, DailyStats } from "./featur
 import { SudokuSolverScreen } from "./features/sudokuSolver/components/SudokuSolverScreen";
 import { SudokuRulesScreen } from "./features/sudokuRules/components/SudokuRulesScreen";
 import { BlockSyncGame } from "./games/blocks/BlockSyncGame";
+import { BlockSyncLogo } from "./games/blocks/BlockSyncLogo";
 import { BlockSyncResumeChoiceModal } from "./games/blocks/BlockSyncResumeChoiceModal";
 import { BlockSyncRoomInviteModal } from "./games/blocks/BlockSyncRoomInviteModal";
+import {
+  BlockSyncRoomResultsModal,
+  type BlockSyncRoomResultsStanding,
+} from "./games/blocks/BlockSyncRoomResultsModal";
 import {
   getBlocksSavedSoloScore,
   getMostRecentPendingBlocksRoom,
@@ -38,6 +43,7 @@ import {
   type BlockSyncPendingRoomSession,
   type BlockSyncRoomConfig,
   type BlockSyncRoomResultPayload,
+  type BlockSyncRoomTimeLimitSec,
 } from "./games/blocks/blocksRoomEngine";
 import type { BlockSyncRoomStandingEntry } from "./games/blocks/BlockSyncEndGameModal";
 import { getRulesArticleCopy } from "./utils/rulesArticleTranslations";
@@ -139,6 +145,7 @@ import {
   handleRovingMenuArrowKey,
   hasActiveModalKeyboardLayer,
   isEditableEventTarget,
+  useTopmostModalKeyboardLayer,
 } from "./utils/keyboardControls";
 import { getKeyboardGuideCopy } from "./utils/keyboardGuideTranslations";
 import { incrementGuestGameCount } from "./utils/guestTracking";
@@ -647,6 +654,10 @@ interface PendingChallenge {
   finisherNames?: string[];
   finisherCount?: number;
   groupedIds?: string[];
+  gameType?: "sudoku" | "blocks";
+  blocksMode?: "classic" | "rush";
+  blocksUndoAllowed?: boolean;
+  blocksTimeLimitSec?: BlockSyncRoomTimeLimitSec;
 }
 
 const getInitialGuestProfile = () => {
@@ -3491,6 +3502,28 @@ export default function App() {
     hasMore?: boolean;
     isLoadingMore?: boolean;
   } | null>(null);
+  const [blockSyncResultsModal, setBlockSyncResultsModal] = useState<{
+    roomCode: string;
+    mode: "classic" | "rush";
+    timeLimitSec: BlockSyncRoomTimeLimitSec;
+    undoAllowed: boolean;
+    isLoading: boolean;
+    standings: BlockSyncRoomResultsStanding[];
+    currentUserAlreadyCompleted: boolean;
+  } | null>(null);
+  const blockSyncResultsModalRef = useRef(blockSyncResultsModal);
+  blockSyncResultsModalRef.current = blockSyncResultsModal;
+  const blocksRoomCompletionTrackerRef = useRef<{
+    roomCode: string;
+    initialized: boolean;
+    completedUids: Set<string>;
+    notifiedUids: Set<string>;
+  }>({
+    roomCode: "",
+    initialized: false,
+    completedUids: new Set(),
+    notifiedUids: new Set(),
+  });
   const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
   const [incomingChallengeId, setIncomingChallengeId] = useState<string | null>(null);
   const [incomingChallengeDetails, setIncomingChallengeDetails] = useState<{
@@ -3502,6 +3535,10 @@ export default function App() {
     password?: string;
     pinHash?: string;
     senderName?: string;
+    gameType?: "sudoku" | "blocks";
+    blocksMode?: "classic" | "rush";
+    blocksUndoAllowed?: boolean;
+    blocksTimeLimitSec?: BlockSyncRoomTimeLimitSec;
   } | null>(null);
   const [enteredInvitePassword, setEnteredInvitePassword] = useState<string>("");
   const [invitePasswordError, setInvitePasswordError] = useState<string | null>(null);
@@ -3532,6 +3569,46 @@ export default function App() {
 
   // Bell Invites modal
   const [showBellInvitesModal, setShowBellInvitesModal] = useState<boolean>(false);
+  const bellModalDialogRef = useRef<HTMLDivElement | null>(null);
+
+  useTopmostModalKeyboardLayer(showBellInvitesModal, {
+    id: "bell-invites-modal",
+    priority: 40,
+    containerRef: bellModalDialogRef,
+    restoreFocus: true,
+    trapFocus: true,
+    onEscape: () => {
+      playClickSound();
+      setShowBellInvitesModal(false);
+      return true;
+    },
+    onBackspace: () => {
+      playClickSound();
+      setShowBellInvitesModal(false);
+      return true;
+    },
+    onKeyDown: (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || isEditableEventTarget(e.target)) {
+        return false;
+      }
+      if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight" ||
+        e.key === "Home" ||
+        e.key === "End"
+      ) {
+        const focusables = getFocusableElements(bellModalDialogRef.current);
+        if (handleRovingMenuArrowKey(e, focusables, "both")) {
+          const nextEl = document.activeElement as HTMLElement | null;
+          nextEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          return true;
+        }
+      }
+      return false;
+    },
+  });
   const [showHowToPlayModal, setShowHowToPlayModal] = useState<boolean>(false);
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState<boolean>(false);
   const [showResetSettingsModal, setShowResetSettingsModal] = useState<boolean>(false);
@@ -4049,11 +4126,29 @@ export default function App() {
       const namesSet = new Set<string>();
       let latestMs = 0;
       const allIds: string[] = [];
+      let resolvedGameType: "sudoku" | "blocks" | undefined;
+      let resolvedBlocksMode: "classic" | "rush" | undefined;
+      let resolvedBlocksUndo: boolean | undefined;
+      let resolvedBlocksTimeLimit: BlockSyncRoomTimeLimitSec | undefined;
 
       for (const it of items) {
         const name = (it.fromName || it.senderName || "").trim();
         if (name && name !== "Opponent") {
           namesSet.add(name);
+        }
+        if (it.gameType === "blocks") {
+          resolvedGameType = "blocks";
+        } else if (!resolvedGameType && it.gameType === "sudoku") {
+          resolvedGameType = "sudoku";
+        }
+        if (it.blocksMode === "rush" || it.blocksMode === "classic") {
+          resolvedBlocksMode = it.blocksMode;
+        }
+        if (it.blocksUndoAllowed !== undefined) {
+          resolvedBlocksUndo = Boolean(it.blocksUndoAllowed);
+        }
+        if (it.blocksTimeLimitSec !== undefined) {
+          resolvedBlocksTimeLimit = it.blocksTimeLimitSec;
         }
         const ms = getInviteTimestampMs(it);
         if (ms > latestMs) latestMs = ms;
@@ -4078,7 +4173,11 @@ export default function App() {
         groupedIds: allIds,
         senderName: finisherNames[0],
         fromName: finisherNames[0],
-        sentAt: latestMs || Date.now()
+        sentAt: latestMs || Date.now(),
+        ...(resolvedGameType ? { gameType: resolvedGameType } : {}),
+        ...(resolvedBlocksMode ? { blocksMode: resolvedBlocksMode } : {}),
+        ...(resolvedBlocksUndo !== undefined ? { blocksUndoAllowed: resolvedBlocksUndo } : {}),
+        ...(resolvedBlocksTimeLimit !== undefined ? { blocksTimeLimitSec: resolvedBlocksTimeLimit } : {}),
       });
     });
 
@@ -4661,11 +4760,30 @@ export default function App() {
         : (incomingName || (isCompleted ? "Opponent" : "Player"));
 
       const resolvedSeed = Number(payload.seed) || (cleanRoomCode ? Number(cleanRoomCode) : 0);
+      const resolvedGameType: "sudoku" | "blocks" | undefined =
+        payload.gameType === "blocks" || existing?.gameType === "blocks"
+          ? "blocks"
+          : payload.gameType === "sudoku"
+            ? "sudoku"
+            : existing?.gameType;
+      const resolvedBlocksMode =
+        payload.blocksMode === "rush" || payload.blocksMode === "classic"
+          ? payload.blocksMode
+          : existing?.blocksMode;
+      const resolvedBlocksUndo =
+        payload.blocksUndoAllowed !== undefined
+          ? Boolean(payload.blocksUndoAllowed)
+          : existing?.blocksUndoAllowed;
+      const resolvedBlocksTimeLimit =
+        payload.blocksTimeLimitSec !== undefined
+          ? (Number(payload.blocksTimeLimitSec) as BlockSyncRoomTimeLimitSec)
+          : existing?.blocksTimeLimitSec;
 
       const itemToUpsert: PendingChallenge = {
         id: canonicalId,
         inviteId: rawInviteId,
         type: isCompleted ? "challenge_completed" : "invite",
+        ...(payload.title || existing?.title ? { title: payload.title || existing?.title } : {}),
         roomCode: cleanRoomCode,
         gameId: cleanRoomCode,
         fromName: finalName,
@@ -4679,7 +4797,11 @@ export default function App() {
         hintLimit: payload.hintLimit ?? 3,
         timerEnabled: payload.timerEnabled ?? true,
         sentAt: typeof payload.sentAt === "number" ? payload.sentAt : (Date.now()),
-        expiresAt: 0
+        expiresAt: 0,
+        ...(resolvedGameType ? { gameType: resolvedGameType } : {}),
+        ...(resolvedBlocksMode ? { blocksMode: resolvedBlocksMode } : {}),
+        ...(resolvedBlocksUndo !== undefined ? { blocksUndoAllowed: resolvedBlocksUndo } : {}),
+        ...(resolvedBlocksTimeLimit !== undefined ? { blocksTimeLimitSec: resolvedBlocksTimeLimit } : {}),
       };
 
       // Filter out previous entry for same canonicalId, cleanRoomCode (for same type), or rawInviteId
@@ -8186,6 +8308,12 @@ export default function App() {
           const maxMistakes = inviteData.maxMistakes ?? 3;
           const hintLimit = inviteData.hintLimit ?? 3;
           const timerEnabled = inviteData.timerEnabled ?? true;
+          const isBlocksInvite = inviteData.gameType === "blocks";
+          const rawBlocksLimit = Number(inviteData.blocksTimeLimitSec);
+          const blocksTimeLimitSec: BlockSyncRoomTimeLimitSec | undefined =
+            rawBlocksLimit === 120 || rawBlocksLimit === 180 || rawBlocksLimit === 300 || rawBlocksLimit === 600
+              ? (rawBlocksLimit as BlockSyncRoomTimeLimitSec)
+              : undefined;
 
           const invitePayload = {
             id: inviteId,
@@ -8203,7 +8331,17 @@ export default function App() {
             maxMistakes,
             hintLimit,
             timerEnabled,
-            sentAt: inviteTime
+            sentAt: inviteTime,
+            ...(isBlocksInvite
+              ? {
+                  gameType: "blocks" as const,
+                  blocksMode: (inviteData.blocksMode === "rush" ? "rush" : "classic") as "classic" | "rush",
+                  ...(inviteData.blocksUndoAllowed !== undefined
+                    ? { blocksUndoAllowed: Boolean(inviteData.blocksUndoAllowed) }
+                    : {}),
+                  ...(blocksTimeLimitSec !== undefined ? { blocksTimeLimitSec } : {}),
+                }
+              : {}),
           };
 
           // Always upsert to Bell challenges so app launch immediately loads all pending invites
@@ -8370,6 +8508,7 @@ export default function App() {
     if (dailyResultModalState?.isOpen) { setDailyResultModalState(null); return true; }
     if (openDropdown) { setOpenDropdown(null); return true; }
     if (playerToUnfriend) { setPlayerToUnfriend(null); return true; }
+    if (blockSyncResultsModal) { setBlockSyncResultsModal(null); return true; }
     if (notificationResultModal) { setNotificationResultModal(null); return true; }
     if (viewingRankingsGame) { setViewingRankingsGame(null); return true; }
     if (showDeleteAccountModal) { setShowDeleteAccountModal(false); return true; }
@@ -8423,6 +8562,7 @@ export default function App() {
     if (dailyResultModalState?.isOpen) count++;
     if (openDropdown) count++;
     if (playerToUnfriend) count++;
+    if (blockSyncResultsModal) count++;
     if (notificationResultModal) count++;
     if (viewingRankingsGame) count++;
     if (showDeleteAccountModal) count++;
@@ -9474,10 +9614,62 @@ export default function App() {
       showGameOverModal ||
       Boolean(viewingRankingsGame) ||
       Boolean(notificationResultModal) ||
+    Boolean(blockSyncResultsModal) ||
       Boolean(dailyResultModalState?.isOpen);
   }, [showGameOverModal, viewingRankingsGame, notificationResultModal, dailyResultModalState?.isOpen]);
 
-  const handleViewChallengeResults = async (roomCode: string, forceOpenModal = false) => {
+  const getBlockSyncResultsSelfIds = useCallback(() => {
+    return new Set(
+      [
+        auth.currentUser?.uid,
+        authUser?.uid,
+        userProfile?.id,
+        userProfileRef.current?.id,
+        getActiveAuthUid(),
+        getOrCreateGuestIdentity().id,
+      ].filter(Boolean) as string[]
+    );
+  }, [authUser?.uid, userProfile?.id]);
+
+  const mapBlockSyncRoomPlayersToStandings = useCallback(
+    (docs: any[]): { standings: BlockSyncRoomResultsStanding[]; currentUserAlreadyCompleted: boolean } => {
+      const selfIds = getBlockSyncResultsSelfIds();
+      let currentUserAlreadyCompleted = false;
+
+      const standings: BlockSyncRoomResultsStanding[] = docs.map((docSnap: any) => {
+        const d = (typeof docSnap.data === "function" ? docSnap.data() : docSnap) as Record<string, any>;
+        const rawId = String(d.id || d.uid || docSnap.id || "");
+        const isCurrentUser = Boolean(
+          selfIds.has(rawId) ||
+            (d.authUid && selfIds.has(String(d.authUid))) ||
+            (d.guestId && selfIds.has(String(d.guestId)))
+        );
+        const isCompleted = d.status === "completed" || d.isPending === false;
+        if (isCurrentUser && isCompleted) {
+          currentUserAlreadyCompleted = true;
+        }
+        return {
+          id: rawId || String(Math.random()),
+          name: String(d.displayName || d.name || d.playerName || "Player"),
+          score: Math.max(0, Math.floor(Number(d.score) || 0)),
+          ...(d.linesCleared !== undefined && Number.isFinite(Number(d.linesCleared))
+            ? { linesCleared: Math.max(0, Math.floor(Number(d.linesCleared))) }
+            : {}),
+          status: isCompleted ? "completed" : "playing",
+          isCurrentUser,
+        };
+      });
+
+      return { standings, currentUserAlreadyCompleted };
+    },
+    [getBlockSyncResultsSelfIds]
+  );
+
+  const handleViewChallengeResults = async (
+    roomCode: string,
+    forceOpenModal = false,
+    knownGameType?: "sudoku" | "blocks"
+  ) => {
     const rawCode = String(roomCode || "").trim();
     const now = Date.now();
     if (lastViewResultsTimeRef.current && lastViewResultsTimeRef.current.code === rawCode && (now - lastViewResultsTimeRef.current.timestamp < 2000)) {
@@ -9516,6 +9708,7 @@ export default function App() {
     if (
       (showGameOverModal && activeGameId === cleanRoomCode) ||
       (notificationResultModal && notificationResultModal.roomCode === cleanRoomCode) ||
+      (blockSyncResultsModal && blockSyncResultsModal.roomCode === cleanRoomCode) ||
       (dailyResultModalState?.isOpen && dailyResultModalState.roomRaceData?.roomCode === cleanRoomCode)
     ) {
       console.log(`[Results] Results modal already active for room ${cleanRoomCode}. Skipped redundant fetch cascade.`);
@@ -9550,7 +9743,99 @@ export default function App() {
       return;
     }
 
-    // 2. ZERO-LATENCY OPTIMISTIC MODAL OPEN VIA ISOLATED NOTIFICATION RESULT STATE:
+    // Dismiss ONLY completed-result notifications for this room and NEVER delete an active game invite
+    setPendingChallenges(prev => {
+      const updated = prev.filter(c => {
+        const matchesRoom = c.id === cleanRoomCode || c.roomCode === cleanRoomCode || c.gameId === cleanRoomCode || c.id === `puzzle_race_${cleanRoomCode}` || c.inviteId === `puzzle_race_${cleanRoomCode}` || c.inviteId === `completed-${cleanRoomCode}`;
+        if (matchesRoom && c.type === "challenge_completed") return false;
+        return true;
+      });
+      try {
+        localStorage.setItem(getScopedKey("pending_challenges"), JSON.stringify(updated));
+        localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
+      } catch (e) { }
+      return updated;
+    });
+
+    const isKnownBlocksRoom = Boolean(
+      knownGameType === "blocks" ||
+      activeBlockSyncRoom?.roomCode === cleanRoomCode ||
+      pendingChallenges.some(
+        (c: any) =>
+          (c.roomCode === cleanRoomCode || c.gameId === cleanRoomCode || c.id === `puzzle_race_${cleanRoomCode}`) &&
+          c.gameType === "blocks"
+      )
+    );
+
+    const openBlockSyncResultsWithRoomData = (roomData: any, playerDocs: any[]) => {
+      const rawLimit = Number(roomData?.blocksTimeLimitSec);
+      const timeLimitSec: BlockSyncRoomTimeLimitSec =
+        rawLimit === 120 || rawLimit === 300 || rawLimit === 600
+          ? rawLimit
+          : (activeBlockSyncRoom?.roomCode === cleanRoomCode ? activeBlockSyncRoom.timeLimitSec : 180);
+      const mode: "classic" | "rush" =
+        roomData?.blocksMode === "rush"
+          ? "rush"
+          : (activeBlockSyncRoom?.roomCode === cleanRoomCode ? activeBlockSyncRoom.mode : "classic");
+      const undoAllowed =
+        roomData?.blocksUndoAllowed !== undefined
+          ? Boolean(roomData.blocksUndoAllowed)
+          : Boolean(activeBlockSyncRoom?.roomCode === cleanRoomCode && activeBlockSyncRoom.undoAllowed);
+      const mapped = mapBlockSyncRoomPlayersToStandings(playerDocs);
+      setNotificationResultModal(null);
+      setBlockSyncResultsModal({
+        roomCode: cleanRoomCode,
+        mode,
+        timeLimitSec,
+        undoAllowed,
+        isLoading: false,
+        standings: mapped.standings,
+        currentUserAlreadyCompleted: mapped.currentUserAlreadyCompleted,
+      });
+    };
+
+    if (isKnownBlocksRoom) {
+      setNotificationResultModal(null);
+      setBlockSyncResultsModal({
+        roomCode: cleanRoomCode,
+        mode: activeBlockSyncRoom?.roomCode === cleanRoomCode ? activeBlockSyncRoom.mode : "classic",
+        timeLimitSec: activeBlockSyncRoom?.roomCode === cleanRoomCode ? activeBlockSyncRoom.timeLimitSec : 180,
+        undoAllowed: Boolean(activeBlockSyncRoom?.roomCode === cleanRoomCode && activeBlockSyncRoom.undoAllowed),
+        isLoading: true,
+        standings:
+          activeBlockSyncRoom?.roomCode === cleanRoomCode && blockSyncRoomStandings.length > 0
+            ? blockSyncRoomStandings.map((s) => ({
+                id: s.id,
+                name: s.name,
+                score: s.score,
+                status: s.statusLabel ? "playing" : "completed",
+                isCurrentUser: s.isSelf,
+              }))
+            : [],
+        currentUserAlreadyCompleted: false,
+      });
+
+      (async () => {
+        try {
+          const [roomSnap, playersSnap] = await Promise.all([
+            getDoc(doc(db, "rooms", cleanRoomCode)),
+            getDocs(collection(db, "rooms", cleanRoomCode, "players")),
+          ]);
+          openBlockSyncResultsWithRoomData(
+            roomSnap.exists() ? roomSnap.data() : null,
+            playersSnap.docs
+          );
+        } catch (err) {
+          console.error("[Results] Block Sync room fetch error:", err);
+          setBlockSyncResultsModal((prev) =>
+            prev && prev.roomCode === cleanRoomCode ? { ...prev, isLoading: false } : prev
+          );
+        }
+      })();
+      return;
+    }
+
+    // 2. ZERO-LATENCY OPTIMISTIC MODAL OPEN VIA ISOLATED NOTIFICATION RESULT STATE (Sudoku):
     // Resolve cached match from local state without mutating active game session states
     const seedNum = parseInt(cleanRoomCode, 10) || 100000;
     const cachedMatch = (completedGames || []).find((g: any) =>
@@ -9558,9 +9843,28 @@ export default function App() {
       String(g.seed).slice(-6) === cleanRoomCode ||
       g.seed === seedNum
     );
+    const isActiveRoomMatch = Boolean(challengeMode && activeGameId === cleanRoomCode && boardState && !boardState.isGameOver);
+
+    // If room gameType is not yet known locally, check /rooms/{code} first so Block Sync rooms never flash Sudoku's modal
+    let preFetchedRoomSnap: any = null;
+    let preFetchedPlayersSnap: any = null;
+    if (!cachedMatch && !isActiveRoomMatch) {
+      try {
+        [preFetchedRoomSnap, preFetchedPlayersSnap] = await Promise.all([
+          getDoc(doc(db, "rooms", cleanRoomCode)),
+          getDocs(collection(db, "rooms", cleanRoomCode, "players")),
+        ]);
+        const preRoomData = preFetchedRoomSnap.exists() ? preFetchedRoomSnap.data() : null;
+        if ((preRoomData?.gameType || "sudoku") === "blocks") {
+          openBlockSyncResultsWithRoomData(preRoomData, preFetchedPlayersSnap.docs);
+          return;
+        }
+      } catch (preErr) {
+        console.warn("[Results] Room gameType pre-check notice:", preErr);
+      }
+    }
 
     const currentLocalName = (userProfile?.name && userProfile.name.trim()) || getActiveDisplayName();
-    const isActiveRoomMatch = Boolean(challengeMode && activeGameId === cleanRoomCode && boardState && !boardState.isGameOver);
     const initialParticipants = (cachedMatch?.participants && Array.isArray(cachedMatch.participants) && cachedMatch.participants.length > 0)
       ? cachedMatch.participants
       : [{
@@ -9588,20 +9892,6 @@ export default function App() {
       hintsLimit: cachedMatch?.hintLimit || 3,
       timerEnabled: true,
       endGameStep: 1
-    });
-
-    // Dismiss ONLY completed-result notifications for this room and NEVER delete an active game invite
-    setPendingChallenges(prev => {
-      const updated = prev.filter(c => {
-        const matchesRoom = c.id === cleanRoomCode || c.roomCode === cleanRoomCode || c.gameId === cleanRoomCode || c.id === `puzzle_race_${cleanRoomCode}` || c.inviteId === `puzzle_race_${cleanRoomCode}` || c.inviteId === `completed-${cleanRoomCode}`;
-        if (matchesRoom && c.type === "challenge_completed") return false;
-        return true;
-      });
-      try {
-        localStorage.setItem(getScopedKey("pending_challenges"), JSON.stringify(updated));
-        localStorage.setItem("sudoku_pending_challenges", JSON.stringify(updated));
-      } catch (e) { }
-      return updated;
     });
 
     // 3. BACKGROUND STANDINGS SYNC:
@@ -9632,11 +9922,17 @@ export default function App() {
           }
         }
 
-        const [roomSnap, playersSnap] = await Promise.all([
-          getDoc(doc(db, "rooms", cleanRoomCode)),
-          getDocs(collection(db, "rooms", cleanRoomCode, "players"))
-        ]);
+        const [roomSnap, playersSnap] = preFetchedRoomSnap && preFetchedPlayersSnap
+          ? [preFetchedRoomSnap, preFetchedPlayersSnap]
+          : await Promise.all([
+              getDoc(doc(db, "rooms", cleanRoomCode)),
+              getDocs(collection(db, "rooms", cleanRoomCode, "players"))
+            ]);
         const roomData = roomSnap.exists() ? roomSnap.data() : null;
+        if ((roomData?.gameType || "sudoku") === "blocks") {
+          openBlockSyncResultsWithRoomData(roomData, playersSnap.docs);
+          return;
+        }
 
         const lastDoc = resultsSnap.docs && resultsSnap.docs.length > 0
           ? resultsSnap.docs[resultsSnap.docs.length - 1]
@@ -9963,6 +10259,34 @@ export default function App() {
       unsubParticipants();
     };
   }, [notificationResultModal?.roomCode]);
+
+  // Scoped real-time listener for blockSyncResultsModal: keeps Block Sync room scores synchronized while modal is open
+  useEffect(() => {
+    const roomCode = blockSyncResultsModal?.roomCode;
+    if (!roomCode) return;
+
+    const unsub = onSnapshot(
+      collection(db, "rooms", roomCode, "players"),
+      (snapshot) => {
+        const mapped = mapBlockSyncRoomPlayersToStandings(snapshot.docs);
+        setBlockSyncResultsModal((prev) =>
+          prev && prev.roomCode === roomCode
+            ? {
+                ...prev,
+                isLoading: false,
+                standings: mapped.standings,
+                currentUserAlreadyCompleted: mapped.currentUserAlreadyCompleted,
+              }
+            : prev
+        );
+      },
+      (err) => {
+        console.warn("[Block Sync Results Realtime] Players listener notice:", err);
+      }
+    );
+
+    return () => unsub();
+  }, [blockSyncResultsModal?.roomCode, mapBlockSyncRoomPlayersToStandings]);
 
   const handleLoadMoreNotificationStandings = async () => {
     if (!notificationResultModal || !notificationResultModal.hasMore || notificationResultModal.isLoadingMore || !notificationResultModal.lastVisibleDoc) {
@@ -12174,6 +12498,12 @@ export default function App() {
           }
 
           // Locked and link lacks matching PIN: show clean PIN prompt dialog
+          const rIsBlocks = rData.gameType === "blocks";
+          const rawBlocksLimit = Number(rData.blocksTimeLimitSec);
+          const rBlocksTimeLimit: BlockSyncRoomTimeLimitSec =
+            rawBlocksLimit === 120 || rawBlocksLimit === 180 || rawBlocksLimit === 300 || rawBlocksLimit === 600
+              ? (rawBlocksLimit as BlockSyncRoomTimeLimitSec)
+              : 180;
           setEnteredInvitePassword("");
           setInvitePasswordError(null);
           setIncomingChallengeId(code);
@@ -12185,7 +12515,16 @@ export default function App() {
             timerEnabled: rTimer,
             pinHash: storedPinHash,
             password: legacyPin,
-            senderName: cleanSender
+            senderName: cleanSender,
+            ...(rIsBlocks
+              ? {
+                  gameType: "blocks" as const,
+                  blocksMode: (rData.blocksMode === "rush" ? "rush" : "classic") as "classic" | "rush",
+                  blocksUndoAllowed:
+                    rData.blocksUndoAllowed !== undefined ? Boolean(rData.blocksUndoAllowed) : true,
+                  blocksTimeLimitSec: rBlocksTimeLimit,
+                }
+              : { gameType: "sudoku" as const }),
           });
           setShowInviteModal(true);
           return;
@@ -12346,9 +12685,17 @@ export default function App() {
     if (cgInvite) {
       chalUrl = cgInvite;
     }
-    const shareText = t("shareInviteMessage");
+    const isBlocksShare = !isDailyRoomRef.current && selectedCreateRoomGameRef.current === "blocks";
+    const shareTitle = isBlocksShare ? "Block Sync" : "SudokuSync";
+    const blocksModeLabel =
+      blocksRoomModeRef.current === "rush"
+        ? `Time Rush (${Math.round(blocksRoomTimeLimitSecRef.current / 60)}m)`
+        : "Classic";
+    const shareText = isBlocksShare
+      ? `Join my Block Sync ${blocksModeLabel} room! Place blocks, clear lines, and beat my score!`
+      : t("shareInviteMessage");
 
-    await shareOrCopyContent("SudokuSync", shareText, chalUrl, showCopiedToast, showCopiedToast);
+    await shareOrCopyContent(shareTitle, shareText, chalUrl, showCopiedToast, showCopiedToast);
   };
 
   // JIT Canonical Room Provisioner: Verified-Once, Cached-Forever Architecture
@@ -12593,7 +12940,11 @@ export default function App() {
     await shareAppContent("SudokuSync", shareText, challengeLink);
   };
 
-  const shareChallengeLink = async (gameId: string, customText?: string) => {
+  const shareChallengeLink = async (
+    gameId: string,
+    customText?: string,
+    shareMeta?: { gameType?: "sudoku" | "blocks"; blocksMode?: "classic" | "rush"; timeLimitSec?: number }
+  ) => {
     if (!isOnline) {
       showToast(t("noInternetConnection") || "No internet connection");
       return;
@@ -12615,9 +12966,21 @@ export default function App() {
     if (cgInvite) {
       chalUrl = cgInvite;
     }
-    const shareText = customText || t("shareInviteMessage");
+    const isBlocksShare = shareMeta?.gameType === "blocks";
+    const shareTitle = isBlocksShare ? "Block Sync" : "SudokuSync";
+    const blocksModeLabel =
+      shareMeta?.blocksMode === "rush"
+        ? (shareMeta?.timeLimitSec
+            ? `Time Rush (${Math.round(shareMeta.timeLimitSec / 60)}m)`
+            : "Time Rush")
+        : "Classic";
+    const shareText =
+      customText ||
+      (isBlocksShare
+        ? `Join my Block Sync ${blocksModeLabel} room! Place blocks, clear lines, and beat my score!`
+        : t("shareInviteMessage"));
 
-    await shareAppContent("SudokuSync", shareText, chalUrl);
+    await shareAppContent(shareTitle, shareText, chalUrl);
   };
 
   const executePendingChallengeShareAction = async (challengeCard: any) => {
@@ -13446,7 +13809,12 @@ export default function App() {
         difficulty: isDailyRoomSession ? dailyChallengeDifficultyRef.current : currentDifficulty,
         seed: isInActiveBlocksRoom && activeBlockSyncRoom ? activeBlockSyncRoom.roomSeed : seed,
         ...(isBlocksInvite
-          ? { gameType: "blocks", blocksMode: effectiveBlocksMode }
+          ? {
+              gameType: "blocks",
+              blocksMode: effectiveBlocksMode,
+              blocksUndoAllowed: effectiveBlocksUndo,
+              blocksTimeLimitSec: effectiveBlocksTimeLimit,
+            }
           : {}),
         ...(isDailyRoomSession && dailyChallengeActiveDateRef.current
           ? { gameMode: "daily", dailyDate: dailyChallengeActiveDateRef.current }
@@ -14641,6 +15009,15 @@ export default function App() {
       ].filter(Boolean) as string[]
     );
 
+    if (blocksRoomCompletionTrackerRef.current.roomCode !== roomCode) {
+      blocksRoomCompletionTrackerRef.current = {
+        roomCode,
+        initialized: false,
+        completedUids: new Set(),
+        notifiedUids: new Set(),
+      };
+    }
+
     const playersCol = collection(db, "rooms", roomCode, "players");
     const unsub = onSnapshot(
       playersCol,
@@ -14653,6 +15030,7 @@ export default function App() {
         }> = [];
 
         const roomOpponents: Array<{ id: string; name: string; authUid?: string }> = [];
+        const completedOpponentsNow: Array<{ uid: string; name: string }> = [];
 
         snapshot.forEach((docSnap) => {
           const d = docSnap.data() as Record<string, any>;
@@ -14679,6 +15057,12 @@ export default function App() {
                   : undefined,
               name: displayName,
             });
+            if (isCompleted) {
+              completedOpponentsNow.push({
+                uid: docId,
+                name: displayName,
+              });
+            }
           }
 
           rows.push({
@@ -14709,6 +15093,75 @@ export default function App() {
         if (roomOpponents.length > 0) {
           void saveOpponentsToPastPlayers(roomOpponents);
         }
+
+        const tracker = blocksRoomCompletionTrackerRef.current;
+        if (!tracker.initialized) {
+          completedOpponentsNow.forEach((opp) => {
+            tracker.completedUids.add(opp.uid);
+            tracker.notifiedUids.add(opp.uid);
+          });
+          tracker.initialized = true;
+        } else {
+          const cleanUpper = roomCode.toUpperCase().trim();
+          const canonicalId = `blocks_room_${cleanUpper}`;
+          completedOpponentsNow.forEach((opp) => {
+            if (tracker.completedUids.has(opp.uid)) return;
+            tracker.completedUids.add(opp.uid);
+            if (tracker.notifiedUids.has(opp.uid)) return;
+            tracker.notifiedUids.add(opp.uid);
+
+            const oppName = opp.name || "Opponent";
+            upsertBellChallenge({
+              id: canonicalId,
+              inviteId: canonicalId,
+              type: "challenge_completed",
+              title: "Block Sync Finished",
+              fromName: oppName,
+              senderName: oppName,
+              fromUserId: opp.uid,
+              roomCode,
+              gameId: roomCode,
+              gameType: "blocks",
+              blocksMode: activeBlockSyncRoom.mode,
+              blocksUndoAllowed: activeBlockSyncRoom.undoAllowed,
+              blocksTimeLimitSec: activeBlockSyncRoom.timeLimitSec,
+              sentAt: Date.now(),
+            });
+
+            const isSuppressed =
+              currentScreenRef.current === "blocks" ||
+              shouldSuppressToastForRoom(roomCode) ||
+              blockSyncResultsModalRef.current?.roomCode === roomCode;
+            const isMuted = Boolean(
+              cleanUpper &&
+                (dismissedCompletionRoomsRef.current.has(cleanUpper) ||
+                  dismissedCompletionRoomsRef.current.has(roomCode) ||
+                  dismissedCompletionRoomsRef.current.has(cleanUpper.slice(-6)))
+            );
+
+            if (isSuppressed) {
+              triggerBellWiggle(false);
+            } else if (!isMuted) {
+              playThrottledNotificationSound(() => {
+                playInviteChime(canonicalId);
+              }, canonicalId);
+              setActiveInviteNotification({
+                id: canonicalId,
+                type: "challenge_completed",
+                title: "Block Sync Finished",
+                fromName: oppName,
+                roomCode,
+                gameId: roomCode,
+                gameType: "blocks",
+                blocksMode: activeBlockSyncRoom.mode,
+                blocksUndoAllowed: activeBlockSyncRoom.undoAllowed,
+                blocksTimeLimitSec: activeBlockSyncRoom.timeLimitSec,
+              });
+            } else {
+              triggerBellWiggle(true);
+            }
+          });
+        }
       },
       (err) => {
         console.warn(
@@ -14719,7 +15172,20 @@ export default function App() {
     );
 
     return () => unsub();
-  }, [activeBlockSyncRoom?.roomCode, isOnline, authUser?.uid, userProfile?.id]);
+  }, [
+    activeBlockSyncRoom?.roomCode,
+    activeBlockSyncRoom?.mode,
+    activeBlockSyncRoom?.undoAllowed,
+    activeBlockSyncRoom?.timeLimitSec,
+    isOnline,
+    authUser?.uid,
+    userProfile?.id,
+    upsertBellChallenge,
+    shouldSuppressToastForRoom,
+    triggerBellWiggle,
+    playThrottledNotificationSound,
+    playInviteChime,
+  ]);
 
   // Dedicated Block Sync Firestore room result submitter (never alters Sudoku submitGameResult)
   const handleSubmitBlockSyncRoomResult = useCallback(
@@ -15639,6 +16105,7 @@ export default function App() {
     showTargetLoginRequiredModal ||
     showHistoryChallengeModal ||
     Boolean(notificationResultModal) ||
+    Boolean(blockSyncResultsModal) ||
     isDailyCardModalOpen ||
     isPostGameDailyCalendarOpen ||
     Boolean(dailyResultModalState?.isOpen) ||
@@ -21979,6 +22446,7 @@ export default function App() {
             playClickSound={playClickSound}
             addLog={addLog}
             onBackToGame={() => setCurrentScreen("game")}
+            onClose={() => navigatorPop()}
             onOpenDisplayNameModal={() => {
               const currentName = (userProfile?.name && userProfile.name !== "Anonymous Voyager" && userProfile.name !== "Guest Voyager" && userProfile.name !== "Guest Solver")
                 ? userProfile.name
@@ -23691,7 +24159,13 @@ export default function App() {
           handleInviteFriend={(playerId) => void handleInviteFriend(playerId)}
           handleReinviteAll={(targets) => void handleReinviteAll(targets)}
           isInvitingAll={isInvitingAll}
-          onShareLink={() => void shareChallengeLink(activeBlockSyncRoom.roomCode)}
+          onShareLink={() =>
+            void shareChallengeLink(activeBlockSyncRoom.roomCode, undefined, {
+              gameType: "blocks",
+              blocksMode: activeBlockSyncRoom.mode,
+              timeLimitSec: activeBlockSyncRoom.timeLimitSec,
+            })
+          }
           copyToClipboard={copyToClipboard}
           showCopiedToast={showCopiedToast}
           onClose={() => setShowBlockSyncRoomInviteModal(false)}
@@ -23702,6 +24176,41 @@ export default function App() {
           playClickSound={playClickSound}
         />
       )}
+
+      {/* 🧩 BLOCK SYNC LIVE / ASYNC ROOM STANDINGS MODAL (from VIEW RESULTS / Toasts) */}
+      <BlockSyncRoomResultsModal
+        isOpen={Boolean(blockSyncResultsModal)}
+        isDarkMode={darkMode}
+        roomCode={blockSyncResultsModal?.roomCode || ""}
+        mode={blockSyncResultsModal?.mode || "classic"}
+        timeLimitSec={blockSyncResultsModal?.timeLimitSec || 180}
+        undoAllowed={blockSyncResultsModal?.undoAllowed}
+        isLoading={Boolean(blockSyncResultsModal?.isLoading)}
+        standings={blockSyncResultsModal?.standings || []}
+        currentUserAlreadyCompleted={Boolean(blockSyncResultsModal?.currentUserAlreadyCompleted)}
+        isCurrentlyInsideThisRoom={Boolean(
+          blockSyncResultsModal &&
+            currentScreen === "blocks" &&
+            activeBlockSyncRoom?.roomCode === blockSyncResultsModal.roomCode
+        )}
+        onCopyRoomCode={(code) => {
+          copyToClipboard(code);
+          showCopiedToast(t("roomCodeCopied"));
+        }}
+        playClickSound={playClickSound}
+        onClose={() => setBlockSyncResultsModal(null)}
+        onAction={() => {
+          if (!blockSyncResultsModal) return;
+          const targetCode = blockSyncResultsModal.roomCode;
+          const insideNow =
+            currentScreen === "blocks" && activeBlockSyncRoom?.roomCode === targetCode;
+          const alreadyDone = blockSyncResultsModal.currentUserAlreadyCompleted;
+          setBlockSyncResultsModal(null);
+          if (!insideNow && !alreadyDone) {
+            void executeJoinRoom(targetCode, { isDirectInvite: true });
+          }
+        }}
+      />
 
       {/* 🔮 CUSTOM GAME HISTORY OR SAVED CHALLENGE LOBBY MODAL */}
       <AnimatePresence>
@@ -26423,6 +26932,10 @@ export default function App() {
             />
 
             <motion.div
+              ref={bellModalDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("challenge_invites_title")}
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -26450,7 +26963,7 @@ export default function App() {
               </div>
 
               {/* Scrollable list */}
-              <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-3.5 max-h-[50vh] pr-0.5">
+              <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-3.5 max-h-[50vh] p-1.5 -mx-1.5">
                 {sortedBellInvites.length === 0 ? (
                   <div className="py-12 text-center text-stone-500 font-sans text-sm italic">
                     {t("no_pending_invites")}
@@ -26458,6 +26971,14 @@ export default function App() {
                 ) : (
                   sortedBellInvites.map((challenge) => {
                     const senderDisplayName = challenge.senderName || (challenge as any).fromName || (challenge as any).hostName || "Player";
+                    const isBlocksItem = challenge.gameType === "blocks";
+                    const blocksModeLabel = challenge.blocksMode === "rush" ? "TIME RUSH" : "CLASSIC";
+                    const blocksTimeMinutes = Math.max(
+                      1,
+                      Math.round((Number(challenge.blocksTimeLimitSec) || 180) / 60)
+                    );
+                    const blocksUndoAllowed =
+                      challenge.blocksUndoAllowed !== undefined ? Boolean(challenge.blocksUndoAllowed) : true;
                     const challengeDifficulty = normalizeDifficulty(challenge.difficulty);
                     const diffTheme = getDifficultyColorTheme(challengeDifficulty, darkMode);
                     const timestampVal = challenge.sentAt ?? (challenge as any).timestamp ?? (challenge as any).createdAt ?? challenge.receivedAt;
@@ -26513,8 +27034,81 @@ export default function App() {
                           return updated;
                         });
                         setShowBellInvitesModal(false);
-                        handleViewChallengeResults(targetCode, true);
+                        handleViewChallengeResults(targetCode, true, isBlocksItem ? "blocks" : undefined);
                       };
+
+                      if (isBlocksItem) {
+                        const blocksFinishedText =
+                          names.length === 1
+                            ? `${names[0]} finished the match!`
+                            : names.length === 2
+                              ? `${names[0]} & ${names[1]} finished the match!`
+                              : `${names[0]}, ${names[1]} & ${names.length - 2} more finished!`;
+
+                        return (
+                          <div
+                            key={challenge.inviteId || challenge.id || `res-${Math.random()}`}
+                            className={`p-4 rounded-2xl flex flex-col gap-3 border transition-all shadow-[0_4px_16px_rgba(43,140,238,0.06)] ${
+                              darkMode
+                                ? "bg-[#15202B] border-[#38BDF8]/20 text-slate-100"
+                                : "bg-[#EDF6FD] border-[#C8DFF3] text-slate-900"
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className={`p-2 rounded-xl shrink-0 ${darkMode ? "bg-[#38BDF8]/15" : "bg-[#2B8CEE]/12"}`}>
+                                  <BlockSyncLogo size={18} isDarkMode={darkMode} className="shrink-0" />
+                                </div>
+                                <div className="flex flex-col text-left min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className={`text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                                      darkMode
+                                        ? "bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/25"
+                                        : "bg-[#2B8CEE]/12 text-[#2B8CEE] border border-[#2B8CEE]/20"
+                                    }`}>
+                                      BLOCK SYNC FINISHED
+                                    </span>
+                                    {targetCode && (
+                                      <span className="text-[9px] font-mono opacity-65">
+                                        #{targetCode}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="font-sans text-xs font-bold mt-1 leading-snug break-words">
+                                    {blocksFinishedText}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="text-[9px] font-mono opacity-70 shrink-0">
+                                {formatInviteTimestamp(timestampVal)}
+                              </span>
+                            </div>
+
+                            <div className="flex gap-2 w-full mt-0.5">
+                              <button
+                                onClick={handleDismissCompletionCard}
+                                className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
+                                  darkMode
+                                    ? "bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 focus-visible:ring-[#38BDF8]"
+                                    : "bg-white/85 hover:bg-white text-slate-600 focus-visible:ring-[#2B8CEE]"
+                                }`}
+                              >
+                                {t("dismissAction")}
+                              </button>
+                              <button
+                                onClick={handleViewCompletionResults}
+                                className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border-none transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
+                                  darkMode
+                                    ? "bg-[#0EA5E9] hover:bg-[#38BDF8] text-slate-950 focus-visible:ring-white/80"
+                                    : "bg-[#2B8CEE] hover:bg-[#1E7AD8] text-white focus-visible:ring-slate-900/35"
+                                }`}
+                              >
+                                {t("viewResultsAction")}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
 
                       return (
                         <div
@@ -26572,6 +27166,114 @@ export default function App() {
                               className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border-none transition-all active:scale-95 text-white flex items-center justify-center gap-1.5 cursor-pointer bg-emerald-600 hover:bg-emerald-500 shadow-sm"
                             >
                               {t("viewResultsAction")}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (isBlocksItem) {
+                      return (
+                        <div
+                          key={challenge.inviteId || challenge.id || `inv-${Math.random()}`}
+                          className={`p-4 rounded-2xl flex flex-col gap-3 transition-all border shadow-[0_4px_16px_rgba(43,140,238,0.06)] ${
+                            darkMode
+                              ? "bg-[#16222E] border-[#38BDF8]/20 text-slate-100"
+                              : "bg-[#EBF4FB] border-[#C8DFF3] text-slate-900"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`p-2 rounded-xl shrink-0 ${darkMode ? "bg-[#38BDF8]/15" : "bg-[#2B8CEE]/12"}`}>
+                                <BlockSyncLogo size={18} isDarkMode={darkMode} className="shrink-0" />
+                              </div>
+                              <div className="flex flex-col text-left min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={`text-[10px] font-mono font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                    darkMode
+                                      ? "bg-[#38BDF8]/15 text-[#38BDF8]"
+                                      : "bg-[#2B8CEE]/12 text-[#2B8CEE]"
+                                  }`}>
+                                    {`BLOCK SYNC · ${blocksModeLabel}`}
+                                  </span>
+                                </div>
+                                {(() => {
+                                  const text = t("invited_by", { name: "___NAME___" });
+                                  const parts = text.split("___NAME___");
+                                  if (parts.length === 2) {
+                                    return (
+                                      <span className="font-sans text-xs font-bold mt-1">
+                                        {parts[0]}<strong className="font-extrabold">{senderDisplayName}</strong>{parts[1]}
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span className="font-sans text-xs font-bold mt-1">
+                                      {t("invited_by", { name: senderDisplayName })}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                            <span className="text-[9px] font-mono opacity-70 shrink-0">
+                              {formatInviteTimestamp(timestampVal)}
+                            </span>
+                          </div>
+
+                          <div className={`grid grid-cols-2 gap-1.5 text-[9px] font-sans p-2 rounded-xl text-center ${
+                            darkMode ? "bg-[#0F172A]/60" : "bg-white/70"
+                          }`}>
+                            <div>
+                              <span className="block opacity-65 uppercase font-bold text-[8px]">MODE</span>
+                              <span className={`font-black ${darkMode ? "text-[#38BDF8]" : "text-[#2B8CEE]"}`}>
+                                {blocksModeLabel}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="block opacity-65 uppercase font-bold text-[8px]">
+                                {challenge.blocksMode === "rush" ? "TIME LIMIT" : "UNDO"}
+                              </span>
+                              <span className="font-black">
+                                {challenge.blocksMode === "rush"
+                                  ? `${blocksTimeMinutes}m`
+                                  : (blocksUndoAllowed ? "Allowed" : "Off")}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 w-full mt-0.5">
+                            <button
+                              disabled={isJoiningRoomLoading}
+                              onClick={() => handleDeclineBellInvite(challenge)}
+                              className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border-none transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
+                                isJoiningRoomLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                              } ${
+                                darkMode
+                                  ? "bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 focus-visible:ring-[#38BDF8]"
+                                  : "bg-white/85 hover:bg-white text-slate-600 focus-visible:ring-[#2B8CEE]"
+                              }`}
+                            >
+                              {t("btn_decline")}
+                            </button>
+                            <button
+                              disabled={isJoiningRoomLoading}
+                              onClick={() => handleAcceptAndPlayBellInvite(challenge)}
+                              className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border-none transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
+                                isJoiningRoomLoading ? "opacity-80 cursor-not-allowed" : "cursor-pointer"
+                              } ${
+                                darkMode
+                                  ? "bg-[#0EA5E9] hover:bg-[#38BDF8] text-slate-950 focus-visible:ring-white/80"
+                                  : "bg-[#2B8CEE] hover:bg-[#1E7AD8] text-white focus-visible:ring-slate-900/35"
+                              }`}
+                            >
+                              {isJoiningRoomLoading ? (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin stroke-[2]" />
+                                  <span>{t("joining_status")}</span>
+                                </>
+                              ) : (
+                                <span>{t("btn_accept_play")}</span>
+                              )}
                             </button>
                           </div>
                         </div>
@@ -26667,7 +27369,11 @@ export default function App() {
 
       {/* 📥 IN-APP INVITATION TOAST BANNER */}
       <AnimatePresence>
-        {activeInviteNotification && (
+        {activeInviteNotification && (() => {
+          const isBlocksToast = activeInviteNotification.gameType === "blocks";
+          const blocksToastModeLabel =
+            activeInviteNotification.blocksMode === "rush" ? "TIME RUSH" : "CLASSIC";
+          return (
           <div className="fixed inset-x-4 top-[24px] z-[70000] flex justify-center pointer-events-auto">
             <motion.div
               drag="y"
@@ -26691,10 +27397,15 @@ export default function App() {
                   : { opacity: 1, y: 0, scale: 1, x: 0 }
               }
               exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              className={`relative w-full max-w-sm sm:max-w-md mx-auto p-3.5 sm:p-4 pt-3 rounded-2xl sm:rounded-3xl flex flex-col gap-3 backdrop-blur-md border shadow-2xl cursor-grab active:cursor-grabbing overflow-hidden select-none ${darkMode
-                ? "bg-zinc-900/95 border-zinc-800 text-stone-100"
-                : "bg-white/95 border-stone-200 text-stone-900"
-                }`}
+              className={`relative w-full max-w-sm sm:max-w-md mx-auto p-3.5 sm:p-4 pt-3 rounded-2xl sm:rounded-3xl flex flex-col gap-3 backdrop-blur-md border shadow-2xl cursor-grab active:cursor-grabbing overflow-hidden select-none ${
+                isBlocksToast
+                  ? (darkMode
+                      ? "bg-[#15202B]/95 border-[#38BDF8]/25 text-slate-100"
+                      : "bg-[#EDF6FD]/95 border-[#C8DFF3] text-slate-900")
+                  : (darkMode
+                      ? "bg-zinc-900/95 border-zinc-800 text-stone-100"
+                      : "bg-white/95 border-stone-200 text-stone-900")
+              }`}
             >
               {/* Swipe-up indicator bar */}
               <div className="w-10 h-1 rounded-full bg-stone-400/40 mx-auto -mt-0.5 mb-0.5" />
@@ -26703,20 +27414,41 @@ export default function App() {
                 <>
                   {/* Tier 1: Top Message Row */}
                   <div className="flex items-center gap-3 w-full min-w-0">
-                    <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-emerald-950/50 text-emerald-300" : "bg-emerald-50 text-emerald-600"}`}>
-                      <Trophy className="w-5 h-5 shrink-0" strokeWidth={2.5} />
-                    </div>
+                    {isBlocksToast ? (
+                      <div className={`p-2 rounded-xl shrink-0 ${darkMode ? "bg-[#38BDF8]/15" : "bg-[#2B8CEE]/12"}`}>
+                        <BlockSyncLogo size={22} isDarkMode={darkMode} className="shrink-0" />
+                      </div>
+                    ) : (
+                      <div className={`p-2.5 rounded-xl shrink-0 ${darkMode ? "bg-emerald-950/50 text-emerald-300" : "bg-emerald-50 text-emerald-600"}`}>
+                        <Trophy className="w-5 h-5 shrink-0" strokeWidth={2.5} />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0 flex flex-col text-left">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
-                          {t("challengeCompletedBadge")}
-                        </span>
-                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-500">
-                          {inviteCountdown}s
-                        </span>
+                        {isBlocksToast ? (
+                          <>
+                            <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-[#38BDF8]" : "text-[#2B8CEE]"}`}>
+                              BLOCK SYNC FINISHED
+                            </span>
+                            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ${darkMode ? "bg-[#38BDF8]/15 text-[#38BDF8]" : "bg-[#2B8CEE]/15 text-[#2B8CEE]"}`}>
+                              {inviteCountdown}s
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
+                              {t("challengeCompletedBadge")}
+                            </span>
+                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-500">
+                              {inviteCountdown}s
+                            </span>
+                          </>
+                        )}
                       </div>
                       <span className="font-sans text-xs sm:text-sm font-semibold mt-0.5 leading-snug break-words">
-                        {t("playerFinishedRace", { name: activeInviteNotification.fromName || 'Opponent' })}
+                        {isBlocksToast
+                          ? `${activeInviteNotification.fromName || 'Opponent'} finished the match!`
+                          : t("playerFinishedRace", { name: activeInviteNotification.fromName || 'Opponent' })}
                       </span>
                     </div>
                   </div>
@@ -26736,8 +27468,13 @@ export default function App() {
                         }
                         dockInviteToBell();
                       }}
-                      className={`flex-1 py-2 px-3 rounded-xl font-medium text-xs sm:text-sm text-center transition-colors border-none cursor-pointer active:scale-95 ${darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-200 text-stone-700 hover:bg-stone-300"
-                        }`}
+                      className={`flex-1 py-2 px-3 rounded-xl font-medium text-xs sm:text-sm text-center transition-colors border-none cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
+                        isBlocksToast
+                          ? (darkMode
+                              ? "bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 focus-visible:ring-[#38BDF8]"
+                              : "bg-white/85 text-slate-700 hover:bg-white focus-visible:ring-[#2B8CEE]")
+                          : (darkMode ? "bg-zinc-800 text-stone-300 hover:bg-zinc-700" : "bg-stone-200 text-stone-700 hover:bg-stone-300")
+                      }`}
                     >
                       {t("dismissAction")}
                     </button>
@@ -26746,6 +27483,7 @@ export default function App() {
                         e.stopPropagation();
                         playClickSound();
                         const targetCode = activeInviteNotification.roomCode || activeInviteNotification.gameId;
+                        const knownType = isBlocksToast ? "blocks" : undefined;
                         if (targetCode) {
                           const cleanCode = String(targetCode).trim().toUpperCase();
                           dismissedCompletionRoomsRef.current.add(String(targetCode).trim());
@@ -26760,9 +27498,15 @@ export default function App() {
                           return updated;
                         });
                         setActiveInviteNotification(null);
-                        handleViewChallengeResults(targetCode, true);
+                        handleViewChallengeResults(targetCode, true, knownType);
                       }}
-                      className="flex-1 py-2 px-3 rounded-xl font-semibold text-xs sm:text-sm text-center shadow-md transition-all border-none text-white cursor-pointer bg-emerald-600 hover:bg-emerald-500 active:scale-95"
+                      className={`flex-1 py-2 px-3 rounded-xl font-semibold text-xs sm:text-sm text-center shadow-md transition-all border-none cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
+                        isBlocksToast
+                          ? (darkMode
+                              ? "bg-[#0EA5E9] hover:bg-[#38BDF8] text-slate-950 focus-visible:ring-white/80"
+                              : "bg-[#2B8CEE] hover:bg-[#1E7AD8] text-white focus-visible:ring-slate-900/35")
+                          : "text-white bg-emerald-600 hover:bg-emerald-500"
+                      }`}
                     >
                       {t("viewResultsAction")}
                     </button>
@@ -26775,17 +27519,40 @@ export default function App() {
                 <>
                   {/* Tier 1: Top Message Row */}
                   <div className="flex items-center gap-3 w-full min-w-0">
-                    <div className={`p-2.5 rounded-xl shrink-0 ${notifTheme.iconBg}`}>
-                      <Users className="w-5 h-5 shrink-0" strokeWidth={2.5} />
-                    </div>
+                    {isBlocksToast ? (
+                      <div className={`p-2 rounded-xl shrink-0 ${darkMode ? "bg-[#38BDF8]/15" : "bg-[#2B8CEE]/12"}`}>
+                        <BlockSyncLogo size={22} isDarkMode={darkMode} className="shrink-0" />
+                      </div>
+                    ) : (
+                      <div className={`p-2.5 rounded-xl shrink-0 ${notifTheme.iconBg}`}>
+                        <Users className="w-5 h-5 shrink-0" strokeWidth={2.5} />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0 flex flex-col text-left">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`text-[10px] font-mono font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${notifTheme.badgeBg}`}>
-                          {`${(activeInviteNotification.difficulty || notifDifficulty || "MEDIUM").toUpperCase()} RACE`}
-                        </span>
-                        <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ${notifTheme.badgeBg}`}>
-                          {inviteCountdown}s
-                        </span>
+                        {isBlocksToast ? (
+                          <>
+                            <span className={`text-[10px] font-mono font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                              darkMode ? "bg-[#38BDF8]/15 text-[#38BDF8]" : "bg-[#2B8CEE]/12 text-[#2B8CEE]"
+                            }`}>
+                              {`BLOCK SYNC · ${blocksToastModeLabel}`}
+                            </span>
+                            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ${
+                              darkMode ? "bg-[#38BDF8]/15 text-[#38BDF8]" : "bg-[#2B8CEE]/12 text-[#2B8CEE]"
+                            }`}>
+                              {inviteCountdown}s
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className={`text-[10px] font-mono font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${notifTheme.badgeBg}`}>
+                              {`${(activeInviteNotification.difficulty || notifDifficulty || "MEDIUM").toUpperCase()} RACE`}
+                            </span>
+                            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ${notifTheme.badgeBg}`}>
+                              {inviteCountdown}s
+                            </span>
+                          </>
+                        )}
                       </div>
                       {(() => {
                         const text = t("user_invited_you", { name: "___NAME___" });
@@ -26828,8 +27595,13 @@ export default function App() {
                         setPendingChallenges(prev => prev.filter(c => c.id !== activeInviteNotification.id && c.inviteId !== activeInviteNotification.id));
                         setActiveInviteNotification(null);
                       }}
-                      className={`flex-1 py-2 px-3 rounded-xl font-medium text-xs sm:text-sm text-center transition-colors border-none cursor-pointer active:scale-95 ${darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600"
-                        }`}
+                      className={`flex-1 py-2 px-3 rounded-xl font-medium text-xs sm:text-sm text-center transition-colors border-none cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
+                        isBlocksToast
+                          ? (darkMode
+                              ? "bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 focus-visible:ring-[#38BDF8]"
+                              : "bg-white/85 text-slate-700 hover:bg-white focus-visible:ring-[#2B8CEE]")
+                          : (darkMode ? "bg-zinc-850 hover:bg-zinc-800 text-stone-300" : "bg-stone-100 hover:bg-stone-200 text-stone-600")
+                      }`}
                     >
                       {t("btn_decline")}
                     </button>
@@ -26842,10 +27614,16 @@ export default function App() {
                         const targetRecipient = activeInviteNotification?.targetUid || activeInviteNotification?.toUserId;
                         await handleAcceptAndLaunchInvite(roomCode || gameId, id, password, true, undefined, targetRecipient);
                       }}
-                      className={`flex-1 py-2 px-3 rounded-xl font-semibold text-xs sm:text-sm text-center shadow-md transition-all border-none flex items-center justify-center gap-1.5 active:scale-95 ${isJoiningRoomLoading
+                      className={`flex-1 py-2 px-3 rounded-xl font-semibold text-xs sm:text-sm text-center shadow-md transition-all border-none flex items-center justify-center gap-1.5 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${isJoiningRoomLoading
                         ? "opacity-80 cursor-not-allowed"
                         : "cursor-pointer"
-                        } ${notifTheme.primaryBtn}`}
+                        } ${
+                          isBlocksToast
+                            ? (darkMode
+                                ? "bg-[#0EA5E9] hover:bg-[#38BDF8] text-slate-950 focus-visible:ring-white/80"
+                                : "bg-[#2B8CEE] hover:bg-[#1E7AD8] text-white focus-visible:ring-slate-900/35")
+                            : notifTheme.primaryBtn
+                        }`}
                     >
                       {isJoiningRoomLoading ? (
                         <>
@@ -26862,20 +27640,30 @@ export default function App() {
               })()}
 
               {/* 5-second countdown progress bar */}
-              <div className="w-full h-1 bg-stone-200/50 dark:bg-zinc-800/50 rounded-full overflow-hidden mt-0.5">
+              <div className={`w-full h-1 rounded-full overflow-hidden mt-0.5 ${
+                isBlocksToast
+                  ? (darkMode ? "bg-[#38BDF8]/15" : "bg-[#2B8CEE]/15")
+                  : "bg-stone-200/50 dark:bg-zinc-800/50"
+              }`}>
                 <motion.div
                   initial={{ width: "100%" }}
                   animate={{ width: "0%" }}
                   transition={{ duration: 5, ease: "linear" }}
-                  className={`h-full ${activeInviteNotification.type === 'challenge_completed'
-                    ? "bg-gradient-to-r from-emerald-500 to-teal-500"
-                    : getDifficultyColorTheme(normalizeDifficulty(activeInviteNotification.difficulty), darkMode).progressBarGradient
+                  className={`h-full ${
+                    isBlocksToast
+                      ? (darkMode
+                          ? "bg-gradient-to-r from-[#0EA5E9] to-[#38BDF8]"
+                          : "bg-gradient-to-r from-[#2B8CEE] to-[#38BDF8]")
+                      : activeInviteNotification.type === 'challenge_completed'
+                        ? "bg-gradient-to-r from-emerald-500 to-teal-500"
+                        : getDifficultyColorTheme(normalizeDifficulty(activeInviteNotification.difficulty), darkMode).progressBarGradient
                     }`}
                 />
               </div>
             </motion.div>
           </div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
       {/* MULTIPLAYER SETUP ALERT: ABOVE 3 MISTAKES WARNING */}

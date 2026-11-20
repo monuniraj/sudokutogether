@@ -24,7 +24,13 @@ import { useFriendPresence } from "../../hooks/useFriendPresence";
 import { formatActiveStatus } from "../../utils/formatTimestamp";
 import { auth } from "../../firebase";
 import { getActiveAuthUid, loadVault } from "../../utils/storageEngine";
-import { handleNumericInputKeyDown } from "../../utils/keyboardControls";
+import {
+  getFocusableElements,
+  handleNumericInputKeyDown,
+  handleRovingMenuArrowKey,
+  isEditableEventTarget,
+  useTopmostModalKeyboardLayer,
+} from "../../utils/keyboardControls";
 import { ShareActionWrapper } from "../share/ShareActionWrapper";
 
 export interface GameOverModalProps {
@@ -130,6 +136,62 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
 }) => {
   const { t, language: hookLanguage } = useTranslation();
   const activeLang = language || hookLanguage || "en";
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const setEndGameStepRef = useRef(setEndGameStep);
+  onCloseRef.current = onClose;
+  setEndGameStepRef.current = setEndGameStep;
+
+  useTopmostModalKeyboardLayer(isOpen, {
+    id: "game-over-modal",
+    priority: 26,
+    containerRef: dialogRef,
+    restoreFocus: true,
+    trapFocus: true,
+    onEscape: () => {
+      if (endGameStep === 2) {
+        playClickSound();
+        setEndGameStepRef.current(1);
+        return true;
+      }
+      if (onCloseRef.current) {
+        playClickSound();
+        onCloseRef.current();
+        return true;
+      }
+      return true;
+    },
+    onBackspace: () => {
+      if (endGameStep === 2) {
+        playClickSound();
+        setEndGameStepRef.current(1);
+        return true;
+      }
+      // Step 1: guard terminal Game Over against accidental dismissal on Backspace
+      return true;
+    },
+    onKeyDown: (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || isEditableEventTarget(e.target)) {
+        return false;
+      }
+      if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight" ||
+        e.key === "Home" ||
+        e.key === "End"
+      ) {
+        const focusables = getFocusableElements(dialogRef.current);
+        if (handleRovingMenuArrowKey(e, focusables, "both")) {
+          const nextEl = document.activeElement as HTMLElement | null;
+          nextEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          return true;
+        }
+      }
+      return false;
+    },
+  });
   const [activeListTab, setActiveListTab] = useState<'recent' | 'friends'>('recent');
   const sanitizedPlayers = useMemo(() => {
     const myId: string | null = userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || loadVault("guest").profile?.id;
@@ -549,6 +611,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
         }}
       />
       <motion.div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("multiplayerLobbyTitle")}
         initial={{ opacity: 0, y: 32 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.50, ease: [0.16, 1, 0.3, 1] }}
@@ -641,7 +707,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               <div
                 ref={scrollContainerRef}
                 onScroll={handleListScroll}
-                className="max-h-[48vh] sm:max-h-[52vh] overflow-y-auto overscroll-contain px-1 py-1 custom-scrollbar flex flex-col gap-2.5"
+                className="max-h-[48vh] sm:max-h-[52vh] overflow-y-auto overscroll-contain p-1.5 custom-scrollbar flex flex-col gap-2.5"
               >
               {results.map((player, idx) => {
                 const isPending = !!player.isPending;
@@ -1120,10 +1186,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.18 }}
-                      className="overflow-hidden"
+                      className="overflow-hidden -mx-1.5 px-1.5"
                     >
                       <div
-                        className={`flex items-center justify-between gap-2 px-3 py-2 mt-1 rounded-xl border-none ${
+                        className={`flex items-center justify-between gap-2 px-3 py-2 my-1.5 rounded-xl border-none ${
                           darkMode
                             ? "bg-[#4c0519]/40 text-[#fecdd3] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
                             : "bg-[#FFE4E6]/65 text-[#9D174D] shadow-[0_4px_14px_rgba(157,23,77,0.05)]"
@@ -1180,10 +1246,10 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.18 }}
-                      className="overflow-hidden"
+                      className="overflow-hidden -mx-1.5 px-1.5"
                     >
                       <div
-                        className={`flex items-center gap-2 px-3 py-1.5 mt-1 rounded-xl border-none text-[11px] font-sans font-bold ${
+                        className={`flex items-center gap-2 px-3 py-1.5 my-1.5 rounded-xl border-none text-[11px] font-sans font-bold ${
                           darkMode
                             ? "bg-[#022c22]/55 text-[#d1fae5] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
                             : "bg-[#D1FAE5]/70 text-[#065F46] shadow-[0_4px_14px_rgba(6,95,70,0.05)]"
@@ -1377,7 +1443,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                     </div>
 
                     {/* PLAYER ROSTER & INLINE ACTIONS */}
-                    <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 no-scrollbar flex flex-col gap-4 max-h-[190px] my-1.5 py-0.5">
+                    <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-4 max-h-[190px] my-1 p-2 -mx-2">
                       {sanitizedPlayers.length === 0 ? (
                         <span className="text-xs italic text-stone-500 py-4 text-center">
                           {t("noPastPlayersNotice")}

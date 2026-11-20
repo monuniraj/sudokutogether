@@ -566,11 +566,11 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                 <span>
                   {selfRank === 1
                     ? allPlayersFinished && standings.length > 1
-                      ? "#1 WINNER"
-                      : "#1 LEADER"
+                      ? "WINNER"
+                      : "LEADER"
                     : selfRank === 2
-                      ? "#2 PODIUM"
-                      : "#3 PODIUM"}
+                      ? "2ND"
+                      : "3RD"}
                 </span>
               </span>
             )}
@@ -852,16 +852,16 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                 const rowThemeClass =
                   podiumTier === 1
                     ? darkMode
-                      ? "bg-[#FBBF24]/16 text-amber-100 border border-[#FBBF24]/35"
-                      : "bg-amber-50/95 text-[#78350F] border border-amber-300/80 shadow-[0_2px_10px_rgba(245,158,11,0.12)]"
+                      ? "bg-[#1E2733] text-slate-50 border border-[#FBBF24]/38 shadow-[0_0_16px_rgba(251,191,36,0.10)]"
+                      : "bg-white/92 text-[#1E293B] border border-[#D97706]/35 shadow-[0_2px_10px_rgba(217,119,6,0.08)]"
                     : podiumTier === 2
                       ? darkMode
-                        ? "bg-slate-300/12 text-slate-100 border border-slate-300/25"
-                        : "bg-white/95 text-slate-800 border border-slate-300/80 shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
+                        ? "bg-[#1B2430] text-slate-100 border border-slate-300/28"
+                        : "bg-white/88 text-[#1E293B] border border-slate-300/80 shadow-[0_2px_8px_rgba(15,23,42,0.04)]"
                       : podiumTier === 3
                         ? darkMode
-                          ? "bg-orange-400/12 text-orange-100 border border-orange-400/25"
-                          : "bg-orange-50/85 text-[#9A3412] border border-orange-300/70"
+                          ? "bg-[#1B232D] text-slate-100 border border-[#FB923C]/30"
+                          : "bg-white/88 text-[#1E293B] border border-[#C2410C]/25"
                         : entry.isSelf
                           ? darkMode
                             ? "bg-[#243445] text-slate-50"
@@ -885,32 +885,43 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                         : "opacity-0 translate-y-2"
                     } ${rowThemeClass}`}
                   >
-                    <div className="min-w-0 flex items-center gap-2">
+                    <div className="min-w-0 flex items-center gap-2.5">
                       {podiumTier > 0 ? (
                         <span
-                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-extrabold tabular-nums shrink-0 ${
+                          aria-label={`Rank ${podiumTier}`}
+                          className={`w-7 h-7 rounded-xl inline-flex items-center justify-center shrink-0 ${
                             podiumTier === 1
                               ? darkMode
-                                ? "bg-[#FBBF24]/25 text-[#FDE047]"
-                                : "bg-amber-200 text-[#78350F]"
+                                ? "bg-[#FBBF24]/20 text-[#FCD34D]"
+                                : "bg-[#FEF3C7] text-[#B45309]"
                               : podiumTier === 2
                                 ? darkMode
-                                  ? "bg-slate-300/22 text-slate-100"
-                                  : "bg-slate-200 text-slate-800"
+                                  ? "bg-slate-300/18 text-slate-200"
+                                  : "bg-slate-200/90 text-slate-600"
                                 : darkMode
-                                  ? "bg-orange-400/22 text-orange-200"
-                                  : "bg-orange-200 text-[#9A3412]"
+                                  ? "bg-[#FB923C]/18 text-[#FDBA74]"
+                                  : "bg-[#FFEDD5] text-[#C2410C]"
                           }`}
                         >
                           {podiumTier === 1 ? (
-                            <Crown className="w-3 h-3 shrink-0" aria-hidden="true" />
+                            <Crown className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                           ) : (
-                            <Medal className="w-3 h-3 shrink-0" aria-hidden="true" />
+                            <Medal className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                           )}
-                          <span>#{podiumTier}</span>
+                        </span>
+                      ) : entry.statusLabel ? (
+                        <span
+                          aria-label="Playing"
+                          className={`w-7 h-7 rounded-xl inline-flex items-center justify-center shrink-0 ${
+                            darkMode
+                              ? "bg-white/[0.06] text-slate-400"
+                              : "bg-slate-200/65 text-slate-500"
+                          }`}
+                        >
+                          <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                         </span>
                       ) : (
-                        <span className="w-5 text-[11px] font-bold tabular-nums opacity-65 shrink-0">
+                        <span className="w-7 text-center text-[11px] font-bold tabular-nums opacity-65 shrink-0">
                           #{idx + 1}
                         </span>
                       )}
@@ -919,11 +930,11 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                         <span
                           className={`shrink-0 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider ${
                             darkMode
-                              ? "bg-[#38BDF8]/20 text-[#38BDF8]"
-                              : "bg-[#2B8CEE]/15 text-[#2B8CEE]"
+                              ? "bg-[#38BDF8]/18 text-[#38BDF8]"
+                              : "bg-[#2B8CEE]/14 text-[#2B8CEE]"
                           }`}
                         >
-                          You
+                          YOU
                         </span>
                       )}
                       {entry.statusLabel && (

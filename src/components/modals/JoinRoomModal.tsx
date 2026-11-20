@@ -4,7 +4,13 @@ import { X, RefreshCw, Play, XCircle, Lock, Unlock } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useTranslation } from "../../i18n/useTranslation";
-import { handleNumericInputKeyDown } from "../../utils/keyboardControls";
+import {
+  getFocusableElements,
+  handleNumericInputKeyDown,
+  handleRovingMenuArrowKey,
+  isEditableEventTarget,
+  useTopmostModalKeyboardLayer,
+} from "../../utils/keyboardControls";
 
 export interface JoinRoomModalProps {
   isOpen: boolean;
@@ -38,8 +44,11 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
   playClickSound
 }) => {
   const { t } = useTranslation();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const roomCodeInputRef = useRef<HTMLInputElement>(null);
   const roomPinInputRef = useRef<HTMLInputElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const lookupSeqRef = useRef(0);
   const [isRoomCodeFocused, setIsRoomCodeFocused] = React.useState(false);
   const [roomLockState, setRoomLockState] = useState<"idle" | "checking" | "locked" | "unlocked" | "fallback">("idle");
@@ -120,10 +129,49 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({
   const hasValidPin = !requiresPin || (cleanPinLength >= 1 && cleanPinLength <= 4);
   const canJoin = hasValidCode && hasValidPin && !isJoiningRoomLoading;
 
+  useTopmostModalKeyboardLayer(isOpen, {
+    id: "join-room-modal",
+    priority: 28,
+    containerRef: dialogRef,
+    restoreFocus: true,
+    trapFocus: true,
+    onEscape: () => {
+      playClickSound();
+      onCloseRef.current();
+      return true;
+    },
+    onBackspace: () => {
+      playClickSound();
+      onCloseRef.current();
+      return true;
+    },
+    onKeyDown: (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || isEditableEventTarget(e.target)) {
+        return false;
+      }
+      if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight" ||
+        e.key === "Home" ||
+        e.key === "End"
+      ) {
+        const focusables = getFocusableElements(dialogRef.current);
+        return handleRovingMenuArrowKey(e, focusables, "both");
+      }
+      return false;
+    },
+  });
+
   if (!isOpen) return null;
 
   return (
     <motion.div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("joinRoomTitle")}
       key="multiplayer-join-modal"
       initial={{ scale: 0.96, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
