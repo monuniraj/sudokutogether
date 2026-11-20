@@ -17,6 +17,7 @@ export interface MultiplayerForkModalProps {
   isOnline: boolean;
   darkMode: boolean;
   playClickSound: () => void;
+  activeGame?: "sudoku" | "blocks";
   pendingBlocksRoom?: BlockSyncPendingRoomSession | null;
   onResumePendingBlocksRoom?: (session: BlockSyncPendingRoomSession) => void;
 }
@@ -36,6 +37,7 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
   isOnline,
   darkMode,
   playClickSound,
+  activeGame = "sudoku",
   pendingBlocksRoom = null,
   onResumePendingBlocksRoom,
 }) => {
@@ -118,6 +120,7 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
 
   if (!isOpen) return null;
 
+  const isBlocksTheme = activeGame === "blocks";
   const hasResumeRoomCard = Boolean(pendingBlocksRoom && onResumePendingBlocksRoom);
   const isRushRoom = pendingBlocksRoom?.config.mode === "rush";
   const rushRemainingSec =
@@ -135,21 +138,52 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
       key="multiplayer-fork-modal"
       role="dialog"
       aria-modal="true"
+      data-block-sync-dialog={isBlocksTheme ? "true" : undefined}
       aria-label={isOnline ? t("multiplayerLobbyTitle") : t("multiplayerUnavailable")}
-      className={`relative w-full max-w-[400px] max-h-[calc(100dvh-28px-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] overflow-hidden rounded-3xl p-6 border-none flex flex-col gap-5 select-none z-[10001] ${
-        darkMode ? "bg-[#1A1A1A] text-stone-200" : "bg-[#FDFBF7] text-stone-850"
+      className={`relative w-full max-w-[400px] max-h-[calc(100dvh-28px-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] overflow-hidden rounded-3xl p-6 flex flex-col gap-5 select-none z-[10001] ${
+        isBlocksTheme
+          ? darkMode
+            ? "bg-[#141A21] text-slate-100 border border-white/10"
+            : "bg-[#F4F8FB] text-slate-900 border border-[#D4E4F0]"
+          : darkMode
+            ? "bg-[#1A1A1A] text-stone-200 border-none"
+            : "bg-[#FDFBF7] text-stone-850 border-none"
       }`}
       style={{
-        boxShadow: darkMode ? '0 10px 40px rgba(0,0,0,0.6)' : '0 4px 20px rgba(0,0,0,0.08)'
+        boxShadow: isBlocksTheme
+          ? darkMode
+            ? "0 18px 46px rgba(0,0,0,0.58)"
+            : "0 14px 40px rgba(15,23,42,0.12)"
+          : darkMode
+            ? "0 10px 40px rgba(0,0,0,0.6)"
+            : "0 4px 20px rgba(0,0,0,0.08)",
       }}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col text-left">
-          <span className={`text-[10px] font-sans font-black tracking-widest uppercase ${darkMode ? "text-purple-400" : "text-[#6B21A8]"}`}>
-            SudokuSync
-          </span>
-          <h3 className="text-xl font-sans font-black tracking-tight leading-normal overflow-visible text-stone-850 dark:text-stone-100 mt-0.5">
+          {isBlocksTheme ? (
+            <span
+              className={`text-[10px] font-sans font-black tracking-widest uppercase ${
+                darkMode ? "text-slate-200" : "text-slate-700"
+              }`}
+            >
+              BLOCK <span className={darkMode ? "text-[#38BDF8]" : "text-[#2B8CEE]"}>SYNC</span>
+            </span>
+          ) : (
+            <span className={`text-[10px] font-sans font-black tracking-widest uppercase ${darkMode ? "text-purple-400" : "text-[#6B21A8]"}`}>
+              SudokuSync
+            </span>
+          )}
+          <h3
+            className={`text-xl font-sans font-black tracking-tight leading-normal overflow-visible mt-0.5 ${
+              isBlocksTheme
+                ? darkMode
+                  ? "text-slate-100"
+                  : "text-slate-900"
+                : "text-stone-850 dark:text-stone-100"
+            }`}
+          >
             {isOnline ? t("multiplayerLobbyTitle") : t("multiplayerUnavailable")}
           </h3>
         </div>
@@ -160,9 +194,17 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
             playClickSound();
             handleDismiss();
           }}
-          className="p-1.5 rounded-full text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
+          className={
+            isBlocksTheme
+              ? `w-9 h-9 rounded-full border-none cursor-pointer flex items-center justify-center transition-all active:scale-95 ${
+                  darkMode
+                    ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-200"
+                    : "bg-[#E6F1F8] hover:bg-[#D5E6F3] text-[#49637A]"
+                }`
+              : "p-1.5 rounded-full text-stone-400 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300 hover:bg-stone-150 dark:hover:bg-zinc-800 transition-colors border-none cursor-pointer"
+          }
         >
-          <X className="w-5 h-5" />
+          <X className={isBlocksTheme ? "w-4 h-4" : "w-5 h-5"} />
         </button>
       </div>
 
@@ -176,10 +218,24 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
             <WifiOff className="w-14 h-14 stroke-[2]" />
           </div>
 
-          <h4 className="text-lg font-sans font-black tracking-tight leading-normal overflow-visible text-stone-900 dark:text-stone-100 mb-1.5">
+          <h4
+            className={`text-lg font-sans font-black tracking-tight leading-normal overflow-visible mb-1.5 ${
+              isBlocksTheme
+                ? darkMode
+                  ? "text-slate-100"
+                  : "text-slate-900"
+                : "text-stone-900 dark:text-stone-100"
+            }`}
+          >
             {t("youAreOffline")}
           </h4>
-          <p className="text-xs sm:text-sm font-sans font-medium text-stone-500 dark:text-stone-400 max-w-[280px] leading-relaxed mb-5">
+          <p className={`text-xs sm:text-sm font-sans font-medium max-w-[280px] leading-relaxed mb-5 ${
+            isBlocksTheme
+              ? darkMode
+                ? "text-slate-400"
+                : "text-slate-500"
+              : "text-stone-500 dark:text-stone-400"
+          }`}>
             {t("offlineNoticeSub")}
           </p>
 
@@ -190,9 +246,13 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
               handleDismiss();
             }}
             className={`w-full py-3 px-4 rounded-2xl font-sans font-black text-xs uppercase tracking-wider transition-all duration-150 border-none cursor-pointer shadow-sm active:scale-[0.98] truncate leading-normal overflow-visible ${
-              darkMode
-                ? "bg-zinc-800 hover:bg-zinc-700 text-stone-200"
-                : "bg-stone-200 hover:bg-stone-300 text-stone-800"
+              isBlocksTheme
+                ? darkMode
+                  ? "bg-[#1B242E] hover:bg-[#222E3B] text-slate-200"
+                  : "bg-[#E6F1F8] hover:bg-[#DCEAF5] text-slate-800"
+                : darkMode
+                  ? "bg-zinc-800 hover:bg-zinc-700 text-stone-200"
+                  : "bg-stone-200 hover:bg-stone-300 text-stone-800"
             }`}
           >
             {t("gotItAction")}
@@ -203,7 +263,7 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
         <div
           ref={menuRef}
           role="menu"
-          className="grid grid-cols-1 gap-2.5 overflow-y-auto min-h-0 pr-0.5"
+          className="grid grid-cols-1 gap-2.5 overflow-y-auto min-h-0 p-2 -mx-2"
         >
           {hasResumeRoomCard && pendingBlocksRoom && (
             <button
@@ -214,10 +274,10 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
                 playClickSound();
                 onResumePendingBlocksRoom?.(pendingBlocksRoom);
               }}
-              className={`w-full py-3 px-4 rounded-2xl flex items-center justify-between gap-2.5 border-none cursor-pointer transition-all duration-150 text-left shadow-xs active:scale-[0.98] ${
+              className={`w-full py-3 px-4 rounded-2xl flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 text-left shadow-xs active:scale-[0.98] ${
                 darkMode
-                  ? "bg-[#1B242E] hover:bg-[#222E3B] text-slate-100 ring-1 ring-[#38BDF8]/40"
-                  : "bg-[#E6F1F8] hover:bg-[#DCEAF5] text-[#2C3E50] ring-1 ring-[#2B8CEE]/35"
+                  ? "bg-[#1B242E] hover:bg-[#222E3B] text-slate-100 border border-[#38BDF8]/45"
+                  : "bg-[#E6F1F8] hover:bg-[#DCEAF5] text-[#2C3E50] border border-[#2B8CEE]/40"
               }`}
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -263,14 +323,28 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
               playClickSound();
               onCreateRoom();
             }}
-            className={`w-full py-3 px-4 rounded-2xl flex items-center justify-between border-none cursor-pointer transition-all duration-150 text-left shadow-xs active:scale-[0.98] ${
-              darkMode 
-                ? "bg-[#2e1065]/40 hover:bg-[#2e1065]/60 text-purple-200 border border-purple-900/40" 
-                : "bg-[#F3E8FF] hover:bg-[#e9d5ff] active:bg-[#d8b4fe] text-[#6B21A8]"
+            className={`w-full py-3 px-4 rounded-2xl flex items-center justify-between cursor-pointer transition-all duration-150 text-left shadow-xs active:scale-[0.98] ${
+              isBlocksTheme
+                ? darkMode
+                  ? "bg-[#1B242E] hover:bg-[#222E3B] text-slate-100 border border-[#38BDF8]/25"
+                  : "bg-[#E6F1F8] hover:bg-[#DCEAF5] active:bg-[#D0E5F5] text-[#1E3A5F] border border-[#C7DDEF]"
+                : darkMode
+                  ? "bg-[#2e1065]/40 hover:bg-[#2e1065]/60 text-purple-200 border border-purple-900/40"
+                  : "bg-[#F3E8FF] hover:bg-[#e9d5ff] active:bg-[#d8b4fe] text-[#6B21A8] border-none"
             }`}
           >
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-xl flex items-center justify-center ${darkMode ? "bg-purple-900/60 text-purple-300" : "bg-white/80 text-[#6B21A8] shadow-xs"}`}>
+              <div
+                className={`p-2 rounded-xl flex items-center justify-center ${
+                  isBlocksTheme
+                    ? darkMode
+                      ? "bg-[#0EA5E9]/20 text-[#38BDF8]"
+                      : "bg-white/85 text-[#2B8CEE] shadow-xs"
+                    : darkMode
+                      ? "bg-purple-900/60 text-purple-300"
+                      : "bg-white/80 text-[#6B21A8] shadow-xs"
+                }`}
+              >
                 <Users className="w-5 h-5 stroke-[2.5]" />
               </div>
               <span className="font-sans font-black text-sm uppercase tracking-wider leading-normal overflow-visible truncate py-0.5">
@@ -288,14 +362,28 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
               playClickSound();
               onOpenJoinRoom();
             }}
-            className={`w-full py-3 px-4 rounded-2xl flex items-center justify-between border-none cursor-pointer transition-all duration-150 text-left shadow-xs active:scale-[0.98] ${
-              darkMode 
-                ? "bg-[#0c4a6e]/40 hover:bg-[#0c4a6e]/60 text-sky-200 border border-sky-900/40" 
-                : "bg-[#E0F2FE] hover:bg-[#bae6fd] active:bg-[#7dd3fc] text-[#0369a1]"
+            className={`w-full py-3 px-4 rounded-2xl flex items-center justify-between cursor-pointer transition-all duration-150 text-left shadow-xs active:scale-[0.98] ${
+              isBlocksTheme
+                ? darkMode
+                  ? "bg-[#1B242E]/75 hover:bg-[#222E3B] text-slate-100 border border-white/10"
+                  : "bg-white/90 hover:bg-white active:bg-[#E6F1F8] text-[#2C3E50] border border-[#D4E4F0]"
+                : darkMode
+                  ? "bg-[#0c4a6e]/40 hover:bg-[#0c4a6e]/60 text-sky-200 border border-sky-900/40"
+                  : "bg-[#E0F2FE] hover:bg-[#bae6fd] active:bg-[#7dd3fc] text-[#0369a1] border-none"
             }`}
           >
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-xl flex items-center justify-center ${darkMode ? "bg-sky-900/60 text-sky-300" : "bg-white/80 text-[#0369a1] shadow-xs"}`}>
+              <div
+                className={`p-2 rounded-xl flex items-center justify-center ${
+                  isBlocksTheme
+                    ? darkMode
+                      ? "bg-white/[0.06] text-slate-300"
+                      : "bg-[#E6F1F8] text-[#2B8CEE] shadow-xs"
+                    : darkMode
+                      ? "bg-sky-900/60 text-sky-300"
+                      : "bg-white/80 text-[#0369a1] shadow-xs"
+                }`}
+              >
                 <Grid3X3 className="w-5 h-5 stroke-[2.5]" />
               </div>
               <span className="font-sans font-black text-sm uppercase tracking-wider leading-normal overflow-visible truncate py-0.5">

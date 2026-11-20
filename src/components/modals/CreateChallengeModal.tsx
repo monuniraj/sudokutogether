@@ -723,7 +723,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             </button>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-2.5 pr-0.5 pt-1">
+          <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-2.5 p-2 -mx-2">
             {MO_LOGIC_CREATE_GAMES.map((game) => {
               const isSelected = effectiveSelectedGame === game.id;
               return (
@@ -842,7 +842,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
             </button>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-3 pr-0.5">
+          <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-3 p-2 -mx-2">
             {effectiveSelectedGame === "sudoku" ? (
               isDailyChallenge ? (
                 <div className={`p-4 rounded-2xl flex flex-col gap-2 ${surfaceCardClass}`}>
@@ -1276,11 +1276,11 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.18 }}
-                  className="overflow-hidden"
+                  className="overflow-hidden -mx-1.5 px-1.5"
                 >
                   <div
                     data-kbd-row="pin-row"
-                    className={`flex items-center justify-between gap-2 px-3 py-2 rounded-2xl border-none ${darkMode
+                    className={`my-1.5 flex items-center justify-between gap-2 px-3 py-2 rounded-2xl border-none ${darkMode
                       ? "bg-[#4c0519]/40 text-[#fecdd3] shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
                       : "bg-[#FFE4E6]/65 text-[#9D174D] shadow-[0_4px_14px_rgba(157,23,77,0.05)]"
                       }`}
@@ -1656,7 +1656,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
               })()}
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 flex flex-col gap-2.5 no-scrollbar pb-1">
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2.5 no-scrollbar p-2 -mx-2">
               {sanitizedPlayers.length === 0 ? (
                 <span className="text-xs italic text-stone-500 py-6 text-center">
                   {t("noPastPlayers")}
@@ -1977,13 +1977,12 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                     onStartGame();
                   }}
                   disabled={!isOnline}
-                  className={`flex-1 py-3.5 sm:py-4 px-4 text-xs sm:text-sm font-sans font-black uppercase tracking-wider rounded-2xl border-none transition-all duration-150 text-center shadow-md flex items-center justify-center gap-2 ${
-                    !isOnline
-                      ? "opacity-50 cursor-not-allowed bg-slate-300 dark:bg-[#1B242E] text-slate-500 dark:text-slate-400"
-                      : darkMode
-                        ? "cursor-pointer hover:scale-[1.01] active:scale-98 bg-[#0EA5E9] hover:bg-[#38BDF8] text-[#082032] shadow-[0_8px_20px_rgba(14,165,233,0.28)]"
-                        : "cursor-pointer hover:scale-[1.01] active:scale-98 bg-[#2B8CEE] hover:bg-[#1D7AD9] text-white shadow-[0_8px_20px_rgba(43,140,238,0.24)]"
-                  }`}
+                  className={`flex-1 py-3.5 sm:py-4 px-4 text-xs sm:text-sm font-sans font-black uppercase tracking-wider rounded-2xl border-none transition-all duration-150 text-center shadow-md flex items-center justify-center gap-2 ${!isOnline
+                    ? "opacity-50 cursor-not-allowed bg-slate-300 dark:bg-[#1B242E] text-slate-500 dark:text-slate-400"
+                    : darkMode
+                      ? "cursor-pointer hover:scale-[1.01] active:scale-98 bg-[#0EA5E9] hover:bg-[#38BDF8] text-[#082032] shadow-[0_8px_20px_rgba(14,165,233,0.28)]"
+                      : "cursor-pointer hover:scale-[1.01] active:scale-98 bg-[#2B8CEE] hover:bg-[#1D7AD9] text-white shadow-[0_8px_20px_rgba(43,140,238,0.24)]"
+                    }`}
                 >
                   <span className="truncate">
                     {isOnline ? t("startGameAction") : t("offline")}

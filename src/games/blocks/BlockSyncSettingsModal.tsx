@@ -649,8 +649,8 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
             : "Settings";
 
   const kbRingClass = darkMode
-    ? "ring-2 ring-[#38BDF8] ring-offset-1 ring-offset-[#141A21]"
-    : "ring-2 ring-[#2B8CEE] ring-offset-1 ring-offset-[#F4F8FB]";
+    ? "ring-2 ring-inset ring-[#38BDF8]"
+    : "ring-2 ring-inset ring-[#2B8CEE]";
 
   const isMainSelected = (idx: number) =>
     keyboardNavActive && mainSelectedIndex === idx;
@@ -790,7 +790,7 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
 
           {/* MAIN VIEW */}
           {activeView === "main" && (
-            <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto overscroll-contain p-0.5">
+            <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto overscroll-contain p-1.5">
               {/* Top 3-Column Quick Toggle Grid */}
               <div
                 aria-label="Quick Audio and Haptics Toggles"
@@ -1115,7 +1115,7 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                 <>
                   <div
                     id="block-sync-history-list"
-                    className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-2 pb-5 p-0.5"
+                    className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-2 pb-5 p-1.5"
                   >
                     {matchHistory.map((match, idx) => {
                       const hasGrid = isValid9x9Grid(match.boardSnapshot);
@@ -1287,7 +1287,7 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                   <div
                     ref={statsScrollRef}
                     id="block-sync-stats-scroll"
-                    className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1.5 pr-0.5"
+                    className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1.5 p-1.5"
                   >
                     {topRuns.map((run, idx) => (
                       <div
@@ -1333,7 +1333,7 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                     }
                   : undefined
               }
-              className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1.5 p-0.5"
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1.5 p-1.5"
             >
               {languages.map((langOpt, idx) => {
                 const isSelected = activeLanguage === langOpt.code;
@@ -1388,7 +1388,7 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                     }
                   : undefined
               }
-              className="flex-1 min-h-0 flex flex-col gap-2.5 overflow-y-auto overscroll-contain p-0.5"
+              className="flex-1 min-h-0 flex flex-col gap-2.5 overflow-y-auto overscroll-contain p-1.5"
             >
               {(() => {
                 let interactiveIdxCounter = -1;

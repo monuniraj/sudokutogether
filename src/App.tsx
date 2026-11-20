@@ -29,6 +29,7 @@ import { SudokuSolverScreen } from "./features/sudokuSolver/components/SudokuSol
 import { SudokuRulesScreen } from "./features/sudokuRules/components/SudokuRulesScreen";
 import { BlockSyncGame } from "./games/blocks/BlockSyncGame";
 import { BlockSyncResumeChoiceModal } from "./games/blocks/BlockSyncResumeChoiceModal";
+import { BlockSyncRoomInviteModal } from "./games/blocks/BlockSyncRoomInviteModal";
 import {
   getBlocksSavedSoloScore,
   getMostRecentPendingBlocksRoom,
@@ -3355,10 +3356,17 @@ export default function App() {
   const [blocksRoomTimeLimitSec, setBlocksRoomTimeLimitSec] = useState<120 | 180 | 300>(180);
   const [activeBlockSyncRoom, setActiveBlockSyncRoom] = useState<BlockSyncRoomConfig | null>(null);
   const [blockSyncRoomStandings, setBlockSyncRoomStandings] = useState<BlockSyncRoomStandingEntry[]>([]);
+  const [showBlockSyncRoomInviteModal, setShowBlockSyncRoomInviteModal] = useState<boolean>(false);
   const [blockSyncResumeChoiceState, setBlockSyncResumeChoiceState] = useState<{
     pendingRoom: BlockSyncPendingRoomSession;
     soloSavedScore: number | null;
   } | null>(null);
+
+  useEffect(() => {
+    if (!activeBlockSyncRoom || currentScreen !== "blocks") {
+      setShowBlockSyncRoomInviteModal(false);
+    }
+  }, [activeBlockSyncRoom, currentScreen]);
   const coldBootLastGameCheckedRef = useRef<boolean>(false);
   const lastTrackedGameUidRef = useRef<string | null | undefined>(undefined);
   const selectedCreateRoomGameRef = useRef<"sudoku" | "blocks">(selectedCreateRoomGame);
@@ -8383,6 +8391,7 @@ export default function App() {
     if (showRematchInviteModal) { setShowRematchInviteModal(false); return true; }
     if (showInviteModal) { setShowInviteModal(false); return true; }
     if (showHistoryChallengeModal) { setShowHistoryChallengeModal(false); return true; }
+    if (showBlockSyncRoomInviteModal) { setShowBlockSyncRoomInviteModal(false); return true; }
     if (showMidGameInviteModal) { setShowMidGameInviteModal(false); return true; }
     if (showGameOverModal) {
       setShowGameOverModal(false);
@@ -8428,6 +8437,7 @@ export default function App() {
     if (showRematchInviteModal) count++;
     if (showInviteModal) count++;
     if (showHistoryChallengeModal) count++;
+    if (showBlockSyncRoomInviteModal) count++;
     if (showMidGameInviteModal) count++;
     if (showGameOverModal) count++;
     if (showCreateChallengeModal) count++;
@@ -8496,6 +8506,7 @@ export default function App() {
     showRematchInviteModal,
     showInviteModal,
     showHistoryChallengeModal,
+    showBlockSyncRoomInviteModal,
     showMidGameInviteModal,
     showGameOverModal,
     showCreateChallengeModal,
@@ -12854,6 +12865,7 @@ export default function App() {
   };
 
   const updateRoomSettingsInFirestore = async (updates: {
+    roomCodeOverride?: string;
     gameType?: "sudoku" | "blocks";
     roomSeed?: number;
     blocksMode?: "classic" | "rush";
@@ -12869,9 +12881,11 @@ export default function App() {
     isClosed?: boolean;
   }) => {
     const seed = challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
-    const code = (activeGameId && /^\d{6}$/.test(activeGameId))
-      ? activeGameId
-      : String(seed).padStart(6, '0').slice(-6);
+    const code = (updates.roomCodeOverride && /^\d{6}$/.test(updates.roomCodeOverride))
+      ? updates.roomCodeOverride
+      : (activeGameId && /^\d{6}$/.test(activeGameId))
+        ? activeGameId
+        : String(seed).padStart(6, '0').slice(-6);
     const isDailyRoomSession = Boolean(isDailyRoomRef.current && dailyChallengeActiveDateRef.current);
 
     const payload: any = {
@@ -13351,25 +13365,51 @@ export default function App() {
 
     const activeAuth = await ensureActiveAuthUser();
     const isDailyRoomSession = Boolean(!historyChallengeGame && isDailyRoomRef.current && dailyChallengeActiveDateRef.current);
+    const isInActiveBlocksRoom = Boolean(
+      !isDailyRoomSession &&
+      !historyChallengeGame &&
+      (currentScreenRef.current === "blocks" || showBlockSyncRoomInviteModal) &&
+      activeBlockSyncRoom?.roomCode
+    );
     const seed = historyChallengeGame?.seed || challengeSeed || (boardState?.seed ? Number(String(boardState.seed).slice(-6)) : 100000);
-    const activeRoomCode = !historyChallengeGame && activeGameId && /^\d{6}$/.test(activeGameId)
-      ? activeGameId
-      : String(seed).padStart(6, '0').slice(-6);
+    const activeRoomCode = isInActiveBlocksRoom && activeBlockSyncRoom
+      ? activeBlockSyncRoom.roomCode
+      : (!historyChallengeGame && activeGameId && /^\d{6}$/.test(activeGameId)
+        ? activeGameId
+        : String(seed).padStart(6, '0').slice(-6));
     const currentUserId = activeAuth?.uid || userProfile?.id;
     const currentUserName = getActiveDisplayName() || userProfileRef.current?.displayName || userProfileRef.current?.name || getOrCreateGuestIdentity().displayName;
 
     const isBlocksInvite =
-      !isDailyRoomSession && selectedCreateRoomGameRef.current === "blocks";
+      !isDailyRoomSession &&
+      (isInActiveBlocksRoom || selectedCreateRoomGameRef.current === "blocks");
+    const effectiveBlocksMode =
+      isInActiveBlocksRoom && activeBlockSyncRoom
+        ? activeBlockSyncRoom.mode
+        : blocksRoomModeRef.current;
+    const effectiveBlocksSeed =
+      isInActiveBlocksRoom && activeBlockSyncRoom
+        ? activeBlockSyncRoom.roomSeed
+        : hashRoomSeed(`${activeRoomCode}:${seed}`);
+    const effectiveBlocksUndo =
+      isInActiveBlocksRoom && activeBlockSyncRoom
+        ? activeBlockSyncRoom.undoAllowed
+        : blocksRoomUndoRef.current;
+    const effectiveBlocksTimeLimit =
+      isInActiveBlocksRoom && activeBlockSyncRoom
+        ? activeBlockSyncRoom.timeLimitSec
+        : blocksRoomTimeLimitSecRef.current;
 
     // Ensure room is synced with current settings before invite is dispatched
     await updateRoomSettingsInFirestore({
+      ...(isInActiveBlocksRoom ? { roomCodeOverride: activeRoomCode } : {}),
       ...(isBlocksInvite
         ? {
             gameType: "blocks" as const,
-            roomSeed: hashRoomSeed(`${activeRoomCode}:${seed}`),
-            blocksMode: blocksRoomModeRef.current,
-            blocksUndoAllowed: blocksRoomUndoRef.current,
-            blocksTimeLimitSec: blocksRoomTimeLimitSecRef.current,
+            roomSeed: effectiveBlocksSeed,
+            blocksMode: effectiveBlocksMode,
+            blocksUndoAllowed: effectiveBlocksUndo,
+            blocksTimeLimitSec: effectiveBlocksTimeLimit,
           }
         : {
             gameType: "sudoku" as const,
@@ -13402,9 +13442,9 @@ export default function App() {
         roomCode: activeRoomCode,
         gameId: activeRoomCode,
         difficulty: isDailyRoomSession ? dailyChallengeDifficultyRef.current : currentDifficulty,
-        seed: seed,
+        seed: isInActiveBlocksRoom && activeBlockSyncRoom ? activeBlockSyncRoom.roomSeed : seed,
         ...(isBlocksInvite
-          ? { gameType: "blocks", blocksMode: blocksRoomModeRef.current }
+          ? { gameType: "blocks", blocksMode: effectiveBlocksMode }
           : {}),
         ...(isDailyRoomSession && dailyChallengeActiveDateRef.current
           ? { gameMode: "daily", dailyDate: dailyChallengeActiveDateRef.current }
@@ -13483,6 +13523,7 @@ export default function App() {
       !showGameOverModal &&
       !showCreateChallengeModal &&
       !showMidGameInviteModal &&
+      !showBlockSyncRoomInviteModal &&
       !showRematchInviteModal &&
       !showMultiplayerForkModal
     ) {
@@ -13494,6 +13535,7 @@ export default function App() {
     showGameOverModal,
     showCreateChallengeModal,
     showMidGameInviteModal,
+    showBlockSyncRoomInviteModal,
     showRematchInviteModal,
     showMultiplayerForkModal,
     isInvitingAll
@@ -15327,6 +15369,32 @@ export default function App() {
     return () => unsub();
   }, [showMidGameInviteModal, activeGameId, challengeSeed, boardState?.seed]);
 
+  // Real-time synchronization of canonical Block Sync room lock/PIN/host while in-game invite modal is open
+  useEffect(() => {
+    const roomCode = activeBlockSyncRoom?.roomCode;
+    if (!showBlockSyncRoomInviteModal || !roomCode) return;
+
+    const unsub = onSnapshot(doc(db, "rooms", roomCode), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const locked = Boolean(data.isLocked || data.pin || data.pinHash);
+        setIsRoomLocked(locked);
+        if (typeof data.pin === "string") setRoomPin(data.pin);
+        const myIds = new Set(
+          [auth.currentUser?.uid, authUser?.uid, userProfile?.id, getActiveAuthUid()].filter(Boolean) as string[]
+        );
+        if (data.hostId || data.createdById) {
+          setIsHost(
+            myIds.has(String(data.hostId || "")) || myIds.has(String(data.createdById || ""))
+          );
+        }
+      }
+    }, (err) => {
+      console.warn("[Firestore] Block Sync room invite lock listener notice:", err);
+    });
+    return () => unsub();
+  }, [showBlockSyncRoomInviteModal, activeBlockSyncRoom?.roomCode, authUser?.uid, userProfile?.id]);
+
   // Pre-game lobby: real-time participant presence sync for CreateChallengeModal
   useEffect(() => {
     if (!showCreateChallengeModal || !isOnline || !rematchGameId) return;
@@ -15453,6 +15521,7 @@ export default function App() {
       showGameOverModal ||
       showCreateChallengeModal ||
       showMidGameInviteModal ||
+      showBlockSyncRoomInviteModal ||
       showRematchInviteModal ||
       showMultiplayerForkModal ||
       showBellInvitesModal ||
@@ -15484,6 +15553,7 @@ export default function App() {
     showGameOverModal,
     showCreateChallengeModal,
     showMidGameInviteModal,
+    showBlockSyncRoomInviteModal,
     showRematchInviteModal,
     showMultiplayerForkModal,
     showBellInvitesModal,
@@ -15493,12 +15563,12 @@ export default function App() {
 
   // Auto-cancel any ongoing batch invitation loop if all invite modals are closed
   useEffect(() => {
-    if (!showGameOverModal && !showCreateChallengeModal && !showMidGameInviteModal && !showRematchInviteModal && !showMultiplayerForkModal) {
+    if (!showGameOverModal && !showCreateChallengeModal && !showMidGameInviteModal && !showBlockSyncRoomInviteModal && !showRematchInviteModal && !showMultiplayerForkModal) {
       if (isInvitingAll) {
         cancelInviteAll();
       }
     }
-  }, [showGameOverModal, showCreateChallengeModal, showMidGameInviteModal, showRematchInviteModal, showMultiplayerForkModal, isInvitingAll]);
+  }, [showGameOverModal, showCreateChallengeModal, showMidGameInviteModal, showBlockSyncRoomInviteModal, showRematchInviteModal, showMultiplayerForkModal, isInvitingAll]);
 
   // Auto-pause the game while ANY modal or overlay dialog is open over the board,
   // and resume synchronously (layout effect, before paint) when it closes.
@@ -15511,6 +15581,7 @@ export default function App() {
     showMultiplayerForkModal ||
     showBellInvitesModal ||
     showMidGameInviteModal ||
+    showBlockSyncRoomInviteModal ||
     showInviteModal ||
     showInviteJoinNamePopup ||
     showCreateChallengeModal ||
@@ -20314,7 +20385,7 @@ export default function App() {
 
                   <div
                     id="home-mo-logic-shelf"
-                    className="overflow-x-auto flex gap-4 px-4 pb-6 scrollbar-hide no-scrollbar"
+                    className="overflow-x-auto flex gap-4 px-4 pt-2 pb-6 scrollbar-hide no-scrollbar"
                   >
                     <button
                       type="button"
@@ -22645,7 +22716,13 @@ export default function App() {
                 }, 120);
               }
             }}
-            onOpenMultiplayer={() => setShowMultiplayerForkModal(true)}
+            onOpenMultiplayer={() => {
+              if (activeBlockSyncRoom) {
+                setShowBlockSyncRoomInviteModal(true);
+              } else {
+                setShowMultiplayerForkModal(true);
+              }
+            }}
             multiplayerRoom={activeBlockSyncRoom}
             roomStandings={blockSyncRoomStandings}
             onSubmitRoomResult={handleSubmitBlockSyncRoomResult}
@@ -23334,6 +23411,7 @@ export default function App() {
           {showMultiplayerForkModal && (
             <MultiplayerForkModal
               isOpen={true}
+              activeGame={currentScreen === "blocks" ? "blocks" : "sudoku"}
               onClose={() => {
                 setShowMultiplayerForkModal(false);
                 if (openedCreateFromMultiplayerResult) {
@@ -23548,6 +23626,39 @@ export default function App() {
         }}
         onClose={() => setBlockSyncResumeChoiceState(null)}
       />
+
+      {/* 🧩 BLOCK SYNC IN-GAME ROOM INVITE MODAL */}
+      {activeBlockSyncRoom && (
+        <BlockSyncRoomInviteModal
+          isOpen={showBlockSyncRoomInviteModal}
+          roomCode={activeBlockSyncRoom.roomCode}
+          roomMode={activeBlockSyncRoom.mode}
+          roomTimeLimitSec={activeBlockSyncRoom.timeLimitSec}
+          isRoomLocked={isRoomLocked}
+          isHost={isHost}
+          roomPin={roomPin}
+          isOnline={isOnline}
+          darkMode={darkMode}
+          currentUserId={userProfile?.id || auth.currentUser?.uid || getActiveAuthUid() || undefined}
+          multiplayerPlayers={multiplayerPlayers}
+          getFriendStatus={getDrawerFriendStatus}
+          getFriendLastActive={getDrawerFriendLastActive}
+          getInviteCooldownState={getInviteCooldownState}
+          handleToggleFriend={handleToggleFriend}
+          handleInviteFriend={(playerId) => void handleInviteFriend(playerId)}
+          handleReinviteAll={(targets) => void handleReinviteAll(targets)}
+          isInvitingAll={isInvitingAll}
+          onShareLink={() => void shareChallengeLink(activeBlockSyncRoom.roomCode)}
+          copyToClipboard={copyToClipboard}
+          showCopiedToast={showCopiedToast}
+          onClose={() => setShowBlockSyncRoomInviteModal(false)}
+          onSwitchRoomLobby={() => {
+            setShowBlockSyncRoomInviteModal(false);
+            setShowMultiplayerForkModal(true);
+          }}
+          playClickSound={playClickSound}
+        />
+      )}
 
       {/* 🔮 CUSTOM GAME HISTORY OR SAVED CHALLENGE LOBBY MODAL */}
       <AnimatePresence>

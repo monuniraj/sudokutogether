@@ -719,25 +719,37 @@ html.theme-snapshotting *::after {
 }
 
 [data-create-room-kbd="true"] :is(button, a[href], [role="button"]):focus {
-  outline: 2.5px solid #4F46E5 !important;
-  outline-offset: 2px !important;
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.22) !important;
+  outline: 2px solid #4F46E5 !important;
+  outline-offset: 1px !important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.22) !important;
 }
 
 .dark [data-create-room-kbd="true"] :is(button, a[href], [role="button"]):focus {
-  outline: 2.5px solid #A5B4FC !important;
-  outline-offset: 2px !important;
-  box-shadow: 0 0 0 4px rgba(165, 180, 252, 0.28) !important;
+  outline: 2px solid #A5B4FC !important;
+  outline-offset: 1px !important;
+  box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.28) !important;
 }
 
 [data-create-room-kbd="true"][data-create-room-theme="blocks"] :is(button, a[href], [role="button"]):focus {
-  outline: 2.5px solid #0284C7 !important;
-  outline-offset: 2px !important;
-  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.22) !important;
+  outline: 2px solid #0284C7 !important;
+  outline-offset: 1px !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.22) !important;
 }
 
 .dark [data-create-room-kbd="true"][data-create-room-theme="blocks"] :is(button, a[href], [role="button"]):focus {
-  outline: 2.5px solid #38BDF8 !important;
-  outline-offset: 2px !important;
-  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.28) !important;
+  outline: 2px solid #38BDF8 !important;
+  outline-offset: 1px !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.28) !important;
+}
+
+[data-block-sync-dialog="true"] :is(button, a[href], [role="button"], [role="menuitem"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid #0EA5E9 !important;
+  outline-offset: 1px !important;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.22) !important;
+}
+
+.dark [data-block-sync-dialog="true"] :is(button, a[href], [role="button"], [role="menuitem"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid #38BDF8 !important;
+  outline-offset: 1px !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.26) !important;
 }

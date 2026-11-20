@@ -245,8 +245,8 @@ export const BlockSyncResumeChoiceModal: React.FC<BlockSyncResumeChoiceModalProp
   const syncAccentClass = isDarkMode ? "text-[#38BDF8]" : "text-[#2B8CEE]";
   const focusRingClass = isKeyboardNavActive
     ? isDarkMode
-      ? "focus:outline-none focus:ring-2 focus:ring-[#38BDF8]"
-      : "focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]"
+      ? "focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#38BDF8]"
+      : "focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#0EA5E9]"
     : "focus:outline-none";
 
   return (
@@ -329,16 +329,16 @@ export const BlockSyncResumeChoiceModal: React.FC<BlockSyncResumeChoiceModalProp
         </div>
 
         {/* Option Cards */}
-        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2.5 pr-0.5">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2.5 p-2 -mx-2">
           {/* Option 1: Resume Multiplayer Room */}
           <button
             type="button"
             id="block-sync-resume-room-option"
             onClick={() => triggerExit("resumeRoom")}
-            className={`w-full min-h-[68px] p-3.5 rounded-2xl border-none text-left flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.985] ${focusRingClass} ${
+            className={`w-full min-h-[68px] p-3.5 rounded-2xl text-left flex items-center justify-between gap-3 cursor-pointer transition-all active:scale-[0.985] ${focusRingClass} ${
               isDarkMode
-                ? "bg-[#1B242E] hover:bg-[#222E3B] ring-1 ring-[#38BDF8]/40 text-slate-100 shadow-[0_8px_20px_rgba(0,0,0,0.32)]"
-                : "bg-[#E6F1F8] hover:bg-[#DCEAF5] ring-1 ring-[#2B8CEE]/35 text-[#2C3E50] shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
+                ? "bg-[#1B242E] hover:bg-[#222E3B] border border-[#38BDF8]/45 text-slate-100 shadow-[0_8px_20px_rgba(0,0,0,0.32)]"
+                : "bg-[#E6F1F8] hover:bg-[#DCEAF5] border border-[#2B8CEE]/40 text-[#2C3E50] shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
