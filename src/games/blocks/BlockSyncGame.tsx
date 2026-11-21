@@ -212,37 +212,37 @@ const PASTEL_TILE_CLASSES_LIGHT: Record<PastelColorKey, string> = {
     "bg-rose-400 border border-rose-500/70 shadow-[inset_0_2px_3px_rgba(255,255,255,0.66),inset_0_-2px_4px_rgba(159,18,57,0.24),0_4px_14px_rgba(0,0,0,0.16)]",
 };
 
-// Hue-Balanced Juicy Silicone Dark Palette (vibrant warm golden/orange/sky + jewel cool tones)
-// Harmonized for #141A21 / #1B242E / #23303E dark surfaces with top specular + same-hue lower bevel
+// Night-Safe Matte-Silicone Dark Palette (82-92% rich jewel saturation, lower luminance, soft 0.15 specular)
+// Calibrated for #0E141B / #19222C / #283747 dark surfaces: warm gold separated from tangerine orange, rich non-chalky purple
 const PASTEL_TILE_CLASSES_DARK: Record<PastelColorKey, string> = {
   yellow:
-    "bg-[#F9CF43] border border-[#D99F14]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.28),inset_0_-3px_5px_rgba(161,98,7,0.5),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#E8B417] border border-[#BA860E]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.15),inset_0_-3px_5px_rgba(140,82,4,0.52),0_5px_14px_rgba(0,0,0,0.45)]",
   emerald:
-    "bg-[#3AD994] border border-[#18B876]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.26),inset_0_-3px_5px_rgba(6,95,70,0.52),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#20BD7A] border border-[#13945D]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.15),inset_0_-3px_5px_rgba(6,95,70,0.54),0_5px_14px_rgba(0,0,0,0.45)]",
   "emerald-mid":
-    "bg-[#1DC484] border border-[#129965]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.25),inset_0_-3px_5px_rgba(6,78,59,0.54),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#15A86E] border border-[#0E8254]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.14),inset_0_-3px_5px_rgba(6,78,59,0.56),0_5px_14px_rgba(0,0,0,0.45)]",
   teal:
-    "bg-[#1BB2B5] border border-[#12898C]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.25),inset_0_-3px_5px_rgba(17,94,89,0.54),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#149B9E] border border-[#0D777A]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.14),inset_0_-3px_5px_rgba(17,94,89,0.56),0_5px_14px_rgba(0,0,0,0.45)]",
   "emerald-rich":
-    "bg-[#17AB75] border border-[#0F8057]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.24),inset_0_-3px_5px_rgba(4,66,46,0.56),0_5px_14px_rgba(0,0,0,0.46)]",
+    "bg-[#119464] border border-[#0B6E49]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.14),inset_0_-3px_5px_rgba(4,66,46,0.58),0_5px_14px_rgba(0,0,0,0.46)]",
   orange:
-    "bg-[#F7924A] border border-[#CF6922]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.28),inset_0_-3px_5px_rgba(154,52,18,0.5),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#E66A1C] border border-[#B84D0E]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.15),inset_0_-3px_5px_rgba(154,52,18,0.54),0_5px_14px_rgba(0,0,0,0.45)]",
   amber:
-    "bg-[#F6A831] border border-[#CC7E10]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.27),inset_0_-3px_5px_rgba(146,64,14,0.52),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#DF8616] border border-[#B3630B]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.15),inset_0_-3px_5px_rgba(146,64,14,0.54),0_5px_14px_rgba(0,0,0,0.45)]",
   "orange-deep":
-    "bg-[#F26831] border border-[#C44514]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.26),inset_0_-3px_5px_rgba(124,45,18,0.54),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#DE4B1E] border border-[#AC330F]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.14),inset_0_-3px_5px_rgba(124,45,18,0.56),0_5px_14px_rgba(0,0,0,0.45)]",
   sky:
-    "bg-[#47BBF5] border border-[#1E8EC9]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.28),inset_0_-3px_5px_rgba(7,89,133,0.52),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#1FA1E8] border border-[#147CB8]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.15),inset_0_-3px_5px_rgba(7,89,133,0.54),0_5px_14px_rgba(0,0,0,0.45)]",
   indigo:
-    "bg-[#6774F2] border border-[#4550C7]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.25),inset_0_-3px_5px_rgba(49,46,129,0.56),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#4B5AE0] border border-[#3642B5]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.14),inset_0_-3px_5px_rgba(49,46,129,0.58),0_5px_14px_rgba(0,0,0,0.45)]",
   cyan:
-    "bg-[#26D2E6] border border-[#109FB0]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.27),inset_0_-3px_5px_rgba(14,116,144,0.52),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#17B5C9] border border-[#0E8C9C]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.15),inset_0_-3px_5px_rgba(14,116,144,0.54),0_5px_14px_rgba(0,0,0,0.45)]",
   violet:
-    "bg-[#935DF0] border border-[#6E3AC7]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.25),inset_0_-3px_5px_rgba(76,29,149,0.56),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#7A42DE] border border-[#5B2BB5]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.14),inset_0_-3px_5px_rgba(76,29,149,0.58),0_5px_14px_rgba(0,0,0,0.45)]",
   purple:
-    "bg-[#BA6EEB] border border-[#9144C4]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.26),inset_0_-3px_5px_rgba(88,28,135,0.54),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#9B42D6] border border-[#782AA8]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.14),inset_0_-3px_5px_rgba(88,28,135,0.56),0_5px_14px_rgba(0,0,0,0.45)]",
   rose:
-    "bg-[#F04D70] border border-[#C22B4D]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.26),inset_0_-3px_5px_rgba(136,19,55,0.54),0_5px_14px_rgba(0,0,0,0.45)]",
+    "bg-[#E03158] border border-[#B01E40]/75 shadow-[inset_0_2px_3px_rgba(255,255,255,0.15),inset_0_-3px_5px_rgba(136,19,55,0.56),0_5px_14px_rgba(0,0,0,0.45)]",
 };
 
 const HOVER_PREVIEW_CLASSES_LIGHT: Record<PastelColorKey, string> = {
@@ -3770,9 +3770,9 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             {/* Left (1fr): Current Score Card */}
             <div
               aria-label={t("blocks_score")}
-              className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-[clamp(10px,3vw,16px)] border-none flex flex-col items-center justify-center transition-colors duration-300 ${darkMode
-                ? "bg-[#1B242E] shadow-[0_6px_18px_rgba(0,0,0,0.34)]"
-                : "bg-[#E6F1F8]/95 shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
+              className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-[clamp(10px,3vw,16px)] flex flex-col items-center justify-center transition-colors duration-300 ${darkMode
+                ? "bg-[#1B242E] border-none shadow-[0_6px_18px_rgba(0,0,0,0.34)]"
+                : "bg-[#E8F2FA]/90 border border-[#C4DCEF]/75 shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
                 }`}
             >
               <span
@@ -3792,9 +3792,9 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
             {/* Center (auto): Soft Dock for Sound, Multiplayer & Help */}
             <div
-              className={`h-[48px] px-1.5 rounded-[clamp(10px,3vw,16px)] border-none flex items-center justify-center gap-1 shrink-0 transition-colors duration-300 ${darkMode
-                ? "bg-[#1B242E] shadow-[0_6px_18px_rgba(0,0,0,0.34)]"
-                : "bg-[#E6F1F8]/95 shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
+              className={`h-[48px] px-1.5 rounded-[clamp(10px,3vw,16px)] flex items-center justify-center gap-1 shrink-0 transition-colors duration-300 ${darkMode
+                ? "bg-[#1B242E] border-none shadow-[0_6px_18px_rgba(0,0,0,0.34)]"
+                : "bg-[#E8F2FA]/90 border border-[#C4DCEF]/75 shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
                 }`}
               id="block-sync-action-bar"
             >
@@ -3843,13 +3843,13 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             <div
               id="block-sync-best-card"
               aria-label={t("blocks_best")}
-              className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-[clamp(10px,3vw,16px)] border-none flex flex-col items-center justify-center transition-all duration-[260ms] ${bestCardGoldPulse
+              className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-[clamp(10px,3vw,16px)] flex flex-col items-center justify-center transition-all duration-[260ms] ${bestCardGoldPulse
                 ? darkMode
-                  ? "bg-[#2B2618] ring-2 ring-[#F9CF43]/70 shadow-[0_0_20px_rgba(249,207,67,0.28)] scale-[1.03]"
-                  : "bg-amber-100/95 ring-2 ring-amber-400/75 shadow-[0_6px_20px_rgba(245,158,11,0.25)] scale-[1.03]"
+                  ? "bg-[#2B2618] border-none ring-2 ring-[#F9CF43]/70 shadow-[0_0_20px_rgba(249,207,67,0.28)] scale-[1.03]"
+                  : "bg-amber-100/95 border-none ring-2 ring-amber-400/75 shadow-[0_6px_20px_rgba(245,158,11,0.25)] scale-[1.03]"
                 : darkMode
-                  ? "bg-[#1B242E] shadow-[0_6px_18px_rgba(0,0,0,0.34)]"
-                  : "bg-[#E6F1F8]/95 shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
+                  ? "bg-[#1B242E] border-none shadow-[0_6px_18px_rgba(0,0,0,0.34)]"
+                  : "bg-[#E8F2FA]/90 border border-[#C4DCEF]/75 shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
                 }`}
             >
               <span
@@ -3994,9 +3994,9 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         <section
           ref={trayContainerRef}
           aria-label="Block Sync Piece Spawner Tray"
-          className={`w-full max-w-[min(92vw,424px,47dvh)] h-24 sm:h-28 px-2.5 sm:px-3.5 py-2 rounded-[clamp(16px,4.8vw,24px)] border-none backdrop-blur-md flex items-center justify-between gap-2 sm:gap-2.5 overflow-hidden shrink-0 transition-colors duration-300 ${darkMode
-            ? "bg-[#1B242E] shadow-[0_10px_30px_rgba(0,0,0,0.42)]"
-            : "bg-[#E6F1F8]/85 shadow-[0_10px_30px_rgba(44,62,80,0.06)]"
+          className={`w-full max-w-[min(92vw,424px,47dvh)] h-24 sm:h-28 px-2.5 sm:px-3.5 py-2 rounded-[clamp(16px,4.8vw,24px)] backdrop-blur-md flex items-center justify-between gap-2 sm:gap-2.5 overflow-hidden shrink-0 transition-colors duration-300 ${darkMode
+            ? "bg-[#1B242E] border-none shadow-[0_10px_30px_rgba(0,0,0,0.42)]"
+            : "bg-[#E8F2FA]/90 border border-[#C4DCEF]/75 shadow-[0_10px_30px_rgba(44,62,80,0.06)]"
             }`}
         >
           {currentBlocks.map((piece, slotIndex) => {
