@@ -48,13 +48,13 @@ const MO_LOGIC_CREATE_GAMES: readonly CreateRoomGameCatalogEntry[] = [
     id: "sudoku",
     primaryWord: "SUDOKU",
     brandWord: "SYNC",
-    subtitle: "Classic 9×9 & Live Rooms",
+    subtitle: "blocks_subtitle_sudoku",
   },
   {
     id: "blocks",
     primaryWord: "BLOCK",
     brandWord: "SYNC",
-    subtitle: "Zen 9×9 Polyomino Puzzle",
+    subtitle: "blocks_subtitle_blocks",
   },
 ];
 
@@ -526,12 +526,12 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
   // Glanceable 1-line rules summary
   const summaryLine = (() => {
     if (effectiveSelectedGame === "blocks") {
-      const undoText = effectiveBlocksUndo ? "Undo On" : "Undo Off";
+      const undoText = effectiveBlocksUndo ? t("blocks_undo_on") : t("blocks_undo_off");
       if (effectiveBlocksMode === "rush") {
         const mins = Math.round(effectiveBlocksTimeLimitSec / 60);
-        return `Time Rush (${mins}m) · Same Seeded Blocks · ${undoText}`;
+        return `${t("blocks_mode_rush")} (${t("blocks_min_short", { min: mins })}) · ${t("blocks_same_seeded_blocks")} · ${undoText}`;
       }
-      return `Same Seeded Blocks · ${undoText}`;
+      return `${t("blocks_same_seeded_blocks")} · ${undoText}`;
     }
 
     const effectiveMistakes = isDailyChallenge ? 3 : challengeMistakeLimit;
@@ -703,7 +703,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 MO LOGIC
               </span>
               <h3 className="text-base font-sans font-black tracking-tight leading-tight mt-0.5 truncate">
-                Select Game
+                {t("blocks_select_game")}
               </h3>
             </div>
 
@@ -762,7 +762,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                           <span className={`ml-1 ${syncAccentClass}`}>{game.brandWord}</span>
                         </span>
                         <span className="mt-1 text-[11px] font-sans opacity-65 truncate">
-                          {game.subtitle}
+                          {t(game.subtitle as any)}
                         </span>
                       </div>
                     </div>
@@ -822,7 +822,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 <span className={`ml-1 ${syncAccentClass}`}>SYNC</span>
               </span>
               <h3 className="text-base font-sans font-black tracking-tight leading-tight mt-0.5 truncate">
-                Match Rules
+                {t("blocks_match_rules")}
               </h3>
             </div>
 
@@ -834,8 +834,8 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 setOpenDropdown(null);
                 onClose();
               }}
-              aria-label="Close"
-              title="Close"
+              aria-label={t("closeBtn")}
+              title={t("closeBtn")}
               className={`w-9 h-9 rounded-full border-none cursor-pointer flex items-center justify-center transition-all active:scale-95 ${iconBtnSurfaceClass}`}
             >
               <X className="w-4 h-4" />
@@ -989,12 +989,12 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 {/* Block Sync Mode */}
                 <div className={`p-3.5 rounded-2xl flex flex-col gap-2 ${surfaceCardClass}`}>
                   <span className="text-[10.5px] font-mono font-black uppercase tracking-wider opacity-65">
-                    Game Mode
+                    {t("blocks_game_mode")}
                   </span>
                   <div data-kbd-row="rules-blocks-mode" className="grid grid-cols-2 gap-2">
                     {[
-                      { id: "classic" as const, label: "Classic Survival" },
-                      { id: "rush" as const, label: "Time Rush" },
+                      { id: "classic" as const, label: t("blocks_mode_classic_survival") },
+                      { id: "rush" as const, label: t("blocks_mode_rush") },
                     ].map((opt) => {
                       const active = effectiveBlocksMode === opt.id;
                       return (
@@ -1038,10 +1038,10 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                     </div>
                     <div className="min-w-0 flex flex-col">
                       <span className="text-xs font-sans font-extrabold leading-tight truncate">
-                        Same Seeded Blocks
+                        {t("blocks_same_seeded_blocks")}
                       </span>
                       <span className="text-[11px] opacity-65 truncate">
-                        Both players draw identical piece sequences
+                        {t("blocks_same_seeded_desc")}
                       </span>
                     </div>
                   </div>
@@ -1051,7 +1051,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                       : "bg-[#D1FAE5] text-[#065F46]"
                       }`}
                   >
-                    Always On
+                    {t("blocks_always_on")}
                   </span>
                 </div>
 
@@ -1062,10 +1062,10 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 >
                   <div className="min-w-0 flex flex-col">
                     <span className="text-xs font-sans font-extrabold leading-tight">
-                      Allow Undo
+                      {t("blocks_allow_undo")}
                     </span>
                     <span className="text-[11px] opacity-65">
-                      Permit single-step piece undo during room match
+                      {t("blocks_allow_undo_desc")}
                     </span>
                   </div>
                   <button
@@ -1087,7 +1087,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                           : "bg-white text-slate-600"
                       }`}
                   >
-                    {effectiveBlocksUndo ? "ON" : "OFF"}
+                    {effectiveBlocksUndo ? t("blocks_on") : t("blocks_off")}
                   </button>
                 </div>
 
@@ -1095,12 +1095,12 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 {effectiveBlocksMode === "rush" && (
                   <div className={`p-3.5 rounded-2xl flex flex-col gap-2 ${surfaceCardClass}`}>
                     <span className="text-[10.5px] font-mono font-black uppercase tracking-wider opacity-65">
-                      Time Limit
+                      {t("blocks_time_limit_label")}
                     </span>
                     <div data-kbd-row="rules-blocks-time" className="grid grid-cols-4 gap-2">
                       {([120, 180, 300, 600] as const).map((sec) => {
                         const active = effectiveBlocksTimeLimitSec === sec;
-                        const label = `${Math.round(sec / 60)}m`;
+                        const label = t("blocks_min_short", { min: Math.round(sec / 60) });
                         return (
                           <button
                             key={sec}
@@ -1148,7 +1148,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                   : "bg-[#D1FAE5] hover:bg-[#A7F3D0] text-[#065F46]"
                 }`}
             >
-              Done
+              {isBlocksTheme ? t("blocks_got_it") : "Done"}
             </button>
           </div>
         </div>
@@ -1387,7 +1387,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                     className={`shrink-0 px-2 py-0.5 rounded-full text-[9.5px] font-mono font-black uppercase tracking-wider ${darkMode ? "bg-amber-900/40 text-amber-300" : "bg-amber-100 text-amber-800"
                       }`}
                   >
-                    Daily Locked
+                    {t("blocks_daily_locked")}
                   </span>
                 ) : (
                   <ChevronDown className="w-4 h-4 opacity-60 shrink-0" />
@@ -1505,7 +1505,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                         className={`w-full h-[40px] flex items-center justify-center gap-1 px-2.5 text-xs font-sans font-extrabold tracking-tight rounded-2xl border-none outline-none cursor-pointer transition-all duration-150 active:scale-95 ${blocksModeBtnClass}`}
                       >
                         <span className="truncate">
-                          {effectiveBlocksMode === "rush" ? "Time Rush" : "Classic"} ▾
+                          {effectiveBlocksMode === "rush" ? t("blocks_mode_rush") : t("blocks_mode_classic")} ▾
                         </span>
                       </button>
 
@@ -1513,15 +1513,15 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                         <div
                           ref={activeDropdownRef}
                           role="listbox"
-                          aria-label="Block Sync Mode"
+                          aria-label={t("blocks_game_mode")}
                           className={`absolute top-full left-0 mt-1.5 w-full min-w-[160px] rounded-2xl p-1.5 flex flex-col gap-1 z-[10020] shadow-xl ${darkMode
                             ? "bg-[#1B242E] border border-slate-700/60"
                             : "bg-white border border-slate-200/80"
                             }`}
                         >
                           {[
-                            { id: "classic" as const, label: "Classic Survival" },
-                            { id: "rush" as const, label: "Time Rush" },
+                            { id: "classic" as const, label: t("blocks_mode_classic_survival") },
+                            { id: "rush" as const, label: t("blocks_mode_rush") },
                           ].map((opt) => (
                             <button
                               key={opt.id}
@@ -1574,7 +1574,7 @@ export const CreateChallengeModal: React.FC<CreateChallengeModalProps> = ({
                 >
                   <span className="inline-flex items-center gap-1.5 min-w-0">
                     <SlidersHorizontal className="w-3.5 h-3.5 stroke-[2.3] shrink-0" />
-                    <span className="truncate">Rules</span>
+                    <span className="truncate">{t("blocks_rules_label")}</span>
                   </span>
                   <ChevronRight className="w-3.5 h-3.5 opacity-60 shrink-0" />
                 </button>

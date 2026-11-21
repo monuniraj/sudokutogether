@@ -63,7 +63,7 @@ interface MoLogicGameCatalogEntry {
   id: "sudoku-sync" | "block-sync" | string;
   primaryWord: string;
   brandWord: string;
-  subtitle: string;
+  subtitleKey: "blocks_subtitle_sudoku" | "blocks_subtitle_blocks";
   isActive: boolean;
 }
 
@@ -72,14 +72,14 @@ const MO_LOGIC_GAMES_CATALOG: readonly MoLogicGameCatalogEntry[] = [
     id: "sudoku-sync",
     primaryWord: "SUDOKU",
     brandWord: "SYNC",
-    subtitle: "Classic 9×9 & Live Rooms",
+    subtitleKey: "blocks_subtitle_sudoku",
     isActive: false,
   },
   {
     id: "block-sync",
     primaryWord: "BLOCK",
     brandWord: "SYNC",
-    subtitle: "Zen 9×9 Polyomino Puzzle",
+    subtitleKey: "blocks_subtitle_blocks",
     isActive: true,
   },
 ];
@@ -96,9 +96,9 @@ function checkPrefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-function formatMatchDateTime(iso: string): string {
+function formatMatchDateTime(iso: string, recentMatchLabel: string): string {
   const parsed = Date.parse(iso);
-  if (!Number.isFinite(parsed) || parsed <= 0) return "Recent match";
+  if (!Number.isFinite(parsed) || parsed <= 0) return recentMatchLabel;
   try {
     return new Intl.DateTimeFormat(undefined, {
       month: "short",
@@ -107,19 +107,23 @@ function formatMatchDateTime(iso: string): string {
       minute: "2-digit",
     }).format(new Date(parsed));
   } catch {
-    return "Recent match";
+    return recentMatchLabel;
   }
 }
 
-function formatRunDate(ts: number): string {
-  if (!Number.isFinite(ts) || ts <= 0) return "Prior best";
+function formatRunDate(
+  ts: number,
+  priorBestLabel: string,
+  savedRunLabel: string
+): string {
+  if (!Number.isFinite(ts) || ts <= 0) return priorBestLabel;
   try {
     return new Intl.DateTimeFormat(undefined, {
       month: "short",
       day: "numeric",
     }).format(new Date(ts));
   } catch {
-    return "Saved run";
+    return savedRunLabel;
   }
 }
 
@@ -162,7 +166,7 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
   onTriggerHaptic,
 }) => {
   const reducedMotion = useMemo(() => checkPrefersReducedMotion(), []);
-  const { language: hookLanguage, setLanguage, languages } = useTranslation();
+  const { language: hookLanguage, setLanguage, languages, t } = useTranslation();
   const activeLanguage = languageProp || hookLanguage;
 
   const [backdropVisible, setBackdropVisible] = useState<boolean>(reducedMotion);
@@ -228,8 +232,8 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
     const averageScore =
       scoreSamples.length > 0
         ? Math.round(
-            scoreSamples.reduce((acc, s) => acc + s, 0) / scoreSamples.length
-          )
+          scoreSamples.reduce((acc, s) => acc + s, 0) / scoreSamples.length
+        )
         : 0;
     return {
       bestScore: vault.bestScore,
@@ -639,14 +643,14 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
 
   const headerTitle =
     activeView === "history"
-      ? "Match History"
+      ? t("blocks_match_history")
       : activeView === "stats"
-        ? "Statistics"
+        ? t("blocks_statistics")
         : activeView === "language"
-          ? "Language"
+          ? t("blocks_language")
           : activeView === "moreGames"
-            ? "More Games"
-            : "Settings";
+            ? t("blocks_more_games")
+            : t("blocks_settings_title");
 
   const kbRingClass = darkMode
     ? "ring-2 ring-inset ring-[#38BDF8]"
@@ -679,11 +683,9 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
             triggerExit("close");
           }
         }}
-        className={`fixed inset-0 z-50 flex items-center justify-center p-3 backdrop-blur-sm transition-opacity ${
-          isExiting ? "duration-[170ms] ease-in" : "duration-[130ms] ease-out"
-        } ${backdropVisible ? "opacity-100" : "opacity-0"} ${
-          darkMode ? "bg-black/60" : "bg-[#2C3E50]/25"
-        }`}
+        className={`fixed inset-0 z-50 flex items-center justify-center p-3 backdrop-blur-sm transition-opacity ${isExiting ? "duration-[170ms] ease-in" : "duration-[130ms] ease-out"
+          } ${backdropVisible ? "opacity-100" : "opacity-0"} ${darkMode ? "bg-black/60" : "bg-[#2C3E50]/25"
+          }`}
       >
         <style>{`
           @keyframes bsSettingsSlideIn {
@@ -700,17 +702,15 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
         <div
           onClick={(e) => e.stopPropagation()}
           style={{ willChange: "transform, opacity" }}
-          className={`w-[calc(100%-24px)] max-w-[390px] max-h-[calc(100dvh-32px)] rounded-3xl p-5 border-none flex flex-col gap-3.5 overflow-hidden transition-[transform,opacity] ${
-            isExiting
-              ? "duration-[170ms] ease-in scale-95 opacity-0"
-              : cardVisible
-                ? "duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] scale-100 translate-y-0 opacity-100"
-                : "duration-[240ms] scale-[0.94] translate-y-3 opacity-0"
-          } ${
-            darkMode
+          className={`w-[calc(100%-24px)] max-w-[390px] max-h-[calc(100dvh-32px)] rounded-3xl p-5 border-none flex flex-col gap-3.5 overflow-hidden transition-[transform,opacity] ${isExiting
+            ? "duration-[170ms] ease-in scale-95 opacity-0"
+            : cardVisible
+              ? "duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] scale-100 translate-y-0 opacity-100"
+              : "duration-[240ms] scale-[0.94] translate-y-3 opacity-0"
+            } ${darkMode
               ? "bg-[#141A21] text-slate-100 shadow-[0_24px_60px_rgba(0,0,0,0.62)]"
               : "bg-[#F4F8FB] text-[#2C3E50] shadow-[0_24px_60px_rgba(44,62,80,0.16)]"
-          }`}
+            }`}
         >
           {/* Header: Clean Root Settings Header OR Balanced 3-Column Icon-Only Sub-View Header */}
           {activeView === "main" ? (
@@ -730,14 +730,13 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
               <button
                 id="block-sync-settings-close-button"
                 type="button"
-                aria-label="Close"
-                title="Close"
+                aria-label={t("closeBtn")}
+                title={t("closeBtn")}
                 onClick={() => triggerExit("close")}
-                className={`w-9 h-9 rounded-full border-none outline-none focus:outline-none shrink-0 flex items-center justify-center cursor-pointer transition-colors duration-150 active:scale-90 ${
-                  darkMode
-                    ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-300"
-                    : "bg-[#E6F1F8] hover:bg-[#D5E6F3] text-[#49637A]"
-                }`}
+                className={`w-9 h-9 rounded-full border-none outline-none focus:outline-none shrink-0 flex items-center justify-center cursor-pointer transition-colors duration-150 active:scale-90 ${darkMode
+                  ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-300"
+                  : "bg-[#E6F1F8] hover:bg-[#D5E6F3] text-[#49637A]"
+                  }`}
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -747,14 +746,13 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
               <button
                 id="block-sync-settings-back-button"
                 type="button"
-                aria-label="Back"
-                title="Back"
+                aria-label={t("back")}
+                title={t("back")}
                 onClick={handleBackToMain}
-                className={`w-9 h-9 rounded-full border-none outline-none focus:outline-none shrink-0 flex items-center justify-center cursor-pointer transition-colors duration-150 active:scale-90 ${
-                  darkMode
-                    ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-300"
-                    : "bg-[#E6F1F8] hover:bg-[#D5E6F3] text-[#49637A]"
-                }`}
+                className={`w-9 h-9 rounded-full border-none outline-none focus:outline-none shrink-0 flex items-center justify-center cursor-pointer transition-colors duration-150 active:scale-90 ${darkMode
+                  ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-300"
+                  : "bg-[#E6F1F8] hover:bg-[#D5E6F3] text-[#49637A]"
+                  }`}
               >
                 <ArrowLeft className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -774,14 +772,13 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
               <button
                 id="block-sync-settings-close-button"
                 type="button"
-                aria-label="Close"
-                title="Close"
+                aria-label={t("closeBtn")}
+                title={t("closeBtn")}
                 onClick={() => triggerExit("close")}
-                className={`w-9 h-9 rounded-full border-none outline-none focus:outline-none shrink-0 flex items-center justify-center cursor-pointer transition-colors duration-150 active:scale-90 ${
-                  darkMode
-                    ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-300"
-                    : "bg-[#E6F1F8] hover:bg-[#D5E6F3] text-[#49637A]"
-                }`}
+                className={`w-9 h-9 rounded-full border-none outline-none focus:outline-none shrink-0 flex items-center justify-center cursor-pointer transition-colors duration-150 active:scale-90 ${darkMode
+                  ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-300"
+                  : "bg-[#E6F1F8] hover:bg-[#D5E6F3] text-[#49637A]"
+                  }`}
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -800,10 +797,10 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                   {
                     key: "sound" as const,
                     kbIndex: 0 as number | null,
-                    label: "Sound",
+                    label: t("blocks_sound"),
                     active: soundOn,
                     disabled: false,
-                    subLabel: soundOn ? "ON" : "OFF",
+                    subLabel: soundOn ? t("blocks_on") : t("blocks_off"),
                     onClick: () => {
                       lastToggleColRef.current = 0;
                       triggerQuickToggle("sound", soundOn, onToggleSound);
@@ -820,21 +817,21 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                   {
                     key: "music" as const,
                     kbIndex: null,
-                    label: "Music",
+                    label: t("blocks_music"),
                     active: false,
                     disabled: true,
-                    subLabel: "Soon",
-                    onClick: () => {},
+                    subLabel: t("blocks_soon"),
+                    onClick: () => { },
                     icon: <Music className="w-5 h-5" aria-hidden="true" />,
                     accentClass: "",
                   },
                   {
                     key: "vibration" as const,
                     kbIndex: 1 as number | null,
-                    label: "Vibration",
+                    label: t("blocks_vibration"),
                     active: vibrationsOn,
                     disabled: false,
-                    subLabel: vibrationsOn ? "ON" : "OFF",
+                    subLabel: vibrationsOn ? t("blocks_on") : t("blocks_off"),
                     onClick: () => {
                       lastToggleColRef.current = 1;
                       triggerQuickToggle(
@@ -867,25 +864,24 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                       onClick={tile.disabled ? undefined : tile.onClick}
                       style={
                         bouncedToggle === tile.key &&
-                        !reducedMotion &&
-                        !tile.disabled
+                          !reducedMotion &&
+                          !tile.disabled
                           ? {
-                              animation:
-                                "bsQuickToggleBounce 130ms cubic-bezier(0.22, 1, 0.36, 1)",
-                            }
+                            animation:
+                              "bsQuickToggleBounce 130ms cubic-bezier(0.22, 1, 0.36, 1)",
+                          }
                           : undefined
                       }
-                      className={`h-[76px] px-2 rounded-2xl border-none outline-none focus:outline-none flex flex-col items-center justify-center gap-1.5 transition-colors duration-150 ${
-                        tile.disabled
-                          ? darkMode
-                            ? "bg-[#1B242E] text-slate-400 opacity-45 cursor-not-allowed"
-                            : "bg-[#E6F1F8]/75 text-[#6D859B] opacity-45 cursor-not-allowed"
-                          : tile.active
-                            ? `${tile.accentClass} cursor-pointer`
-                            : darkMode
-                              ? "bg-[#1B242E] text-slate-400 opacity-75 hover:opacity-95 cursor-pointer"
-                              : "bg-[#E6F1F8]/75 text-[#6D859B] opacity-80 hover:opacity-100 cursor-pointer"
-                      } ${selected ? kbRingClass : ""}`}
+                      className={`h-[76px] px-2 rounded-2xl border-none outline-none focus:outline-none flex flex-col items-center justify-center gap-1.5 transition-colors duration-150 ${tile.disabled
+                        ? darkMode
+                          ? "bg-[#1B242E] text-slate-400 opacity-45 cursor-not-allowed"
+                          : "bg-[#E6F1F8]/75 text-[#6D859B] opacity-45 cursor-not-allowed"
+                        : tile.active
+                          ? `${tile.accentClass} cursor-pointer`
+                          : darkMode
+                            ? "bg-[#1B242E] text-slate-400 opacity-75 hover:opacity-95 cursor-pointer"
+                            : "bg-[#E6F1F8]/75 text-[#6D859B] opacity-80 hover:opacity-100 cursor-pointer"
+                        } ${selected ? kbRingClass : ""}`}
                     >
                       {tile.icon}
                       <span className="text-[11.5px] font-semibold tracking-tight leading-none">
@@ -907,25 +903,23 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                   id="block-sync-settings-history-row"
                   type="button"
                   onClick={() => handleOpenSubView("history")}
-                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${
-                    darkMode
-                      ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
-                      : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
-                  } ${isMainSelected(2) ? kbRingClass : ""}`}
+                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${darkMode
+                    ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
+                    : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
+                    } ${isMainSelected(2) ? kbRingClass : ""}`}
                 >
                   <div className="min-w-0 flex items-center gap-2.5">
                     <History className="w-4 h-4 shrink-0 opacity-75" aria-hidden="true" />
-                    <span className="text-sm font-semibold truncate">History</span>
+                    <span className="text-sm font-semibold truncate">{t("blocks_history_row")}</span>
                   </div>
                   <div className="shrink-0 flex items-center gap-2">
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums ${
-                        darkMode
-                          ? "bg-[#141A21] text-slate-300"
-                          : "bg-white/80 text-[#49637A]"
-                      }`}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums ${darkMode
+                        ? "bg-[#141A21] text-slate-300"
+                        : "bg-white/80 text-[#49637A]"
+                        }`}
                     >
-                      {matchHistory.length} played
+                      {t("blocks_played_count", { count: matchHistory.length })}
                     </span>
                     <ChevronRight className="w-4 h-4 opacity-50" aria-hidden="true" />
                   </div>
@@ -937,25 +931,23 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                   id="block-sync-settings-stats-row"
                   type="button"
                   onClick={() => handleOpenSubView("stats")}
-                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${
-                    darkMode
-                      ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
-                      : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
-                  } ${isMainSelected(3) ? kbRingClass : ""}`}
+                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${darkMode
+                    ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
+                    : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
+                    } ${isMainSelected(3) ? kbRingClass : ""}`}
                 >
                   <div className="min-w-0 flex items-center gap-2.5">
                     <BarChart3 className="w-4 h-4 shrink-0 opacity-75" aria-hidden="true" />
-                    <span className="text-sm font-semibold truncate">Statistics</span>
+                    <span className="text-sm font-semibold truncate">{t("blocks_statistics")}</span>
                   </div>
                   <div className="shrink-0 flex items-center gap-2">
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums ${
-                        darkMode
-                          ? "bg-[#141A21] text-slate-300"
-                          : "bg-white/80 text-[#49637A]"
-                      }`}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums ${darkMode
+                        ? "bg-[#141A21] text-slate-300"
+                        : "bg-white/80 text-[#49637A]"
+                        }`}
                     >
-                      Best {statsSummary.bestScore.toLocaleString()}
+                      {t("blocks_best_short", { score: statsSummary.bestScore.toLocaleString() })}
                     </span>
                     <ChevronRight className="w-4 h-4 opacity-50" aria-hidden="true" />
                   </div>
@@ -967,23 +959,21 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                   id="block-sync-settings-language-row"
                   type="button"
                   onClick={() => handleOpenSubView("language")}
-                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${
-                    darkMode
-                      ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
-                      : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
-                  } ${isMainSelected(4) ? kbRingClass : ""}`}
+                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${darkMode
+                    ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
+                    : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
+                    } ${isMainSelected(4) ? kbRingClass : ""}`}
                 >
                   <div className="min-w-0 flex items-center gap-2.5">
                     <Globe className="w-4 h-4 shrink-0 opacity-75" aria-hidden="true" />
-                    <span className="text-sm font-semibold truncate">Language</span>
+                    <span className="text-sm font-semibold truncate">{t("blocks_language")}</span>
                   </div>
                   <div className="shrink-0 flex items-center gap-2">
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold max-w-[110px] truncate ${
-                        darkMode
-                          ? "bg-[#141A21] text-slate-300"
-                          : "bg-white/80 text-[#49637A]"
-                      }`}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold max-w-[110px] truncate ${darkMode
+                        ? "bg-[#141A21] text-slate-300"
+                        : "bg-white/80 text-[#49637A]"
+                        }`}
                     >
                       {activeLanguageLabel}
                     </span>
@@ -997,25 +987,23 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                   id="block-sync-settings-more-games-row"
                   type="button"
                   onClick={() => handleOpenSubView("moreGames")}
-                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${
-                    darkMode
-                      ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
-                      : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
-                  } ${isMainSelected(5) ? kbRingClass : ""}`}
+                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${darkMode
+                    ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
+                    : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
+                    } ${isMainSelected(5) ? kbRingClass : ""}`}
                 >
                   <div className="min-w-0 flex items-center gap-2.5">
                     <Gamepad2 className="w-4 h-4 shrink-0 opacity-75" aria-hidden="true" />
-                    <span className="text-sm font-semibold truncate">More Games</span>
+                    <span className="text-sm font-semibold truncate">{t("blocks_more_games")}</span>
                   </div>
                   <div className="shrink-0 flex items-center gap-2">
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums ${
-                        darkMode
-                          ? "bg-[#141A21] text-slate-300"
-                          : "bg-white/80 text-[#49637A]"
-                      }`}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold tabular-nums ${darkMode
+                        ? "bg-[#141A21] text-slate-300"
+                        : "bg-white/80 text-[#49637A]"
+                        }`}
                     >
-                      {MO_LOGIC_GAMES_CATALOG.length} games
+                      {t("blocks_games_count", { count: MO_LOGIC_GAMES_CATALOG.length })}
                     </span>
                     <ChevronRight className="w-4 h-4 opacity-50 shrink-0" aria-hidden="true" />
                   </div>
@@ -1027,24 +1015,23 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                   id="block-sync-settings-replay-row"
                   type="button"
                   onClick={handleReplayClick}
-                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${
-                    confirmReplay
-                      ? darkMode
-                        ? "bg-[#F04D70]/22 text-[#FF8CA4] ring-1 ring-[#F04D70]/45"
-                        : "bg-amber-100 text-[#9A4E0B] ring-1 ring-amber-400/55"
-                      : darkMode
-                        ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
-                        : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
-                  } ${isMainSelected(6) ? kbRingClass : ""}`}
+                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${confirmReplay
+                    ? darkMode
+                      ? "bg-[#F04D70]/22 text-[#FF8CA4] ring-1 ring-[#F04D70]/45"
+                      : "bg-amber-100 text-[#9A4E0B] ring-1 ring-amber-400/55"
+                    : darkMode
+                      ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
+                      : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
+                    } ${isMainSelected(6) ? kbRingClass : ""}`}
                 >
                   <div className="min-w-0 flex items-center gap-2.5">
                     <RotateCcw className="w-4 h-4 shrink-0 opacity-80" aria-hidden="true" />
                     <span className="text-sm font-semibold truncate">
-                      {confirmReplay ? "Tap again to restart" : "Replay"}
+                      {confirmReplay ? t("blocks_tap_again_restart") : t("blocks_replay")}
                     </span>
                   </div>
                   <span className="text-[11px] font-semibold opacity-65 shrink-0">
-                    {confirmReplay ? "Confirm" : "Fresh board"}
+                    {confirmReplay ? t("blocks_confirm") : t("blocks_fresh_board")}
                   </span>
                 </button>
 
@@ -1058,18 +1045,17 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                     onTriggerHapticRef.current?.("light");
                     triggerExit("home");
                   }}
-                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${
-                    darkMode
-                      ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
-                      : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
-                  } ${isMainSelected(7) ? kbRingClass : ""}`}
+                  className={`w-full h-[50px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-all duration-150 active:scale-[0.985] ${darkMode
+                    ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
+                    : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
+                    } ${isMainSelected(7) ? kbRingClass : ""}`}
                 >
                   <div className="min-w-0 flex items-center gap-2.5">
                     <Home className="w-4 h-4 shrink-0 opacity-75" aria-hidden="true" />
-                    <span className="text-sm font-semibold truncate">Home</span>
+                    <span className="text-sm font-semibold truncate">{t("blocks_home")}</span>
                   </div>
                   <span className="text-[11px] font-medium opacity-55 shrink-0">
-                    Saves progress
+                    {t("blocks_saves_progress")}
                   </span>
                 </button>
               </div>
@@ -1083,9 +1069,9 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
               style={
                 !reducedMotion
                   ? {
-                      animation:
-                        "bsSettingsSlideIn 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
-                    }
+                    animation:
+                      "bsSettingsSlideIn 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
+                  }
                   : undefined
               }
               className="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-2xl"
@@ -1093,22 +1079,20 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
               {matchHistory.length === 0 ? (
                 <div
                   id="block-sync-history-empty"
-                  className={`w-full rounded-2xl p-6 flex flex-col items-center justify-center gap-2 text-center ${
-                    darkMode ? "bg-[#1B242E]" : "bg-[#E6F1F8]/90"
-                  }`}
+                  className={`w-full rounded-2xl p-6 flex flex-col items-center justify-center gap-2 text-center ${darkMode ? "bg-[#1B242E]" : "bg-[#E6F1F8]/90"
+                    }`}
                 >
                   <div
-                    className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                      darkMode
-                        ? "bg-[#141A21] text-slate-400"
-                        : "bg-white/80 text-[#5B92BF]"
-                    }`}
+                    className={`w-10 h-10 rounded-2xl flex items-center justify-center ${darkMode
+                      ? "bg-[#141A21] text-slate-400"
+                      : "bg-white/80 text-[#5B92BF]"
+                      }`}
                   >
                     <History className="w-5 h-5" aria-hidden="true" />
                   </div>
-                  <p className="text-sm font-bold">No completed matches yet</p>
+                  <p className="text-sm font-bold">{t("blocks_no_matches_yet")}</p>
                   <p className="text-xs opacity-65 max-w-[230px]">
-                    Finish a run to save your score and 9×9 board snapshot here.
+                    {t("blocks_no_matches_desc")}
                   </p>
                 </div>
               ) : (
@@ -1129,20 +1113,18 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                             onTriggerHapticRef.current?.("light");
                             setSelectedMatch(match);
                           }}
-                          className={`w-full p-2.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-3 text-left cursor-pointer transition-all duration-150 active:scale-[0.985] ${
-                            darkMode
-                              ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
-                              : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
-                          } ${isSubSelected(idx) ? kbRingClass : ""}`}
+                          className={`w-full p-2.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-3 text-left cursor-pointer transition-all duration-150 active:scale-[0.985] ${darkMode
+                            ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
+                            : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
+                            } ${isSubSelected(idx) ? kbRingClass : ""}`}
                         >
                           <div className="min-w-0 flex items-center gap-3">
                             {/* Compact 40x40px Mini 9x9 Snapshot */}
                             <div
-                              className={`w-10 h-10 shrink-0 p-[3px] rounded-xl ${
-                                darkMode
-                                  ? "bg-[#141A21] shadow-[inset_0_1px_4px_rgba(0,0,0,0.45)]"
-                                  : "bg-white/85 shadow-[inset_0_1px_4px_rgba(140,178,209,0.25)]"
-                              }`}
+                              className={`w-10 h-10 shrink-0 p-[3px] rounded-xl ${darkMode
+                                ? "bg-[#141A21] shadow-[inset_0_1px_4px_rgba(0,0,0,0.45)]"
+                                : "bg-white/85 shadow-[inset_0_1px_4px_rgba(140,178,209,0.25)]"
+                                }`}
                             >
                               {hasGrid ? (
                                 <div className="w-full h-full grid grid-cols-9 grid-rows-9 gap-[1px]">
@@ -1159,11 +1141,10 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                                       return (
                                         <div
                                           key={`${match.id}-${rIdx}-${cIdx}`}
-                                          className={`w-full h-full rounded-[1px] ${
-                                            darkMode
-                                              ? "bg-[#23303E]/70"
-                                              : "bg-[#E6F1F8]"
-                                          }`}
+                                          className={`w-full h-full rounded-[1px] ${darkMode
+                                            ? "bg-[#23303E]/70"
+                                            : "bg-[#E6F1F8]"
+                                            }`}
                                         />
                                       );
                                     })
@@ -1182,18 +1163,17 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                               </span>
                               <div className="mt-0.5 flex items-center gap-1.5 min-w-0">
                                 <span className="text-[11px] opacity-65 truncate">
-                                  {formatMatchDateTime(match.playedAt)}
-                                  {match.mode !== "multiplayer" ? " · Solo" : ""}
+                                  {formatMatchDateTime(match.playedAt, t("blocks_recent_match"))}
+                                  {match.mode !== "multiplayer" ? ` · ${t("blocks_solo")}` : ""}
                                 </span>
                                 {match.mode === "multiplayer" && (
                                   <span
-                                    className={`shrink-0 px-1.5 py-0.5 rounded-full text-[9.5px] font-semibold uppercase tracking-wider tabular-nums ${
-                                      darkMode
-                                        ? "bg-[#38BDF8]/15 text-[#38BDF8]"
-                                        : "bg-[#2B8CEE]/12 text-[#2B8CEE]"
-                                    }`}
+                                    className={`shrink-0 px-1.5 py-0.5 rounded-full text-[9.5px] font-semibold uppercase tracking-wider tabular-nums ${darkMode
+                                      ? "bg-[#38BDF8]/15 text-[#38BDF8]"
+                                      : "bg-[#2B8CEE]/12 text-[#2B8CEE]"
+                                      }`}
                                   >
-                                    {match.roomCode ? `ROOM · ${match.roomCode}` : "ROOM"}
+                                    {match.roomCode ? `${t("blocks_room")} · ${match.roomCode}` : t("blocks_room")}
                                   </span>
                                 )}
                               </div>
@@ -1203,14 +1183,13 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                           <div className="shrink-0 flex items-center gap-1.5">
                             {match.isNewBest && (
                               <span
-                                className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider ${
-                                  darkMode
-                                    ? "bg-[#F9CF43]/20 text-[#F9CF43]"
-                                    : "bg-amber-200/90 text-[#7A5208]"
-                                }`}
+                                className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wider ${darkMode
+                                  ? "bg-[#F9CF43]/20 text-[#F9CF43]"
+                                  : "bg-amber-200/90 text-[#7A5208]"
+                                  }`}
                               >
                                 <Star className="w-2.5 h-2.5 fill-current" aria-hidden="true" />
-                                <span>BEST</span>
+                                <span>{t("blocks_best")}</span>
                               </span>
                             )}
                             <ChevronRight className="w-4 h-4 opacity-50" aria-hidden="true" />
@@ -1222,11 +1201,10 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                   {matchHistory.length > 4 && (
                     <div
                       aria-hidden="true"
-                      className={`pointer-events-none absolute inset-x-0 bottom-0 h-6 ${
-                        darkMode
-                          ? "bg-gradient-to-t from-[#141A21] to-transparent"
-                          : "bg-gradient-to-t from-[#F4F8FB] to-transparent"
-                      }`}
+                      className={`pointer-events-none absolute inset-x-0 bottom-0 h-6 ${darkMode
+                        ? "bg-gradient-to-t from-[#141A21] to-transparent"
+                        : "bg-gradient-to-t from-[#F4F8FB] to-transparent"
+                        }`}
                     />
                   )}
                 </>
@@ -1241,9 +1219,9 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
               style={
                 !reducedMotion
                   ? {
-                      animation:
-                        "bsSettingsSlideIn 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
-                    }
+                    animation:
+                      "bsSettingsSlideIn 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
+                  }
                   : undefined
               }
               className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden"
@@ -1251,23 +1229,22 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
               <div className="w-full shrink-0 grid grid-cols-3 gap-2">
                 {[
                   {
-                    label: "BEST SCORE",
+                    label: t("blocks_best_score_label"),
                     value: statsSummary.bestScore.toLocaleString(),
                   },
                   {
-                    label: "PLAYED",
+                    label: t("blocks_played_label"),
                     value: statsSummary.gamesPlayed.toLocaleString(),
                   },
                   {
-                    label: "AVERAGE",
+                    label: t("blocks_average_label"),
                     value: statsSummary.averageScore.toLocaleString(),
                   },
                 ].map((stat) => (
                   <div
                     key={stat.label}
-                    className={`rounded-2xl p-3 flex flex-col items-center justify-center text-center ${
-                      darkMode ? "bg-[#1B242E]" : "bg-[#E6F1F8]/90"
-                    }`}
+                    className={`rounded-2xl p-3 flex flex-col items-center justify-center text-center ${darkMode ? "bg-[#1B242E]" : "bg-[#E6F1F8]/90"
+                      }`}
                   >
                     <span className="text-[9.5px] font-semibold uppercase tracking-[0.10em] opacity-55">
                       {stat.label}
@@ -1280,20 +1257,19 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
               </div>
 
               <div
-                className={`flex-1 min-h-0 rounded-2xl p-3 flex flex-col gap-2 overflow-hidden ${
-                  darkMode ? "bg-[#1B242E]" : "bg-[#E6F1F8]/90"
-                }`}
+                className={`flex-1 min-h-0 rounded-2xl p-3 flex flex-col gap-2 overflow-hidden ${darkMode ? "bg-[#1B242E]" : "bg-[#E6F1F8]/90"
+                  }`}
               >
                 <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.10em] opacity-55">
-                  <span>PERSONAL TOP RUNS</span>
-                  <span>{topRuns.length} RECORDED</span>
+                  <span>{t("blocks_personal_top_runs")}</span>
+                  <span>{t("blocks_recorded_count", { count: topRuns.length })}</span>
                 </div>
 
                 {topRuns.length === 0 ? (
                   <div className="py-6 flex flex-col items-center justify-center gap-1.5 text-center opacity-70">
                     <Trophy className="w-5 h-5 opacity-75" aria-hidden="true" />
                     <span className="text-xs font-medium">
-                      Complete a match to rank your best Block Sync scores.
+                      {t("blocks_complete_to_rank")}
                     </span>
                   </div>
                 ) : (
@@ -1305,22 +1281,25 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                     {topRuns.map((run, idx) => (
                       <div
                         key={run.id}
-                        className={`px-3 py-2 rounded-xl flex items-center justify-between gap-2 text-xs ${
-                          idx === 0
-                            ? darkMode
-                              ? "bg-[#243445] text-slate-50"
-                              : "bg-white/95 text-[#223447]"
-                            : darkMode
-                              ? "bg-[#141A21]/75 text-slate-300"
-                              : "bg-white/65 text-[#49637A]"
-                        }`}
+                        className={`px-3 py-2 rounded-xl flex items-center justify-between gap-2 text-xs ${idx === 0
+                          ? darkMode
+                            ? "bg-[#243445] text-slate-50"
+                            : "bg-white/95 text-[#223447]"
+                          : darkMode
+                            ? "bg-[#141A21]/75 text-slate-300"
+                            : "bg-white/65 text-[#49637A]"
+                          }`}
                       >
                         <div className="min-w-0 flex items-center gap-2">
                           <span className="w-5 text-[11px] font-bold tabular-nums opacity-65 shrink-0">
                             #{idx + 1}
                           </span>
                           <span className="font-semibold truncate">
-                            {formatRunDate(run.achievedAt)}
+                            {formatRunDate(
+                              run.achievedAt,
+                              t("blocks_prior_best"),
+                              t("blocks_saved_run")
+                            )}
                           </span>
                         </div>
                         <span className="font-bold tabular-nums shrink-0">
@@ -1341,9 +1320,9 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
               style={
                 !reducedMotion
                   ? {
-                      animation:
-                        "bsSettingsSlideIn 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
-                    }
+                    animation:
+                      "bsSettingsSlideIn 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
+                  }
                   : undefined
               }
               className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-1.5 p-1.5"
@@ -1362,15 +1341,14 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                       setLanguage(langOpt.code);
                       onChangeLanguage?.(langOpt.code);
                     }}
-                    className={`w-full h-[46px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-colors duration-150 ${
-                      isSelected
-                        ? darkMode
-                          ? "bg-[#26D2E6]/18 text-[#6BE6F5] ring-1 ring-[#26D2E6]/35"
-                          : "bg-[#47BBF5]/20 text-[#156994] ring-1 ring-[#47BBF5]/40"
-                        : darkMode
-                          ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-200"
-                          : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
-                    } ${isSubSelected(idx) ? kbRingClass : ""}`}
+                    className={`w-full h-[46px] px-3.5 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-2.5 cursor-pointer transition-colors duration-150 ${isSelected
+                      ? darkMode
+                        ? "bg-[#26D2E6]/18 text-[#6BE6F5] ring-1 ring-[#26D2E6]/35"
+                        : "bg-[#47BBF5]/20 text-[#156994] ring-1 ring-[#47BBF5]/40"
+                      : darkMode
+                        ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-200"
+                        : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
+                      } ${isSubSelected(idx) ? kbRingClass : ""}`}
                   >
                     <div className="min-w-0 flex items-center gap-2.5">
                       <span className="text-base leading-none shrink-0" aria-hidden="true">
@@ -1396,9 +1374,9 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
               style={
                 !reducedMotion
                   ? {
-                      animation:
-                        "bsSettingsSlideIn 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
-                    }
+                    animation:
+                      "bsSettingsSlideIn 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
+                  }
                   : undefined
               }
               className="flex-1 min-h-0 flex flex-col gap-2.5 overflow-y-auto overscroll-contain p-1.5"
@@ -1423,9 +1401,8 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                         {game.primaryWord}
                       </span>
                       <span
-                        className={`ml-1 ${
-                          darkMode ? "text-[#38BDF8]" : "text-[#2B8CEE]"
-                        }`}
+                        className={`ml-1 ${darkMode ? "text-[#38BDF8]" : "text-[#2B8CEE]"
+                          }`}
                       >
                         {game.brandWord}
                       </span>
@@ -1438,29 +1415,27 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                         key={game.id}
                         id={`block-sync-more-games-${game.id}`}
                         aria-current="true"
-                        className={`w-full p-3 rounded-2xl border-none flex items-center justify-between gap-3 cursor-default ${
-                          darkMode
-                            ? "bg-[#22303E] ring-1 ring-[#38BDF8]/40"
-                            : "bg-[#E6F1F8] ring-1 ring-[#2B8CEE]/35"
-                        }`}
+                        className={`w-full p-3 rounded-2xl border-none flex items-center justify-between gap-3 cursor-default ${darkMode
+                          ? "bg-[#22303E] ring-1 ring-[#38BDF8]/40"
+                          : "bg-[#E6F1F8] ring-1 ring-[#2B8CEE]/35"
+                          }`}
                       >
                         <div className="min-w-0 flex items-center gap-3">
                           {iconNode}
                           <div className="min-w-0 flex flex-col items-start text-left">
                             {titleNode}
                             <span className="mt-1 text-[11px] opacity-65 truncate">
-                              {game.subtitle}
+                              {t(game.subtitleKey)}
                             </span>
                           </div>
                         </div>
                         <span
-                          className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            darkMode
-                              ? "bg-[#38BDF8]/20 text-[#38BDF8]"
-                              : "bg-[#2B8CEE]/15 text-[#2B8CEE]"
-                          }`}
+                          className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${darkMode
+                            ? "bg-[#38BDF8]/20 text-[#38BDF8]"
+                            : "bg-[#2B8CEE]/15 text-[#2B8CEE]"
+                            }`}
                         >
-                          Playing
+                          {t("blocks_playing_badge")}
                         </span>
                       </div>
                     );
@@ -1480,18 +1455,17 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
                         onTriggerHapticRef.current?.("light");
                         triggerExit("moreGames");
                       }}
-                      className={`w-full p-3 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-3 text-left cursor-pointer transition-all duration-150 active:scale-[0.985] ${
-                        darkMode
-                          ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
-                          : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
-                      } ${isSubSelected(interactiveIdx) ? kbRingClass : ""}`}
+                      className={`w-full p-3 rounded-2xl border-none outline-none focus:outline-none flex items-center justify-between gap-3 text-left cursor-pointer transition-all duration-150 active:scale-[0.985] ${darkMode
+                        ? "bg-[#1B242E] hover:bg-[#222D39] text-slate-100"
+                        : "bg-[#E6F1F8]/90 hover:bg-[#DCEAF5] text-[#2C3E50]"
+                        } ${isSubSelected(interactiveIdx) ? kbRingClass : ""}`}
                     >
                       <div className="min-w-0 flex items-center gap-3">
                         {iconNode}
                         <div className="min-w-0 flex flex-col items-start text-left">
                           {titleNode}
                           <span className="mt-1 text-[11px] opacity-65 truncate">
-                            {game.subtitle}
+                            {t(game.subtitleKey)}
                           </span>
                         </div>
                       </div>
@@ -1502,7 +1476,7 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
               })()}
 
               <p className="px-1 pt-1 text-[11px] text-center opacity-50">
-                Switching games saves your live Block Sync board automatically.
+                {t("blocks_switching_saves_note")}
               </p>
             </div>
           )}
@@ -1514,7 +1488,7 @@ export const BlockSyncSettingsModal: React.FC<BlockSyncSettingsModalProps> = ({
         <BlockSyncEndGameModal
           darkMode={darkMode}
           reviewMode={true}
-          playedAtLabel={formatMatchDateTime(selectedMatch.playedAt)}
+          playedAtLabel={formatMatchDateTime(selectedMatch.playedAt, t("blocks_recent_match"))}
           onCloseReview={() => {
             onPlayUiSoundRef.current?.("rowTap");
             onTriggerHapticRef.current?.("light");

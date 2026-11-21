@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { isHapticsEnabled, setGlobalHapticsEnabled } from "../../utils/haptics";
 import { Language } from "../../i18n/translations";
+import { useTranslation } from "../../i18n/useTranslation";
 import {
   BlocksMatchStandingEntry,
   BlocksSavedSession,
@@ -1822,6 +1823,9 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
   onSubmitRoomResult,
   onLeaveMultiplayerRoom,
 }) => {
+  const { t } = useTranslation();
+  const tRef = useRef(t);
+  tRef.current = t;
   const isRoomMode = Boolean(multiplayerRoom);
   const isUndoAllowed = !multiplayerRoom || multiplayerRoom.undoAllowed;
 
@@ -2441,7 +2445,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           if (!list.some((entry) => entry.isSelf)) {
             list.push({
               id: uidRef.current || "self",
-              name: "You",
+              name: tRef.current("blocks_you"),
               score: finalScore,
               isSelf: true,
               statusLabel: undefined,
@@ -2504,9 +2508,9 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         isCurrent: entry.id === vaultOutcome.currentRunId,
         label:
           entry.id === vaultOutcome.currentRunId
-            ? "This Run"
+            ? tRef.current("blocks_this_run")
             : entry.id.startsWith("legacy-best-")
-              ? "Prior Best"
+              ? tRef.current("blocks_prior_best")
               : undefined,
       }));
       setGameOverSummary({
@@ -3669,7 +3673,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
               }`}
           >
             <Star className="w-3.5 h-3.5 fill-current shrink-0" aria-hidden="true" />
-            <span>NEW BEST!</span>
+            <span>{t("blocks_new_best_banner")}</span>
           </div>
         </div>
       )}
@@ -3695,7 +3699,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                   : "bg-[#E6F1F8]/95 text-[#2C3E50] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
                   }`}
               >
-                <span className="opacity-60">ROOM</span>
+                <span className="opacity-60">{t("blocks_room")}</span>
                 <span aria-hidden="true" className="opacity-40">
                   ·
                 </span>
@@ -3732,7 +3736,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                         } ${rushMinutePulse && !isCriticalTime ? "bs-rush-minute-pop" : ""}`}
                     >
                       <Clock className="w-3 h-3 shrink-0" aria-hidden="true" />
-                      <span>RUSH</span>
+                      <span>{t("blocks_mode_rush_short")}</span>
                       <span>{formattedClock}</span>
                     </span>
                   );
@@ -3744,7 +3748,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                     : "bg-[#E6F1F8]/95 text-[#065F46] shadow-[0_4px_12px_rgba(44,62,80,0.05)]"
                     }`}
                 >
-                  CLASSIC
+                  {t("blocks_mode_classic")}
                 </span>
               )}
             </div>
@@ -3754,7 +3758,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           <div className="w-full grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 mb-0.5">
             {/* Left (1fr): Current Score Card */}
             <div
-              aria-label="Current Score"
+              aria-label={t("blocks_score")}
               className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-[clamp(10px,3vw,16px)] border-none flex flex-col items-center justify-center transition-colors duration-300 ${darkMode
                 ? "bg-[#1B242E] shadow-[0_6px_18px_rgba(0,0,0,0.34)]"
                 : "bg-[#E6F1F8]/95 shadow-[0_6px_18px_rgba(44,62,80,0.06)]"
@@ -3764,7 +3768,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 className={`text-[9.5px] leading-none font-semibold tracking-[0.10em] uppercase whitespace-nowrap truncate max-w-full opacity-55 ${darkMode ? "text-slate-100" : "text-[#2C3E50]"
                   }`}
               >
-                SCORE
+                {t("blocks_score")}
               </span>
               <span
                 id="block-sync-score-value"
@@ -3786,7 +3790,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
               {[
                 {
                   id: "block-sync-speaker-button",
-                  label: soundOn ? "Mute sound" : "Unmute sound",
+                  label: soundOn ? t("blocks_aria_mute") : t("blocks_aria_unmute"),
                   onClick: handleToggleSound,
                   icon: soundOn ? (
                     <Volume2 className="w-4 h-4" />
@@ -3796,13 +3800,13 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 },
                 {
                   id: "block-sync-multiplayer-button",
-                  label: "Multiplayer",
+                  label: t("blocks_aria_multiplayer"),
                   onClick: () => onOpenMultiplayer?.(),
                   icon: <Users className="w-4 h-4" />,
                 },
                 {
                   id: "block-sync-tutorial-button",
-                  label: "How to play",
+                  label: t("blocks_aria_how_to_play"),
                   onClick: openHowToPlayModal,
                   icon: <HelpCircle className="w-4 h-4" />,
                 },
@@ -3827,7 +3831,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             {/* Right (1fr): Best Score Card (with 260ms warm-gold Mid-Game Best Cross pulse) */}
             <div
               id="block-sync-best-card"
-              aria-label="Best Score"
+              aria-label={t("blocks_best")}
               className={`min-w-0 w-full h-[48px] px-2 sm:px-3 rounded-[clamp(10px,3vw,16px)] border-none flex flex-col items-center justify-center transition-all duration-[260ms] ${bestCardGoldPulse
                 ? darkMode
                   ? "bg-[#2B2618] ring-2 ring-[#F9CF43]/70 shadow-[0_0_20px_rgba(249,207,67,0.28)] scale-[1.03]"
@@ -3841,7 +3845,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 className={`text-[9.5px] leading-none font-semibold tracking-[0.10em] uppercase whitespace-nowrap truncate max-w-full opacity-55 ${darkMode ? "text-slate-100" : "text-[#2C3E50]"
                   }`}
               >
-                BEST
+                {t("blocks_best")}
               </span>
               <span
                 id="block-sync-best-value"
@@ -3863,7 +3867,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           <section
             aria-label="Block Sync 9 by 9 Board"
             className={`relative w-full aspect-square p-2.5 sm:p-3.5 rounded-[clamp(16px,4.8vw,24px)] backdrop-blur-md transition-colors duration-300 ${darkMode
-              ? "bg-[#212D3A] border border-slate-600/35 shadow-[0_14px_38px_rgba(0,0,0,0.52)]"
+              ? "bg-[#19222C] border border-slate-700/50 shadow-[0_14px_38px_rgba(0,0,0,0.52)]"
               : "bg-[#D1E4F3]/95 border border-[#B7D2E8]/60 shadow-[0_12px_36px_rgba(44,62,80,0.08)]"
               }`}
           >
@@ -3876,10 +3880,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                     clearFeedback.streakCount >= 2;
                   const labels = [`+${clearFeedback.pointsDelta}`];
                   if (clearFeedback.comboMultiplier > 1) {
-                    labels.push(`Combo x${clearFeedback.comboMultiplier}`);
+                    labels.push(t("blocks_combo_x", { n: clearFeedback.comboMultiplier }));
                   }
                   if (clearFeedback.streakCount > 1) {
-                    labels.push(`Streak ${clearFeedback.streakCount}`);
+                    labels.push(t("blocks_streak_n", { n: clearFeedback.streakCount }));
                   }
 
                   return (
@@ -3935,8 +3939,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
                   const emptyCellClass = darkMode
                     ? isAltSudokuBox
-                      ? "border-none bg-[#2B3B4C] shadow-[inset_0_2px_6px_rgba(0,0,0,0.50)]"
-                      : "border-none bg-[#11171F] shadow-[inset_0_3px_7px_rgba(0,0,0,0.72)]"
+                      ? "border-none bg-[#283747] shadow-[inset_0_2px_6px_rgba(0,0,0,0.52)]"
+                      : "border-none bg-[#0E141B] shadow-[inset_0_3px_7px_rgba(0,0,0,0.74)]"
                     : isAltSudokuBox
                       ? "border-none bg-[#BDD9EE]/95 shadow-[inset_0_2px_6px_rgba(88,128,166,0.30)]"
                       : "border-none bg-white shadow-[inset_0_2px_6px_rgba(116,154,186,0.28)]";
@@ -4057,8 +4061,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             <button
               id="block-sync-undo-button"
               type="button"
-              aria-label="Undo last move"
-              title="Undo last move"
+              aria-label={t("blocks_aria_undo")}
+              title={t("blocks_aria_undo")}
               disabled={isGameOver || isBoardLockedBeat || !canUndo}
               onClick={handleUndo}
               className={`h-8 sm:h-9 px-3.5 rounded-2xl border-none inline-flex items-center justify-center gap-1.5 max-w-full overflow-hidden text-xs font-semibold transition-all duration-150 ${isGameOver || isBoardLockedBeat || !canUndo
@@ -4071,7 +4075,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 }`}
             >
               <Undo2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">Undo</span>
+              <span className="truncate">{t("blocks_undo")}</span>
             </button>
           </div>
         )}
@@ -4137,7 +4141,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 if (!base.some((entry) => entry.isSelf)) {
                   base.push({
                     id: uidRef.current || "self",
-                    name: "You",
+                    name: t("blocks_you"),
                     score: gameOverSummary.finalScore,
                     isSelf: true,
                     statusLabel: undefined,
@@ -4206,13 +4210,13 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 id="block-sync-tutorial-title"
                 className="text-xl font-bold tracking-tight"
               >
-                How to Play
+                {t("blocks_how_to_play_title")}
               </h2>
               <button
                 id="block-sync-tutorial-close-button"
                 type="button"
-                aria-label="Close How to Play"
-                title="Close"
+                aria-label={t("closeBtn")}
+                title={t("closeBtn")}
                 onClick={() => setShowTutorial(false)}
                 className={`w-8 h-8 rounded-full border-none shrink-0 flex items-center justify-center cursor-pointer transition-colors duration-150 active:scale-90 ${darkMode
                   ? "bg-[#141A21] hover:bg-[#24303D] text-slate-300"
@@ -4306,9 +4310,9 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
             <ol className="w-full flex flex-col gap-2 text-left text-sm font-medium">
               {[
-                "Drag a block from the tray onto the 9×9 board.",
-                "Fill a full row, column or 3×3 box to clear it.",
-                "Cleared groups vanish and score points. Clear several at once for a combo!",
+                t("blocks_how_to_play_step1"),
+                t("blocks_how_to_play_step2"),
+                t("blocks_how_to_play_step3"),
               ].map((text, idx) => (
                 <li key={`tut-step-${idx}`} className="flex items-start gap-2.5">
                   <span
@@ -4335,7 +4339,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 : "bg-[#CFE4F4] text-[#223447] shadow-[0_8px_22px_rgba(140,178,209,0.28)]"
                 }`}
             >
-              {isRunInProgress ? "Got it" : "Got it, Let's Play!"}
+              {isRunInProgress ? t("blocks_got_it") : t("blocks_got_it_play")}
             </button>
           </div>
         </div>

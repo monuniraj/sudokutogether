@@ -285,7 +285,7 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
                 <div className="min-w-0 flex flex-col">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="font-sans font-black text-xs uppercase tracking-wider truncate tabular-nums">
-                      Resume Room {pendingBlocksRoom.config.roomCode}
+                      {t("blocks_resume_room", { code: pendingBlocksRoom.config.roomCode })}
                     </span>
                     <span
                       className={`shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-black uppercase tracking-wider ${
@@ -298,16 +298,19 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
                             : "bg-[#D1FAE5] text-[#065F46]"
                       }`}
                     >
-                      {isRushExpired ? "TIME UP" : "LIVE"}
+                      {isRushExpired ? t("blocks_time_up_badge") : t("blocks_live_badge")}
                     </span>
                   </div>
                   <span className="mt-0.5 text-[11px] font-sans font-semibold opacity-75 truncate tabular-nums inline-flex items-center gap-1">
                     {isRushRoom && <Clock className="w-3 h-3 shrink-0" />}
                     {isRushRoom
                       ? isRushExpired
-                        ? `Time Up · Tap to submit (${pendingBlocksRoom.score.toLocaleString()})`
-                        : `Time Rush ${formatMmSs(rushRemainingSec ?? 0)} · Score ${pendingBlocksRoom.score.toLocaleString()}`
-                      : `Classic · Score ${pendingBlocksRoom.score.toLocaleString()}`}
+                        ? t("blocks_time_up_submit", { score: pendingBlocksRoom.score.toLocaleString() })
+                        : t("blocks_rush_progress", {
+                            time: formatMmSs(rushRemainingSec ?? 0),
+                            score: pendingBlocksRoom.score.toLocaleString(),
+                          })
+                      : t("blocks_classic_progress", { score: pendingBlocksRoom.score.toLocaleString() })}
                   </span>
                 </div>
               </div>

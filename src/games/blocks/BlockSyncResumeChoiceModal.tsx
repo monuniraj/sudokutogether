@@ -3,6 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { Clock, Play, Sparkles, Users, X } from "lucide-react";
 import { isHapticsEnabled } from "../../utils/haptics";
+import { useTranslation } from "../../i18n/useTranslation";
 import {
   getFocusableElements,
   isEditableEventTarget,
@@ -53,6 +54,7 @@ export const BlockSyncResumeChoiceModal: React.FC<BlockSyncResumeChoiceModalProp
   onPlaySoloClassic,
   onClose,
 }) => {
+  const { t } = useTranslation();
   const reducedMotion = useMemo(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
       return false;
@@ -309,15 +311,15 @@ export const BlockSyncResumeChoiceModal: React.FC<BlockSyncResumeChoiceModalProp
               id="block-sync-resume-choice-title"
               className="text-lg font-sans font-extrabold tracking-tight leading-tight mt-1 truncate"
             >
-              Continue Playing
+              {t("blocks_continue_playing_title")}
             </h3>
           </div>
 
           <button
             type="button"
             onClick={() => triggerExit("close")}
-            aria-label="Close"
-            title="Close"
+            aria-label={t("closeBtn")}
+            title={t("closeBtn")}
             className={`w-9 h-9 rounded-full border-none cursor-pointer flex items-center justify-center transition-all active:scale-95 ${focusRingClass} ${
               isDarkMode
                 ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-200"
@@ -363,15 +365,18 @@ export const BlockSyncResumeChoiceModal: React.FC<BlockSyncResumeChoiceModalProp
               <div className="min-w-0 flex flex-col">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="text-sm font-sans font-extrabold tracking-tight truncate tabular-nums">
-                    Room {pendingRoom.config.roomCode}
+                    {t("blocks_room_code_label", { code: pendingRoom.config.roomCode })}
                   </span>
                 </div>
                 <span className="mt-0.5 text-[11.5px] font-sans opacity-75 truncate tabular-nums">
                   {isRush
                     ? isRushExpired
-                      ? `Time Up · Tap to submit (${pendingRoom.score.toLocaleString()})`
-                      : `Time Rush ${formatMmSs(remainingSec ?? 0)} · Score ${pendingRoom.score.toLocaleString()}`
-                    : `Classic · Score ${pendingRoom.score.toLocaleString()}`}
+                      ? t("blocks_time_up_submit", { score: pendingRoom.score.toLocaleString() })
+                      : t("blocks_rush_progress", {
+                          time: formatMmSs(remainingSec ?? 0),
+                          score: pendingRoom.score.toLocaleString(),
+                        })
+                    : t("blocks_classic_progress", { score: pendingRoom.score.toLocaleString() })}
                 </span>
               </div>
             </div>
@@ -387,7 +392,7 @@ export const BlockSyncResumeChoiceModal: React.FC<BlockSyncResumeChoiceModalProp
                     : "bg-[#D1FAE5] text-[#065F46]"
               }`}
             >
-              {isRushExpired ? "TIME UP" : "LIVE"}
+              {isRushExpired ? t("blocks_time_up_badge") : t("blocks_live_badge")}
             </span>
           </button>
 
@@ -419,15 +424,15 @@ export const BlockSyncResumeChoiceModal: React.FC<BlockSyncResumeChoiceModalProp
 
               <div className="min-w-0 flex flex-col">
                 <span className="text-sm font-sans font-extrabold tracking-tight truncate">
-                  Play Solo Classic
+                  {t("blocks_play_solo_classic")}
                 </span>
                 <span className="mt-0.5 text-[11.5px] font-sans opacity-75 truncate tabular-nums">
                   {soloSavedScore != null
-                    ? `Resume saved board (${soloSavedScore.toLocaleString()})`
-                    : "Start fresh Classic run"}
+                    ? t("blocks_resume_saved_board", { score: soloSavedScore.toLocaleString() })
+                    : t("blocks_start_fresh_classic")}
                 </span>
                 <span className="mt-0.5 text-[10.5px] font-sans opacity-55 truncate">
-                  Multiplayer room stays active
+                  {t("blocks_room_stays_active")}
                 </span>
               </div>
             </div>

@@ -48,7 +48,8 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
 
   const isBlocksInvite = incomingChallengeDetails?.gameType === "blocks";
   const blocksMode = incomingChallengeDetails?.blocksMode === "rush" ? "rush" : "classic";
-  const blocksModeLabel = blocksMode === "rush" ? "TIME RUSH" : "CLASSIC";
+  const blocksModeLabel =
+    blocksMode === "rush" ? t("blocks_mode_rush") : t("blocks_mode_classic");
   const blocksTimeMinutes = Math.max(
     1,
     Math.round((Number(incomingChallengeDetails?.blocksTimeLimitSec) || 180) / 60)
@@ -158,7 +159,7 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
               <div className="flex items-center justify-center gap-6 py-2">
                 <div className="flex flex-col items-center">
                   <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
-                    MODE
+                    {t("blocks_mode_label")}
                   </span>
                   <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-black uppercase tracking-wider mt-1 ${
                     darkMode ? "bg-[#38BDF8]/15 text-[#38BDF8]" : "bg-[#2B8CEE]/12 text-[#2B8CEE]"
@@ -169,12 +170,12 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
                 <div className={`w-[1px] h-8 ${darkMode ? "bg-slate-700/60" : "bg-[#D4E4F0]"}`} />
                 <div className="flex flex-col items-center">
                   <span className={`text-[10px] uppercase font-bold tracking-widest ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
-                    {blocksMode === "rush" ? "TIME LIMIT" : "UNDO"}
+                    {blocksMode === "rush" ? t("blocks_time_limit_label") : t("blocks_undo_label")}
                   </span>
                   <span className={`text-lg font-mono font-semibold mt-0.5 ${darkMode ? "text-slate-100" : "text-slate-900"}`}>
                     {blocksMode === "rush"
-                      ? `${blocksTimeMinutes}m`
-                      : (blocksUndoAllowed ? "Allowed" : "Off")}
+                      ? t("blocks_min_short", { min: blocksTimeMinutes })
+                      : (blocksUndoAllowed ? t("blocks_undo_allowed") : t("blocks_undo_none"))}
                   </span>
                 </div>
               </div>

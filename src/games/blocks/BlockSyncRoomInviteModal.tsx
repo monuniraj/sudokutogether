@@ -252,8 +252,8 @@ export const BlockSyncRoomInviteModal: React.FC<BlockSyncRoomInviteModalProps> =
   const lockLabel = isRoomLocked
     ? isHost && roomPin
       ? `PIN: ${roomPin}`
-      : "LOCKED"
-    : "OPEN";
+      : t("blocks_locked")
+    : t("blocks_open");
 
   const copyCodeHandler = () => {
     playClickSound();
@@ -311,8 +311,8 @@ export const BlockSyncRoomInviteModal: React.FC<BlockSyncRoomInviteModalProps> =
                 <button
                   type="button"
                   onClick={copyCodeHandler}
-                  aria-label="Copy room code"
-                  title="Copy room code"
+                  aria-label={t("blocks_copy_room_code")}
+                  title={t("blocks_copy_room_code")}
                   className={`w-8 h-8 rounded-xl border-none cursor-pointer flex items-center justify-center transition-all active:scale-95 shrink-0 ${
                     darkMode
                       ? "bg-[#1B242E] hover:bg-[#24303D] text-[#38BDF8]"
@@ -360,7 +360,9 @@ export const BlockSyncRoomInviteModal: React.FC<BlockSyncRoomInviteModalProps> =
               }`}
             >
               {roomMode === "rush" && <Clock className="w-3 h-3 shrink-0" />}
-              {roomMode === "rush" ? `TIME RUSH · ${rushMinutes}M` : "CLASSIC"}
+              {roomMode === "rush"
+                ? `${t("blocks_mode_rush")} · ${t("blocks_min_short", { min: rushMinutes })}`
+                : t("blocks_mode_classic")}
             </span>
 
             <span
@@ -699,7 +701,7 @@ export const BlockSyncRoomInviteModal: React.FC<BlockSyncRoomInviteModalProps> =
                 : "text-[#5B748B] hover:text-[#2B8CEE]"
             }`}
           >
-            Switch Room / Lobby
+            {t("blocks_switch_room_lobby")}
           </button>
         </div>
       </div>

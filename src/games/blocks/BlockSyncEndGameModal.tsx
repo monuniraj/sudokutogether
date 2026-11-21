@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { BlockSyncConfettiRain } from "./BlockSyncConfettiRain";
+import { useTranslation } from "../../i18n/useTranslation";
 
 export interface BlockSyncMiniBoardCell {
   color: string;
@@ -80,9 +81,13 @@ function checkPrefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-function formatRunTimestamp(achievedAt: number): string {
+function formatRunTimestamp(
+  achievedAt: number,
+  priorRecordLabel: string,
+  savedRunLabel: string
+): string {
   if (!Number.isFinite(achievedAt) || achievedAt <= 0) {
-    return "Prior record";
+    return priorRecordLabel;
   }
   try {
     return new Intl.DateTimeFormat(undefined, {
@@ -90,7 +95,7 @@ function formatRunTimestamp(achievedAt: number): string {
       day: "numeric",
     }).format(new Date(achievedAt));
   } catch {
-    return "Saved run";
+    return savedRunLabel;
   }
 }
 
@@ -132,6 +137,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
   onButtonTapCue,
   registerPlayAgainTrigger,
 }) => {
+  const { t } = useTranslation();
   const reducedMotion = useMemo(() => checkPrefersReducedMotion(), []);
   const instantReveal = reducedMotion || reviewMode;
 
@@ -547,15 +553,15 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
               <span>
                 {reviewMode
                   ? isNewBest
-                    ? "NEW RECORD!"
+                    ? t("blocks_new_record")
                     : roomMode
-                      ? "MULTIPLAYER MATCH"
-                      : "SOLO MATCH"
+                      ? t("blocks_multiplayer_match")
+                      : t("blocks_solo_match")
                   : endReason === "time_up"
-                    ? "TIME'S UP!"
+                    ? t("blocks_times_up")
                     : isNewRecordHeadline
-                      ? "NEW RECORD!"
-                      : "OUT OF MOVES"}
+                      ? t("blocks_new_record")
+                      : t("blocks_out_of_moves")}
               </span>
             </h2>
           </div>
@@ -585,11 +591,11 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                 <span>
                   {selfRank === 1
                     ? allPlayersFinished && standings.length > 1
-                      ? "WINNER"
-                      : "LEADER"
+                      ? t("blocks_winner")
+                      : t("blocks_leader")
                     : selfRank === 2
-                      ? "2ND"
-                      : "3RD"}
+                      ? t("blocks_rank_2nd")
+                      : t("blocks_rank_3rd")}
                 </span>
               </span>
             ) : isLowerRoomReplay && selfRank != null ? (
@@ -600,7 +606,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                     : "bg-[#E6F1F8] text-[#49637A] border border-[#D4E4F0]"
                 }`}
               >
-                <span>ROOM #{selfRank}</span>
+                <span>{t("blocks_room_rank", { rank: selfRank })}</span>
               </span>
             ) : null}
 
@@ -624,7 +630,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                 }`}
               >
                 <Star className="w-3 h-3 fill-current shrink-0" aria-hidden="true" />
-                <span>NEW BEST</span>
+                <span>{t("blocks_new_best_badge")}</span>
               </span>
             )}
 
@@ -632,8 +638,8 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
               <button
                 id="block-sync-review-close-button"
                 type="button"
-                aria-label="Close match record"
-                title="Close"
+                aria-label={t("closeBtn")}
+                title={t("closeBtn")}
                 onClick={() => handleExitAction("closeReview")}
                 className={`w-8 h-8 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 active:scale-90 ${
                   darkMode
@@ -662,7 +668,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
         >
           <div className="min-w-0 flex flex-col items-start justify-center text-left">
             <span className="text-[10px] leading-none font-semibold uppercase tracking-[0.10em] opacity-55">
-              FINAL SCORE
+              {t("blocks_final_score")}
             </span>
             <span
               id="block-sync-final-score"
@@ -681,7 +687,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                     : "bg-[#EBF4FB] text-[#2B8CEE] border border-[#BBD9F0]"
                 }`}
               >
-                Room Best: {savedRoomBestScore.toLocaleString()} (kept)
+                {t("blocks_room_best_kept", { score: savedRoomBestScore.toLocaleString() })}
               </span>
             )}
             <div
@@ -696,7 +702,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                 aria-hidden="true"
               />
               <span className="truncate">
-                BEST: {bestScore.toLocaleString()}
+                {t("blocks_best_colon", { score: bestScore.toLocaleString() })}
               </span>
             </div>
           </div>
@@ -752,7 +758,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
               >
                 <Grid3X3 className="w-5 h-5" aria-hidden="true" />
                 <span className="text-[9px] font-semibold uppercase tracking-wider">
-                  No Grid
+                  {t("blocks_no_grid")}
                 </span>
               </div>
             )}
@@ -782,7 +788,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                   darkMode ? "text-slate-200" : "text-[#2C3E50]"
                 }`}
               >
-                Higher than {percentileData.higherThanPercent}% of players
+                {t("blocks_higher_than_players", { pct: percentileData.higherThanPercent })}
               </p>
             </div>
             <span
@@ -792,7 +798,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                   : "bg-sky-200/80 text-[#2E5E82]"
               }`}
             >
-              Top {percentileData.topPercent}%
+              {t("blocks_top_percent", { pct: percentileData.topPercent })}
             </span>
           </div>
 
@@ -838,10 +844,10 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
           <div className="px-3.5 pt-2.5 pb-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-[0.10em]">
             <span className="opacity-55">
               {hasMultiplayerStandings
-                ? "ROOM STANDINGS"
+                ? t("blocks_room_standings")
                 : reviewMode && soloRuns.length === 0
-                  ? "MATCH SUMMARY"
-                  : "TOP RUNS"}
+                  ? t("blocks_match_summary")
+                  : t("blocks_top_runs")}
             </span>
             <div className="flex items-center gap-1.5 shrink-0">
               {roomCode && (
@@ -854,15 +860,15 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                     setCopiedRoomCode(true);
                     window.setTimeout(() => setCopiedRoomCode(false), 1400);
                   }}
-                  title={`Copy Room Code ${roomCode}`}
-                  aria-label={`Copy Room Code ${roomCode}`}
+                  title={t("blocks_copy_room_code")}
+                  aria-label={t("blocks_copy_room_code")}
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-semibold uppercase tracking-wider tabular-nums border-none cursor-pointer transition-all active:scale-95 ${
                     darkMode
                       ? "bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 text-[#38BDF8]"
                       : "bg-[#2B8CEE]/12 hover:bg-[#2B8CEE]/20 text-[#2B8CEE]"
                   }`}
                 >
-                  <span>ROOM · {roomCode}</span>
+                  <span>{t("blocks_room")} · {roomCode}</span>
                   {copiedRoomCode ? (
                     <Check className="w-2.5 h-2.5 stroke-[2.8]" aria-hidden="true" />
                   ) : (
@@ -872,12 +878,12 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
               )}
               <span className="opacity-55">
                 {hasMultiplayerStandings
-                  ? "RANKED"
+                  ? t("blocks_ranked")
                   : isFirstSoloRecord
-                    ? "FIRST RUN"
+                    ? t("blocks_first_run")
                     : reviewMode && soloRuns.length === 0
-                      ? "SOLO"
-                      : `${soloRuns.length} RECORDED`}
+                      ? t("blocks_solo")
+                      : t("blocks_recorded_count", { count: soloRuns.length })}
               </span>
             </div>
           </div>
@@ -975,12 +981,14 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                               : "bg-[#2B8CEE]/14 text-[#2B8CEE]"
                           }`}
                         >
-                          YOU
+                          {t("blocks_you")}
                         </span>
                       )}
                       {entry.statusLabel && (
                         <span className="shrink-0 text-[10px] font-medium opacity-65">
-                          {entry.statusLabel}
+                          {entry.statusLabel === "Playing..."
+                            ? t("blocks_playing_ellipsis")
+                            : entry.statusLabel}
                         </span>
                       )}
                     </div>
@@ -1012,10 +1020,10 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                   </div>
                   <div className="min-w-0 flex flex-col text-left">
                     <span className="text-xs font-bold truncate">
-                      First Record Set
+                      {t("blocks_first_record_set")}
                     </span>
                     <span className="text-[11px] opacity-65 truncate">
-                      Your baseline score is locked in
+                      {t("blocks_baseline_locked")}
                     </span>
                   </div>
                 </div>
@@ -1034,7 +1042,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                 }`}
               >
                 <span className="font-semibold truncate opacity-80">
-                  {isNewBest ? "Set a new personal best" : "Recorded solo run"}
+                  {isNewBest ? t("blocks_new_personal_best_desc") : t("blocks_recorded_solo_run")}
                 </span>
                 <span className="font-bold tabular-nums shrink-0">
                   {finalScore.toLocaleString()}
@@ -1076,8 +1084,12 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                     <span className="font-semibold truncate">
                       {run.label ||
                         (run.isCurrent
-                          ? "Current Run"
-                          : formatRunTimestamp(run.achievedAt))}
+                          ? t("blocks_current_run")
+                          : formatRunTimestamp(
+                              run.achievedAt,
+                              t("blocks_prior_record"),
+                              t("blocks_saved_run")
+                            ))}
                     </span>
                     {run.isCurrent && (
                       <span
@@ -1131,7 +1143,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
               }`}
             >
               <ArrowLeft className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>Back to History</span>
+              <span>{t("blocks_back_to_history")}</span>
             </button>
           ) : (
             <>
@@ -1146,7 +1158,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                 }`}
               >
                 <RotateCcw className="w-4 h-4 shrink-0" aria-hidden="true" />
-                <span>Play Again</span>
+                <span>{t("blocks_play_again")}</span>
               </button>
 
               <button
@@ -1160,7 +1172,7 @@ export const BlockSyncEndGameModal: React.FC<BlockSyncEndGameModalProps> = ({
                 }`}
               >
                 <Home className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                <span>Back to Home</span>
+                <span>{t("blocks_back_to_home")}</span>
               </button>
             </>
           )}

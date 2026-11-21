@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { BlockSyncLogo } from "./BlockSyncLogo";
 import type { BlockSyncRoomTimeLimitSec } from "./blocksRoomEngine";
+import { useTranslation } from "../../i18n/useTranslation";
 import {
   getFocusableElements,
   handleRovingMenuArrowKey,
@@ -60,6 +61,7 @@ export const BlockSyncRoomResultsModal: React.FC<BlockSyncRoomResultsModalProps>
   onCopyRoomCode,
   playClickSound,
 }) => {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const onCloseRef = useRef(onClose);
   const onActionRef = useRef(onAction);
@@ -150,10 +152,10 @@ export const BlockSyncRoomResultsModal: React.FC<BlockSyncRoomResultsModalProps>
   const rushMinutes = Math.max(1, Math.round(timeLimitSec / 60));
 
   const primaryLabel = isCurrentlyInsideThisRoom
-    ? "CONTINUE PLAYING"
+    ? t("blocks_continue_playing")
     : !currentUserAlreadyCompleted
-      ? "PLAY THIS ROOM"
-      : "CLOSE";
+      ? t("blocks_play_this_room")
+      : t("closeBtn");
 
   const handleCopyCode = () => {
     playClickSound?.();
@@ -211,7 +213,7 @@ export const BlockSyncRoomResultsModal: React.FC<BlockSyncRoomResultsModalProps>
                   </span>
                 </span>
                 <h2 className="mt-1 text-lg font-sans font-extrabold tracking-tight leading-none truncate">
-                  ROOM STANDINGS
+                  {t("blocks_room_standings")}
                 </h2>
               </div>
             </div>
@@ -222,8 +224,8 @@ export const BlockSyncRoomResultsModal: React.FC<BlockSyncRoomResultsModalProps>
                 playClickSound?.();
                 handleDismiss();
               }}
-              aria-label="Close standings"
-              title="Close"
+              aria-label={t("closeBtn")}
+              title={t("closeBtn")}
               className={`w-9 h-9 rounded-full border-none cursor-pointer flex items-center justify-center transition-all active:scale-95 shrink-0 ${
                 isDarkMode
                   ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-200"
@@ -247,7 +249,11 @@ export const BlockSyncRoomResultsModal: React.FC<BlockSyncRoomResultsModalProps>
               }`}
             >
               {mode === "rush" && <Clock className="w-3 h-3 shrink-0" aria-hidden="true" />}
-              <span>{mode === "rush" ? `TIME RUSH · ${rushMinutes}M` : "CLASSIC"}</span>
+              <span>
+                {mode === "rush"
+                  ? `${t("blocks_mode_rush")} · ${t("blocks_min_short", { min: rushMinutes })}`
+                  : t("blocks_mode_classic")}
+              </span>
             </span>
 
             {typeof undoAllowed === "boolean" && (
@@ -258,22 +264,22 @@ export const BlockSyncRoomResultsModal: React.FC<BlockSyncRoomResultsModalProps>
                     : "bg-white/85 text-[#49637A]"
                 }`}
               >
-                {undoAllowed ? "UNDO ON" : "NO UNDO"}
+                {undoAllowed ? t("blocks_undo_on") : t("blocks_undo_disabled_badge")}
               </span>
             )}
 
             <button
               type="button"
               onClick={handleCopyCode}
-              title={`Copy Room Code ${roomCode}`}
-              aria-label={`Copy Room Code ${roomCode}`}
+              title={t("blocks_copy_room_code")}
+              aria-label={t("blocks_copy_room_code")}
               className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider tabular-nums border-none cursor-pointer transition-all active:scale-95 ${
                 isDarkMode
                   ? "bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 text-[#38BDF8]"
                   : "bg-[#2B8CEE]/12 hover:bg-[#2B8CEE]/20 text-[#2B8CEE]"
               }`}
             >
-              <span>ROOM · {roomCode}</span>
+              <span>{t("blocks_room")} · {roomCode}</span>
               {copied ? (
                 <Check className="w-2.5 h-2.5 stroke-[2.8]" aria-hidden="true" />
               ) : (
@@ -293,12 +299,12 @@ export const BlockSyncRoomResultsModal: React.FC<BlockSyncRoomResultsModalProps>
             {isLoading && sortedStandings.length === 0 ? (
               <div className="py-8 flex flex-col items-center justify-center gap-2 text-center opacity-70">
                 <Trophy className="w-5 h-5 animate-pulse" aria-hidden="true" />
-                <span className="text-xs font-semibold">Loading room standings...</span>
+                <span className="text-xs font-semibold">{t("blocks_loading_standings")}</span>
               </div>
             ) : sortedStandings.length === 0 ? (
               <div className="py-8 flex flex-col items-center justify-center gap-1.5 text-center opacity-70">
                 <Trophy className="w-5 h-5 opacity-75" aria-hidden="true" />
-                <span className="text-xs font-semibold">No player scores recorded yet.</span>
+                <span className="text-xs font-semibold">{t("blocks_no_scores_yet")}</span>
               </div>
             ) : (
               sortedStandings.map((entry, idx) => {
@@ -382,7 +388,7 @@ export const BlockSyncRoomResultsModal: React.FC<BlockSyncRoomResultsModalProps>
                               : "bg-[#2B8CEE]/14 text-[#2B8CEE]"
                           }`}
                         >
-                          YOU
+                          {t("blocks_you")}
                         </span>
                       )}
                     </div>
@@ -395,7 +401,9 @@ export const BlockSyncRoomResultsModal: React.FC<BlockSyncRoomResultsModalProps>
                           </span>
                           {entry.linesCleared !== undefined && (
                             <span className="text-[10px] font-medium opacity-65 tabular-nums">
-                              {entry.linesCleared} {entry.linesCleared === 1 ? "line" : "lines"}
+                              {entry.linesCleared === 1
+                                ? t("blocks_line_singular", { n: entry.linesCleared })
+                                : t("blocks_line_plural", { n: entry.linesCleared })}
                             </span>
                           )}
                         </>
@@ -407,7 +415,7 @@ export const BlockSyncRoomResultsModal: React.FC<BlockSyncRoomResultsModalProps>
                               : "bg-slate-200/70 text-[#49637A]"
                           }`}
                         >
-                          Playing...
+                          {t("blocks_playing_ellipsis")}
                         </span>
                       )}
                     </div>

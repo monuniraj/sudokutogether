@@ -12804,10 +12804,10 @@ export default function App() {
     const shareTitle = isBlocksShare ? "Block Sync" : "SudokuSync";
     const blocksModeLabel =
       blocksRoomModeRef.current === "rush"
-        ? `Time Rush (${Math.round(blocksRoomTimeLimitSecRef.current / 60)}m)`
-        : "Classic";
+        ? `${t("blocks_mode_rush")} (${t("blocks_min_short", { min: Math.round(blocksRoomTimeLimitSecRef.current / 60) })})`
+        : t("blocks_mode_classic");
     const shareText = isBlocksShare
-      ? `Join my Block Sync ${blocksModeLabel} room! Place blocks, clear lines, and beat my score!`
+      ? t("blocks_share_invite_msg", { mode: blocksModeLabel })
       : t("shareInviteMessage");
 
     await shareOrCopyContent(shareTitle, shareText, chalUrl, showCopiedToast, showCopiedToast);
@@ -13086,13 +13086,13 @@ export default function App() {
     const blocksModeLabel =
       shareMeta?.blocksMode === "rush"
         ? (shareMeta?.timeLimitSec
-            ? `Time Rush (${Math.round(shareMeta.timeLimitSec / 60)}m)`
-            : "Time Rush")
-        : "Classic";
+            ? `${t("blocks_mode_rush")} (${t("blocks_min_short", { min: Math.round(shareMeta.timeLimitSec / 60) })})`
+            : t("blocks_mode_rush"))
+        : t("blocks_mode_classic");
     const shareText =
       customText ||
       (isBlocksShare
-        ? `Join my Block Sync ${blocksModeLabel} room! Place blocks, clear lines, and beat my score!`
+        ? t("blocks_share_invite_msg", { mode: blocksModeLabel })
         : t("shareInviteMessage"));
 
     await shareAppContent(shareTitle, shareText, chalUrl);
@@ -15263,7 +15263,7 @@ export default function App() {
               setActiveInviteNotification({
                 id: canonicalId,
                 type: "challenge_completed",
-                title: "Block Sync Finished",
+                title: t("blocks_finished_title"),
                 fromName: oppName,
                 roomCode,
                 gameId: roomCode,
@@ -27096,7 +27096,10 @@ export default function App() {
                   sortedBellInvites.map((challenge) => {
                     const senderDisplayName = challenge.senderName || (challenge as any).fromName || (challenge as any).hostName || "Player";
                     const isBlocksItem = challenge.gameType === "blocks";
-                    const blocksModeLabel = challenge.blocksMode === "rush" ? "TIME RUSH" : "CLASSIC";
+                    const blocksModeLabel =
+                      challenge.blocksMode === "rush"
+                        ? t("blocks_mode_rush")
+                        : t("blocks_mode_classic");
                     const blocksTimeMinutes = Math.max(
                       1,
                       Math.round((Number(challenge.blocksTimeLimitSec) || 180) / 60)
@@ -27164,10 +27167,14 @@ export default function App() {
                       if (isBlocksItem) {
                         const blocksFinishedText =
                           names.length === 1
-                            ? `${names[0]} finished the match!`
+                            ? t("blocks_player_finished_one", { name: names[0] })
                             : names.length === 2
-                              ? `${names[0]} & ${names[1]} finished the match!`
-                              : `${names[0]}, ${names[1]} & ${names.length - 2} more finished!`;
+                              ? t("blocks_player_finished_two", { name1: names[0], name2: names[1] })
+                              : t("blocks_player_finished_many", {
+                                  name1: names[0],
+                                  name2: names[1],
+                                  count: names.length - 2,
+                                });
 
                         return (
                           <div
@@ -27190,7 +27197,7 @@ export default function App() {
                                         ? "bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/25"
                                         : "bg-[#2B8CEE]/12 text-[#2B8CEE] border border-[#2B8CEE]/20"
                                     }`}>
-                                      BLOCK SYNC FINISHED
+                                      {t("blocks_finished_badge")}
                                     </span>
                                     {targetCode && (
                                       <span className="text-[9px] font-mono opacity-65">
@@ -27348,19 +27355,19 @@ export default function App() {
                             darkMode ? "bg-[#0F172A]/60" : "bg-white/70"
                           }`}>
                             <div>
-                              <span className="block opacity-65 uppercase font-bold text-[8px]">MODE</span>
+                              <span className="block opacity-65 uppercase font-bold text-[8px]">{t("blocks_mode_label")}</span>
                               <span className={`font-black ${darkMode ? "text-[#38BDF8]" : "text-[#2B8CEE]"}`}>
                                 {blocksModeLabel}
                               </span>
                             </div>
                             <div>
                               <span className="block opacity-65 uppercase font-bold text-[8px]">
-                                {challenge.blocksMode === "rush" ? "TIME LIMIT" : "UNDO"}
+                                {challenge.blocksMode === "rush" ? t("blocks_time_limit_label") : t("blocks_undo_label")}
                               </span>
                               <span className="font-black">
                                 {challenge.blocksMode === "rush"
-                                  ? `${blocksTimeMinutes}m`
-                                  : (blocksUndoAllowed ? "Allowed" : "Off")}
+                                  ? t("blocks_min_short", { min: blocksTimeMinutes })
+                                  : (blocksUndoAllowed ? t("blocks_undo_allowed") : t("blocks_undo_none"))}
                               </span>
                             </div>
                           </div>
@@ -27496,7 +27503,9 @@ export default function App() {
         {activeInviteNotification && (() => {
           const isBlocksToast = activeInviteNotification.gameType === "blocks";
           const blocksToastModeLabel =
-            activeInviteNotification.blocksMode === "rush" ? "TIME RUSH" : "CLASSIC";
+            activeInviteNotification.blocksMode === "rush"
+              ? t("blocks_mode_rush")
+              : t("blocks_mode_classic");
           return (
           <div className="fixed inset-x-4 top-[24px] z-[70000] flex justify-center pointer-events-auto">
             <motion.div
@@ -27552,7 +27561,7 @@ export default function App() {
                         {isBlocksToast ? (
                           <>
                             <span className={`text-[10px] uppercase font-bold tracking-wider ${darkMode ? "text-[#38BDF8]" : "text-[#2B8CEE]"}`}>
-                              BLOCK SYNC FINISHED
+                              {t("blocks_finished_badge")}
                             </span>
                             <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ${darkMode ? "bg-[#38BDF8]/15 text-[#38BDF8]" : "bg-[#2B8CEE]/15 text-[#2B8CEE]"}`}>
                               {inviteCountdown}s
@@ -27571,7 +27580,7 @@ export default function App() {
                       </div>
                       <span className="font-sans text-xs sm:text-sm font-semibold mt-0.5 leading-snug break-words">
                         {isBlocksToast
-                          ? `${activeInviteNotification.fromName || 'Opponent'} finished the match!`
+                          ? t("blocks_player_finished_one", { name: activeInviteNotification.fromName || "Opponent" })
                           : t("playerFinishedRace", { name: activeInviteNotification.fromName || 'Opponent' })}
                       </span>
                     </div>
