@@ -3,16 +3,17 @@ import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
 import {
   Clock,
+  Crown,
   Hand,
   HelpCircle,
   Sparkles,
-  Star,
   Undo2,
   Users,
   Volume2,
   VolumeX,
   X,
 } from "lucide-react";
+import { BlockSyncConfettiRain } from "./BlockSyncConfettiRain";
 import { isHapticsEnabled, setGlobalHapticsEnabled } from "../../utils/haptics";
 import { Language } from "../../i18n/translations";
 import { useTranslation } from "../../i18n/useTranslation";
@@ -1937,6 +1938,10 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     id: number;
     exiting: boolean;
   } | null>(null);
+  const [milestoneRain, setMilestoneRain] = useState<{
+    active: boolean;
+    burstKey: number;
+  }>({ active: false, burstKey: 0 });
   const [bestCardGoldPulse, setBestCardGoldPulse] = useState<boolean>(false);
   const [gameOverSummary, setGameOverSummary] = useState<GameOverSummary | null>(null);
   const [dragState, setDragState] = useState<ActiveDragState | null>(null);
@@ -1993,13 +1998,18 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
   const clarityBeatTimerRef = useRef<number | null>(null);
   const midGameBannerTimerRef = useRef<number | null>(null);
   const midGameBannerExitTimerRef = useRef<number | null>(null);
+  const milestoneRainTimerRef = useRef<number | null>(null);
   const bestPulseTimerRef = useRef<number | null>(null);
   const clearBatchSeqRef = useRef<number>(0);
   const feedbackSeqRef = useRef<number>(0);
   const midGameSeqRef = useRef<number>(0);
   const clearStreakRef = useRef<number>(restoredSession?.clearStreak ?? 0);
   const hasCrossedBestThisRunRef = useRef<boolean>(
-    Boolean(restoredSession && restoredSession.score > loadBlocksVault(uid).bestScore)
+    Boolean(
+      initialSessionBest > 0 &&
+        ((restoredSession && restoredSession.score > initialSessionBest) ||
+          (restoredPendingRoom && restoredPendingRoom.score > initialSessionBest))
+    )
   );
   const matchRecordedForCurrentRunRef = useRef<boolean>(false);
   const lastTrayShapeIdsRef = useRef<BlockShapeId[]>(
@@ -2168,10 +2178,15 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       window.clearTimeout(midGameBannerExitTimerRef.current);
       midGameBannerExitTimerRef.current = null;
     }
+    if (milestoneRainTimerRef.current !== null) {
+      window.clearTimeout(milestoneRainTimerRef.current);
+      milestoneRainTimerRef.current = null;
+    }
     if (bestPulseTimerRef.current !== null) {
       window.clearTimeout(bestPulseTimerRef.current);
       bestPulseTimerRef.current = null;
     }
+    setMilestoneRain((prev) => (prev.active ? { ...prev, active: false } : prev));
   }, []);
 
   // Reload isolated vault whenever identity changes (Guest <-> Authenticated UID)
@@ -2196,12 +2211,17 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     if (midGameBannerExitTimerRef.current !== null) {
       window.clearTimeout(midGameBannerExitTimerRef.current);
     }
+    if (milestoneRainTimerRef.current !== null) {
+      window.clearTimeout(milestoneRainTimerRef.current);
+    }
     if (bestPulseTimerRef.current !== null) {
       window.clearTimeout(bestPulseTimerRef.current);
     }
 
     midGameSeqRef.current += 1;
-    setMidGameBestBanner({ id: midGameSeqRef.current, exiting: false });
+    const burstId = midGameSeqRef.current;
+    setMidGameBestBanner({ id: burstId, exiting: false });
+    setMilestoneRain({ active: true, burstKey: burstId });
     setBestCardGoldPulse(true);
     playMidGameBestShimmerSound(soundOnRef.current);
     triggerBlockSyncHaptic("success");
@@ -2209,7 +2229,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     bestPulseTimerRef.current = window.setTimeout(() => {
       setBestCardGoldPulse(false);
       bestPulseTimerRef.current = null;
-    }, 260);
+    }, 520);
 
     midGameBannerTimerRef.current = window.setTimeout(() => {
       midGameBannerTimerRef.current = null;
@@ -2217,8 +2237,15 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       midGameBannerExitTimerRef.current = window.setTimeout(() => {
         midGameBannerExitTimerRef.current = null;
         setMidGameBestBanner(null);
-      }, 190);
-    }, 1650);
+      }, 200);
+    }, 2000);
+
+    milestoneRainTimerRef.current = window.setTimeout(() => {
+      milestoneRainTimerRef.current = null;
+      setMilestoneRain((prev) =>
+        prev.burstKey === burstId && prev.active ? { ...prev, active: false } : prev
+      );
+    }, 3400);
   }, []);
 
   const tileClasses = darkMode
@@ -2757,7 +2784,15 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       lastTrayShapeIdsRef.current = nextTray
         .filter((p): p is PolyominoPiece => p !== null)
         .map((p) => p.shapeId);
+      const freshVaultBest = loadBlocksVault(uidRef.current).bestScore;
+      setBestScore(freshVaultBest);
+      setInitialSessionBest(freshVaultBest);
+      initialSessionBestRef.current = freshVaultBest;
       scoreRef.current = validSolo?.score ?? 0;
+      hasCrossedBestThisRunRef.current = Boolean(
+        freshVaultBest > 0 && validSolo && validSolo.score > freshVaultBest
+      );
+      matchRecordedForCurrentRunRef.current = false;
       clearStreakRef.current = validSolo?.clearStreak ?? 0;
       historyStackRef.current = validSolo
         ? validSolo.historyStack.map((snap) => ({
@@ -2833,7 +2868,14 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       lastTrayShapeIdsRef.current = restoredTray
         .filter((p): p is PolyominoPiece => p !== null)
         .map((p) => p.shapeId);
+      const freshVaultBest = loadBlocksVault(uidRef.current).bestScore;
+      setBestScore(freshVaultBest);
+      setInitialSessionBest(freshVaultBest);
+      initialSessionBestRef.current = freshVaultBest;
       scoreRef.current = pending.score;
+      hasCrossedBestThisRunRef.current = Boolean(
+        freshVaultBest > 0 && pending.score > freshVaultBest
+      );
       clearStreakRef.current = 0;
       historyStackRef.current = [];
       isGameOverRef.current = false;
@@ -3604,57 +3646,23 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           0% { transform: translateY(0) scale(1); opacity: 1; }
           100% { transform: translateY(-10px) scale(0.96); opacity: 0; }
         }
-        @keyframes bsMidSparkleFall {
-          0% { transform: translate3d(var(--bs-sx0), 0px, 0) scale(0.5); opacity: 0; }
-          20% { opacity: 1; }
-          100% { transform: translate3d(var(--bs-sx1), var(--bs-sy1), 0) rotate(120deg) scale(0.85); opacity: 0; }
-        }
       `}</style>
 
-      {/* Non-Blocking Mid-Game Best Cross Floating Banner + Falling Juicy Sparkles */}
+      {/* 25% Full-Screen 3D Crystal-Pastel Milestone Rain on Mid-Game Best Crossing */}
+      <BlockSyncConfettiRain
+        active={milestoneRain.active}
+        burstKey={milestoneRain.burstKey}
+        isDarkMode={darkMode}
+        intensity="milestone"
+      />
+
+      {/* Non-Blocking Mid-Game Best Cross Designer Crown Pill Banner */}
       {midGameBestBanner && (
         <div
           key={`midgame-best-${midGameBestBanner.id}`}
           aria-live="polite"
-          className="pointer-events-none fixed top-[calc(76px+env(safe-area-inset-top,0px))] left-1/2 -translate-x-1/2 z-40 flex items-center justify-center"
+          className="pointer-events-none fixed top-[calc(76px+env(safe-area-inset-top,0px))] left-1/2 -translate-x-1/2 z-[10060] flex items-center justify-center"
         >
-          {!reducedMotion &&
-            [
-              { x0: -68, x1: -86, y1: 56, delay: 0, color: "#F9CF43" },
-              { x0: -52, x1: -64, y1: 72, delay: 45, color: "#3AD994" },
-              { x0: -38, x1: -44, y1: 62, delay: 90, color: "#47BBF5" },
-              { x0: -22, x1: -28, y1: 78, delay: 25, color: "#F04D70" },
-              { x0: -8, x1: -12, y1: 66, delay: 70, color: "#26D2E6" },
-              { x0: 6, x1: 10, y1: 74, delay: 30, color: "#935DF0" },
-              { x0: 20, x1: 26, y1: 60, delay: 80, color: "#F9CF43" },
-              { x0: 36, x1: 42, y1: 78, delay: 15, color: "#3AD994" },
-              { x0: 50, x1: 62, y1: 64, delay: 60, color: "#47BBF5" },
-              { x0: 66, x1: 84, y1: 58, delay: 95, color: "#F04D70" },
-              { x0: -44, x1: -56, y1: 48, delay: 120, color: "#26D2E6" },
-              { x0: 44, x1: 56, y1: 52, delay: 110, color: "#F9CF43" },
-              { x0: -14, x1: -20, y1: 54, delay: 140, color: "#3AD994" },
-              { x0: 14, x1: 18, y1: 58, delay: 130, color: "#935DF0" },
-            ].map((sp, spIdx) => (
-              <span
-                key={`midgame-sparkle-${spIdx}`}
-                aria-hidden="true"
-                style={
-                  {
-                    width: spIdx % 2 === 0 ? "6px" : "5px",
-                    height: spIdx % 2 === 0 ? "6px" : "5px",
-                    backgroundColor: sp.color,
-                    borderRadius: spIdx % 3 === 0 ? "9999px" : "2px",
-                    "--bs-sx0": `${sp.x0}px`,
-                    "--bs-sx1": `${sp.x1}px`,
-                    "--bs-sy1": `${sp.y1}px`,
-                    animation: `bsMidSparkleFall 900ms cubic-bezier(0.22, 1, 0.36, 1) ${sp.delay}ms forwards`,
-                    willChange: "transform, opacity",
-                  } as React.CSSProperties
-                }
-                className="block absolute top-1/2 opacity-0"
-              />
-            ))}
-
           <div
             id="block-sync-midgame-best-banner"
             style={
@@ -3662,17 +3670,20 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 ? undefined
                 : {
                   animation: midGameBestBanner.exiting
-                    ? "bsMidBestExit 180ms ease-in forwards"
+                    ? "bsMidBestExit 200ms ease-in forwards"
                     : "bsMidBestEnter 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
                   willChange: "transform, opacity",
                 }
             }
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border-none text-xs font-extrabold uppercase tracking-[0.08em] whitespace-nowrap ${darkMode
-              ? "bg-[#1B242E] text-[#F9CF43] ring-1 ring-[#F9CF43]/40 shadow-[0_12px_28px_rgba(0,0,0,0.48)]"
-              : "bg-amber-100/95 text-[#7A5208] shadow-[0_12px_26px_rgba(245,158,11,0.22)]"
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-black uppercase tracking-[0.14em] whitespace-nowrap ${darkMode
+              ? "bg-[#16202B]/95 text-[#F8FAFC] border border-[#FBBF24]/45 shadow-[0_10px_30px_rgba(251,191,36,0.22)]"
+              : "bg-white/95 text-[#1E293B] border border-[#F59E0B]/45 shadow-[0_10px_28px_rgba(245,158,11,0.22)]"
               }`}
           >
-            <Star className="w-3.5 h-3.5 fill-current shrink-0" aria-hidden="true" />
+            <Crown
+              className={`w-4 h-4 shrink-0 ${darkMode ? "text-[#FBBF24]" : "text-[#D97706]"}`}
+              aria-hidden="true"
+            />
             <span>{t("blocks_new_best_banner")}</span>
           </div>
         </div>

@@ -4,7 +4,7 @@ export interface BlockSyncConfettiRainProps {
   active: boolean;
   burstKey: number;
   isDarkMode: boolean;
-  intensity?: "full" | "podium";
+  intensity?: "full" | "podium" | "milestone";
 }
 
 interface PaletteColor {
@@ -75,8 +75,9 @@ export const BlockSyncConfettiRain: React.FC<BlockSyncConfettiRainProps> = ({
     if (!ctx) return;
 
     const paletteSet = isDarkMode ? DARK_CRYSTAL_PALETTE : LIGHT_CRYSTAL_PALETTE;
-    const totalTarget = intensity === "podium" ? 110 : 220;
-    const emitWindowMs = intensity === "podium" ? 1800 : 2800;
+    const isMilestone = intensity === "milestone";
+    const totalTarget = isMilestone ? 58 : intensity === "podium" ? 110 : 220;
+    const emitWindowMs = isMilestone ? 1100 : intensity === "podium" ? 1800 : 2800;
 
     let viewportW = Math.max(320, window.innerWidth || 390);
     let viewportH = Math.max(480, window.innerHeight || 844);
@@ -134,7 +135,9 @@ export const BlockSyncConfettiRain: React.FC<BlockSyncConfettiRainProps> = ({
     };
 
     // Seed gentle initial leading curtain across the upper band immediately
-    const initialSeed = Math.min(18, Math.round(totalTarget * 0.08));
+    const initialSeed = isMilestone
+      ? Math.min(8, Math.round(totalTarget * 0.14))
+      : Math.min(18, Math.round(totalTarget * 0.08));
     for (let i = 0; i < initialSeed; i += 1) {
       flakes.push(spawnFlake());
       spawnedCount += 1;
@@ -153,9 +156,17 @@ export const BlockSyncConfettiRain: React.FC<BlockSyncConfettiRainProps> = ({
       }
 
       const elapsedMs = now - startAt;
+      if (isMilestone && elapsedMs >= 3200) {
+        ctx.clearRect(0, 0, viewportW, viewportH);
+        return;
+      }
       const rawDtMs = lastAt !== null ? now - lastAt : 16.67;
       lastAt = now;
       const dt = Math.min(33, Math.max(0, rawDtMs)) / 1000;
+      const milestoneAlphaFade =
+        isMilestone && elapsedMs > 2400
+          ? Math.max(0, 1 - (elapsedMs - 2400) / 800)
+          : 1;
 
       // Stream remaining particles continuously across the emitter window
       if (spawnedCount < totalTarget && elapsedMs <= emitWindowMs) {
@@ -207,7 +218,7 @@ export const BlockSyncConfettiRain: React.FC<BlockSyncConfettiRainProps> = ({
         ctx.rotate(f.rotZ);
         ctx.scale(perspectiveScale, perspectiveScale * Math.max(0.14, absFlip));
 
-        ctx.globalAlpha = f.baseAlpha * edgeFade;
+        ctx.globalAlpha = f.baseAlpha * edgeFade * milestoneAlphaFade;
         ctx.fillStyle = cosFlip >= 0 ? f.palette.front : f.palette.back;
 
         const w = f.baseWidth;
@@ -221,7 +232,8 @@ export const BlockSyncConfettiRain: React.FC<BlockSyncConfettiRainProps> = ({
 
         // Crisp subtle crystal edge-glint when turning edge-on
         if (absFlip < 0.22) {
-          ctx.globalAlpha = (isDarkMode ? 0.85 : 0.72) * edgeFade;
+          ctx.globalAlpha =
+            (isDarkMode ? 0.85 : 0.72) * edgeFade * milestoneAlphaFade;
           ctx.fillStyle = "#FFFFFF";
           ctx.fillRect(-w * 0.5, -Math.max(1, h * 0.16), w, Math.max(1.5, h * 0.32));
         }
