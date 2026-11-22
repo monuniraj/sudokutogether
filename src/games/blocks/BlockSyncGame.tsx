@@ -21,6 +21,7 @@ import {
   BlocksMatchStandingEntry,
   BlocksSavedSession,
   clearBlocksSavedSession,
+  getBlocksMatchHistory,
   getSettings,
   loadBlocksSavedSession,
   loadBlocksVault,
@@ -43,6 +44,7 @@ import {
   clearPendingBlocksRoomSession,
   EARLY_BLOCK_SHAPE_IDS,
   generateSeededBlockTray,
+  getMostRecentPendingBlocksRoom,
   getPendingBlocksRoomSession,
   savePendingBlocksRoomSession,
   type BlockShapeId,
@@ -65,7 +67,7 @@ export type {
   PolyominoPiece,
 };
 
-const TUTORIAL_SEEN_KEY = "block_sync_tutorial_seen";
+const TUTORIAL_SEEN_KEY = "blocks_hasSeenHowToPlay";
 
 export interface BlockSyncGameProps {
   darkMode: boolean;
@@ -74,6 +76,8 @@ export interface BlockSyncGameProps {
   vibrations?: boolean;
   language?: Language;
   isSettingsOpen?: boolean;
+  hasPendingMultiplayerRoom?: boolean;
+  suppressAutoHowToPlay?: boolean;
   onCloseSettings?: () => void;
   onToggleSoundEffects?: (enabled: boolean) => void;
   onToggleVibrations?: (enabled: boolean) => void;
@@ -1812,6 +1816,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
   vibrations,
   language,
   isSettingsOpen = false,
+  hasPendingMultiplayerRoom = false,
+  suppressAutoHowToPlay = false,
   onCloseSettings,
   onToggleSoundEffects,
   onToggleVibrations,
@@ -1976,18 +1982,115 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
   const vibrationsOn = vibrations !== undefined ? vibrations : localVibrationsOn;
   const [showTutorial, setShowTutorial] = useState<boolean>(false);
   const [tutorialStage, setTutorialStage] = useState<0 | 1 | 2 | 3>(0);
+  const [isFirstTimeTutorialPending, setIsFirstTimeTutorialPending] = useState<boolean>(() => {
+    try {
+      return (
+        typeof window !== "undefined" &&
+        localStorage.getItem(TUTORIAL_SEEN_KEY) !== "1" &&
+        loadBlocksVault(uid).gamesPlayed === 0 &&
+        getBlocksMatchHistory(uid).length === 0
+      );
+    } catch {
+      return false;
+    }
+  });
+  const [isFirstTimeTutorialActive, setIsFirstTimeTutorialActive] = useState<boolean>(false);
+  const [tutorialExitState, setTutorialExitState] = useState<{
+    active: boolean;
+    dx: number;
+    dy: number;
+  } | null>(null);
+  const [helpButtonPulse, setHelpButtonPulse] = useState<boolean>(false);
+  const [pendingRoomRevision, setPendingRoomRevision] = useState<number>(0);
   const [canUndo, setCanUndo] = useState<boolean>(() =>
     Boolean(restoredSession && restoredSession.historyStack.length > 0)
   );
 
-  // First-visit tutorial check (`block_sync_tutorial_seen`)
+  const suppressAutoHowToPlayRef = useRef<boolean>(suppressAutoHowToPlay);
+  suppressAutoHowToPlayRef.current = suppressAutoHowToPlay;
+  const helpButtonRef = useRef<HTMLButtonElement | null>(null);
+  const howToPlayCardRef = useRef<HTMLDivElement | null>(null);
+  const tutorialClosingRef = useRef<boolean>(false);
+  const tutorialAutoTimerRef = useRef<number | null>(null);
+  const tutorialExitTimerRef = useRef<number | null>(null);
+  const helpPulseTimerRef = useRef<number | null>(null);
+  const rushPausedRemainingMsRef = useRef<number | null>(null);
+
+  // First-time-only How-to-Play auto-open after a brief 350ms settle delay (Solo + Room Links/Codes)
   useEffect(() => {
+    if (tutorialAutoTimerRef.current !== null) {
+      window.clearTimeout(tutorialAutoTimerRef.current);
+      tutorialAutoTimerRef.current = null;
+    }
+
+    let alreadySeen = false;
     try {
-      if (localStorage.getItem(TUTORIAL_SEEN_KEY) !== "1") {
-        localStorage.setItem(TUTORIAL_SEEN_KEY, "1");
-        setShowTutorial(true);
+      alreadySeen = localStorage.getItem(TUTORIAL_SEEN_KEY) === "1";
+    } catch {
+      alreadySeen = true;
+    }
+    const hasCompletedMatches =
+      loadBlocksVault(uid).gamesPlayed > 0 || getBlocksMatchHistory(uid).length > 0;
+
+    if (alreadySeen || hasCompletedMatches || isGameOver) {
+      setIsFirstTimeTutorialPending(false);
+      return;
+    }
+
+    if (suppressAutoHowToPlay || isSettingsOpen || showTutorial) {
+      setIsFirstTimeTutorialPending(false);
+      return;
+    }
+
+    setIsFirstTimeTutorialPending(true);
+    tutorialAutoTimerRef.current = window.setTimeout(() => {
+      tutorialAutoTimerRef.current = null;
+      setIsFirstTimeTutorialPending(false);
+      try {
+        if (localStorage.getItem(TUTORIAL_SEEN_KEY) === "1") return;
+      } catch {
+        return;
       }
-    } catch { }
+      if (
+        suppressAutoHowToPlayRef.current ||
+        isSettingsOpenRef.current ||
+        isGameOverRef.current ||
+        showTutorialRef.current
+      ) {
+        return;
+      }
+      if (
+        loadBlocksVault(uidRef.current).gamesPlayed > 0 ||
+        getBlocksMatchHistory(uidRef.current).length > 0
+      ) {
+        return;
+      }
+      tutorialClosingRef.current = false;
+      setTutorialExitState(null);
+      setIsFirstTimeTutorialActive(true);
+      setShowTutorial(true);
+    }, 350);
+
+    return () => {
+      if (tutorialAutoTimerRef.current !== null) {
+        window.clearTimeout(tutorialAutoTimerRef.current);
+        tutorialAutoTimerRef.current = null;
+      }
+    };
+  }, [suppressAutoHowToPlay, isSettingsOpen, isGameOver, uid, multiplayerRoom?.roomCode, showTutorial]);
+
+  useEffect(() => {
+    return () => {
+      if (tutorialAutoTimerRef.current !== null) {
+        window.clearTimeout(tutorialAutoTimerRef.current);
+      }
+      if (tutorialExitTimerRef.current !== null) {
+        window.clearTimeout(tutorialExitTimerRef.current);
+      }
+      if (helpPulseTimerRef.current !== null) {
+        window.clearTimeout(helpPulseTimerRef.current);
+      }
+    };
   }, []);
 
   // Continuous 4-stage How-to-Play demo loop (Row -> Column -> 3x3 Box -> Combo x2)
@@ -2024,6 +2127,12 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     )
   );
   const matchRecordedForCurrentRunRef = useRef<boolean>(false);
+  const hasPlacedPieceInRunRef = useRef<boolean>(
+    Boolean(
+      (restoredSession && restoredSession.score > 0) ||
+        (restoredPendingRoom && restoredPendingRoom.score > 0)
+    )
+  );
   const lastTrayShapeIdsRef = useRef<BlockShapeId[]>(
     restoredSession && restoredSession.lastTrayShapeIds.length > 0
       ? (restoredSession.lastTrayShapeIds as BlockShapeId[])
@@ -2156,22 +2265,82 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     }
   }, [isSettingsOpen]);
 
+  const closeHowToPlayModal = useCallback(() => {
+    try {
+      localStorage.setItem(TUTORIAL_SEEN_KEY, "1");
+    } catch { }
+    setIsFirstTimeTutorialPending(false);
+    if (!showTutorialRef.current || tutorialClosingRef.current) return;
+
+    if (reducedMotion || typeof window === "undefined") {
+      setTutorialExitState(null);
+      setIsFirstTimeTutorialActive(false);
+      setShowTutorial(false);
+      return;
+    }
+
+    tutorialClosingRef.current = true;
+    const cardEl = howToPlayCardRef.current;
+    const helpEl = helpButtonRef.current;
+    let dx = 0;
+    let dy = -140;
+    if (cardEl && helpEl) {
+      const cardRect = cardEl.getBoundingClientRect();
+      const helpRect = helpEl.getBoundingClientRect();
+      if (cardRect.width > 0 && helpRect.width > 0) {
+        dx = helpRect.left + helpRect.width / 2 - (cardRect.left + cardRect.width / 2);
+        dy = helpRect.top + helpRect.height / 2 - (cardRect.top + cardRect.height / 2);
+      }
+    }
+
+    setTutorialExitState({ active: false, dx, dy });
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        setTutorialExitState({ active: true, dx, dy });
+      });
+    });
+
+    if (tutorialExitTimerRef.current !== null) {
+      window.clearTimeout(tutorialExitTimerRef.current);
+    }
+    tutorialExitTimerRef.current = window.setTimeout(() => {
+      tutorialExitTimerRef.current = null;
+      tutorialClosingRef.current = false;
+      setTutorialExitState(null);
+      setIsFirstTimeTutorialActive(false);
+      setShowTutorial(false);
+
+      setHelpButtonPulse(true);
+      if (helpPulseTimerRef.current !== null) {
+        window.clearTimeout(helpPulseTimerRef.current);
+      }
+      helpPulseTimerRef.current = window.setTimeout(() => {
+        helpPulseTimerRef.current = null;
+        setHelpButtonPulse(false);
+      }, 320);
+    }, 260);
+  }, [reducedMotion]);
+
   const openHowToPlayModal = useCallback(() => {
     if (isSettingsOpenRef.current) {
       onCloseSettings?.();
     }
+    if (tutorialExitTimerRef.current !== null) {
+      window.clearTimeout(tutorialExitTimerRef.current);
+      tutorialExitTimerRef.current = null;
+    }
+    tutorialClosingRef.current = false;
+    setTutorialExitState(null);
     setShowTutorial(true);
   }, [onCloseSettings]);
 
   const toggleHowToPlayModal = useCallback(() => {
-    setShowTutorial((prev) => {
-      const next = !prev;
-      if (next && isSettingsOpenRef.current) {
-        onCloseSettings?.();
-      }
-      return next;
-    });
-  }, [onCloseSettings]);
+    if (showTutorialRef.current) {
+      closeHowToPlayModal();
+    } else {
+      openHowToPlayModal();
+    }
+  }, [closeHowToPlayModal, openHowToPlayModal]);
 
   const isRunInProgress =
     score > 0 ||
@@ -2211,6 +2380,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     initialSessionBestRef.current = vaultBest;
     hasCrossedBestThisRunRef.current = false;
     matchRecordedForCurrentRunRef.current = false;
+    hasPlacedPieceInRunRef.current = false;
+    setPendingRoomRevision((v) => v + 1);
     setIsBoardLockedBeat(false);
     setMidGameBestBanner(null);
     setBestCardGoldPulse(false);
@@ -2259,6 +2430,11 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       );
     }, 3400);
   }, []);
+
+  const hasPendingRoomIndicator = useMemo(() => {
+    if (multiplayerRoom) return false;
+    return Boolean(getMostRecentPendingBlocksRoom(uid) || hasPendingMultiplayerRoom);
+  }, [multiplayerRoom, uid, pendingRoomRevision, isGameOver, hasPendingMultiplayerRoom]);
 
   const tileClasses = darkMode
     ? PASTEL_TILE_CLASSES_DARK
@@ -2332,6 +2508,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
 
     const activeRoom = multiplayerRoomRef.current;
     if (activeRoom) {
+      if (!hasPlacedPieceInRunRef.current && scoreRef.current === 0) return;
       // Save per-room pending state in isolated room vault; NEVER touch Solo savedSession
       const boardSnapshot = stableBoardRef.current.map((row) =>
         row.map((cell) => (cell ? cell.color : null))
@@ -2422,6 +2599,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       } else {
         clearBlocksSavedSession(uidRef.current);
       }
+      setPendingRoomRevision((v) => v + 1);
       setIsBoardLockedBeat(false);
       isBoardLockedBeatRef.current = false;
       const vaultOutcome = updateBlocksBestScore(finalScore, uidRef.current);
@@ -2568,6 +2746,12 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     []
   );
 
+  const isRushFirstTimeTutorialPaused = Boolean(
+    multiplayerRoom?.mode === "rush" &&
+      !isGameOver &&
+      (isFirstTimeTutorialPending || (showTutorial && isFirstTimeTutorialActive))
+  );
+
   // Wall-clock Time Rush countdown (`mode === "rush"`) + behavioral tension psychology
   useEffect(() => {
     if (!multiplayerRoom || multiplayerRoom.mode !== "rush" || isGameOver) {
@@ -2576,11 +2760,31 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         setRushMinutePulse(false);
         lastRushWholeSecRef.current = null;
         lastRushMinuteMarkTriggeredRef.current = null;
+        rushPausedRemainingMsRef.current = null;
       }
       return;
     }
 
-    if (rushEndAtRef.current === null) {
+    // Defer / pause Time Rush clock while brand-new players view initial How-to-Play demo
+    if (isRushFirstTimeTutorialPaused) {
+      const pausedMs =
+        rushPausedRemainingMsRef.current !== null
+          ? rushPausedRemainingMsRef.current
+          : rushEndAtRef.current !== null
+            ? Math.max(0, rushEndAtRef.current - Date.now())
+            : multiplayerRoom.timeLimitSec * 1000;
+      rushPausedRemainingMsRef.current = pausedMs;
+      rushEndAtRef.current = null;
+      const heldSec = Math.ceil(pausedMs / 1000);
+      lastRushWholeSecRef.current = heldSec;
+      setRushRemainingSec((prev) => (prev === heldSec ? prev : heldSec));
+      return;
+    }
+
+    if (rushPausedRemainingMsRef.current !== null) {
+      rushEndAtRef.current = Date.now() + rushPausedRemainingMsRef.current;
+      rushPausedRemainingMsRef.current = null;
+    } else if (rushEndAtRef.current === null) {
       rushEndAtRef.current = Date.now() + multiplayerRoom.timeLimitSec * 1000;
     }
 
@@ -2675,6 +2879,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     multiplayerRoom?.mode,
     multiplayerRoom?.timeLimitSec,
     isGameOver,
+    isRushFirstTimeTutorialPaused,
     clearHoverPreview,
     clearReturnTimer,
     finalizeGameOver,
@@ -2697,6 +2902,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
     initialSessionBestRef.current = freshVaultBest;
     hasCrossedBestThisRunRef.current = false;
     matchRecordedForCurrentRunRef.current = false;
+    hasPlacedPieceInRunRef.current = false;
+    setPendingRoomRevision((v) => v + 1);
     roomTrayIndexRef.current = 0;
     linesClearedRef.current = 0;
     bestComboRef.current = 0;
@@ -2805,6 +3012,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         freshVaultBest > 0 && validSolo && validSolo.score > freshVaultBest
       );
       matchRecordedForCurrentRunRef.current = false;
+      hasPlacedPieceInRunRef.current = Boolean(validSolo && validSolo.score > 0);
+      setPendingRoomRevision((v) => v + 1);
       clearStreakRef.current = validSolo?.clearStreak ?? 0;
       historyStackRef.current = validSolo
         ? validSolo.historyStack.map((snap) => ({
@@ -2869,6 +3078,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       roomStartedAtRef.current = pending.startedAt;
       roomSubmittedForCurrentRunRef.current = false;
       matchRecordedForCurrentRunRef.current = false;
+      hasPlacedPieceInRunRef.current = pending.score > 0;
+      setPendingRoomRevision((v) => v + 1);
       rushEndAtRef.current =
         multiplayerRoom.mode === "rush"
           ? (pending.rushEndAt ?? Date.now() + multiplayerRoom.timeLimitSec * 1000)
@@ -3065,7 +3276,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       if (e.key === "?" || (e.shiftKey && e.key === "/") || keyLower === "h") {
         if (!isGameOverRef.current && !isBoardLockedBeatRef.current && !dragStateRef.current) {
           e.preventDefault();
-          setShowTutorial((prev) => !prev);
+          toggleHowToPlayModal();
         }
         return;
       }
@@ -3074,7 +3285,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       if (e.key === "Escape" || e.key === "Backspace") {
         if (showTutorialRef.current) {
           e.preventDefault();
-          setShowTutorial(false);
+          closeHowToPlayModal();
         }
         return;
       }
@@ -3270,6 +3481,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         const nextTotalScore = scoreRef.current + pointsDelta;
 
         scoreRef.current = nextTotalScore;
+        hasPlacedPieceInRunRef.current = true;
         setScore(nextTotalScore);
 
         if (
@@ -3658,6 +3870,19 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           0% { transform: translateY(0) scale(1); opacity: 1; }
           100% { transform: translateY(-14px) scale(0.96); opacity: 0; }
         }
+        @keyframes bsHelpButtonPulse {
+          0% { transform: scale(1); }
+          45% { transform: scale(1.18); }
+          100% { transform: scale(1); }
+        }
+        .bs-help-button-pulse {
+          animation: bsHelpButtonPulse 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .bs-help-button-pulse {
+            animation: none !important;
+          }
+        }
       `}</style>
 
       {/* 25% Full-Screen 3D Crystal-Pastel Milestone Rain on Mid-Game Best Crossing */}
@@ -3804,16 +4029,44 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 <button
                   key={btn.id}
                   id={btn.id}
+                  ref={btn.id === "block-sync-tutorial-button" ? helpButtonRef : undefined}
                   type="button"
                   aria-label={btn.label}
                   title={btn.label}
                   onClick={btn.onClick}
-                  className={`w-9 h-9 rounded-xl border-none flex items-center justify-center cursor-pointer transition-all duration-150 active:scale-90 ${darkMode
+                  className={`relative w-9 h-9 rounded-xl border-none flex items-center justify-center cursor-pointer transition-all duration-150 active:scale-90 ${
+                    btn.id === "block-sync-tutorial-button" && helpButtonPulse
+                      ? "bs-help-button-pulse"
+                      : ""
+                  } ${darkMode
                     ? "text-slate-200 hover:bg-[#24303D]"
                     : "text-[#49637A] hover:bg-[#D5E6F3]/80"
                     }`}
                 >
                   {btn.icon}
+                  {btn.id === "block-sync-multiplayer-button" &&
+                    hasPendingRoomIndicator && (
+                      <span
+                        id="block-sync-multiplayer-pending-dot"
+                        aria-hidden="true"
+                        className="pointer-events-none absolute top-1.5 right-1.5 flex h-2.5 w-2.5 items-center justify-center"
+                      >
+                        {!reducedMotion && (
+                          <span
+                            className={`absolute inset-0 rounded-full animate-ping ${
+                              darkMode ? "bg-[#FBBF24]/35" : "bg-[#F59E0B]/40"
+                            }`}
+                          />
+                        )}
+                        <span
+                          className={`relative h-2 w-2 rounded-full ring-2 ${
+                            darkMode
+                              ? "bg-[#FBBF24] ring-[#19222C]"
+                              : "bg-[#F59E0B] ring-[#E8F2FA]"
+                          }`}
+                        />
+                      </span>
+                    )}
                 </button>
               ))}
             </div>
@@ -4214,15 +4467,33 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           aria-labelledby="block-sync-tutorial-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setShowTutorial(false);
+              closeHowToPlayModal();
             }
           }}
-          className={`fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-sm ${darkMode ? "bg-black/60" : "bg-[#2C3E50]/25"
+          className={`fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity duration-[260ms] ease-[cubic-bezier(0.32,0.72,0,1)] ${
+            tutorialExitState?.active ? "opacity-0 pointer-events-none" : "opacity-100"
+          } ${darkMode ? "bg-black/60" : "bg-[#2C3E50]/25"
             }`}
         >
           <div
+            ref={howToPlayCardRef}
             onClick={(e) => e.stopPropagation()}
-            className={`relative block-sync-fade-in w-full max-w-[360px] max-h-[calc(100dvh-32px)] overflow-y-auto px-5 py-5 rounded-3xl border-none flex flex-col items-center gap-3 text-center ${darkMode
+            style={
+              tutorialExitState
+                ? {
+                    transform: tutorialExitState.active
+                      ? `translate3d(${tutorialExitState.dx}px, ${tutorialExitState.dy}px, 0) scale(0.12)`
+                      : "translate3d(0px, 0px, 0) scale(1)",
+                    opacity: tutorialExitState.active ? 0 : 1,
+                    transition:
+                      "transform 260ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms cubic-bezier(0.32, 0.72, 0, 1)",
+                    willChange: "transform, opacity",
+                  }
+                : undefined
+            }
+            className={`relative ${
+              tutorialExitState ? "" : "block-sync-fade-in"
+            } w-full max-w-[360px] max-h-[calc(100dvh-32px)] overflow-y-auto px-5 py-5 rounded-3xl border-none flex flex-col items-center gap-3 text-center ${darkMode
               ? "bg-[#1B242E] text-slate-100 shadow-[0_24px_60px_rgba(0,0,0,0.55)]"
               : "bg-[#F8FBFE] text-[#2C3E50] shadow-[0_24px_60px_rgba(44,62,80,0.14)]"
               }`}
@@ -4240,7 +4511,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 type="button"
                 aria-label={t("closeBtn")}
                 title={t("closeBtn")}
-                onClick={() => setShowTutorial(false)}
+                onClick={closeHowToPlayModal}
                 className={`w-8 h-8 rounded-full border-none shrink-0 flex items-center justify-center cursor-pointer transition-colors duration-150 active:scale-90 ${darkMode
                   ? "bg-[#141A21] hover:bg-[#24303D] text-slate-300"
                   : "bg-[#E6F1F8] hover:bg-[#D5E6F3] text-[#49637A]"
@@ -4548,7 +4819,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
             <button
               id="block-sync-tutorial-start-button"
               type="button"
-              onClick={() => setShowTutorial(false)}
+              onClick={closeHowToPlayModal}
               className={`w-full py-3.5 px-5 rounded-2xl border-none font-semibold text-sm transition-transform duration-150 active:scale-[0.98] hover:scale-[1.02] ${darkMode
                 ? "bg-[#6CA3CA] text-slate-950 shadow-[0_8px_22px_rgba(0,0,0,0.38)]"
                 : "bg-[#CFE4F4] text-[#223447] shadow-[0_8px_22px_rgba(140,178,209,0.28)]"

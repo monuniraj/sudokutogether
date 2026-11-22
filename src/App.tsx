@@ -3403,15 +3403,6 @@ export default function App() {
   blocksRoomTimeLimitSecRef.current = blocksRoomTimeLimitSec;
 
   const handleOpenBlockSyncEntry = () => {
-    const effectiveBlocksUid = isGuestSession ? null : (authUser?.uid ?? null);
-    const pendingRoom = getMostRecentPendingBlocksRoom(effectiveBlocksUid);
-    if (pendingRoom) {
-      setBlockSyncResumeChoiceState({
-        pendingRoom,
-        soloSavedScore: getBlocksSavedSoloScore(effectiveBlocksUid),
-      });
-      return;
-    }
     setActiveBlockSyncRoom(null);
     navigateToScreen("blocks");
   };
@@ -21087,40 +21078,142 @@ export default function App() {
                         triggerHapticTap(vibrations);
                         handleOpenBlockSyncEntry();
                       }}
-                      className={`w-48 h-28 sm:h-32 shrink-0 rounded-3xl border-none p-4 flex flex-col items-start justify-between text-left cursor-pointer select-none transition-all duration-200 active:scale-[0.98] ${
+                      className={`group relative overflow-hidden w-[224px] sm:w-[244px] h-28 sm:h-32 shrink-0 rounded-3xl border-none p-4 flex items-center justify-between text-left cursor-pointer select-none transition-all duration-200 active:scale-[0.98] ${
                         darkMode
                           ? "bg-[#1E2936] hover:bg-[#243242] shadow-[0_6px_20px_rgba(0,0,0,0.28)]"
                           : "bg-[#EAF4FB] hover:bg-[#DCEEF9] shadow-[0_6px_20px_rgba(30,41,59,0.05)]"
                       }`}
                     >
-                      {/* Minimal flat 3x3 pastel block grid vector icon */}
-                      <div
-                        className={`w-9 h-9 rounded-2xl flex items-center justify-center ${
-                          darkMode ? "bg-white/[0.06]" : "bg-white/75"
-                        }`}
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          aria-hidden="true"
-                          className="w-5 h-5"
-                          fill="none"
+                      {/* Left Column: Crisp Uncluttered Brand Icon + Title */}
+                      <div className="min-w-0 flex-1 pr-2 h-full flex flex-col items-start justify-between relative z-10">
+                        <div
+                          className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${
+                            darkMode ? "bg-white/[0.06]" : "bg-white/80"
+                          }`}
                         >
-                          <rect x="3" y="3" width="5" height="5" rx="1.5" fill={darkMode ? "#7EB3DC" : "#78ADD4"} />
-                          <rect x="9.5" y="3" width="5" height="5" rx="1.5" fill={darkMode ? "#93C5FD" : "#96C3E4"} />
-                          <rect x="16" y="3" width="5" height="5" rx="1.5" fill={darkMode ? "#5D8FB5" : "#649CC7"} />
-                          <rect x="3" y="9.5" width="5" height="5" rx="1.5" fill={darkMode ? "#93C5FD" : "#96C3E4"} />
-                          <rect x="9.5" y="9.5" width="5" height="5" rx="1.5" fill={darkMode ? "#7EB3DC" : "#78ADD4"} />
-                          <rect x="16" y="9.5" width="5" height="5" rx="1.5" fill={darkMode ? "#7EB3DC" : "#78ADD4"} />
-                          <rect x="3" y="16" width="5" height="5" rx="1.5" fill={darkMode ? "#5D8FB5" : "#649CC7"} />
-                          <rect x="9.5" y="16" width="5" height="5" rx="1.5" fill={darkMode ? "#93C5FD" : "#96C3E4"} />
-                        </svg>
+                          <svg
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                            className="w-5 h-5"
+                            fill="none"
+                          >
+                            <rect x="3" y="3" width="5" height="5" rx="1.5" fill={darkMode ? "#7EB3DC" : "#78ADD4"} />
+                            <rect x="9.5" y="3" width="5" height="5" rx="1.5" fill={darkMode ? "#93C5FD" : "#96C3E4"} />
+                            <rect x="16" y="3" width="5" height="5" rx="1.5" fill={darkMode ? "#5D8FB5" : "#649CC7"} />
+                            <rect x="3" y="9.5" width="5" height="5" rx="1.5" fill={darkMode ? "#93C5FD" : "#96C3E4"} />
+                            <rect x="9.5" y="9.5" width="5" height="5" rx="1.5" fill={darkMode ? "#7EB3DC" : "#78ADD4"} />
+                            <rect x="16" y="9.5" width="5" height="5" rx="1.5" fill={darkMode ? "#7EB3DC" : "#78ADD4"} />
+                            <rect x="3" y="16" width="5" height="5" rx="1.5" fill={darkMode ? "#5D8FB5" : "#649CC7"} />
+                            <rect x="9.5" y="16" width="5" height="5" rx="1.5" fill={darkMode ? "#93C5FD" : "#96C3E4"} />
+                          </svg>
+                        </div>
+
+                        <span className={`font-sans font-black text-xs sm:text-sm tracking-wider uppercase leading-none ${
+                          darkMode ? "text-[#E2EEF7]" : "text-[#2C3E50]"
+                        }`}>
+                          BLOCK SYNC
+                        </span>
                       </div>
 
-                      <span className={`font-sans font-black text-xs sm:text-sm tracking-wider uppercase leading-none ${
-                        darkMode ? "text-[#E2EEF7]" : "text-[#2C3E50]"
-                      }`}>
-                        BLOCK SYNC
-                      </span>
+                      {/* Right Visual Zone: Pure-CSS 3D Perspective-Tilted 6x6 Mini-Board Diorama */}
+                      <div
+                        aria-hidden="true"
+                        className="shrink-0 pointer-events-none relative w-[84px] sm:w-[94px] h-full flex items-center justify-center"
+                      >
+                        {/* Back Depth Layer: Subtle Secondary Tilted Plate */}
+                        <div
+                          style={{ transform: "rotate(-13deg) translate(-4px, 3px)" }}
+                          className={`absolute w-[66px] h-[66px] sm:w-[74px] sm:h-[74px] rounded-[13px] ${
+                            darkMode
+                              ? "bg-[#141D26] border border-[#38BDF8]/20 shadow-[0_8px_18px_rgba(0,0,0,0.45)]"
+                              : "bg-[#DCEAF6]/90 border border-[#C4DCEF]/85 shadow-[0_6px_14px_rgba(30,41,59,0.06)]"
+                          }`}
+                        />
+
+                        {/* Hero Front 6x6 Mini-Board with Authentic 3x3 Checkerboard Pockets */}
+                        <div
+                          style={{
+                            transform: "perspective(420px) rotateX(12deg) rotateY(-12deg) rotate(-6deg)",
+                          }}
+                          className={`relative w-[68px] h-[68px] sm:w-[76px] sm:h-[76px] p-[3.5px] rounded-[13px] transition-transform duration-300 group-hover:-translate-y-0.5 ${
+                            darkMode
+                              ? "bg-[#19222C] border border-slate-700/60 shadow-[0_10px_22px_rgba(0,0,0,0.56)]"
+                              : "bg-[#D1E4F3] border border-[#B7D2E8]/80 shadow-[0_8px_20px_rgba(44,62,80,0.14)]"
+                          }`}
+                        >
+                          <div className="w-full h-full grid grid-cols-6 grid-rows-6 gap-[2px]">
+                            {Array.from({ length: 36 }, (_, idx) => {
+                              const r = Math.floor(idx / 6);
+                              const c = idx % 6;
+                              const coord = `${r},${c}`;
+                              const isAltBox = (Math.floor(r / 3) + Math.floor(c / 3)) % 2 === 1;
+
+                              let tileFill: string | null = null;
+                              if (coord === "0,0" || coord === "0,1" || coord === "1,0") {
+                                tileFill = darkMode ? "bg-[#1FA1E8]" : "bg-sky-300";
+                              } else if (coord === "1,3" || coord === "1,4" || coord === "2,3") {
+                                tileFill = darkMode ? "bg-[#E8B417]" : "bg-yellow-300";
+                              } else if (
+                                coord === "3,0" ||
+                                coord === "3,1" ||
+                                coord === "3,2" ||
+                                coord === "3,3" ||
+                                coord === "3,4"
+                              ) {
+                                tileFill = darkMode ? "bg-[#20BD7A]" : "bg-emerald-400";
+                              } else if (coord === "4,1" || coord === "4,2" || coord === "5,2") {
+                                tileFill = darkMode ? "bg-[#E66A1C]" : "bg-orange-400";
+                              }
+
+                              const cellSurface = tileFill
+                                ? `${tileFill} shadow-[inset_0_1px_1px_rgba(255,255,255,0.22)]`
+                                : darkMode
+                                  ? isAltBox
+                                    ? "bg-[#283747]"
+                                    : "bg-[#0E141B]"
+                                  : isAltBox
+                                    ? "bg-[#BDD9EE]"
+                                    : "bg-white";
+
+                              return (
+                                <div
+                                  key={`diorama-cell-${coord}`}
+                                  className={`w-full h-full rounded-[24%] ${cellSurface}`}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Floating 3-Tile Polyomino L-Piece Hovering Lower-Right */}
+                        <div
+                          style={{ transform: "rotate(7deg)" }}
+                          className="absolute -bottom-0.5 -right-0.5 grid grid-cols-2 grid-rows-2 gap-[2px] drop-shadow-[0_8px_12px_rgba(15,23,42,0.3)] transition-transform duration-300 group-hover:-translate-y-0.5"
+                        >
+                          <div
+                            className={`w-[10px] h-[10px] sm:w-[11px] sm:h-[11px] rounded-[24%] ${
+                              darkMode
+                                ? "bg-[#1FA1E8] border border-[#147CB8]/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)]"
+                                : "bg-sky-300 border border-sky-400/75 shadow-[inset_0_1px_1px_rgba(255,255,255,0.65)]"
+                            }`}
+                          />
+                          <div aria-hidden="true" />
+                          <div
+                            className={`w-[10px] h-[10px] sm:w-[11px] sm:h-[11px] rounded-[24%] ${
+                              darkMode
+                                ? "bg-[#1FA1E8] border border-[#147CB8]/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)]"
+                                : "bg-sky-300 border border-sky-400/75 shadow-[inset_0_1px_1px_rgba(255,255,255,0.65)]"
+                            }`}
+                          />
+                          <div
+                            className={`w-[10px] h-[10px] sm:w-[11px] sm:h-[11px] rounded-[24%] ${
+                              darkMode
+                                ? "bg-[#1FA1E8] border border-[#147CB8]/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)]"
+                                : "bg-sky-300 border border-sky-400/75 shadow-[inset_0_1px_1px_rgba(255,255,255,0.65)]"
+                            }`}
+                          />
+                        </div>
+                      </div>
                     </button>
                   </div>
                 </section>
@@ -23394,6 +23487,22 @@ export default function App() {
             vibrations={vibrations}
             language={language}
             isSettingsOpen={showBlockSyncSettings}
+            hasPendingMultiplayerRoom={Boolean(
+              !activeBlockSyncRoom &&
+                getMostRecentPendingBlocksRoom(isGuestSession ? null : (authUser?.uid ?? null))
+            )}
+            suppressAutoHowToPlay={Boolean(
+              showBlockSyncSettings ||
+                blockSyncResumeChoiceState ||
+                showBlockSyncRoomInviteModal ||
+                blockSyncResultsModal ||
+                showUpdateRequiredModal ||
+                showMultiplayerForkModal ||
+                showCreateChallengeModal ||
+                showJoinRoomModal ||
+                showInviteModal ||
+                showBellInvitesModal
+            )}
             onCloseSettings={() => setShowBlockSyncSettings(false)}
             onToggleSoundEffects={handleToggleSoundEffects}
             onToggleVibrations={handleToggleVibrations}
@@ -24396,7 +24505,9 @@ export default function App() {
       />
 
       {/* Future-Proof App / Room Schema Update Required Modal */}
-      {showUpdateRequiredModal && (
+      {showUpdateRequiredModal && (() => {
+        const isBlocksUpdateTheme = currentScreen === "blocks";
+        return (
         <div
           className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 backdrop-blur-xs ${
             darkMode ? "bg-black/60" : "bg-slate-900/25"
@@ -24411,18 +24522,27 @@ export default function App() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="update-required-modal-title"
+            data-block-sync-dialog={isBlocksUpdateTheme ? "true" : undefined}
             onClick={(e) => e.stopPropagation()}
-            className={`w-full max-w-[360px] rounded-3xl p-6 flex flex-col items-center text-center gap-4 border-none select-none z-[10001] ${
-              darkMode
-                ? "bg-[#141A21] text-slate-100 shadow-[0_18px_46px_rgba(0,0,0,0.58)]"
-                : "bg-[#F4F8FB] text-[#1E293B] shadow-[0_14px_40px_rgba(15,23,42,0.12)]"
+            className={`w-full max-w-[360px] rounded-3xl p-6 flex flex-col items-center text-center gap-4 select-none z-[10001] ${
+              isBlocksUpdateTheme
+                ? darkMode
+                  ? "bg-[#16202B] text-slate-100 border border-slate-700/60 shadow-[0_18px_46px_rgba(0,0,0,0.58)]"
+                  : "bg-[#F4F8FB] text-[#1E293B] border border-[#C4DCEF] shadow-[0_14px_40px_rgba(15,23,42,0.12)]"
+                : darkMode
+                  ? "bg-[#1A1A1A] text-stone-200 border-none shadow-[0_10px_40px_rgba(0,0,0,0.6)]"
+                  : "bg-[#FDFBF7] text-stone-850 border-none shadow-[0_4px_20px_rgba(0,0,0,0.08)]"
             }`}
           >
             <div
               className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                darkMode
-                  ? "bg-[#38BDF8]/18 text-[#38BDF8]"
-                  : "bg-[#2B8CEE]/12 text-[#2B8CEE]"
+                isBlocksUpdateTheme
+                  ? darkMode
+                    ? "bg-[#38BDF8]/15 text-[#38BDF8]"
+                    : "bg-[#2B8CEE]/12 text-[#2B8CEE]"
+                  : darkMode
+                    ? "bg-indigo-950/60 text-indigo-300"
+                    : "bg-indigo-100/80 text-indigo-600"
               }`}
             >
               <Rocket className="w-6 h-6 stroke-[2.2]" aria-hidden="true" />
@@ -24437,7 +24557,13 @@ export default function App() {
               </h3>
               <p
                 className={`text-xs sm:text-[13px] leading-relaxed ${
-                  darkMode ? "text-slate-300" : "text-slate-600"
+                  isBlocksUpdateTheme
+                    ? darkMode
+                      ? "text-slate-300"
+                      : "text-slate-600"
+                    : darkMode
+                      ? "text-stone-400"
+                      : "text-stone-600"
                 }`}
               >
                 This multiplayer room uses a newer MoLogic game or feature. Please update the app to join.
@@ -24459,9 +24585,13 @@ export default function App() {
                   }
                 }}
                 className={`w-full min-h-[46px] px-4 rounded-2xl border-none cursor-pointer font-sans font-bold text-sm transition-all active:scale-[0.985] ${
-                  darkMode
-                    ? "bg-[#38BDF8] hover:bg-[#52C8FA] text-[#082032] shadow-[0_8px_20px_rgba(56,189,248,0.24)]"
-                    : "bg-[#2B8CEE] hover:bg-[#1D7AD9] text-white shadow-[0_8px_20px_rgba(43,140,238,0.22)]"
+                  isBlocksUpdateTheme
+                    ? darkMode
+                      ? "bg-[#38BDF8] hover:bg-[#5CCBF9] text-[#0B141D] shadow-[0_8px_20px_rgba(56,189,248,0.24)]"
+                      : "bg-[#2B8CEE] hover:bg-[#1E7AE0] text-white shadow-[0_8px_20px_rgba(43,140,238,0.22)]"
+                    : darkMode
+                      ? "bg-indigo-500 hover:bg-indigo-400 text-white shadow-sm"
+                      : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm"
                 }`}
               >
                 Update Now
@@ -24473,9 +24603,13 @@ export default function App() {
                   setShowUpdateRequiredModal(false);
                 }}
                 className={`w-full h-[40px] px-4 rounded-2xl border-none cursor-pointer font-sans font-semibold text-xs transition-colors active:scale-[0.985] ${
-                  darkMode
-                    ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-300"
-                    : "bg-[#E6F1F8] hover:bg-[#D5E6F3] text-[#49637A]"
+                  isBlocksUpdateTheme
+                    ? darkMode
+                      ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-300"
+                      : "bg-[#E6F1F8] hover:bg-[#D5E6F3] text-[#49637A]"
+                    : darkMode
+                      ? "bg-zinc-800 hover:bg-zinc-750 text-stone-250"
+                      : "bg-stone-100 hover:bg-stone-200 text-stone-700"
                 }`}
               >
                 Not Now
@@ -24483,7 +24617,8 @@ export default function App() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* 🔮 CUSTOM GAME HISTORY OR SAVED CHALLENGE LOBBY MODAL */}
       <AnimatePresence>
