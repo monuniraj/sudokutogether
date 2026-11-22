@@ -20126,6 +20126,71 @@ export default function App() {
           </div>
         </div>
 
+        {/* Web-Only Editorial "More Games by Mo Logic" Hub (above Start Playing CTA) */}
+        {!Capacitor.isNativePlatform() && (() => {
+          const otherWebGames = MO_LOGIC_WEB_GAMES.filter((g) => g.id !== "sudoku");
+          if (otherWebGames.length === 0) return null;
+          return (
+            <section
+              id="home-more-games-web-hub"
+              aria-label="More Games by Mo Logic"
+              className={`w-full max-w-4xl mx-auto mb-10 p-5 sm:p-6 rounded-3xl border-0 flex flex-col gap-3.5 font-sans ${
+                darkMode
+                  ? "bg-[#18212C]/85 text-slate-100 shadow-[0_8px_28px_rgba(0,0,0,0.28)]"
+                  : "bg-[#EEF6FC]/90 text-[#1E3A5F] shadow-[0_8px_28px_rgba(30,41,59,0.04)]"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={`text-[11px] font-extrabold uppercase tracking-widest ${
+                    darkMode ? "text-[#7DD3FC]" : "text-[#0369A1]"
+                  }`}
+                >
+                  More Games by Mo Logic
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {otherWebGames.map((game) => (
+                  <a
+                    key={game.id}
+                    href={game.path}
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                      e.preventDefault();
+                      playClickSound();
+                      if (game.id === "blocks") {
+                        handleOpenBlockSyncEntry();
+                      }
+                    }}
+                    className={`p-3.5 rounded-2xl border-0 no-underline flex items-center justify-between gap-3 transition-all duration-150 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                      darkMode
+                        ? "bg-slate-900/70 hover:bg-slate-900 text-slate-100 shadow-[0_4px_14px_rgba(0,0,0,0.2)]"
+                        : "bg-white/90 hover:bg-white text-[#1E3A5F] shadow-[0_4px_14px_rgba(14,116,144,0.06)]"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-sm tracking-tight">{game.name}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            darkMode ? "bg-[#0EA5E9]/20 text-[#7DD3FC]" : "bg-[#E0F2FE] text-[#0369A1]"
+                          }`}
+                        >
+                          {game.badge}
+                        </span>
+                      </div>
+                      <p className={`text-xs mt-1 leading-relaxed ${darkMode ? "text-slate-300" : "text-[#465C70]"}`}>
+                        {game.shortTagline}
+                      </p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 shrink-0 opacity-75" />
+                  </a>
+                ))}
+              </div>
+            </section>
+          );
+        })()}
+
         {/* SECTION 4: CALL TO ACTION & COMPLIANT FOOTER */}
         <div className="w-full max-w-4xl mx-auto flex flex-col items-center">
           {/* CTA Anchor Button */}
@@ -20254,71 +20319,6 @@ export default function App() {
                   ))}
                 </div>
               </nav>
-            );
-          })()}
-
-          {/* Compact Web-Only "More Games by Mo Logic" Cross-Game Hub */}
-          {!Capacitor.isNativePlatform() && (() => {
-            const otherWebGames = MO_LOGIC_WEB_GAMES.filter((g) => g.id !== "sudoku");
-            if (otherWebGames.length === 0) return null;
-            return (
-              <section
-                id="home-more-games-web-hub"
-                aria-label="More Games by Mo Logic"
-                className={`w-full max-w-4xl mx-auto mb-6 p-4 sm:p-5 rounded-3xl border-0 flex flex-col gap-3 font-sans ${
-                  darkMode
-                    ? "bg-[#18212C]/85 text-slate-100 shadow-[0_8px_28px_rgba(0,0,0,0.28)]"
-                    : "bg-[#EEF6FC]/90 text-[#1E3A5F] shadow-[0_8px_28px_rgba(30,41,59,0.04)]"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={`text-[11px] font-extrabold uppercase tracking-widest ${
-                      darkMode ? "text-[#7DD3FC]" : "text-[#0369A1]"
-                    }`}
-                  >
-                    More Games by Mo Logic
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {otherWebGames.map((game) => (
-                    <a
-                      key={game.id}
-                      href={game.path}
-                      onClick={(e) => {
-                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                        e.preventDefault();
-                        playClickSound();
-                        if (game.id === "blocks") {
-                          handleOpenBlockSyncEntry();
-                        }
-                      }}
-                      className={`p-3.5 rounded-2xl border-0 no-underline flex items-center justify-between gap-3 transition-all duration-150 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
-                        darkMode
-                          ? "bg-slate-900/70 hover:bg-slate-900 text-slate-100 shadow-[0_4px_14px_rgba(0,0,0,0.2)]"
-                          : "bg-white/90 hover:bg-white text-[#1E3A5F] shadow-[0_4px_14px_rgba(14,116,144,0.06)]"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-black text-sm tracking-tight">{game.name}</span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              darkMode ? "bg-[#0EA5E9]/20 text-[#7DD3FC]" : "bg-[#E0F2FE] text-[#0369A1]"
-                            }`}
-                          >
-                            {game.badge}
-                          </span>
-                        </div>
-                        <p className={`text-xs mt-1 leading-relaxed ${darkMode ? "text-slate-300" : "text-[#465C70]"}`}>
-                          {game.shortTagline}
-                        </p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 shrink-0 opacity-75" />
-                    </a>
-                  ))}
-                </div>
-              </section>
             );
           })()}
 
@@ -20477,9 +20477,9 @@ export default function App() {
                   {t("termsOfService")}
                 </a>
               </div>
-              <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1.5 text-xs">
-                <span className={`font-bold uppercase tracking-wider text-[11px] ${darkMode ? "text-zinc-400" : "text-stone-500"}`}>
-                  More Games by Mo Logic:
+              <div className="flex flex-wrap justify-center items-center gap-x-2 gap-y-1 text-xs font-semibold">
+                <span className={darkMode ? "text-zinc-400" : "text-stone-500"}>
+                  More Games:
                 </span>
                 {MO_LOGIC_WEB_GAMES.filter((g) => g.id !== "sudoku").map((game) => (
                   <a
@@ -20493,7 +20493,7 @@ export default function App() {
                         handleOpenBlockSyncEntry();
                       }
                     }}
-                    className="py-1 px-2.5 rounded-xl font-semibold text-[#0369A1] dark:text-[#7DD3FC] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                    className="py-1 px-2 rounded-xl text-stone-600 hover:text-[#0369A1] dark:text-stone-300 dark:hover:text-[#bae6fd] transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                   >
                     {game.name}
                   </a>
@@ -21198,7 +21198,13 @@ export default function App() {
                           </svg>
                         </div>
 
-                        <span className="font-sans font-black text-xs sm:text-sm tracking-wider uppercase leading-none whitespace-nowrap">
+                        <span
+                          className={`font-sans font-black text-xs sm:text-sm tracking-wider uppercase leading-none whitespace-nowrap ${
+                            darkMode
+                              ? "drop-shadow-[0_1px_2px_rgba(20,26,33,0.92)]"
+                              : "drop-shadow-[0_1px_2px_rgba(234,244,251,0.92)]"
+                          }`}
+                        >
                           <span className={darkMode ? "text-slate-100" : "text-[#1E3A5F]"}>
                             BLOCK
                           </span>{" "}
@@ -21208,10 +21214,10 @@ export default function App() {
                         </span>
                       </div>
 
-                      {/* Right-Anchored 3D Perspective-Tilted Block Sync Diorama Sticker */}
+                      {/* Right-Anchored Full-Size 3D Perspective-Tilted Block Sync Diorama Sticker */}
                       <div
                         aria-hidden="true"
-                        className="pointer-events-none z-0 absolute right-[10px] top-[10px] scale-[0.76] sm:scale-[0.82] origin-top-right w-[88px] h-[88px] flex items-center justify-center"
+                        className="pointer-events-none z-0 absolute right-[14px] top-1/2 -translate-y-1/2 scale-100 w-[88px] h-[88px] flex items-center justify-center"
                       >
                         {/* Back Depth Layer: Subtle Secondary Tilted Plate */}
                         <div
