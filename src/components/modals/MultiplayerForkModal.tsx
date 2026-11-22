@@ -287,19 +287,33 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
                     <span className="font-sans font-black text-xs uppercase tracking-wider truncate tabular-nums">
                       {t("blocks_resume_room", { code: pendingBlocksRoom.config.roomCode })}
                     </span>
-                    <span
-                      className={`shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-black uppercase tracking-wider ${
-                        isRushExpired
-                          ? darkMode
+                    {isRushExpired ? (
+                      <span
+                        className={`shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-black uppercase tracking-wider ${
+                          darkMode
                             ? "bg-[#4c0519] text-[#fda4af]"
                             : "bg-[#FFE4E6] text-[#9D174D]"
-                          : darkMode
-                            ? "bg-[#10B981]/20 text-[#34D399]"
-                            : "bg-[#D1FAE5] text-[#065F46]"
-                      }`}
-                    >
-                      {isRushExpired ? t("blocks_time_up_badge") : t("blocks_live_badge")}
-                    </span>
+                        }`}
+                      >
+                        {t("blocks_time_up_badge")}
+                      </span>
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="relative shrink-0 inline-flex h-2.5 w-2.5 items-center justify-center"
+                      >
+                        <span
+                          className={`absolute inset-0 rounded-full animate-ping motion-reduce:animate-none ${
+                            darkMode ? "bg-[#FBBF24]/40" : "bg-[#F59E0B]/45"
+                          }`}
+                        />
+                        <span
+                          className={`relative h-2 w-2 rounded-full ${
+                            darkMode ? "bg-[#FBBF24]" : "bg-[#F59E0B]"
+                          }`}
+                        />
+                      </span>
+                    )}
                   </div>
                   <span className="mt-0.5 text-[11px] font-sans font-semibold opacity-75 truncate tabular-nums inline-flex items-center gap-1">
                     {isRushRoom && <Clock className="w-3 h-3 shrink-0" />}

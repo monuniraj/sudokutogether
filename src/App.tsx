@@ -21078,14 +21078,14 @@ export default function App() {
                         triggerHapticTap(vibrations);
                         handleOpenBlockSyncEntry();
                       }}
-                      className={`group relative overflow-hidden w-[224px] sm:w-[244px] h-28 sm:h-32 shrink-0 rounded-3xl border-none p-4 flex items-center justify-between text-left cursor-pointer select-none transition-all duration-200 active:scale-[0.98] ${
+                      className={`group relative overflow-hidden w-48 h-28 sm:h-32 shrink-0 rounded-3xl border-none p-4 flex flex-col items-start justify-between text-left cursor-pointer select-none transition-all duration-200 active:scale-[0.98] ${
                         darkMode
                           ? "bg-[#1E2936] hover:bg-[#243242] shadow-[0_6px_20px_rgba(0,0,0,0.28)]"
                           : "bg-[#EAF4FB] hover:bg-[#DCEEF9] shadow-[0_6px_20px_rgba(30,41,59,0.05)]"
                       }`}
                     >
-                      {/* Left Column: Crisp Uncluttered Brand Icon + Title */}
-                      <div className="min-w-0 flex-1 pr-2 h-full flex flex-col items-start justify-between relative z-10">
+                      {/* Foreground Column: Crisp Uncluttered Brand Icon + Two-Tone Wordmark */}
+                      <div className="relative z-10 h-full flex flex-col items-start justify-between max-w-[116px]">
                         <div
                           className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${
                             darkMode ? "bg-white/[0.06]" : "bg-white/80"
@@ -21108,17 +21108,20 @@ export default function App() {
                           </svg>
                         </div>
 
-                        <span className={`font-sans font-black text-xs sm:text-sm tracking-wider uppercase leading-none ${
-                          darkMode ? "text-[#E2EEF7]" : "text-[#2C3E50]"
-                        }`}>
-                          BLOCK SYNC
+                        <span className="font-sans font-black text-xs sm:text-sm tracking-wider uppercase leading-none whitespace-nowrap">
+                          <span className={darkMode ? "text-slate-100" : "text-[#1E3A5F]"}>
+                            BLOCK
+                          </span>{" "}
+                          <span className={darkMode ? "text-[#38BDF8]" : "text-[#2B8CEE]"}>
+                            SYNC
+                          </span>
                         </span>
                       </div>
 
-                      {/* Right Visual Zone: Pure-CSS 3D Perspective-Tilted 6x6 Mini-Board Diorama */}
+                      {/* Right-Anchored 3D Perspective-Tilted Block Sync Diorama Sticker */}
                       <div
                         aria-hidden="true"
-                        className="shrink-0 pointer-events-none relative w-[84px] sm:w-[94px] h-full flex items-center justify-center"
+                        className="pointer-events-none z-0 absolute right-[-8px] top-1/2 -translate-y-1/2 scale-[0.88] w-[88px] h-[88px] flex items-center justify-center"
                       >
                         {/* Back Depth Layer: Subtle Secondary Tilted Plate */}
                         <div

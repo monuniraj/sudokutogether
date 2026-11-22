@@ -4049,7 +4049,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                       <span
                         id="block-sync-multiplayer-pending-dot"
                         aria-hidden="true"
-                        className="pointer-events-none absolute top-1.5 right-1.5 flex h-2.5 w-2.5 items-center justify-center"
+                        className="pointer-events-none absolute top-1 right-1 translate-x-0.5 -translate-y-0.5 flex h-2.5 w-2.5 items-center justify-center"
                       >
                         {!reducedMotion && (
                           <span
