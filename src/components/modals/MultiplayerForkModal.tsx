@@ -304,12 +304,12 @@ export const MultiplayerForkModal: React.FC<MultiplayerForkModalProps> = ({
                       >
                         <span
                           className={`absolute inset-0 rounded-full animate-ping motion-reduce:animate-none ${
-                            darkMode ? "bg-[#FBBF24]/40" : "bg-[#F59E0B]/45"
+                            darkMode ? "bg-[#38BDF8]/40" : "bg-[#2B8CEE]/40"
                           }`}
                         />
                         <span
                           className={`relative h-2 w-2 rounded-full ${
-                            darkMode ? "bg-[#FBBF24]" : "bg-[#F59E0B]"
+                            darkMode ? "bg-[#38BDF8]" : "bg-[#2B8CEE]"
                           }`}
                         />
                       </span>

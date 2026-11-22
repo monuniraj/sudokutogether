@@ -115,7 +115,7 @@ export const StudioSplash: React.FC<StudioSplashProps> = ({
                 className="text-[12.5px] font-semibold uppercase text-slate-400 font-sans select-none"
                 style={{ letterSpacing: "0.24em" }}
               >
-                BY <span className="font-bold text-slate-200">MOLOGIC</span>
+                BY <span className="font-bold text-slate-200">MO LOGIC</span>
               </span>
             </motion.div>
 

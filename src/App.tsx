@@ -20486,7 +20486,7 @@ export default function App() {
                   className="text-[12.5px] font-semibold uppercase text-slate-400 font-sans select-none"
                   style={{ letterSpacing: "0.24em" }}
                 >
-                  BY <span className="font-bold text-slate-200">MOLOGIC</span>
+                  BY <span className="font-bold text-slate-200">MO LOGIC</span>
                 </span>
               </motion.div>
             </div>
@@ -21121,7 +21121,7 @@ export default function App() {
                       {/* Right-Anchored 3D Perspective-Tilted Block Sync Diorama Sticker */}
                       <div
                         aria-hidden="true"
-                        className="pointer-events-none z-0 absolute right-[-8px] top-1/2 -translate-y-1/2 scale-[0.88] w-[88px] h-[88px] flex items-center justify-center"
+                        className="pointer-events-none z-0 absolute right-[10px] top-[10px] scale-[0.76] sm:scale-[0.82] origin-top-right w-[88px] h-[88px] flex items-center justify-center"
                       >
                         {/* Back Depth Layer: Subtle Secondary Tilted Plate */}
                         <div
@@ -24569,7 +24569,7 @@ export default function App() {
                       : "text-stone-600"
                 }`}
               >
-                This multiplayer room uses a newer MoLogic game or feature. Please update the app to join.
+                This multiplayer room uses a newer Mo Logic game or feature. Please update the app to join.
               </p>
             </div>
 

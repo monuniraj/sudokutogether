@@ -706,7 +706,11 @@ export type TranslationKey =
   | "blocks_player_finished_one"
   | "blocks_player_finished_two"
   | "blocks_player_finished_many"
-  | "blocks_share_invite_msg";
+  | "blocks_share_invite_msg"
+  | "blocks_tutorial_step_row"
+  | "blocks_tutorial_step_col"
+  | "blocks_tutorial_step_box"
+  | "blocks_tutorial_step_combo";
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: {
@@ -1397,6 +1401,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     blocks_player_finished_two: "{name1} & {name2} finished the match!",
     blocks_player_finished_many: "{name1}, {name2} & {count} more finished!",
     blocks_share_invite_msg: "Join my Block Sync {mode} room! Place blocks, clear lines, and beat my score!",
+    blocks_tutorial_step_row: "Row Clear",
+    blocks_tutorial_step_col: "Column Clear",
+    blocks_tutorial_step_box: "3×3 Box Clear",
+    blocks_tutorial_step_combo: "Combo ×2!",
   },
   hi: {
     playerInsights: "खिलाड़ी अंतर्दृष्टि",
@@ -2086,6 +2094,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     blocks_player_finished_two: "{name1} और {name2} ने मैच पूरा किया!",
     blocks_player_finished_many: "{name1}, {name2} और {count} अन्य ने पूरा किया!",
     blocks_share_invite_msg: "मेरे Block Sync ({mode}) रूम में जुड़ें! ब्लॉक लगाएं, लाइनें साफ़ करें और मेरा स्कोर तोड़ें!",
+    blocks_tutorial_step_row: "पंक्ति साफ़",
+    blocks_tutorial_step_col: "कॉलम साफ़",
+    blocks_tutorial_step_box: "3×3 बॉक्स साफ़",
+    blocks_tutorial_step_combo: "कॉम्बो ×2!",
   },
   de: {
     playerInsights: "Spieler-Einblicke",
@@ -2775,6 +2787,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     blocks_player_finished_two: "{name1} & {name2} haben beendet!",
     blocks_player_finished_many: "{name1}, {name2} & {count} weitere fertig!",
     blocks_share_invite_msg: "Tritt meinem Block Sync-Raum ({mode}) bei! Platziere Blöcke und knacke meinen Punktestand!",
+    blocks_tutorial_step_row: "Reihe komplett",
+    blocks_tutorial_step_col: "Spalte komplett",
+    blocks_tutorial_step_box: "3×3-Feld komplett",
+    blocks_tutorial_step_combo: "Kombo ×2!",
   },
   ja: {
     playerInsights: "プレイヤーデータ",
@@ -3464,6 +3480,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     blocks_player_finished_two: "{name1}さん・{name2}さんが完了！",
     blocks_player_finished_many: "{name1}さん他{count}名が完了！",
     blocks_share_invite_msg: "Block Sync（{mode}）で対戦しよう！ブロックを置いてラインを消そう！",
+    blocks_tutorial_step_row: "横ライン消去",
+    blocks_tutorial_step_col: "縦ライン消去",
+    blocks_tutorial_step_box: "3×3ボックス消去",
+    blocks_tutorial_step_combo: "コンボ ×2!",
   },
   ko: {
     playerInsights: "플레이어 통계",
@@ -4153,6 +4173,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     blocks_player_finished_two: "{name1} & {name2}님이 완료했습니다!",
     blocks_player_finished_many: "{name1}, {name2} 외 {count}명이 완료했습니다!",
     blocks_share_invite_msg: "내 Block Sync ({mode}) 방에 참여하세요! 블록을 놓고 최고 점수에 도전하세요!",
+    blocks_tutorial_step_row: "가로줄 클리어",
+    blocks_tutorial_step_col: "세로줄 클리어",
+    blocks_tutorial_step_box: "3×3 박스 클리어",
+    blocks_tutorial_step_combo: "콤보 ×2!",
   },
   es: {
     playerInsights: "Estadísticas",
@@ -4842,6 +4866,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     blocks_player_finished_two: "¡{name1} y {name2} terminaron!",
     blocks_player_finished_many: "¡{name1}, {name2} y {count} más terminaron!",
     blocks_share_invite_msg: "¡Únete a mi sala de Block Sync ({mode})! Coloca bloques y supera mi puntuación.",
+    blocks_tutorial_step_row: "Fila completa",
+    blocks_tutorial_step_col: "Columna completa",
+    blocks_tutorial_step_box: "Caja 3×3 completa",
+    blocks_tutorial_step_combo: "¡Combo ×2!",
   },
   fr: {
     playerInsights: "Statistiques Joueur",
@@ -5531,6 +5559,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     blocks_player_finished_two: "{name1} & {name2} ont terminé !",
     blocks_player_finished_many: "{name1}, {name2} et {count} autres ont fini !",
     blocks_share_invite_msg: "Rejoins ma salle Block Sync ({mode}) ! Place des blocs et bats mon score !",
+    blocks_tutorial_step_row: "Ligne effacée",
+    blocks_tutorial_step_col: "Colonne effacée",
+    blocks_tutorial_step_box: "Bloc 3×3 effacé",
+    blocks_tutorial_step_combo: "Combo ×2 !",
   },
   it: {
     playerInsights: "Statistiche Giocatore",
@@ -6220,6 +6252,10 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     blocks_player_finished_two: "{name1} e {name2} hanno finito!",
     blocks_player_finished_many: "{name1}, {name2} e altri {count} hanno finito!",
     blocks_share_invite_msg: "Unisciti alla mia stanza Block Sync ({mode})! Piazza i blocchi e batti il mio punteggio!",
+    blocks_tutorial_step_row: "Riga completata",
+    blocks_tutorial_step_col: "Colonna completata",
+    blocks_tutorial_step_box: "Blocco 3×3 completato",
+    blocks_tutorial_step_combo: "Combo ×2!",
   },
   "pt-BR": {
     playerInsights: "Estatísticas",
@@ -6909,5 +6945,9 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     blocks_player_finished_two: "{name1} e {name2} concluíram!",
     blocks_player_finished_many: "{name1}, {name2} e mais {count} concluíram!",
     blocks_share_invite_msg: "Entre na minha sala Block Sync ({mode})! Encaixe blocos e supere minha pontuação!",
+    blocks_tutorial_step_row: "Linha limpa",
+    blocks_tutorial_step_col: "Coluna limpa",
+    blocks_tutorial_step_box: "Bloco 3×3 limpo",
+    blocks_tutorial_step_combo: "Combo ×2!",
   },
 };

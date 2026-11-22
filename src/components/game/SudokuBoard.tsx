@@ -167,7 +167,7 @@ export const SudokuBoard: React.FC<SudokuBoardProps> = React.memo(({
           className="text-[11px] font-semibold text-stone-400 dark:text-zinc-500 font-sans uppercase mt-1"
           style={{ letterSpacing: "0.22em" }}
         >
-          By Mologic
+          By Mo Logic
         </span>
       </div>
     );

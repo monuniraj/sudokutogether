@@ -4053,16 +4053,16 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                       >
                         {!reducedMotion && (
                           <span
-                            className={`absolute inset-0 rounded-full animate-ping ${
-                              darkMode ? "bg-[#FBBF24]/35" : "bg-[#F59E0B]/40"
+                            className={`absolute inset-0 rounded-full animate-ping motion-reduce:animate-none ${
+                              darkMode ? "bg-[#38BDF8]/40" : "bg-[#2B8CEE]/40"
                             }`}
                           />
                         )}
                         <span
                           className={`relative h-2 w-2 rounded-full ring-2 ${
                             darkMode
-                              ? "bg-[#FBBF24] ring-[#19222C]"
-                              : "bg-[#F59E0B] ring-[#E8F2FA]"
+                              ? "bg-[#38BDF8] ring-[#19222C]"
+                              : "bg-[#2B8CEE] ring-[#E8F2FA]"
                           }`}
                         />
                       </span>
@@ -4526,7 +4526,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
               const stageConfigs = [
                 {
                   key: "row",
-                  label: "Row Clear",
+                  label: t("blocks_tutorial_step_row"),
                   color: "emerald" as PastelColorKey,
                   prefilled: ["2,0", "2,1", "2,4", "2,5"],
                   targets: ["2,2", "2,3"],
@@ -4548,7 +4548,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 },
                 {
                   key: "col",
-                  label: "Column Clear",
+                  label: t("blocks_tutorial_step_col"),
                   color: "sky" as PastelColorKey,
                   prefilled: ["0,2", "1,2", "4,2", "5,2"],
                   targets: ["2,2", "3,2"],
@@ -4570,7 +4570,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 },
                 {
                   key: "box",
-                  label: "3×3 Box Clear",
+                  label: t("blocks_tutorial_step_box"),
                   color: "violet" as PastelColorKey,
                   prefilled: ["0,3", "0,4", "0,5", "1,3", "1,5", "2,5"],
                   targets: ["1,4", "2,3", "2,4"],
@@ -4593,7 +4593,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
                 },
                 {
                   key: "combo",
-                  label: `${t("blocks_combo_x", { n: 2 })}!`,
+                  label: t("blocks_tutorial_step_combo"),
                   color: "rose" as PastelColorKey,
                   prefilled: [
                     "3,0", "3,1", "3,2",
