@@ -29,6 +29,8 @@ import { SudokuSolverScreen } from "./features/sudokuSolver/components/SudokuSol
 import { SudokuRulesScreen } from "./features/sudokuRules/components/SudokuRulesScreen";
 import { BlockSyncGame } from "./games/blocks/BlockSyncGame";
 import { BlockSyncLogo } from "./games/blocks/BlockSyncLogo";
+import { BlockSyncWebGuide } from "./games/blocks/BlockSyncWebGuide";
+import { MO_LOGIC_WEB_GAMES } from "./utils/moLogicWebGames";
 import { BlockSyncResumeChoiceModal } from "./games/blocks/BlockSyncResumeChoiceModal";
 import { BlockSyncRoomInviteModal } from "./games/blocks/BlockSyncRoomInviteModal";
 import {
@@ -17317,8 +17319,9 @@ export default function App() {
     }
 
     if (currentScreen === "blocks" || isBlocksPath(routePathname)) {
-      const blocksTitle = "Block Sync — Zen Block Puzzle | Mo Logic";
-      const blocksDesc = "Play Block Sync, a calm pastel 9x9 block puzzle by Mo Logic.";
+      const blocksTitle = "Block Sync — Free 9×9 Block Puzzle & Multiplayer | Mo Logic";
+      const blocksDesc =
+        "Play Block Sync free online by Mo Logic. Place polyomino blocks on a calm 9×9 grid, clear rows, columns, and 3×3 boxes in Classic or Time Rush modes, and compete in shared multiplayer rooms.";
       const blocksCanonical = "https://sudokusync.com/blocks";
       document.documentElement.lang = "en";
       document.title = blocksTitle;
@@ -20254,6 +20257,71 @@ export default function App() {
             );
           })()}
 
+          {/* Compact Web-Only "More Games by Mo Logic" Cross-Game Hub */}
+          {!Capacitor.isNativePlatform() && (() => {
+            const otherWebGames = MO_LOGIC_WEB_GAMES.filter((g) => g.id !== "sudoku");
+            if (otherWebGames.length === 0) return null;
+            return (
+              <section
+                id="home-more-games-web-hub"
+                aria-label="More Games by Mo Logic"
+                className={`w-full max-w-4xl mx-auto mb-6 p-4 sm:p-5 rounded-3xl border-0 flex flex-col gap-3 font-sans ${
+                  darkMode
+                    ? "bg-[#18212C]/85 text-slate-100 shadow-[0_8px_28px_rgba(0,0,0,0.28)]"
+                    : "bg-[#EEF6FC]/90 text-[#1E3A5F] shadow-[0_8px_28px_rgba(30,41,59,0.04)]"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={`text-[11px] font-extrabold uppercase tracking-widest ${
+                      darkMode ? "text-[#7DD3FC]" : "text-[#0369A1]"
+                    }`}
+                  >
+                    More Games by Mo Logic
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {otherWebGames.map((game) => (
+                    <a
+                      key={game.id}
+                      href={game.path}
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                        e.preventDefault();
+                        playClickSound();
+                        if (game.id === "blocks") {
+                          handleOpenBlockSyncEntry();
+                        }
+                      }}
+                      className={`p-3.5 rounded-2xl border-0 no-underline flex items-center justify-between gap-3 transition-all duration-150 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                        darkMode
+                          ? "bg-slate-900/70 hover:bg-slate-900 text-slate-100 shadow-[0_4px_14px_rgba(0,0,0,0.2)]"
+                          : "bg-white/90 hover:bg-white text-[#1E3A5F] shadow-[0_4px_14px_rgba(14,116,144,0.06)]"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-sm tracking-tight">{game.name}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              darkMode ? "bg-[#0EA5E9]/20 text-[#7DD3FC]" : "bg-[#E0F2FE] text-[#0369A1]"
+                            }`}
+                          >
+                            {game.badge}
+                          </span>
+                        </div>
+                        <p className={`text-xs mt-1 leading-relaxed ${darkMode ? "text-slate-300" : "text-[#465C70]"}`}>
+                          {game.shortTagline}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 shrink-0 opacity-75" />
+                    </a>
+                  ))}
+                </div>
+              </section>
+            );
+          })()}
+
           {/* Compliant Static Footer: Company, Legal & Language Selector Only */}
           {!Capacitor.isNativePlatform() && (
             <footer className="w-full max-w-4xl mx-auto px-4 py-6 border-t border-dashed border-stone-200/50 dark:border-zinc-800/50 flex flex-col items-center gap-4 text-center text-sm font-sans text-stone-600 select-text">
@@ -20409,8 +20477,30 @@ export default function App() {
                   {t("termsOfService")}
                 </a>
               </div>
+              <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1.5 text-xs">
+                <span className={`font-bold uppercase tracking-wider text-[11px] ${darkMode ? "text-zinc-400" : "text-stone-500"}`}>
+                  More Games by Mo Logic:
+                </span>
+                {MO_LOGIC_WEB_GAMES.filter((g) => g.id !== "sudoku").map((game) => (
+                  <a
+                    key={`footer-game-${game.id}`}
+                    href={game.path}
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                      e.preventDefault();
+                      playClickSound();
+                      if (game.id === "blocks") {
+                        handleOpenBlockSyncEntry();
+                      }
+                    }}
+                    className="py-1 px-2.5 rounded-xl font-semibold text-[#0369A1] dark:text-[#7DD3FC] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                  >
+                    {game.name}
+                  </a>
+                ))}
+              </div>
               <div className="opacity-80 font-mono text-[11px]">
-                © 2026 SudokuSync. All rights reserved.
+                © 2026 Mo Logic · SudokuSync. All rights reserved.
               </div>
             </footer>
           )}
@@ -23481,62 +23571,98 @@ export default function App() {
         )}
 
         {/* PANE: BLOCK SYNC (/blocks) */}
-        {currentScreen === "blocks" && (
-          <BlockSyncGame
-            key={`blocks-${isGuestSession ? "guest" : (authUser?.uid || "guest")}`}
-            darkMode={darkMode}
-            uid={isGuestSession ? null : (authUser?.uid ?? null)}
-            soundEffects={soundEffects}
-            vibrations={vibrations}
-            language={language}
-            isSettingsOpen={showBlockSyncSettings}
-            hasPendingMultiplayerRoom={Boolean(
-              !activeBlockSyncRoom &&
-                getMostRecentPendingBlocksRoom(isGuestSession ? null : (authUser?.uid ?? null))
-            )}
-            suppressAutoHowToPlay={Boolean(
-              showBlockSyncSettings ||
-                blockSyncResumeChoiceState ||
-                showBlockSyncRoomInviteModal ||
-                blockSyncResultsModal ||
-                showUpdateRequiredModal ||
-                showMultiplayerForkModal ||
-                showCreateChallengeModal ||
-                showJoinRoomModal ||
-                showInviteModal ||
-                showBellInvitesModal
-            )}
-            onCloseSettings={() => setShowBlockSyncSettings(false)}
-            onToggleSoundEffects={handleToggleSoundEffects}
-            onToggleVibrations={handleToggleVibrations}
-            onLanguageChange={handleLanguageChange}
-            onBackHome={() => handleNavigateHome()}
-            onOpenMoreGames={() => {
-              handleNavigateHome();
-              if (typeof window !== "undefined") {
-                window.setTimeout(() => {
+        {currentScreen === "blocks" && (() => {
+          const blockSyncGameNode = (
+            <BlockSyncGame
+              key={`blocks-${isGuestSession ? "guest" : (authUser?.uid || "guest")}`}
+              darkMode={darkMode}
+              uid={isGuestSession ? null : (authUser?.uid ?? null)}
+              soundEffects={soundEffects}
+              vibrations={vibrations}
+              language={language}
+              isSettingsOpen={showBlockSyncSettings}
+              hasPendingMultiplayerRoom={Boolean(
+                !activeBlockSyncRoom &&
+                  getMostRecentPendingBlocksRoom(isGuestSession ? null : (authUser?.uid ?? null))
+              )}
+              suppressAutoHowToPlay={Boolean(
+                showBlockSyncSettings ||
+                  blockSyncResumeChoiceState ||
+                  showBlockSyncRoomInviteModal ||
+                  blockSyncResultsModal ||
+                  showUpdateRequiredModal ||
+                  showMultiplayerForkModal ||
+                  showCreateChallengeModal ||
+                  showJoinRoomModal ||
+                  showInviteModal ||
+                  showBellInvitesModal
+              )}
+              onCloseSettings={() => setShowBlockSyncSettings(false)}
+              onToggleSoundEffects={handleToggleSoundEffects}
+              onToggleVibrations={handleToggleVibrations}
+              onLanguageChange={handleLanguageChange}
+              onBackHome={() => handleNavigateHome()}
+              onOpenMoreGames={() => {
+                handleNavigateHome();
+                if (typeof window !== "undefined") {
+                  window.setTimeout(() => {
+                    document
+                      .getElementById("home-block-sync-card")
+                      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }, 120);
+                }
+              }}
+              onOpenMultiplayer={() => {
+                if (activeBlockSyncRoom) {
+                  setShowBlockSyncRoomInviteModal(true);
+                } else {
+                  setShowMultiplayerForkModal(true);
+                }
+              }}
+              multiplayerRoom={activeBlockSyncRoom}
+              roomStandings={blockSyncRoomStandings}
+              onSubmitRoomResult={handleSubmitBlockSyncRoomResult}
+              onLeaveMultiplayerRoom={() => {
+                setActiveBlockSyncRoom(null);
+                setCurrentScreen("home");
+              }}
+            />
+          );
+
+          if (Capacitor.isNativePlatform()) {
+            return blockSyncGameNode;
+          }
+
+          return (
+            <div
+              id="blocks-web-scroll-container"
+              className={`flex-1 min-h-0 h-full w-full overflow-y-auto overscroll-y-contain flex flex-col ${
+                darkMode ? "bg-[#141A21]" : "bg-[#F4F8FB]"
+              }`}
+            >
+              <div className="w-full h-full min-h-full shrink-0 flex flex-col">
+                {blockSyncGameNode}
+              </div>
+              <BlockSyncWebGuide
+                darkMode={darkMode}
+                onNavigateHome={() => handleNavigateHome()}
+                onNavigateLegal={(page) => navigateToScreen(page)}
+                onNavigateWebPath={(path) => {
+                  if (isBlocksPath(path)) {
+                    navigateToScreen("blocks");
+                  } else {
+                    handleNavigateHome();
+                  }
+                }}
+                onScrollToBoard={() =>
                   document
-                    .getElementById("home-block-sync-card")
-                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                }, 120);
-              }
-            }}
-            onOpenMultiplayer={() => {
-              if (activeBlockSyncRoom) {
-                setShowBlockSyncRoomInviteModal(true);
-              } else {
-                setShowMultiplayerForkModal(true);
-              }
-            }}
-            multiplayerRoom={activeBlockSyncRoom}
-            roomStandings={blockSyncRoomStandings}
-            onSubmitRoomResult={handleSubmitBlockSyncRoomResult}
-            onLeaveMultiplayerRoom={() => {
-              setActiveBlockSyncRoom(null);
-              setCurrentScreen("home");
-            }}
-          />
-        )}
+                    .getElementById("blocks-web-scroll-container")
+                    ?.scrollTo({ top: 0, behavior: "smooth" })
+                }
+              />
+            </div>
+          );
+        })()}
 
         {/* PANE: SUDOKU RULES & STRATEGIES HUB (/rules) */}
         {currentScreen === "rules" && (

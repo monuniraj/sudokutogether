@@ -154,6 +154,7 @@ function buildStandaloneMainHtml(opts: {
   h1: string;
   lead: string;
   sections: Array<{ heading: string; paragraphs?: string[]; bullets?: string[] }>;
+  navLinks?: Array<{ href: string; label: string }>;
 }): string {
   const sectionsHtml = opts.sections
     .map((sec) => {
@@ -166,28 +167,36 @@ function buildStandaloneMainHtml(opts: {
     })
     .join('\n      ');
 
+  const navLinks = opts.navLinks || [
+    { href: '/', label: 'Play SudokuSync' },
+    { href: '/blocks', label: 'Play Block Sync' },
+    { href: '/en/easy', label: 'Easy Sudoku (51 Clues)' },
+    { href: '/rules', label: 'Sudoku Rules & Strategies' },
+    { href: '/guides/multiplayer-sudoku', label: 'Multiplayer Guide' },
+    { href: '/guides/beginner-sudoku', label: 'Beginner Guide' },
+    { href: '/guides/advanced-patterns', label: 'Advanced Patterns' },
+    { href: '/daily-challenge', label: 'Daily Challenge' },
+    { href: '/solver', label: 'Sudoku Solver' },
+  ];
+  const navHtml = navLinks
+    .map((item) => `<a href="${escapeHtml(item.href)}" style="color: #0369a1; text-decoration: underline;">${escapeHtml(item.label)}</a>`)
+    .join('\n        ');
+
   return `
     <main style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 2rem; max-width: 820px; margin: 0 auto; line-height: 1.65; color: #1e1e1e; background-color: #fdfbf7;">
       ${opts.badge ? `<p style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #0369a1;">${escapeHtml(opts.badge)}</p>` : ''}
       <h1>${escapeHtml(opts.h1)}</h1>
       <p>${escapeHtml(opts.lead)}</p>
       ${sectionsHtml}
-      <nav aria-label="SudokuSync Academy and Tools" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; display: flex; flex-wrap: wrap; gap: 0.75rem;">
-        <a href="/" style="color: #0369a1; text-decoration: underline;">Play SudokuSync</a>
-        <a href="/en/easy" style="color: #0369a1; text-decoration: underline;">Easy Sudoku (51 Clues)</a>
-        <a href="/rules" style="color: #0369a1; text-decoration: underline;">Sudoku Rules &amp; Strategies</a>
-        <a href="/guides/multiplayer-sudoku" style="color: #0369a1; text-decoration: underline;">Multiplayer Guide</a>
-        <a href="/guides/beginner-sudoku" style="color: #0369a1; text-decoration: underline;">Beginner Guide</a>
-        <a href="/guides/advanced-patterns" style="color: #0369a1; text-decoration: underline;">Advanced Patterns</a>
-        <a href="/daily-challenge" style="color: #0369a1; text-decoration: underline;">Daily Challenge</a>
-        <a href="/solver" style="color: #0369a1; text-decoration: underline;">Sudoku Solver</a>
+      <nav aria-label="Mo Logic Games and Academy" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; display: flex; flex-wrap: wrap; gap: 0.75rem;">
+        ${navHtml}
       </nav>
       <footer style="margin-top: 1.25rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;">
         <a href="/about" style="color: #0369a1; text-decoration: underline;">About Us</a>
         <a href="/contact" style="color: #0369a1; text-decoration: underline;">Contact Us</a>
         <a href="/privacy" style="color: #0369a1; text-decoration: underline;">Privacy Policy</a>
         <a href="/terms" style="color: #0369a1; text-decoration: underline;">Terms of Service</a>
-        <span style="opacity: 0.8; font-family: monospace; font-size: 11px;">© 2026 SudokuSync (Mo Logic). All rights reserved.</span>
+        <span style="opacity: 0.8; font-family: monospace; font-size: 11px;">© 2026 Mo Logic · SudokuSync &amp; Block Sync. All rights reserved.</span>
       </footer>
     </main>
   `.trim();
@@ -461,6 +470,39 @@ function buildStandaloneRoutes(): StaticStandaloneRoute[] {
             heading: legalCopy.terms.s5Header,
             paragraphs: [legalCopy.terms.s5Text, legalCopy.terms.s6Text, legalCopy.terms.s7Text],
           },
+        ],
+      }),
+    },
+    {
+      route: 'blocks',
+      title: 'Block Sync — Free 9×9 Block Puzzle & Multiplayer | Mo Logic',
+      description:
+        'Play Block Sync free online by Mo Logic. Place polyomino blocks on a calm 9×9 grid, clear rows, columns, and 3×3 boxes in Classic or Time Rush modes, and compete in shared multiplayer rooms.',
+      canonicalUrl: `${SEO_SITE_ORIGIN}/blocks`,
+      h1: 'Block Sync — Free 9×9 Block Puzzle & Multiplayer',
+      noscriptMainHtml: buildStandaloneMainHtml({
+        badge: 'Mo Logic · 9×9 Block Placement & 3×3 Box Clears',
+        h1: 'Block Sync — Free 9×9 Block Puzzle & Multiplayer',
+        lead: 'Play Block Sync free in your browser or Android app. Drag three polyomino shapes per tray onto a calm 9×9 grid to clear full rows, columns, and 3×3 checkerboard boxes across Classic and Time Rush modes.',
+        sections: [
+          {
+            heading: 'How Block Sync Works',
+            paragraphs: [
+              'Each turn gives you three distinct shapes to place anywhere on the 9×9 board with zero falling gravity. Complete horizontal rows, vertical columns, or highlighted 3×3 boxes to clear space and stack Combo Multipliers.',
+            ],
+          },
+          {
+            heading: 'Classic, Time Rush & Unified Cross-Game Multiplayer',
+            paragraphs: [
+              'Switch effortlessly between relaxed Classic runs and competitive 2m, 3m, or 5m Time Rush challenges. Share 6-digit Room Codes with optional PIN protection to race friends on identical seeded trays.',
+            ],
+          },
+        ],
+        navLinks: [
+          { href: '/', label: 'Sudoku Sync' },
+          { href: '/rules', label: 'Sudoku Rules & Strategies' },
+          { href: '/daily-challenge', label: 'Daily Challenge' },
+          { href: '/solver', label: 'Sudoku Solver' },
         ],
       }),
     }
