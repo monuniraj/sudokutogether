@@ -18,7 +18,7 @@ export interface LegalDocumentLocaleContent {
     s1Firestore: {
       label: string;
       intro: string;
-      bullets: [string, string, string];
+      bullets: string[];
     };
     s1Fcm: LabeledText & {
       controlLabel: string;
@@ -127,22 +127,23 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     privacy: {
       title: "Privacy Policy",
       intro:
-        "At SudokuSync (accessible from https://sudokusync.com and the official Android mobile application), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed, and how we uphold global privacy standards including the General Data Protection Regulation (GDPR), the California Consumer Privacy Act (CCPA/CPRA), the Children's Online Privacy Protection Act (COPPA), Google Play Store Data Safety Policies, Google AdSense Program Policies, and Google AdMob Policies.",
+        "At Mo Logic (operating SudokuSync, Block Sync, and all connected puzzle games, cross-game multiplayer rooms, web portals at https://sudokusync.com, and official Android mobile applications), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed across the Mo Logic platform, and how we uphold global privacy standards including the General Data Protection Regulation (GDPR), the California Consumer Privacy Act (CCPA/CPRA), the Children's Online Privacy Protection Act (COPPA), Google Play Store Data Safety Policies, Google AdSense Program Policies, and Google AdMob Policies.",
       s1Header: "1. Information Collection & Storage Architecture",
       s1Intro:
         "We operate on strict data minimization principles, clearly distinguishing between client-only local data and cloud database records:",
       s1LocalStorage: {
         label: "Client-Side Local Storage (Browser & Device Only):",
-        text: "Standard browser localStorage is used strictly on your device to persist UI preferences (Dark Mode, sound synthesis, haptics), mistake counter limits, timer visibility, active puzzle board state/notes, and saved single-player games. This data remains on your device and is never sold, shared, or transmitted to third-party marketing entities.",
+        text: "Standard browser localStorage is used strictly on your device to persist UI preferences (Dark Mode, sound synthesis, haptics), mistake counter limits, timer visibility, active Sudoku board states/notes, saved Block Sync runs, and single-player progress. This data remains on your device and is never sold, shared, or transmitted to third-party marketing entities.",
       },
       s1Firestore: {
         label: "Google Cloud Firestore (Real-Time Multiplayer & Leaderboards):",
         intro:
-          "When participating in multiplayer challenges or global matches, the following non-sensitive game parameters are stored on Google Cloud Firestore:",
+          "When participating in multiplayer rooms, challenges, or global matches across Mo Logic games, the following non-sensitive game parameters are stored on Google Cloud Firestore:",
         bullets: [
-          "Anonymous Challenge ID, seed number, and difficulty level.",
+          "Anonymous Challenge / Room ID, seed number, and difficulty or mode level.",
           "Player display nickname (user-chosen alphanumeric string) and user ID.",
           "Match performance metrics: Completion time (seconds), mistake count, and win/loss completion status.",
+          "Cross-game multiplayer room telemetry across Mo Logic titles (including game type such as sudoku or blocks, mode such as Classic or Time Rush, scores, and room standings) visible to room participants and Recent Players, with automatic room expiry and cleanup.",
         ],
       },
       s1Fcm: {
@@ -161,7 +162,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Standard web server request logs (including IP addresses, browser user-agent, timestamps, and rate limiting metrics) are processed automatically by Google Firebase Hosting and our Express server solely for operational security, DDoS prevention, and rate-limiting integrity.",
       },
       s2Header: "2. Advertising, Google AdSense, AdMob SDK, AAID & Google UMP Consent",
-      s2P1: "We partner with Google LLC to keep SudokuSync free across platforms using Google AdSense on the web and the Google AdMob SDK in our official Android mobile application. On the web, Google and third-party ad networks use cookies (including the DoubleClick / DART cookie), web beacons, and device identifiers to measure ad performance and serve advertisements based on your prior visits to this website or other websites on the Internet. On Android, the AdMob SDK may process the Android Advertising ID (AAID), app interaction events, and diagnostic signals for ad delivery, frequency capping, and fraud prevention.",
+      s2P1: "We partner with Google LLC to keep Mo Logic games (including SudokuSync and Block Sync) free across platforms using Google AdSense on the web and the Google AdMob SDK in our official Android mobile application. On the web, Google and third-party ad networks use cookies (including the DoubleClick / DART cookie), web beacons, and device identifiers to measure ad performance and serve advertisements based on your prior visits to this website or other websites on the Internet. On Android, the AdMob SDK may process the Android Advertising ID (AAID), app interaction events, and diagnostic signals for ad delivery, frequency capping, and fraud prevention.",
       s2P2: "Before serving personalized ads to users in regulated jurisdictions (including the EEA and the UK), our mobile app uses the Google UMP (User Messaging Platform) Consent SDK to present a clear privacy choices dialog so you can grant, manage, or withdraw your consent at any time.",
       s2BoxTitle: "Advertising Transparency, AAID Controls & Opt-Out Portals:",
       s2BoxIntro:
@@ -207,10 +208,10 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         "Under the California Consumer Privacy Act as amended by the CPRA, California residents are entitled to know what data categories are collected and to request data deletion. We do NOT sell or share your personal information with third parties for monetary or commercial consideration.",
       s5Header: "5. Children's Privacy Protection (COPPA)",
       s5Text:
-        "Protecting the privacy of young children is especially important. SudokuSync does not knowingly collect or solicit personally identifiable information from children under the age of 13 (or under 16 in the EEA/UK). Our game does not require real names, physical addresses, or phone numbers to play. If a parent or guardian believes their child has submitted personal information to our servers, please contact us immediately at sudokutogethermode@gmail.com and we will expeditiously remove such records.",
+        "Protecting the privacy of young children is especially important. Mo Logic games (including SudokuSync and Block Sync) do not knowingly collect or solicit personally identifiable information from children under the age of 13 (or under 16 in the EEA/UK). Our games do not require real names, physical addresses, or phone numbers to play. If a parent or guardian believes their child has submitted personal information to our servers, please contact us immediately at sudokutogethermode@gmail.com and we will expeditiously remove such records.",
       s6Header: "6. Data Retention & Security Controls",
       s6Text:
-        "Multiplayer challenge match records older than 30 days are pruned automatically from our databases. All client-to-server traffic is encrypted in transit using industry-standard TLS/HTTPS protocols. Strict Firestore security rules enforce document-level ownership and prevent unauthorized data tampering.",
+        "Multiplayer rooms expire automatically and challenge match records older than 30 days are pruned automatically from our databases. All client-to-server traffic is encrypted in transit using industry-standard TLS/HTTPS protocols. Strict Firestore security rules enforce document-level ownership and prevent unauthorized data tampering.",
       s7Header: "7. Contact Us",
       s7Intro:
         "For any questions regarding this Privacy Policy or our data handling practices, please contact our Data Protection desk:",
@@ -220,13 +221,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     terms: {
       title: "Terms of Service",
       intro:
-        "By accessing, browsing, installing, or playing SudokuSync (accessible from https://sudokusync.com or our official Android application), you agree to be bound by these Terms of Service, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws. If you do not agree with any of these terms, you are prohibited from using or accessing this application.",
+        "By accessing, browsing, installing, or playing any game on the Mo Logic multi-game puzzle platform — including SudokuSync, Block Sync, and future Mo Logic games (accessible from https://sudokusync.com or our official Android application) — you agree to be bound by these Terms of Service, all applicable laws and regulations, and agree that you are responsible for compliance with any applicable local laws. If you do not agree with any of these terms, you are prohibited from using or accessing this application.",
       s1Header: "1. Description of Service & Free Access",
       s1Text:
-        'SudokuSync provides free-to-play digital Sudoku puzzles, deterministic seeded matchmaking rooms, real-time leaderboards, and logic training tools. The service is provided on an "AS IS" and "AS AVAILABLE" basis. We reserve the right to modify, update, or discontinue features of the game at any time without prior notice.',
+        'Mo Logic provides free-to-play digital logic and block-placement puzzle games (including SudokuSync, Block Sync, and upcoming titles), deterministic seeded matchmaking rooms, real-time leaderboards, and training tools. The service is provided on an "AS IS" and "AS AVAILABLE" basis. We reserve the right to modify, update, or discontinue features of our games at any time without prior notice, and joining newer games or multiplayer rooms may require updating to the latest app version (Update Required compatibility guard).',
       s2Header: "2. Fair Play, Anti-Cheat & Community Standards",
       s2Intro:
-        "SudokuSync is committed to maintaining an honest, merit-based puzzle ecosystem. To ensure a fair and enjoyable environment for all players across single-player leaderboards and real-time multiplayer duels, you agree strictly to abide by our Fair Play standards:",
+        "Mo Logic is committed to maintaining an honest, merit-based puzzle ecosystem across SudokuSync, Block Sync, and future Mo Logic releases. To ensure a fair and enjoyable environment for all players across single-player leaderboards and real-time multiplayer rooms, you agree strictly to abide by our Fair Play standards:",
       s2BoxTitle: "Fair Play & Anti-Cheat Policy:",
       s2Bullets: [
         {
@@ -256,7 +257,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       },
       s3Header: "3. Cloud Account & Synchronization Usage",
       s3Intro:
-        "Players may choose to access SudokuSync as a guest or connect their personal Google Account for enhanced functionality:",
+        "Players may choose to access Mo Logic games (SudokuSync, Block Sync, and connected titles) as a guest or connect their personal Google Account for enhanced functionality:",
       s3Bullets: [
         {
           label: "Cross-Device Synchronization:",
@@ -281,13 +282,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Intellectual Property Rights",
       s4Text:
-        "All game logic engines, procedural sound synthesis code, user interface designs, SudokuSync Design System tokens, graphics, logos, and software code are the intellectual property of SudokuSync and protected by international copyright and trademark laws.",
+        "All game logic engines, procedural sound synthesis code, user interface designs, Mo Logic / SudokuSync Design System tokens, graphics, logos, and software code across SudokuSync, Block Sync, and future Mo Logic games are the intellectual property of Mo Logic and protected by international copyright and trademark laws.",
       s5Header: "5. Third-Party Advertisements (AdSense & AdMob)",
       s5Text:
         "The service is kept free via Google AdSense on Web and the Google AdMob SDK (including optional interstitial or rewarded video ads, subject to Google UMP consent in applicable regions) on Android. We do not control or endorse the content of third-party advertisements or external links. Any interactions or transactions with advertised third parties are solely between you and the respective advertiser.",
       s6Header: "6. Disclaimer of Warranties & Limitation of Liability",
       s6Text:
-        "The materials and software on SudokuSync are provided on an 'as is' basis. SudokuSync makes no warranties, expressed or implied, and hereby disclaims all other warranties including, without limitation, implied warranties of merchantability, fitness for a particular purpose, or non-infringement. In no event shall SudokuSync or its developers be liable for any damages (including, without limitation, damages for loss of data or profit) arising out of the use or inability to use the game.",
+        "The materials and software across Mo Logic (including SudokuSync and Block Sync) are provided on an 'as is' basis. Mo Logic makes no warranties, expressed or implied, and hereby disclaims all other warranties including, without limitation, implied warranties of merchantability, fitness for a particular purpose, or non-infringement. In no event shall Mo Logic or its developers be liable for any damages (including, without limitation, damages for loss of data or profit) arising out of the use or inability to use our games.",
       s7Header: "7. Account Deletion & Termination",
       s7Text:
         'You may stop using the application at any time. You can delete all your stored profile data instantly using the in-app "Delete Account & Data" button under Settings, which purges all cloud records, stored push notification tokens, and local storage. We reserve the right to ban or remove player nicknames or access for users who violate these Terms of Service.',
@@ -311,18 +312,18 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       topics: {
         bug: {
           label: "Bug Report",
-          subject: "SudokuSync Bug Report (v1.0.3)",
-          body: "App Version: v1.0.3\nPlatform (Web / Android): \nScreen or Feature: \nSteps to Reproduce: \nExpected vs Actual Result: ",
+          subject: "Mo Logic Bug Report (SudokuSync / Block Sync v1.0.3)",
+          body: "App Version: v1.0.3\nGame (SudokuSync / Block Sync): \nPlatform (Web / Android): \nScreen or Feature: \nSteps to Reproduce: \nExpected vs Actual Result: ",
         },
         privacy: {
           label: "Privacy / UMP Consent",
-          subject: "SudokuSync Privacy & UMP Consent Inquiry (v1.0.3)",
-          body: "App Version: v1.0.3\nPlatform (Web / Android): \nTopic (GDPR / CCPA / AdSense / AdMob AAID / UMP Consent): \nDetails of Request: ",
+          subject: "Mo Logic Privacy & UMP Consent Inquiry (v1.0.3)",
+          body: "App Version: v1.0.3\nGame (SudokuSync / Block Sync): \nPlatform (Web / Android): \nTopic (GDPR / CCPA / AdSense / AdMob AAID / UMP Consent): \nDetails of Request: ",
         },
         deletion: {
           label: "Account & Data Deletion",
-          subject: "SudokuSync Account & Data Deletion Request (v1.0.3)",
-          body: "App Version: v1.0.3\nPlayer Display Name / Email: \nRequest: Please permanently delete my SudokuSync Firestore profile, leaderboard/match records, and push notification tokens.",
+          subject: "Mo Logic Account & Data Deletion Request (v1.0.3)",
+          body: "App Version: v1.0.3\nPlayer Display Name / Email: \nRequest: Please permanently delete my Mo Logic (SudokuSync & Block Sync) Firestore profile, leaderboard/match records, and push notification tokens.",
         },
       },
     },
@@ -330,7 +331,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       publisherBadge: "Published by Mo Logic",
       publisherHeader: "Independent Puzzle Studio & Editorial Standards",
       publisherText:
-        "SudokuSync is developed and published independently by Mo Logic across Web (https://sudokusync.com) and Google Play Android (com.mologic.sudokusync). Every puzzle, interactive diagram, and logic guide is crafted for distraction-free solving with a borderless pastel design system, Light/Dark themes, offline persistence, and transparent ad-supported free access.",
+        "Mo Logic develops and independently publishes both SudokuSync and Block Sync across Web (https://sudokusync.com and /blocks) and Google Play Android (com.mologic.sudokusync) within one unified puzzle ecosystem. Every classic 9x9 Sudoku puzzle and Block Sync 9x9 block-placement board (featuring 3x3 box clears plus Classic and Time Rush modes) is crafted for distraction-free play with a borderless pastel design system, Light/Dark themes, offline persistence, and transparent ad-supported free access.",
       engineHeader: "Deterministic 9x9 Puzzle Engine & Verified Clue Tiers",
       engineIntro:
         "Every classic 9x9 board is produced by our seeded Mulberry32 PRNG generator and checked by our human-logic difficulty engine plus bitmask MRV solver verification to guarantee a mathematically unique single solution before play begins:",
@@ -360,9 +361,9 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           summary: "Deep candidate deduction chains, X-Wing patterns, and minimal starting clues.",
         },
       ],
-      multiplayerHeader: "Same-Board Live & Asynchronous Multiplayer",
+      multiplayerHeader: "Unified Cross-Game Live & Asynchronous Multiplayer",
       multiplayerText:
-        "Play live or asynchronously on the exact same 9x9 seed using 6-digit numeric Room Codes, optional PIN protection, and direct ?room= browser share links. Signed-in Google players can sync stats, manage persistent Friends alongside Recent Players, challenge opponents asynchronously, and toggle Ghost Mode visibility at any time.",
+        "Under one shared Mo Logic multiplayer ecosystem, play SudokuSync on the exact same 9x9 seed or compete in Block Sync (9x9 block placement with 3x3 box clears across Classic & Time Rush modes) using 6-digit numeric Room Codes, optional PIN protection, and direct ?room= browser share links. Signed-in Google players can sync stats, manage persistent Friends alongside Recent Players, challenge opponents asynchronously, and toggle Ghost Mode visibility at any time.",
       assistantsText:
         "Seven verified Smart Assistants tailor the board to your style: Highlight Identical Numbers, Show Remaining Numbers, Highlight Related Area, Auto-Switch Completed Numbers, Auto-Remove Notes, Auto-Notes (Hard and Expert modes), and Fast Fill (Number-First), paired with configurable mistake limits and timer toggles.",
       exploreHeader: "Explore Rules, Tools & Support",
@@ -378,22 +379,23 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     privacy: {
       title: "प्राइवेसी पॉलिसी",
       intro:
-        "SudokuSync (https://sudokusync.com और ऑफिशियल Android मोबाइल ऐप) पर हम अपने सभी विज़िटर्स और प्लेयर्स की प्राइवेसी को सबसे ज़्यादा अहमियत देते हैं। यह प्राइवेसी पॉलिसी विस्तार से बताती है कि कौनसा डेटा कलेक्ट, स्टोर और प्रोसेस होता है, और हम GDPR, California Consumer Privacy Act (CCPA/CPRA), COPPA, Google Play Store Data Safety Policies, Google AdSense Program Policies और Google AdMob Policies को कैसे फॉलो करते हैं।",
+        "Mo Logic (जो SudokuSync, Block Sync और सभी जुड़े हुए पज़ल गेम्स, क्रॉस-गेम मल्टीप्लेयर रूम्स, https://sudokusync.com वेब पोर्टल और ऑफिशियल Android ऐप्स संचालित करता है) पर हम अपने सभी विज़िटर्स और प्लेयर्स की प्राइवेसी को सबसे ज़्यादा अहमियत देते हैं। यह प्राइवेसी पॉलिसी बताती है कि पूरे Mo Logic इकोसिस्टम में कौनसा डेटा कलेक्ट, स्टोर और प्रोसेस होता है, और हम GDPR, California Consumer Privacy Act (CCPA/CPRA), COPPA, Google Play Store Data Safety Policies, Google AdSense Program Policies और Google AdMob Policies को कैसे फॉलो करते हैं।",
       s1Header: "1. जानकारी कलेक्शन और स्टोरेज आर्किटेक्चर",
       s1Intro:
         "हम सख्त डेटा मिनिमाइज़ेशन फॉलो करते हैं और डिवाइस-लोकल डेटा तथा क्लाउड डेटाबेस रिकॉर्ड्स के बीच साफ अंतर रखते हैं:",
       s1LocalStorage: {
         label: "क्लाइंट-साइड लोकल स्टोरेज (सिर्फ ब्राउज़र और डिवाइस):",
-        text: "आपके डिवाइस पर ब्राउज़र localStorage सिर्फ UI प्रेफरेंसेस (डार्क मोड, साउंड सिंथेसिस, हैप्टिक्स), मिस्टेक लिमिट, टाइमर विज़िबिलिटी, एक्टिव पज़ल नोट्स और सेव्ड सोलो गेम्स को याद रखने के लिए यूज़ होता है। यह डेटा आपके डिवाइस पर ही रहता है और कभी किसी थर्ड-पार्टी मार्केटिंग एजेंसी को बेचा या शेयर नहीं किया जाता।",
+        text: "आपके डिवाइस पर ब्राउज़र localStorage सिर्फ UI प्रेफरेंसेस (डार्क मोड, साउंड सिंथेसिस, हैप्टिक्स), मिस्टेक लिमिट, टाइमर विज़िबिलिटी, एक्टिव Sudoku बोर्ड/नोट्स और सेव्ड Block Sync सोलो व रूम रन को याद रखने के लिए यूज़ होता है। यह डेटा आपके डिवाइस पर ही रहता है और कभी किसी थर्ड-पार्टी मार्केटिंग एजेंसी को बेचा या शेयर नहीं किया जाता।",
       },
       s1Firestore: {
         label: "Google Cloud Firestore (रियल-टाइम मल्टीप्लेयर और लीडरबोर्ड):",
         intro:
-          "मल्टीप्लेयर चैलेंजेज़ या ग्लोबल मैचेज़ खेलते समय सिर्फ नॉन-सेंसिटिव गेम पैरामीटर्स Google Cloud Firestore पर सेव होते हैं:",
+          "Mo Logic गेम्स में मल्टीप्लेयर रूम्स, चैलेंजेज़ या ग्लोबल मैचेज़ खेलते समय सिर्फ नॉन-सेंसिटिव गेम पैरामीटर्स Google Cloud Firestore पर सेव होते हैं:",
         bullets: [
-          "एनोनिमस चैलेंज ID, पज़ल सीड नंबर और डिफिकल्टी लेवल।",
+          "एनोनिमस चैलेंज / रूम ID, पज़ल सीड नंबर और डिफिकल्टी या मोड लेवल।",
           "प्लेयर डिस्प्ले निकनेम (यूज़र का चुना हुआ अल्फ़ान्यूमेरिक नाम) और यूज़र ID।",
           "मैच परफॉर्मेंस मेट्रिक्स: कम्प्लीशन टाइम (सेकंड्स), मिस्टेक काउंट और जीत/हार स्टेटस।",
+          "Mo Logic गेम्स के क्रॉस-गेम मल्टीप्लेयर रूम डेटा (जैसे game type sudoku / blocks, मोड Classic / Time Rush, स्कोर और रूम स्टैंडिंग्स) जो रूम में शामिल प्लेयर्स और Recent Players को दिखते हैं, और समय पूरा होने पर रूम्स अपने आप एक्सपायर व क्लियर हो जाते हैं।",
         ],
       },
       s1Fcm: {
@@ -412,7 +414,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Google Firebase Hosting और हमारा Express सर्वर ऑपरेशनल सिक्योरिटी, DDoS प्रोटेक्शन और रेट-लिमिटिंग के लिए स्टैंडर्ड वेब सर्वर रिक्वेस्ट लॉग्स (IP एड्रेस, ब्राउज़र यूज़र-एजेंट, टाइमस्टैम्प) अपने आप प्रोसेस करते हैं।",
       },
       s2Header: "2. विज्ञापन, Google AdSense, AdMob SDK, AAID और Google UMP कंसेंट",
-      s2P1: "SudokuSync को फ्री रखने के लिए हम Google LLC की सर्विसेज़ यूज़ करते हैं — वेब पर Google AdSense और ऑफिशियल Android ऐप में Google AdMob SDK। वेब पर Google और पार्टनर ऐड नेटवर्क्स कुकीज़ (जैसे DoubleClick / DART cookie), वेब बीकन्स और आइडेंटिफायर्स यूज़ करते हैं। Android पर AdMob SDK ऐड डिलीवरी, फ्रीक्वेंसी कैपिंग और फ्रॉड प्रिवेंशन के लिए Android Advertising ID (AAID), ऐप इंटरैक्शन इवेंट्स और डायग्नोस्टिक सिग्नल्स प्रोसेस कर सकता है।",
+      s2P1: "Mo Logic गेम्स (SudokuSync और Block Sync समेत) को फ्री रखने के लिए हम Google LLC की सर्विसेज़ यूज़ करते हैं — वेब पर Google AdSense और ऑफिशियल Android ऐप में Google AdMob SDK। वेब पर Google और पार्टनर ऐड नेटवर्क्स कुकीज़ (जैसे DoubleClick / DART cookie), वेब बीकन्स और आइडेंटिफायर्स यूज़ करते हैं। Android पर AdMob SDK ऐड डिलीवरी, फ्रीक्वेंसी कैपिंग और फ्रॉड प्रिवेंशन के लिए Android Advertising ID (AAID), ऐप इंटरैक्शन इवेंट्स और डायग्नोस्टिक सिग्नल्स प्रोसेस कर सकता है।",
       s2P2: "रेगुलेटेड रीजन (जैसे EEA और UK) में पर्सनलाइज़्ड ऐड्स दिखाने से पहले हमारा मोबाइल ऐप Google UMP (User Messaging Platform) Consent SDK के ज़रिए क्लियर प्राइवेसी चॉइस डायलॉग दिखाता है जहाँ आप अपनी कंसेंट कभी भी मैनेज या वापस ले सकते हैं।",
       s2BoxTitle: "विज्ञापन ट्रांसपेरेंसी, AAID कंट्रोल्स और Opt-Out पोर्टल्स:",
       s2BoxIntro:
@@ -458,10 +460,10 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         "CCPA/CPRA के तहत कैलिफ़ोर्निया निवासियों को यह जानने का अधिकार है कि कौनसा डेटा कलेक्ट होता है और वे डिलीशन रिक्वेस्ट कर सकते हैं। हम आपकी पर्सनल जानकारी कभी किसी थर्ड पार्टी को पैसे या कमर्शियल फायदे के लिए बेचते या शेयर नहीं करते।",
       s5Header: "5. बच्चों की प्राइवेसी सुरक्षा (COPPA)",
       s5Text:
-        "बच्चों की प्राइवेसी हमारे लिए बेहद ज़रूरी है। SudokuSync 13 साल से कम (या EEA/UK में 16 साल से कम) बच्चों से जान-बूझकर कोई पर्सनल जानकारी कलेक्ट नहीं करता। खेलने के लिए असली नाम, घर का पता या फोन नंबर ज़रूरी नहीं है। अगर किसी पेरेंट को लगे कि उनके बच्चे ने कोई पर्सनल जानकारी सबमिट कर दी है, तो तुरंत sudokutogethermode@gmail.com पर ईमेल करें — हम तुरंत वे रिकॉर्ड्स हटा देंगे।",
+        "बच्चों की प्राइवेसी हमारे लिए बेहद ज़रूरी है। Mo Logic गेम्स (SudokuSync और Block Sync समेत) 13 साल से कम (या EEA/UK में 16 साल से कम) बच्चों से जान-बूझकर कोई पर्सनल जानकारी कलेक्ट नहीं करते। खेलने के लिए असली नाम, घर का पता या फोन नंबर ज़रूरी नहीं है। अगर किसी पेरेंट को लगे कि उनके बच्चे ने कोई पर्सनल जानकारी सबमिट कर दी है, तो तुरंत sudokutogethermode@gmail.com पर ईमेल करें — हम तुरंत वे रिकॉर्ड्स हटा देंगे।",
       s6Header: "6. डेटा रिटेंशन और सिक्योरिटी कंट्रोल्स",
       s6Text:
-        "30 दिन से पुराने मल्टीप्लेयर चैलेंज मैच रिकॉर्ड्स हमारे डेटाबेस से अपने आप डिलीट हो जाते हैं। सभी क्लाइंट-टू-सर्वर ट्रैफिक TLS/HTTPS एन्क्रिप्शन से सुरक्षित रहता है और सख्त Firestore सिक्योरिटी रूल्स अनचाही छेड़छाड़ रोकते हैं।",
+        "मल्टीप्लेयर रूम्स तय समय के बाद अपने आप एक्सपायर हो जाते हैं और 30 दिन से पुराने चैलेंज मैच रिकॉर्ड्स हमारे डेटाबेस से अपने आप डिलीट हो जाते हैं। सभी क्लाइंट-टू-सर्वर ट्रैफिक TLS/HTTPS एन्क्रिप्शन से सुरक्षित रहता है और सख्त Firestore सिक्योरिटी रूल्स अनचाही छेड़छाड़ रोकते हैं।",
       s7Header: "7. हमसे संपर्क करें",
       s7Intro:
         "इस प्राइवेसी पॉलिसी या डेटा हैंडलिंग से जुड़े किसी भी सवाल के लिए हमारे सपोर्ट डेस्क से संपर्क करें:",
@@ -471,13 +473,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     terms: {
       title: "सेवा की शर्तें (Terms of Service)",
       intro:
-        "SudokuSync (https://sudokusync.com या ऑफिशियल Android एप्लिकेशन) को एक्सेस करने, इंस्टॉल करने या खेलने से आप इन सेवा की शर्तों और सभी लागू नियमों को मानते हैं। अगर आप इन शर्तों से सहमत नहीं हैं, तो कृपया इस ऐप का उपयोग न करें।",
+        "Mo Logic के मल्टी-गेम पज़ल प्लेटफॉर्म (जिसमें SudokuSync, Block Sync और आने वाले Mo Logic गेम्स शामिल हैं — https://sudokusync.com या ऑफिशियल Android एप्लिकेशन) को एक्सेस करने, इंस्टॉल करने या खेलने से आप इन सेवा की शर्तों और सभी लागू नियमों को मानते हैं। अगर आप इन शर्तों से सहमत नहीं हैं, तो कृपया इस ऐप का उपयोग न करें।",
       s1Header: "1. सर्विस का विवरण और फ्री एक्सेस",
       s1Text:
-        'SudokuSync फ्री डिजिटल सुडोकू पज़ल्स, डिटरमिनिस्टिक सीडेड मल्टीप्लेयर रूम्स, रियल-टाइम लीडरबोर्ड और लॉजिक ट्रेनिंग टूल्स देता है। यह सर्विस "AS IS" और "AS AVAILABLE" आधार पर दी जाती है। हम बिना पूर्व सूचना के फीचर्स अपडेट या बदलने का अधिकार रखते हैं।',
+        'Mo Logic फ्री डिजिटल लॉजिक और ब्लॉक-प्लेसमेंट पज़ल गेम्स (SudokuSync, Block Sync और नए टाइटल्स), डिटरमिनिस्टिक सीडेड मल्टीप्लेयर रूम्स, रियल-टाइम लीडरबोर्ड और ट्रेनिंग टूल्स देता है। यह सर्विस "AS IS" और "AS AVAILABLE" आधार पर दी जाती है। हम बिना पूर्व सूचना के फीचर्स अपडेट या बदलने का अधिकार रखते हैं, और नए गेम्स या मल्टीप्लेयर रूम्स जॉइन करने के लिए लेटेस्ट ऐप वर्ज़न पर अपडेट करना ज़रूरी हो सकता है (Update Required कम्पैटिबिलिटी गार्ड)।',
       s2Header: "2. फेयर प्ले, एंटी-चीट और कम्युनिटी स्टैंडर्ड्स",
       s2Intro:
-        "SudokuSync एक फेयर और स्किल-बेस्ड पज़ल प्लेटफॉर्म बनाए रखने के लिए प्रतिबद्ध है। सिंगल-प्लेयर लीडरबोर्ड और मल्टीप्लेयर मुकाबलों में ईमानदारी रखने के लिए आप इन नियमों का पालन करेंगे:",
+        "Mo Logic अपने सभी गेम्स (SudokuSync, Block Sync और भविष्य के Mo Logic टाइटल्स) में एक फेयर और स्किल-बेस्ड पज़ल प्लेटफॉर्म बनाए रखने के लिए प्रतिबद्ध है। सिंगल-प्लेयर लीडरबोर्ड और मल्टीप्लेयर मुकाबलों में ईमानदारी रखने के लिए आप इन नियमों का पालन करेंगे:",
       s2BoxTitle: "फेयर प्ले और एंटी-चीट पॉलिसी:",
       s2Bullets: [
         {
@@ -507,7 +509,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       },
       s3Header: "3. क्लाउड अकाउंट और सिंक्रोनाइज़ेशन उपयोग",
       s3Intro:
-        "प्लेयर्स गेस्ट मोड में खेल सकते हैं या बेहतर निरंतरता के लिए अपना Google अकाउंट लिंक कर सकते हैं:",
+        "प्लेयर्स Mo Logic गेम्स (SudokuSync, Block Sync और जुड़े हुए टाइटल्स) को गेस्ट मोड में खेल सकते हैं या बेहतर निरंतरता के लिए अपना Google अकाउंट लिंक कर सकते हैं:",
       s3Bullets: [
         {
           label: "क्रॉस-डिवाइस सिंक्रोनाइज़ेशन:",
@@ -532,13 +534,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. इंटेलेक्चुअल प्रॉपर्टी अधिकार",
       s4Text:
-        "सभी पज़ल लॉजिक इंजन्स, प्रोसीजरल साउंड सिंथेसिस कोड, UI डिज़ाइंस, SudokuSync Design System टोकन्स, ग्राफिक्स, लोगोज़ और सॉफ्टवेयर कोड SudokuSync की इंटेलेक्चुअल प्रॉपर्टी हैं और कॉपीराइट कानूनों से सुरक्षित हैं।",
+        "SudokuSync, Block Sync और भविष्य के Mo Logic गेम्स के सभी पज़ल लॉजिक इंजन्स, प्रोसीजरल साउंड सिंथेसिस कोड, UI डिज़ाइंस, Mo Logic / SudokuSync Design System टोकन्स, ग्राफिक्स, लोगोज़ और सॉफ्टवेयर कोड Mo Logic की इंटेलेक्चुअल प्रॉपर्टी हैं और कॉपीराइट कानूनों से सुरक्षित हैं।",
       s5Header: "5. थर्ड-पार्टी विज्ञापन (AdSense और AdMob)",
       s5Text:
         "ऐप को फ्री रखने के लिए वेब पर Google AdSense और Android पर Google AdMob SDK (जिसमें लागू रीजन में Google UMP कंसेंट के साथ इंटरस्टीशियल या रिवॉर्डेड ऐड्स शामिल हो सकते हैं) यूज़ होता है। थर्ड-पार्टी ऐड्स या बाहरी लिंक्स के कंटेंट के लिए हम ज़िम्मेदार नहीं हैं।",
       s6Header: "6. वारंटी अस्वीकरण और दायित्व की सीमा",
       s6Text:
-        "SudokuSync का सॉफ्टवेयर और मटीरियल 'as is' आधार पर दिया जाता है। हम किसी तरह की वारंटी नहीं देते और गेम यूज़ करने या न कर पाने से होने वाले किसी भी डेटा या प्रॉफिट नुकसान के लिए डेवलपर ज़िम्मेदार नहीं होगा।",
+        "Mo Logic (SudokuSync और Block Sync समेत) का सॉफ्टवेयर और मटीरियल 'as is' आधार पर दिया जाता है। हम किसी तरह की वारंटी नहीं देते और गेम्स यूज़ करने या न कर पाने से होने वाले किसी भी डेटा या प्रॉफिट नुकसान के लिए डेवलपर ज़िम्मेदार नहीं होगा।",
       s7Header: "7. अकाउंट डिलीशन और समाप्ति",
       s7Text:
         'आप कभी भी ऐप यूज़ करना बंद कर सकते हैं और सेटिंग्स में "अकाउंट और डेटा डिलीट करें" से सारा डेटा तुरंत डिलीट कर सकते हैं। शर्तें तोड़ने पर निकनेम्स या एक्सेस हटाने का अधिकार हमारे पास सुरक्षित है।',
@@ -562,18 +564,18 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       topics: {
         bug: {
           label: "बग रिपोर्ट",
-          subject: "SudokuSync Bug Report (v1.0.3)",
-          body: "App Version: v1.0.3\nPlatform (Web / Android): \nस्क्रीन या फीचर: \nदिक्कत कैसे हुई: \nक्या होना चाहिए था vs क्या हुआ: ",
+          subject: "Mo Logic Bug Report (SudokuSync / Block Sync v1.0.3)",
+          body: "App Version: v1.0.3\nGame (SudokuSync / Block Sync): \nPlatform (Web / Android): \nस्क्रीन या फीचर: \nदिक्कत कैसे हुई: \nक्या होना चाहिए था vs क्या हुआ: ",
         },
         privacy: {
           label: "प्राइवेसी / UMP कंसेंट",
-          subject: "SudokuSync Privacy & UMP Consent Inquiry (v1.0.3)",
-          body: "App Version: v1.0.3\nPlatform (Web / Android): \nटॉपिक (GDPR / CCPA / AdSense / AdMob AAID / UMP Consent): \nअपनी रिक्वेस्ट लिखें: ",
+          subject: "Mo Logic Privacy & UMP Consent Inquiry (v1.0.3)",
+          body: "App Version: v1.0.3\nGame (SudokuSync / Block Sync): \nPlatform (Web / Android): \nटॉपिक (GDPR / CCPA / AdSense / AdMob AAID / UMP Consent): \nअपनी रिक्वेस्ट लिखें: ",
         },
         deletion: {
           label: "अकाउंट और डेटा डिलीशन",
-          subject: "SudokuSync Account & Data Deletion Request (v1.0.3)",
-          body: "App Version: v1.0.3\nप्लेयर डिस्प्ले नेम / ईमेल: \nरिक्वेस्ट: कृपया मेरा SudokuSync Firestore प्रोफाइल, लीडरबोर्ड/मैच रिकॉर्ड्स और पुश नोटिफिकेशन टोकन्स हमेशा के लिए डिलीट करें।",
+          subject: "Mo Logic Account & Data Deletion Request (v1.0.3)",
+          body: "App Version: v1.0.3\nप्लेयर डिस्प्ले नेम / ईमेल: \nरिक्वेस्ट: कृपया मेरा Mo Logic (SudokuSync और Block Sync) Firestore प्रोफाइल, लीडरबोर्ड/मैच रिकॉर्ड्स और पुश नोटिफिकेशन टोकन्स हमेशा के लिए डिलीट करें।",
         },
       },
     },
@@ -581,7 +583,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       publisherBadge: "Mo Logic की तरफ से पब्लिश्ड",
       publisherHeader: "इंडिपेंडेंट पज़ल स्टूडियो और क्वालिटी स्टैंडर्ड्स",
       publisherText:
-        "SudokuSync को Mo Logic ने वेब (https://sudokusync.com) और Google Play Android (com.mologic.sudokusync) के लिए इंडिपेंडेंट रूप से बनाया और पब्लिश किया है। हर पज़ल, डायग्राम और गाइड को क्लीन बॉर्डरलेस पेस्टल UI, लाइट/डार्क मोड्स, ऑफलाइन सपोर्ट और ट्रांसपेरेंट फ्री एक्सेस के साथ डिज़ाइन किया गया है।",
+        "Mo Logic एक ही यूनिफाइड पज़ल इकोसिस्टम के तहत वेब (https://sudokusync.com और /blocks) और Google Play Android (com.mologic.sudokusync) पर SudokuSync और Block Sync दोनों को इंडिपेंडेंट रूप से बनाता और पब्लिश करता है। क्लासिक 9x9 Sudoku के साथ-साथ Block Sync 3x3 बॉक्स क्लियर्स, Classic और Time Rush मोड्स वाला क्लीन 9x9 ब्लॉक-प्लेसमेंट अनुभव देता है — बॉर्डरलेस पेस्टल UI, लाइट/डार्क मोड्स, ऑफलाइन सपोर्ट और ट्रांसपेरेंट फ्री एक्सेस के साथ।",
       engineHeader: "डिटरमिनिस्टिक 9x9 पज़ल इंजन और वेरिफाइड क्लूज़",
       engineIntro:
         "हर क्लासिक 9x9 बोर्ड हमारे सीडेड Mulberry32 PRNG जेनरेटर से बनता है और ह्यूमन-लॉजिक डिफिकल्टी इंजन तथा बिटमास्क MRV सॉल्वर से चेक होता है ताकि हर पज़ल का सिर्फ एक ही सही सॉल्यूशन हो:",
@@ -611,9 +613,9 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           summary: "डीप कैंडिडेट एलिमिनेशन चेन्स, X-Wing पैटर्न्स और कम स्टार्टिंग क्लूज़।",
         },
       ],
-      multiplayerHeader: "सेम-बोर्ड लाइव और एसिंक्रोनस मल्टीप्लेयर",
+      multiplayerHeader: "यूनिफाइड क्रॉस-गेम लाइव और एसिंक्रोनस मल्टीप्लेयर",
       multiplayerText:
-        "6-डिजिट रूम कोड्स, ऑप्शनल PIN लॉक और डायरेक्ट ?room= शेयर लिंक्स के ज़रिए वेब और Android पर दोस्तों के साथ बिल्कुल एक ही 9x9 ग्रिड पर लाइव या async मुकाबला खेलें। Google Sign-In के साथ आपके स्टैट्स, पर्सिस्टेंट Friends और Recent Players क्लाउड में सिंक रहते हैं, और Ghost Mode कभी भी ऑन/ऑफ हो सकता है।",
+        "Mo Logic के शेयर्ड मल्टीप्लेयर इकोसिस्टम में 6-डिजिट रूम कोड्स, ऑप्शनल PIN लॉक और डायरेक्ट ?room= शेयर लिंक्स के ज़रिए वेब और Android पर एक ही 9x9 Sudoku सीड या Block Sync (3x3 बॉक्स क्लियर्स, Classic और Time Rush मोड्स) में लाइव या async मुकाबला खेलें। Google Sign-In से आपके स्टैट्स, Friends और Recent Players सिंक रहते हैं, और Ghost Mode कभी भी टॉगल हो सकता है।",
       assistantsText:
         "बोर्ड पर 7 Smart Assistants मिलते हैं: Highlight Identical Numbers, Show Remaining Numbers, Highlight Related Area, Auto-Switch Completed Numbers, Auto-Remove Notes, Auto-Notes (सिर्फ Hard/Expert), और Fast Fill (Number-First)।",
       exploreHeader: "रूल्स, टूल्स और सपोर्ट देखें",
@@ -629,21 +631,22 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     privacy: {
       title: "Datenschutzerklärung",
       intro:
-        "Bei SudokuSync (https://sudokusync.com und unsere offizielle Android-App) hat der Schutz deiner Daten höchste Priorität. Diese Datenschutzerklärung erläutert ausführlich, welche Informationen erfasst, gespeichert und verarbeitet werden und wie wir globale Standards einhalten, darunter DSGVO (GDPR), CCPA/CPRA, COPPA, Google Play Data Safety, Google AdSense und Google AdMob.",
+        "Bei Mo Logic (Betreiber von SudokuSync, Block Sync sowie allen verbundenen Logikspielen, spielübergreifenden Mehrspielerräumen, Web-Portalen unter https://sudokusync.com und offiziellen Android-Apps) hat der Schutz deiner Daten höchste Priorität. Diese Datenschutzerklärung erläutert, welche Daten im gesamten Mo Logic-Ökosystem erfasst, gespeichert und verarbeitet werden, gemäß DSGVO (GDPR), CCPA/CPRA, COPPA, Google Play Data Safety, Google AdSense und Google AdMob.",
       s1Header: "1. Datenerhebung & Speicherarchitektur",
       s1Intro:
         "Wir arbeiten nach strenger Datensparsamkeit und trennen strikt zwischen rein lokalen Gerätedaten und Cloud-Datenbankeinträgen:",
       s1LocalStorage: {
         label: "Lokaler Speicher (nur Browser & Gerät):",
-        text: "Standard-localStorage wird ausschließlich lokal auf deinem Gerät genutzt, um Einstellungen (Dark Mode, Sounds, Haptik), Fehlerlimits, Timer-Anzeige, aktive Notizen und gespeicherte Einzelspieler-Partien zu sichern. Diese Daten verlassen dein Gerät nicht für Marketingzwecke.",
+        text: "Standard-localStorage wird ausschließlich lokal auf deinem Gerät genutzt, um Einstellungen (Dark Mode, Sounds, Haptik), Fehlerlimits, Timer-Anzeige, aktive Sudoku-Notizen sowie gespeicherte Block-Sync-Solo- und Raumläufe zu sichern. Diese Daten verlassen dein Gerät nicht für Marketingzwecke.",
       },
       s1Firestore: {
         label: "Google Cloud Firestore (Multiplayer & Bestenlisten):",
-        intro: "Bei Multiplayer-Duellen oder Bestenlisten werden nur folgende nicht-sensible Spielparameter gespeichert:",
+        intro: "Bei Mehrspielerräumen, Duellen oder Bestenlisten über alle Mo Logic-Spiele hinweg werden nur folgende nicht-sensible Parameter gespeichert:",
         bullets: [
-          "Anonyme Challenge-ID, Seed-Nummer und Schwierigkeitsgrad.",
+          "Anonyme Challenge-/Raum-ID, Seed-Nummer und Schwierigkeitsgrad bzw. Modus.",
           "Spieler-Spitzname (alphanumerisch gewählt) und Benutzer-ID.",
           "Match-Leistungswerte: Lösungszeit (Sekunden), Fehleranzahl und Sieg/Niederlage.",
+          "Spielübergreifende Raum-Telemetrie der Mo Logic-Titel (einschließlich Spieltyp wie sudoku oder blocks, Modus wie Classic oder Time Rush, Punktestand und Raumrangliste), sichtbar für Raumteilnehmer und Letzte Mitspieler, mit automatischem Raumablauf und Bereinigung.",
         ],
       },
       s1Fcm: {
@@ -662,7 +665,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Standard-Webserverlogs (IP-Adresse, Browser User-Agent, Zeitstempel, Rate-Limiting) werden von Google Firebase Hosting und unserem Express-Server ausschließlich zur Betriebssicherheit und DDoS-Abwehr verarbeitet.",
       },
       s2Header: "2. Werbung, Google AdSense, AdMob SDK, AAID & Google UMP-Einwilligung",
-      s2P1: "Um SudokuSync kostenlos anzubieten, nutzen wir Google AdSense im Web und das Google AdMob SDK in der Android-App. Im Web verwenden Google und Werbepartner Cookies (inklusive DoubleClick-/DART-Cookie) und Web-Beacons. Auf Android kann das AdMob SDK die Android Advertising ID (AAID), App-Interaktionen und Diagnosesignale für Anzeigenauslieferung, Frequency Capping und Betrugsabwehr verarbeiten.",
+      s2P1: "Um Mo Logic-Spiele (einschließlich SudokuSync und Block Sync) kostenlos anzubieten, nutzen wir Google AdSense im Web und das Google AdMob SDK in der Android-App. Im Web verwenden Google und Werbepartner Cookies (inklusive DoubleClick-/DART-Cookie) und Web-Beacons. Auf Android kann das AdMob SDK die Android Advertising ID (AAID), App-Interaktionen und Diagnosesignale für Anzeigenauslieferung, Frequency Capping und Betrugsabwehr verarbeiten.",
       s2P2: "Vor personalisierter Werbung in regulierten Regionen (einschließlich EWR und UK) zeigt unsere Android-App über das Google UMP (User Messaging Platform) Consent SDK einen Einwilligungsdialog an, über den du deine Zustimmung jederzeit gewähren, anpassen oder widerrufen kannst.",
       s2BoxTitle: "Werbetransparenz, AAID-Kontrolle & Opt-Out-Portale:",
       s2BoxIntro:
@@ -699,10 +702,10 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         "Nach CCPA/CPRA haben Einwohner Kaliforniens Anspruch auf Auskunft und Löschung. Wir verkaufen oder teilen deine personenbezogenen Daten NICHT gegen Geld oder kommerzielle Gegenleistung an Dritte.",
       s5Header: "5. Schutz von Kindern (COPPA)",
       s5Text:
-        "SudokuSync erfasst wissentlich keine personenbezogenen Daten von Kindern unter 13 Jahren (bzw. unter 16 im EWR/UK). Für das Spiel sind weder Klarnamen noch Adressen oder Telefonnummern erforderlich. Eltern können uns bei Bedenken sofort unter sudokutogethermode@gmail.com kontaktieren, damit Einträge umgehend gelöscht werden.",
+        "Mo Logic-Spiele (einschließlich SudokuSync und Block Sync) erfassen wissentlich keine personenbezogenen Daten von Kindern unter 13 Jahren (bzw. unter 16 im EWR/UK). Für das Spiel sind weder Klarnamen noch Adressen oder Telefonnummern erforderlich. Eltern können uns bei Bedenken sofort unter sudokutogethermode@gmail.com kontaktieren, damit Einträge umgehend gelöscht werden.",
       s6Header: "6. Aufbewahrungsfristen & Sicherheitskontrollen",
       s6Text:
-        "Multiplayer-Matchdatensätze älter als 30 Tage werden automatisch gelöscht. Jeglicher Datenverkehr ist per TLS/HTTPS verschlüsselt, und strenge Firestore-Sicherheitsregeln erzwingen Eigentumsrechte auf Dokumentebene.",
+        "Mehrspielerräume laufen automatisch ab und Matchdatensätze älter als 30 Tage werden automatisch gelöscht. Jeglicher Datenverkehr ist per TLS/HTTPS verschlüsselt, und strenge Firestore-Sicherheitsregeln erzwingen Eigentumsrechte auf Dokumentebene.",
       s7Header: "7. Kontakt",
       s7Intro: "Bei Fragen zu dieser Datenschutzerklärung wende dich bitte an unser Datenschutzteam:",
       s7TurnaroundLabel: "Antwortzeit:",
@@ -711,13 +714,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     terms: {
       title: "Nutzungsbedingungen",
       intro:
-        "Durch den Zugriff, die Installation oder das Spielen von SudokuSync (https://sudokusync.com oder offizielle Android-App) erkennst du diese Nutzungsbedingungen sowie alle geltenden Gesetze verbindlich an.",
+        "Durch den Zugriff, die Installation oder das Spielen eines Spiels auf der Multi-Game-Plattform von Mo Logic — einschließlich SudokuSync, Block Sync und künftiger Mo Logic-Spiele (https://sudokusync.com oder offizielle Android-App) — erkennst du diese Nutzungsbedingungen sowie alle geltenden Gesetze verbindlich an.",
       s1Header: "1. Leistungsbeschreibung & Kostenloser Zugang",
       s1Text:
-        'SudokuSync bietet kostenlose digitale Sudoku-Rätsel, deterministische Multiplayer-Räume, Echtzeit-Bestenlisten und Logikwerkzeuge auf "AS IS"- und "AS AVAILABLE"-Basis. Wir behalten uns das Recht vor, Funktionen jederzeit anzupassen oder einzustellen.',
+        'Mo Logic bietet kostenlose digitale Logik- und Blockplatzierungsspiele (darunter SudokuSync, Block Sync und künftige Titel), deterministische Mehrspielerräume, Echtzeit-Bestenlisten und Trainingswerkzeuge auf "AS IS"- und "AS AVAILABLE"-Basis. Wir behalten uns vor, Funktionen jederzeit anzupassen oder einzustellen; der Beitritt zu neueren Spielen oder Mehrspielerräumen kann ein Update auf die neueste App-Version erfordern (Update-Required-Kompatibilitätsschutz).',
       s2Header: "2. Fair Play, Anti-Cheat & Community-Standards",
       s2Intro:
-        "SudokuSync steht für ein faires, leistungsorientiertes Rätselumfeld. Alle Spieler verpflichten sich zu folgenden Fair-Play-Regeln:",
+        "Mo Logic steht für ein faires, leistungsorientiertes Rätselumfeld in SudokuSync, Block Sync und künftigen Veröffentlichungen. Alle Spieler verpflichten sich zu folgenden Fair-Play-Regeln:",
       s2BoxTitle: "Fair-Play- & Anti-Cheat-Richtlinie:",
       s2Bullets: [
         { label: "Keine Bots oder automatischen Solver:", text: "Bots, Solver-Skripte, Auto-Clicker oder Headless-Browser sind verboten." },
@@ -731,7 +734,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Bei Erkennung von Cheats oder Manipulation werden Zeiten disqualifiziert, Bestenlisten-Einträge gelöscht und Konten/Geräte gesperrt.",
       },
       s3Header: "3. Cloud-Konto & Synchronisierung",
-      s3Intro: "Du kannst als Gast spielen oder optional dein Google-Konto verknüpfen:",
+      s3Intro: "Du kannst Mo Logic-Spiele (SudokuSync, Block Sync und verbundene Titel) als Gast spielen oder optional dein Google-Konto verknüpfen:",
       s3Bullets: [
         { label: "Geräteübergreifende Synchronisierung:", text: "Sichert Statistiken, Lösungsverlauf, Bestzeiten, Einstellungen und gespeicherte Partien über Web und Android." },
         { label: "Vertraulichkeit:", text: "Du bist für die Sicherheit deiner Google-Zugangsdaten und alle Aktivitäten in deiner Sitzung selbst verantwortlich." },
@@ -741,13 +744,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Geistiges Eigentum",
       s4Text:
-        "Alle Spiel-Engines, prozedurale Audio-Synthese, UI-Designs, SudokuSync Design-System-Tokens, Grafiken, Logos und Quellcodes sind geistiges Eigentum von SudokuSync.",
+        "Alle Spiel-Engines, prozedurale Audio-Synthese, UI-Designs, Mo Logic / SudokuSync Design-System-Tokens, Grafiken, Logos und Quellcodes in SudokuSync, Block Sync und künftigen Mo Logic-Spielen sind geistiges Eigentum von Mo Logic.",
       s5Header: "5. Werbung Dritter (AdSense & AdMob)",
       s5Text:
         "Die Finanzierung erfolgt über Google AdSense (Web) und das Google AdMob SDK (Android, inklusive optionaler Interstitial-/Rewarded-Ads vorbehaltlich Google UMP-Einwilligung). Für Inhalte externer Werbetreibender übernehmen wir keine Haftung.",
       s6Header: "6. Gewährleistungs- & Haftungsausschluss",
       s6Text:
-        "Die Software wird ohne Mängelgewähr ('as is') bereitgestellt. SudokuSync schließt jede ausdrückliche oder stillschweigende Haftung für Datenverluste, entgangenen Gewinn oder Nutzungsausfälle aus, soweit gesetzlich zulässig.",
+        "Die Software innerhalb von Mo Logic (einschließlich SudokuSync und Block Sync) wird ohne Mängelgewähr ('as is') bereitgestellt. Mo Logic schließt jede ausdrückliche oder stillschweigende Haftung für Datenverluste, entgangenen Gewinn oder Nutzungsausfälle aus, soweit gesetzlich zulässig.",
       s7Header: "7. Kontolöschung & Kündigung",
       s7Text:
         'Du kannst die Nutzung jederzeit beenden und über "Konto & Daten löschen" in den Einstellungen sämtliche Cloud- und Lokaldaten sofort entfernen. Bei Verstößen behalten wir uns Profil- und Zugangssperrungen vor.',
@@ -771,18 +774,18 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       topics: {
         bug: {
           label: "Fehlerbericht",
-          subject: "SudokuSync Bug Report (v1.0.3)",
-          body: "App-Version: v1.0.3\nPlattform (Web / Android): \nBereich / Bildschirm: \nSchritte zur Reproduktion: \nErwartet vs. Tatsächlich: ",
+          subject: "Mo Logic Bug Report (SudokuSync / Block Sync v1.0.3)",
+          body: "App-Version: v1.0.3\nSpiel (SudokuSync / Block Sync): \nPlattform (Web / Android): \nBereich / Bildschirm: \nSchritte zur Reproduktion: \nErwartet vs. Tatsächlich: ",
         },
         privacy: {
           label: "Datenschutz / UMP",
-          subject: "SudokuSync Privacy & UMP Consent Inquiry (v1.0.3)",
-          body: "App-Version: v1.0.3\nPlattform (Web / Android): \nThema (DSGVO / CCPA / AdSense / AdMob AAID / UMP): \nAnliegen: ",
+          subject: "Mo Logic Privacy & UMP Consent Inquiry (v1.0.3)",
+          body: "App-Version: v1.0.3\nSpiel (SudokuSync / Block Sync): \nPlattform (Web / Android): \nThema (DSGVO / CCPA / AdSense / AdMob AAID / UMP): \nAnliegen: ",
         },
         deletion: {
           label: "Konto & Daten löschen",
-          subject: "SudokuSync Account & Data Deletion Request (v1.0.3)",
-          body: "App-Version: v1.0.3\nSpielername / E-Mail: \nAnfrage: Bitte löscht mein SudokuSync-Firestore-Profil, Bestenlisten- und Match-Daten sowie Push-Tokens dauerhaft.",
+          subject: "Mo Logic Account & Data Deletion Request (v1.0.3)",
+          body: "App-Version: v1.0.3\nSpielername / E-Mail: \nAnfrage: Bitte löscht mein Mo Logic-Firestore-Profil (SudokuSync & Block Sync), Bestenlisten- und Match-Daten sowie Push-Tokens dauerhaft.",
         },
       },
     },
@@ -790,7 +793,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       publisherBadge: "Veröffentlicht von Mo Logic",
       publisherHeader: "Unabhängiges Puzzle-Studio & Qualitätsstandards",
       publisherText:
-        "SudokuSync wird unabhängig von Mo Logic für das Web (https://sudokusync.com) und Google Play Android (com.mologic.sudokusync) entwickelt. Jedes Rätsel und jeder Leitfaden setzt auf eine ruhige, randlose Pastell-Oberfläche mit Hell-/Dunkelmodus, Offline-Speicher und transparentem kostenlosem Zugang.",
+        "Mo Logic entwickelt und veröffentlicht sowohl SudokuSync als auch Block Sync unabhängig unter einem gemeinsamen Ökosystem für das Web (https://sudokusync.com und /blocks) und Google Play Android (com.mologic.sudokusync). Neben klassischem 9x9-Sudoku bietet Block Sync ruhiges 9x9-Blockplatzieren mit 3x3-Box-Clears, Classic- und Time-Rush-Modi auf einer randlosen Pastell-Oberfläche mit Hell-/Dunkelmodus und Offline-Speicher.",
       engineHeader: "Deterministische 9x9-Engine & Verifizierte Hinweise",
       engineIntro:
         "Jedes klassische 9x9-Brett wird per Mulberry32-PRNG erzeugt und durch unsere Human-Logic-Bewertung sowie Bitmask-MRV-Verifikation auf genau eine eindeutige Lösung geprüft:",
@@ -820,9 +823,9 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           summary: "Tiefe Kandidatenketten, X-Wing-Techniken und wenige Startziffern.",
         },
       ],
-      multiplayerHeader: "Same-Board Live- & Async-Mehrspielermodus",
+      multiplayerHeader: "Spielübergreifender Live- & Async-Mehrspielermodus",
       multiplayerText:
-        "Spiele live oder asynchron auf exakt demselben 9x9-Seed per 6-stelligem Raumcode, optionaler PIN-Sperre und direktem ?room=-Link. Mit Google-Anmeldung synchronisierst du Statistiken, gespeicherte Freunde neben den letzten Mitspielern und den Geistmodus plattformübergreifend.",
+        "Spiele im gemeinsamen Mo Logic-Mehrspieler-Ökosystem live oder asynchron SudokuSync auf exakt demselben 9x9-Seed oder Block Sync (9x9-Blockplatzierung mit 3x3-Box-Clears in Classic & Time Rush) per 6-stelligem Raumcode, optionaler PIN-Sperre und ?room=-Link. Mit Google-Anmeldung synchronisierst du Statistiken, Freunde, letzte Mitspieler und den Geistmodus.",
       assistantsText:
         "Sieben verifizierte Smart-Assistenten unterstützen dein Spiel: Gleiche Zahlen markieren, Verbleibende Zahlen anzeigen, Zugehörige Bereiche markieren, Vollständige Zahlen automatisch wechseln, Notizen automatisch entfernen, Auto-Notizen (nur Schwer/Experte) und Schnelleingabe.",
       exploreHeader: "Regeln, Werkzeuge & Kontakt entdecken",
@@ -838,20 +841,21 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     privacy: {
       title: "プライバシーポリシー",
       intro:
-        "SudokuSync（https://sudokusync.com および公式Androidアプリ）では、プレイヤーのプライバシー保護を最重要事項としています。本ポリシーでは、収集・保存・処理される情報の種類、および GDPR、CCPA/CPRA、COPPA、Google Play データセーフティ、Google AdSense、Google AdMob ポリシーの遵守について詳しく説明します。",
+        "Mo Logic（SudokuSync、Block Sync、および連携するすべてのパズルゲーム、クロスゲーム・マルチプレイルーム、Webポータル https://sudokusync.com、公式Androidアプリを運営）では、プレイヤーのプライバシー保護を最重要事項としています。本ポリシーでは、Mo Logicプラットフォーム全体で収集・保存・処理される情報の種類、および GDPR、CCPA/CPRA、COPPA、Google Play データセーフティ、Google AdSense、Google AdMob ポリシーの遵守について詳しく説明します。",
       s1Header: "1. 情報収集とデータ保存アーキテクチャ",
       s1Intro: "当社は厳格なデータ最小化原則に基づき、端末内データとクラウド記録を明確に分離しています。",
       s1LocalStorage: {
         label: "クライアント側ローカル保存（ブラウザ・端末のみ）：",
-        text: "標準的な localStorage は、UI設定（ダークモード、効果音、触覚）、ミス上限、タイマー表示、メモ、保存済みソロゲームの保持のみに使用され、外部マーケティング業者へ販売・送信されることはありません。",
+        text: "標準的な localStorage は、UI設定（ダークモード、効果音、触覚）、ミス上限、タイマー表示、進行中のSudoku盤面・メモ、および保存済みBlock Syncのソロ/ルーム進行の保持のみに使用され、外部マーケティング業者へ販売・送信されることはありません。",
       },
       s1Firestore: {
         label: "Google Cloud Firestore（リアルタイム対戦・ランキング）：",
-        intro: "マルチプレイヤー対戦やグローバルマッチに参加した際、以下の非機密ゲームデータのみが保存されます：",
+        intro: "Mo Logic各ゲームのマルチプレイルーム、チャレンジ、またはグローバルマッチに参加した際、以下の非機密ゲームデータのみが保存されます：",
         bullets: [
-          "匿名のチャレンジID、シード番号、難易度。",
+          "匿名のチャレンジ／ルームID、シード番号、難易度またはモード。",
           "プレイヤー表示名（ユーザー指定の英数字）およびユーザーID。",
           "成績指標：クリア時間（秒）、ミス回数、勝敗ステータス。",
+          "Mo Logicタイトル間のクロスゲーム・マルチプレイルーム情報（sudoku や blocks などのゲーム種別、Classic／Time Rush などのモード、スコア、ルーム順位）はルーム参加者および最近のプレイヤーに公開され、ルームは期限到来後に自動期限切れ・削除されます。",
         ],
       },
       s1Fcm: {
@@ -869,7 +873,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Google Firebase Hosting および当社サーバーは、DDoS防御やレート制限・セキュリティ維持のみを目的として、標準的なアクセスログ（IPアドレス、User-Agent、タイムスタンプ）を自動処理します。",
       },
       s2Header: "2. 広告配信（Google AdSense / AdMob SDK / AAID / Google UMP同意管理）",
-      s2P1: "SudokuSync を無料で提供するため、Webでは Google AdSense、Androidアプリでは Google AdMob SDK を使用しています。WebではCookie（DoubleClick / DART Cookie含む）や識別子が利用され、Androidでは広告配信・フリークエンシー制限・不正防止のために Android広告ID（AAID）、操作イベント、診断シグナルが処理される場合があります。",
+      s2P1: "Mo Logic の各ゲーム（SudokuSync および Block Sync を含む）を無料で提供するため、Webでは Google AdSense、Androidアプリでは Google AdMob SDK を使用しています。WebではCookie（DoubleClick / DART Cookie含む）や識別子が利用され、Androidでは広告配信・フリークエンシー制限・不正防止のために Android広告ID（AAID）、操作イベント、診断シグナルが処理される場合があります。",
       s2P2: "EEA・英国など規制地域でパーソナライズ広告を表示する前には、Google UMP (User Messaging Platform) Consent SDK により明確な同意ダイアログを表示し、いつでも同意の変更・撤回ができるようにしています。",
       s2BoxTitle: "広告の透明性、AAID管理およびオプトアウト窓口：",
       s2BoxIntro: "以下の手順・公式ポータルからパーソナライズ広告の停止や広告IDのリセットが可能です：",
@@ -905,10 +909,10 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         "CCPA/CPRAに基づき、カリフォルニア州居住者は収集データの開示・削除を請求できます。当社が利用者の個人情報を金銭的対価や商業目的で第三者に販売・共有することは一切ありません。",
       s5Header: "5. 児童のプライバシー保護（COPPA）",
       s5Text:
-        "SudokuSync は13歳未満（EEA/UKでは16歳未満）の児童から意図的に個人情報を収集しません。本名・住所・電話番号の登録は不要です。万が一お子様が情報を送信したと思われる場合は sudokutogethermode@gmail.com までご連絡ください。速やかに削除いたします。",
+        "Mo Logic の各ゲーム（SudokuSync および Block Sync を含む）は13歳未満（EEA/UKでは16歳未満）の児童から意図的に個人情報を収集しません。本名・住所・電話番号の登録は不要です。万が一お子様が情報を送信したと思われる場合は sudokutogethermode@gmail.com までご連絡ください。速やかに削除いたします。",
       s6Header: "6. データ保持期間とセキュリティ管理",
       s6Text:
-        "30日を超えたマルチプレイヤー対戦記録はデータベースから自動削除されます。すべての通信は TLS/HTTPS で暗号化され、厳格な Firestore セキュリティルールによってデータ改ざんを防いでいます。",
+        "マルチプレイルームは自動的に期限切れとなり、30日を超えた対戦記録はデータベースから自動削除されます。すべての通信は TLS/HTTPS で暗号化され、厳格な Firestore セキュリティルールによってデータ改ざんを防いでいます。",
       s7Header: "7. お問い合わせ",
       s7Intro: "本プライバシーポリシーやデータ取扱いに関するご質問はこちらまでご連絡ください：",
       s7TurnaroundLabel: "返信目安：",
@@ -917,12 +921,12 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     terms: {
       title: "利用規約",
       intro:
-        "SudokuSync（https://sudokusync.com および公式Androidアプリ）にアクセス、インストール、またはプレイすることで、本利用規約および適用法令に同意したものとみなされます。同意されない場合はご利用をお控えください。",
+        "Mo Logic のマルチゲーム・パズルプラットフォーム（SudokuSync、Block Sync、および今後の Mo Logic タイトルを含む、https://sudokusync.com および公式Androidアプリ）にアクセス、インストール、またはプレイすることで、本利用規約および適用法令に同意したものとみなされます。同意されない場合はご利用をお控えください。",
       s1Header: "1. サービス内容と無料提供",
       s1Text:
-        "SudokuSync は無料の数独パズル、決定論的シード対戦ルーム、リアルタイムランキング、ロジック補助機能を提供します。本サービスは現状有姿（「AS IS」「AS AVAILABLE」）で提供され、予告なく機能を変更・終了する場合があります。",
+        "Mo Logic は無料のロジック／ブロック配置パズルゲーム（SudokuSync、Block Sync、および今後追加されるタイトル）、決定論的シード対戦ルーム、リアルタイムランキング、トレーニング機能を提供します。本サービスは現状有姿（「AS IS」「AS AVAILABLE」）で提供され、予告なく機能を変更・終了する場合があります。また、新しいゲームやマルチプレイルームへの参加には最新アプリバージョンへの更新が必要となる場合があります（Update Required 互換性保護機能）。",
       s2Header: "2. フェアプレイ・不正対策・コミュニティ基準",
-      s2Intro: "公平で健全なランキング・対戦環境を守るため、すべてのユーザーは以下の基準に従うものとします：",
+      s2Intro: "SudokuSync、Block Sync、および今後の Mo Logic 作品で公平かつ健全な環境を守るため、すべてのユーザーは以下の基準に従うものとします：",
       s2BoxTitle: "フェアプレイ・不正防止ポリシー：",
       s2Bullets: [
         { label: "自動ボット・ソルバーの禁止：", text: "自動解答スクリプト、ボット、自動クリッカー、ヘッドレスブラウザの使用禁止。" },
@@ -936,7 +940,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "不正行為が検出された場合、記録の失格、ランキングからの削除、プロフィールや端末アクセスの停止を行います。",
       },
       s3Header: "3. クラウドアカウントと同期の利用",
-      s3Intro: "ゲストプレイのほか、任意でGoogleアカウントを連携してクラウド機能を利用できます：",
+      s3Intro: "Mo Logic の各ゲーム（SudokuSync、Block Sync、連携タイトル）ではゲストプレイのほか、任意でGoogleアカウントを連携してクラウド機能を利用できます：",
       s3Bullets: [
         { label: "端末間同期：", text: "統計、履歴、ベストタイム、設定、保存済みパズルをWeb・Android間で同期します。" },
         { label: "認証情報の管理責任：", text: "Googleアカウントの管理および認証下での操作はユーザー自身の責任となります。" },
@@ -946,13 +950,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. 知的財産権",
       s4Text:
-        "すべてのゲームロジック、音声合成コード、UIデザイン、SudokuSync デザインシステムトークン、画像、ロゴ、ソースコードの知的財産権は SudokuSync に帰属します。",
+        "SudokuSync、Block Sync、および今後の Mo Logic ゲームにおけるすべてのゲームロジック、音声合成コード、UIデザイン、Mo Logic / SudokuSync デザインシステムトークン、画像、ロゴ、ソースコードの知的財産権は Mo Logic に帰属します。",
       s5Header: "5. 第三者広告（AdSense & AdMob）",
       s5Text:
         "無料提供のため、Webでは Google AdSense、Androidでは Google AdMob SDK（対象地域での Google UMP 同意に基づくインタースティシャル／リワード広告を含む）を表示します。外部広告主の内容について当社は責任を負いません。",
       s6Header: "6. 保証の否認と責任制限",
       s6Text:
-        "本ソフトウェアは現状のまま提供され、明示・黙示を問わず一切の保証を行いません。データ損失や逸失利益を含むいかなる損害についても、開発者は責任を負わないものとします。",
+        "Mo Logic（SudokuSync および Block Sync を含む）のソフトウェアは現状のまま提供され、明示・黙示を問わず一切の保証を行いません。データ損失や逸失利益を含むいかなる損害についても、開発者は責任を負わないものとします。",
       s7Header: "7. アカウント削除および利用終了",
       s7Text:
         "利用はいつでも終了でき、設定の「アカウントとデータを削除」から全データを即座に削除できます。規約違反時にはアクセス停止を行う権利を有します。",
@@ -976,18 +980,18 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       topics: {
         bug: {
           label: "不具合報告",
-          subject: "SudokuSync Bug Report (v1.0.3)",
-          body: "アプリバージョン: v1.0.3\n利用環境 (Web / Android): \n該当画面・機能: \n再現手順: \n期待する動作と実際の動作: ",
+          subject: "Mo Logic Bug Report (SudokuSync / Block Sync v1.0.3)",
+          body: "アプリバージョン: v1.0.3\n対象ゲーム (SudokuSync / Block Sync): \n利用環境 (Web / Android): \n該当画面・機能: \n再現手順: \n期待する動作と実際の動作: ",
         },
         privacy: {
           label: "プライバシー / UMP同意",
-          subject: "SudokuSync Privacy & UMP Consent Inquiry (v1.0.3)",
-          body: "アプリバージョン: v1.0.3\n利用環境 (Web / Android): \n区分 (GDPR / CCPA / AdSense / AdMob AAID / UMP): \nお問い合わせ内容: ",
+          subject: "Mo Logic Privacy & UMP Consent Inquiry (v1.0.3)",
+          body: "アプリバージョン: v1.0.3\n対象ゲーム (SudokuSync / Block Sync): \n利用環境 (Web / Android): \n区分 (GDPR / CCPA / AdSense / AdMob AAID / UMP): \nお問い合わせ内容: ",
         },
         deletion: {
           label: "アカウント・データ削除",
-          subject: "SudokuSync Account & Data Deletion Request (v1.0.3)",
-          body: "アプリバージョン: v1.0.3\nプレイヤー表示名 / メールアドレス: \n依頼内容: SudokuSync の Firestore プロフィール、対戦・ランキング記録、FCM 通知トークンの完全削除を希望します。",
+          subject: "Mo Logic Account & Data Deletion Request (v1.0.3)",
+          body: "アプリバージョン: v1.0.3\nプレイヤー表示名 / メールアドレス: \n依頼内容: Mo Logic（SudokuSync および Block Sync）の Firestore プロフィール、対戦・ランキング記録、FCM 通知トークンの完全削除を希望します。",
         },
       },
     },
@@ -995,7 +999,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       publisherBadge: "開発・公開: Mo Logic",
       publisherHeader: "独立パズルスタジオと品質方針",
       publisherText:
-        "SudokuSync は Mo Logic が Web（https://sudokusync.com）および Google Play Android（com.mologic.sudokusync）向けに独立開発・公開している論理パズルプラットフォームです。ボーダーレスなパステルUI、ライト/ダーク対応、オフライン保存、透明性の高い広告モデルで快適に遊べます。",
+        "Mo Logic は Web（https://sudokusync.com および /blocks）ならびに Google Play Android（com.mologic.sudokusync）向けに、SudokuSync と Block Sync の両タイトルを一つの統合パズルエコシステムとして独立開発・公開しています。クラシック9x9数独に加え、Block Sync では3x3ボックス消去・Classic／Time Rush モードを備えた9x9ブロック配置パズルを、ボーダーレスなパステルUI、ライト/ダーク対応、オフライン保存で快適に楽しめます。",
       engineHeader: "決定的9x9エンジンと難易度別ヒント数",
       engineIntro:
         "すべてのクラシック9x9盤面は Mulberry32 PRNG により生成され、人間向けロジック評価と MRV ビットマスク検証によって「唯一解」であることが数学的に確認されています。",
@@ -1025,9 +1029,9 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           summary: "X-Wing などの連鎖消去が鍵になる最小限の初期配置。",
         },
       ],
-      multiplayerHeader: "同盤面ライブ＆非同期マルチプレイ",
+      multiplayerHeader: "統合クロスゲーム・ライブ＆非同期マルチプレイ",
       multiplayerText:
-        "6桁のルーム番号、任意のPIN保護、?room= 共有リンクを使って、Web と Android の垣根なくまったく同じ9x9盤面でライブまたは非同期対戦が楽しめます。Google ログインで戦績やフレンドリスト、最近のプレイヤー履歴を同期でき、ゴーストモードでオンライン表示も切り替え可能です。",
+        "Mo Logic 共通のマルチプレイ基盤により、6桁のルーム番号、任意のPIN保護、?room= 共有リンクを使って、SudokuSync（同一9x9シード）と Block Sync（3x3ボックス消去対応・Classic／Time Rush モード）の両方でライブおよび非同期対戦を楽しめます。Google ログインで戦績やフレンド、最近のプレイヤー、ゴーストモードを同期できます。",
       assistantsText:
         "同一数字の強調、残り数字の表示、関連エリア強調、完了数字の自動切替、メモの自動削除、自動メモ（上級・達人限定）、ファストフィルの7つのスマートアシストを搭載しています。",
       exploreHeader: "ルール・ツール・サポートを見る",
@@ -1043,20 +1047,21 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     privacy: {
       title: "개인정보 처리방침",
       intro:
-        "SudokuSync(https://sudokusync.com 및 공식 Android 모바일 앱)는 플레이어의 개인정보 보호를 최우선으로 생각합니다. 본 방침은 수집·저장·처리되는 정보 유형과 GDPR, CCPA/CPRA, COPPA, Google Play 데이터 보안 정책, Google AdSense 및 Google AdMob 정책 준수 방식을 상세히 안내합니다.",
+        "Mo Logic(SudokuSync, Block Sync 및 모든 연동 퍼즐 게임, 크로스 게임 멀티플레이어 방, 웹 포털 https://sudokusync.com, 공식 Android 앱 운영)은 플레이어의 개인정보 보호를 최우선으로 생각합니다. 본 방침은 Mo Logic 플랫폼 전반에서 수집·저장·처리되는 정보 유형과 GDPR, CCPA/CPRA, COPPA, Google Play 데이터 보안 정책, Google AdSense 및 Google AdMob 정책 준수 방식을 상세히 안내합니다.",
       s1Header: "1. 정보 수집 및 데이터 저장 아키텍처",
       s1Intro: "당사는 엄격한 데이터 최소화 원칙을 따르며 기기 내 로컬 저장소와 클라우드 기록을 명확히 구분합니다:",
       s1LocalStorage: {
         label: "클라이언트 로컬 저장소(브라우저 및 기기 전용):",
-        text: "표준 브라우저 localStorage는 다크 모드, 사운드, 햅틱, 실수 제한, 타이머 표시, 메모 및 저장된 1인용 게임 등 UI 환경설정 유지를 위해서만 기기 내부에 사용되며 외부 마케팅 업체에 판매되거나 전송되지 않습니다.",
+        text: "표준 브라우저 localStorage는 다크 모드, 사운드, 햅틱, 실수 제한, 타이머 표시, 진행 중인 Sudoku 보드/메모 및 저장된 Block Sync 솔로·방 기록 등 UI 환경설정 유지를 위해서만 기기 내부에 사용되며 외부 마케팅 업체에 판매되거나 전송되지 않습니다.",
       },
       s1Firestore: {
         label: "Google Cloud Firestore(실시간 멀티플레이어 및 순위표):",
-        intro: "멀티플레이어 대전 또는 글로벌 매치 참여 시 다음의 비민감 게임 정보만 저장됩니다:",
+        intro: "Mo Logic 게임 전반의 멀티플레이어 방, 챌린지 또는 글로벌 매치 참여 시 다음의 비민감 게임 정보만 저장됩니다:",
         bullets: [
-          "익명 챌린지 ID, 시드 번호 및 난이도.",
+          "익명 챌린지 / 방 ID, 시드 번호 및 난이도 또는 모드.",
           "플레이어 닉네임(사용자 지정 영숫자) 및 사용자 ID.",
           "매치 성과 지표: 완료 시간(초), 실수 횟수 및 승패 결과.",
+          "Mo Logic 타이틀 간 크로스 게임 멀티플레이어 방 텔레메트리(sudoku/blocks 등의 게임 유형, Classic/Time Rush 모드, 점수, 방 순위 포함)는 방 참여자와 최근 플레이어에게 공개되며, 만료 시 자동 정리·삭제됩니다.",
         ],
       },
       s1Fcm: {
@@ -1074,7 +1079,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Google Firebase Hosting과 당사 서버는 운영 보안, DDoS 방어 및 요청 제한 무결성 유지를 위해서만 표준 웹 요청 로그(IP 주소, User-Agent, 타임스탬프)를 자동 처리합니다.",
       },
       s2Header: "2. 광고, Google AdSense, AdMob SDK, AAID 및 Google UMP 동의",
-      s2P1: "SudokuSync를 무료로 제공하기 위해 웹에서는 Google AdSense, Android 앱에서는 Google AdMob SDK를 사용합니다. 웹에서는 쿠키(DoubleClick / DART 쿠키 포함)와 식별자가 사용되며, Android에서는 광고 게재, 빈도 제한 및 사기 방지를 위해 Android 광고 ID(AAID), 앱 상호작용 이벤트 및 진단 신호가 처리될 수 있습니다.",
+      s2P1: "Mo Logic 게임(SudokuSync 및 Block Sync 포함)을 무료로 제공하기 위해 웹에서는 Google AdSense, Android 앱에서는 Google AdMob SDK를 사용합니다. 웹에서는 쿠키(DoubleClick / DART 쿠키 포함)와 식별자가 사용되며, Android에서는 광고 게재, 빈도 제한 및 사기 방지를 위해 Android 광고 ID(AAID), 앱 상호작용 이벤트 및 진단 신호가 처리될 수 있습니다.",
       s2P2: "EEA 및 영국 등 규제 지역에서 맞춤형 광고를 게재하기 전에 모바일 앱은 Google UMP(User Messaging Platform) Consent SDK를 통해 명확한 개인정보 선택 창을 표시하여 언제든 동의를 관리하거나 철회할 수 있게 합니다.",
       s2BoxTitle: "광고 투명성, AAID 제어 및 수신 거부 포털:",
       s2BoxIntro: "언제든 맞춤형 광고를 거부하거나 모바일 광고 ID 재설정 및 쿠키 설정을 관리할 수 있습니다:",
@@ -1110,10 +1115,10 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         "캘리포니아 거주자는 수집 데이터 범주 확인 및 삭제를 요청할 수 있습니다. 당사는 금전적 또는 상업적 대가를 위해 귀하의 개인정보를 제3자에게 판매하거나 공유하지 않습니다.",
       s5Header: "5. 아동 개인정보 보호(COPPA)",
       s5Text:
-        "SudokuSync는 만 13세 미만(EEA/UK에서는 만 16세 미만) 아동의 개인정보를 고의로 수집하지 않습니다. 플레이를 위해 실명, 주소, 전화번호를 요구하지 않으며, 아동 정보 제출이 확인될 경우 sudokutogethermode@gmail.com 으로 연락 주시면 즉시 삭제합니다.",
+        "Mo Logic 게임(SudokuSync 및 Block Sync 포함)은 만 13세 미만(EEA/UK에서는 만 16세 미만) 아동의 개인정보를 고의로 수집하지 않습니다. 플레이를 위해 실명, 주소, 전화번호를 요구하지 않으며, 아동 정보 제출이 확인될 경우 sudokutogethermode@gmail.com 으로 연락 주시면 즉시 삭제합니다.",
       s6Header: "6. 데이터 보유 기간 및 보안 제어",
       s6Text:
-        "30일이 지난 멀티플레이어 매치 기록은 데이터베이스에서 자동 삭제됩니다. 모든 클라이언트-서버 통신은 TLS/HTTPS로 암호화되며 엄격한 Firestore 보안 규칙으로 무단 변조를 차단합니다.",
+        "멀티플레이어 방은 만료 시 자동 삭제되며 30일이 지난 매치 기록도 데이터베이스에서 자동 정리됩니다. 모든 클라이언트-서버 통신은 TLS/HTTPS로 암호화되며 엄격한 Firestore 보안 규칙으로 무단 변조를 차단합니다.",
       s7Header: "7. 문의처",
       s7Intro: "개인정보 처리방침 및 데이터 관리에 대한 문의는 아래로 연락해 주세요:",
       s7TurnaroundLabel: "응답 시간:",
@@ -1122,12 +1127,12 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     terms: {
       title: "서비스 이용약관",
       intro:
-        "SudokuSync(https://sudokusync.com 및 공식 Android 앱)에 접속·설치하거나 플레이함으로써 귀하는 본 이용약관 및 관련 법령을 준수할 것에 동의합니다. 동의하지 않는 경우 앱을 이용할 수 없습니다.",
+        "Mo Logic 멀티게임 퍼즐 플랫폼(SudokuSync, Block Sync 및 향후 Mo Logic 게임 포함, https://sudokusync.com 및 공식 Android 앱)에 접속·설치하거나 플레이함으로써 귀하는 본 이용약관 및 관련 법령을 준수할 것에 동의합니다. 동의하지 않는 경우 앱을 이용할 수 없습니다.",
       s1Header: "1. 서비스 설명 및 무료 제공",
       s1Text:
-        'SudokuSync는 무료 디지털 스도쿠 퍼즐, 결정적 시드 멀티플레이어 방, 실시간 순위표 및 논리 훈련 도구를 "있는 그대로(AS IS)" 및 "이용 가능한 범위(AS AVAILABLE)" 기준으로 제공합니다.',
+        'Mo Logic은 무료 디지털 논리 및 블록 배치 퍼즐 게임(SudokuSync, Block Sync 및 향후 출시작), 결정적 시드 멀티플레이어 방, 실시간 순위표 및 훈련 도구를 "있는 그대로(AS IS)" 및 "이용 가능한 범위(AS AVAILABLE)" 기준으로 제공합니다. 최신 게임이나 멀티플레이어 방에 참여하려면 최신 앱 버전으로 업데이트해야 할 수 있습니다(Update Required 호환성 보호).',
       s2Header: "2. 페어플레이, 부정행위 방지 및 커뮤니티 기준",
-      s2Intro: "공정한 경쟁 환경을 유지하기 위해 모든 플레이어는 다음 페어플레이 규칙을 준수해야 합니다:",
+      s2Intro: "SudokuSync, Block Sync 및 향후 Mo Logic 게임에서 공정한 경쟁 환경을 유지하기 위해 모든 플레이어는 다음 페어플레이 규칙을 준수해야 합니다:",
       s2BoxTitle: "페어플레이 및 부정행위 방지 정책:",
       s2Bullets: [
         { label: "자동 봇 및 솔버 금지:", text: "퍼즐을 풀거나 플레이를 모방하는 봇, 스크립트, 오토클리커, 헤드리스 브라우저 사용 금지." },
@@ -1141,7 +1146,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "부정행위 탐지 시 기록 실격, 공개 순위표 제거 및 프로필·기기 이용 제한 조치가 취해집니다.",
       },
       s3Header: "3. 클라우드 계정 및 동기화 이용",
-      s3Intro: "게스트로 플레이하거나 Google 계정을 연결해 확장 기능을 사용할 수 있습니다:",
+      s3Intro: "Mo Logic 게임(SudokuSync, Block Sync 및 연동 타이틀)을 게스트로 플레이하거나 Google 계정을 연결해 확장 기능을 사용할 수 있습니다:",
       s3Bullets: [
         { label: "기기 간 동기화:", text: "통계, 해결 기록, 최고 기록, 설정 및 저장된 퍼즐 상태를 웹과 Android 간 안전하게 동기화합니다." },
         { label: "계정 보안 책임:", text: "Google 계정 보안 유지와 인증 세션에서 발생하는 모든 활동에 대한 책임은 본인에게 있습니다." },
@@ -1151,13 +1156,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. 지식재산권",
       s4Text:
-        "모든 게임 로직 엔진, 사운드 합성 코드, UI 디자인, SudokuSync 디자인 시스템 토큰, 그래픽, 로고 및 소프트웨어 코드는 SudokuSync의 지식재산권으로 보호됩니다.",
+        "SudokuSync, Block Sync 및 향후 Mo Logic 게임의 모든 게임 로직 엔진, 사운드 합성 코드, UI 디자인, Mo Logic / SudokuSync 디자인 시스템 토큰, 그래픽, 로고 및 소프트웨어 코드는 Mo Logic의 지식재산권으로 보호됩니다.",
       s5Header: "5. 제3자 광고(AdSense 및 AdMob)",
       s5Text:
         "서비스 무료 운영을 위해 웹에서는 Google AdSense, Android에서는 Google AdMob SDK(해당 지역 Google UMP 동의 하에 전면·보상형 광고 포함 가능)가 제공됩니다. 외부 광고주의 콘텐츠에 대해서는 책임지지 않습니다.",
       s6Header: "6. 보증의 부인 및 책임의 제한",
       s6Text:
-        "SudokuSync의 자료와 소프트웨어는 '있는 그대로' 제공되며 명시적·묵시적 보증을 부인합니다. 이용 또는 이용 불능으로 인한 데이터 손실 등의 손해에 대해 개발자는 책임을 지지 않습니다.",
+        "Mo Logic(SudokuSync 및 Block Sync 포함)의 자료와 소프트웨어는 '있는 그대로' 제공되며 명시적·묵시적 보증을 부인합니다. 이용 또는 이용 불능으로 인한 데이터 손실 등의 손해에 대해 개발자는 책임을 지지 않습니다.",
       s7Header: "7. 계정 삭제 및 이용 해지",
       s7Text:
         '언제든 앱 사용을 중단하고 설정의 "계정 및 데이터 삭제"로 모든 데이터를 즉시 삭제할 수 있습니다. 약관 위반 시 닉네임 삭제 및 접근 제한 권리를 보유합니다.',
@@ -1181,18 +1186,18 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       topics: {
         bug: {
           label: "버그 제보",
-          subject: "SudokuSync Bug Report (v1.0.3)",
-          body: "앱 버전: v1.0.3\n플랫폼 (Web / Android): \n화면 / 기능: \n재현 방법: \n예상 동작 vs 실제 동작: ",
+          subject: "Mo Logic Bug Report (SudokuSync / Block Sync v1.0.3)",
+          body: "앱 버전: v1.0.3\n게임 (SudokuSync / Block Sync): \n플랫폼 (Web / Android): \n화면 / 기능: \n재현 방법: \n예상 동작 vs 실제 동작: ",
         },
         privacy: {
           label: "개인정보 / UMP 동의",
-          subject: "SudokuSync Privacy & UMP Consent Inquiry (v1.0.3)",
-          body: "앱 버전: v1.0.3\n플랫폼 (Web / Android): \n항목 (GDPR / CCPA / AdSense / AdMob AAID / UMP): \n문의 내용: ",
+          subject: "Mo Logic Privacy & UMP Consent Inquiry (v1.0.3)",
+          body: "앱 버전: v1.0.3\n게임 (SudokuSync / Block Sync): \n플랫폼 (Web / Android): \n항목 (GDPR / CCPA / AdSense / AdMob AAID / UMP): \n문의 내용: ",
         },
         deletion: {
           label: "계정 및 데이터 삭제",
-          subject: "SudokuSync Account & Data Deletion Request (v1.0.3)",
-          body: "앱 버전: v1.0.3\n플레이어 닉네임 / 이메일: \n요청 내용: SudokuSync Firestore 프로필, 순위/매치 기록 및 푸시 알림 토큰의 영구 삭제를 요청합니다.",
+          subject: "Mo Logic Account & Data Deletion Request (v1.0.3)",
+          body: "앱 버전: v1.0.3\n플레이어 닉네임 / 이메일: \n요청 내용: Mo Logic(SudokuSync 및 Block Sync) Firestore 프로필, 순위/매치 기록 및 푸시 알림 토큰의 영구 삭제를 요청합니다.",
         },
       },
     },
@@ -1200,7 +1205,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       publisherBadge: "Mo Logic 제작 · 퍼블리싱",
       publisherHeader: "독립 퍼즐 스튜디오 및 품질 기준",
       publisherText:
-        "SudokuSync는 독립 퍼즐 스튜디오 Mo Logic이 웹(https://sudokusync.com)과 Google Play Android(com.mologic.sudokusync)용으로 제작·배포합니다. 테두리 없는 파스텔 인터페이스, 라이트/다크 테마, 오프라인 저장, 투명한 광고 기반 무료 플레이를 제공합니다.",
+        "독립 퍼즐 스튜디오 Mo Logic은 통합 생태계 안에서 웹(https://sudokusync.com 및 /blocks)과 Google Play Android(com.mologic.sudokusync)용으로 SudokuSync와 Block Sync를 함께 제작·배포합니다. 클래식 9x9 스도쿠와 더불어 Block Sync는 3x3 박스 클리어, Classic 및 Time Rush 모드를 갖춘 9x9 블록 배치 퍼즐을 테두리 없는 파스텔 UI, 라이트/다크 테마, 오프라인 저장과 함께 제공합니다.",
       engineHeader: "결정론적 9x9 퍼즐 엔진 및 단서 수 검증",
       engineIntro:
         "모든 클래식 9x9 퍼즐은 시드 기반 Mulberry32 PRNG 생성기와 휴먼 로직 난이도 엔진, MRV 비트마스크 솔버 검증을 거쳐 단 하나의 유일한 정답이 보장됩니다:",
@@ -1230,9 +1235,9 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           summary: "고급 연쇄 소거와 X-Wing 패턴을 요구하는 최소 단서 보드.",
         },
       ],
-      multiplayerHeader: "동일 보드 실시간 & 비동기 멀티플레이어",
+      multiplayerHeader: "통합 크로스 게임 실시간 & 비동기 멀티플레이어",
       multiplayerText:
-        "6자리 숫자 방 코드, 선택적 PIN 잠금, ?room= 직접 공유 링크를 통해 웹과 Android에서 완전히 동일한 9x9 시드로 실시간 또는 비동기 대결을 즐길 수 있습니다. Google 로그인 시 기록, 친구 목록, 최근 플레이어 동기화와 고스트 모드를 지원합니다.",
+        "Mo Logic 공유 멀티플레이어 생태계에서 6자리 숫자 방 코드, 선택적 PIN 잠금, ?room= 공유 링크로 SudokuSync(동일 9x9 시드)와 Block Sync(3x3 박스 클리어, Classic & Time Rush 모드) 모두 실시간 및 비동기 대결을 즐길 수 있습니다. Google 로그인 시 기록, 친구, 최근 플레이어 및 고스트 모드를 동기화합니다.",
       assistantsText:
         "동일 숫자 강조, 남은 숫자 표시, 관련 영역 강조, 완료 숫자 자동 전환, 메모 자동 삭제, 자동 메모(어려움/전문가 전용), 빠른 채우기의 7가지 검증된 스마트 어시스턴트를 제공합니다.",
       exploreHeader: "규칙, 도구 및 지원 바로가기",
@@ -1248,21 +1253,22 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     privacy: {
       title: "Política de Privacidad",
       intro:
-        "En SudokuSync (https://sudokusync.com y la aplicación oficial para Android), consideramos la privacidad de nuestros jugadores de suma importancia. Este documento detalla qué información se recopila, almacena y procesa, cumpliendo con GDPR, CCPA/CPRA, COPPA, Google Play Data Safety, Google AdSense y Google AdMob.",
+        "En Mo Logic (operador de SudokuSync, Block Sync y todos los juegos de lógica conectados, salas multijugador entre juegos, portales web en https://sudokusync.com y aplicaciones oficiales para Android), consideramos la privacidad de nuestros jugadores de suma importancia. Este documento detalla qué información se recopila, almacena y procesa en todo el ecosistema Mo Logic, cumpliendo con GDPR, CCPA/CPRA, COPPA, Google Play Data Safety, Google AdSense y Google AdMob.",
       s1Header: "1. Recopilación de Información y Arquitectura de Almacenamiento",
       s1Intro:
         "Operamos bajo minimización estricta de datos, diferenciando claramente entre almacenamiento local y registros en la nube:",
       s1LocalStorage: {
         label: "Almacenamiento Local en el Dispositivo (Solo Navegador y Dispositivo):",
-        text: "El localStorage del navegador se usa estrictamente en tu dispositivo para guardar preferencias (Modo oscuro, sonido, vibración), límites de errores, temporizador, notas activas y partidas individuales guardadas. Nunca se vende ni comparte con terceros con fines comerciales.",
+        text: "El localStorage del navegador se usa estrictamente en tu dispositivo para guardar preferencias (Modo oscuro, sonido, vibración), límites de errores, temporizador, tableros y notas activas de Sudoku y partidas guardadas de Block Sync (individual y en sala). Nunca se vende ni comparte con terceros con fines comerciales.",
       },
       s1Firestore: {
         label: "Google Cloud Firestore (Multijugador en Tiempo Real y Clasificaciones):",
-        intro: "Al participar en duelos multijugador o clasificaciones globales, solo se almacenan parámetros no sensibles:",
+        intro: "Al participar en salas multijugador, desafíos o clasificaciones globales en los juegos de Mo Logic, solo se almacenan parámetros no sensibles:",
         bullets: [
-          "ID anónimo del desafío, semilla y nivel de dificultad.",
+          "ID anónimo del desafío o sala, semilla y nivel de dificultad o modo.",
           "Apodo alfanumérico elegido por el jugador e ID de usuario.",
           "Métricas de rendimiento: tiempo de resolución (segundos), errores y victoria/derrota.",
+          "Telemetría de salas multijugador entre juegos de Mo Logic (incluyendo el tipo de juego como sudoku o blocks, el modo como Classic o Time Rush, la puntuación y la clasificación de sala) visible para los participantes de la sala y Jugadores Recientes, con caducidad y limpieza automática de salas.",
         ],
       },
       s1Fcm: {
@@ -1280,7 +1286,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Google Firebase Hosting y nuestro servidor Express procesan registros estándar (IP, user-agent, marcas de tiempo y limitación de tasa) exclusivamente para seguridad operativa y prevención de DDoS.",
       },
       s2Header: "2. Publicidad, Google AdSense, AdMob SDK, AAID y Consentimiento Google UMP",
-      s2P1: "Para mantener SudokuSync gratuito usamos Google AdSense en la web y Google AdMob SDK en nuestra app oficial de Android. En la web se emplean cookies (incluida DoubleClick / DART) y balizas web. En Android, el SDK de AdMob puede procesar el Android Advertising ID (AAID), eventos de interacción y señales técnicas para entrega de anuncios y prevención de fraude.",
+      s2P1: "Para mantener gratuitos los juegos de Mo Logic (incluidos SudokuSync y Block Sync) usamos Google AdSense en la web y Google AdMob SDK en nuestra app oficial de Android. En la web se emplean cookies (incluida DoubleClick / DART) y balizas web. En Android, el SDK de AdMob puede procesar el Android Advertising ID (AAID), eventos de interacción y señales técnicas para entrega de anuncios y prevención de fraude.",
       s2P2: "Antes de mostrar anuncios personalizados en regiones reguladas (como EEE y Reino Unido), la app utiliza Google UMP (User Messaging Platform) Consent SDK para ofrecer opciones claras de consentimiento y revocación en cualquier momento.",
       s2BoxTitle: "Transparencia Publicitaria, Controles AAID y Portales de Exclusión:",
       s2BoxIntro: "Puedes desactivar anuncios personalizados, restablecer tu ID de publicidad móvil o gestionar cookies en cualquier momento:",
@@ -1316,10 +1322,10 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         "Los residentes de California tienen derecho a conocer y solicitar la eliminación de sus datos. NO vendemos ni compartimos tu información personal con terceros por consideración monetaria o comercial.",
       s5Header: "5. Privacidad Infantil (COPPA)",
       s5Text:
-        "SudokuSync no recopila intencionadamente datos personales de menores de 13 años (o de 16 en EEE/Reino Unido). No exigimos nombres reales, direcciones ni teléfonos. Si crees que un menor ha enviado información personal, escríbenos a sudokutogethermode@gmail.com para borrarla de inmediato.",
+        "Los juegos de Mo Logic (incluidos SudokuSync y Block Sync) no recopilan intencionadamente datos personales de menores de 13 años (o de 16 en EEE/Reino Unido). No exigimos nombres reales, direcciones ni teléfonos. Si crees que un menor ha enviado información personal, escríbenos a sudokutogethermode@gmail.com para borrarla de inmediato.",
       s6Header: "6. Conservación de Datos y Controles de Seguridad",
       s6Text:
-        "Los registros multijugador mayores de 30 días se purgan automáticamente. Todo el tráfico va cifrado mediante TLS/HTTPS y reglas estrictas de Firestore protegen cada documento.",
+        "Las salas multijugador caducan automáticamente y los registros de partidas mayores de 30 días se purgan de forma automática. Todo el tráfico va cifrado mediante TLS/HTTPS y reglas estrictas de Firestore protegen cada documento.",
       s7Header: "7. Contacto",
       s7Intro: "Para consultas sobre esta Política de Privacidad o gestión de datos, contacta con nuestro equipo:",
       s7TurnaroundLabel: "Tiempo de Respuesta:",
@@ -1328,12 +1334,12 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     terms: {
       title: "Términos de Servicio",
       intro:
-        "Al acceder, instalar o jugar SudokuSync (https://sudokusync.com o app oficial Android), aceptas quedar vinculado por estos Términos de Servicio y las leyes aplicables.",
+        "Al acceder, instalar o jugar a cualquier título de la plataforma multijuego de Mo Logic — incluidos SudokuSync, Block Sync y futuros juegos de Mo Logic (en https://sudokusync.com o en nuestra app oficial para Android) — aceptas quedar vinculado por estos Términos de Servicio y las leyes aplicables.",
       s1Header: "1. Descripción del Servicio y Acceso Gratuito",
       s1Text:
-        'SudokuSync ofrece puzzles Sudoku digitales gratuitos, salas deterministas con semilla, clasificaciones y herramientas lógicas "TAL CUAL" y "SEGÚN DISPONIBILIDAD", reservándonos el derecho a actualizar funciones.',
+        'Mo Logic ofrece juegos digitales gratuitos de lógica y colocación de bloques (incluidos SudokuSync, Block Sync y próximos títulos), salas deterministas con semilla, clasificaciones en tiempo real y herramientas de entrenamiento "TAL CUAL" y "SEGÚN DISPONIBILIDAD", reservándonos el derecho de modificar funciones. Además, unirse a juegos nuevos o salas multijugador puede requerir actualizar a la última versión de la aplicación (control de compatibilidad Update Required).',
       s2Header: "2. Juego Limpio, Anti-Trampas y Normas de Comunidad",
-      s2Intro: "Para preservar competiciones honestas, aceptas cumplir estrictamente nuestras normas de Juego Limpio:",
+      s2Intro: "Para preservar competiciones honestas en SudokuSync, Block Sync y futuros lanzamientos de Mo Logic, aceptas cumplir estrictamente nuestras normas de Juego Limpio:",
       s2BoxTitle: "Política de Juego Limpio y Anti-Trampas:",
       s2Bullets: [
         { label: "Sin Bots ni Solvers Automáticos:", text: "Prohibido usar bots, scripts resolutores, autoclickers o navegadores headless." },
@@ -1347,7 +1353,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Cualquier manipulación detectada conlleva descalificación inmediata, retirada de clasificaciones y suspensión del perfil o dispositivo.",
       },
       s3Header: "3. Cuenta en la Nube y Sincronización",
-      s3Intro: "Puedes jugar como invitado o vincular tu cuenta Google:",
+      s3Intro: "Puedes jugar a los títulos de Mo Logic (SudokuSync, Block Sync y juegos conectados) como invitado o vincular tu cuenta Google:",
       s3Bullets: [
         { label: "Sincronización Multidispositivo:", text: "Guarda estadísticas, historial, mejores tiempos, ajustes y tableros entre Web y Android." },
         { label: "Confidencialidad:", text: "Eres responsable de la seguridad de tus credenciales de Google y la actividad de tu sesión." },
@@ -1357,13 +1363,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Propiedad Intelectual",
       s4Text:
-        "Todos los motores lógicos, síntesis procedural de sonido, interfaces, tokens de SudokuSync Design System, gráficos, logotipos y código pertenecen a SudokuSync.",
+        "Todos los motores lógicos, síntesis procedural de sonido, interfaces, tokens de Mo Logic / SudokuSync Design System, gráficos, logotipos y código en SudokuSync, Block Sync y futuros títulos de Mo Logic pertenecen a Mo Logic.",
       s5Header: "5. Publicidad de Terceros (AdSense y AdMob)",
       s5Text:
         "El juego se financia con Google AdSense en Web y Google AdMob SDK en Android (incluidos anuncios intersticiales o recompensados sujetos a consentimiento Google UMP). No respaldamos ni controlamos sitios anunciados.",
       s6Header: "6. Exención de Garantías y Limitación de Responsabilidad",
       s6Text:
-        "El software se entrega 'tal cual', sin garantías expresas ni implícitas. En ningún caso SudokuSync será responsable por pérdida de datos o beneficios derivada del uso del juego.",
+        "El software de Mo Logic (incluidos SudokuSync y Block Sync) se entrega 'tal cual', sin garantías expresas ni implícitas. En ningún caso Mo Logic ni sus desarrolladores serán responsables por pérdida de datos o beneficios derivada del uso de nuestros juegos.",
       s7Header: "7. Eliminación de Cuenta y Terminación",
       s7Text:
         'Puedes dejar de usar la app en cualquier momento y borrar todo con "Eliminar Cuenta y Datos" en Ajustes. Nos reservamos el derecho de restringir acceso ante incumplimientos.',
@@ -1387,18 +1393,18 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       topics: {
         bug: {
           label: "Reportar Error",
-          subject: "SudokuSync Bug Report (v1.0.3)",
-          body: "Versión: v1.0.3\nPlataforma (Web / Android): \nPantalla o función: \nPasos para reproducir: \nResultado esperado vs real: ",
+          subject: "Mo Logic Bug Report (SudokuSync / Block Sync v1.0.3)",
+          body: "Versión: v1.0.3\nJuego (SudokuSync / Block Sync): \nPlataforma (Web / Android): \nPantalla o función: \nPasos para reproducir: \nResultado esperado vs real: ",
         },
         privacy: {
           label: "Privacidad / Consentimiento UMP",
-          subject: "SudokuSync Privacy & UMP Consent Inquiry (v1.0.3)",
-          body: "Versión: v1.0.3\nPlataforma (Web / Android): \nTema (GDPR / CCPA / AdSense / AdMob AAID / UMP): \nDetalles de la solicitud: ",
+          subject: "Mo Logic Privacy & UMP Consent Inquiry (v1.0.3)",
+          body: "Versión: v1.0.3\nJuego (SudokuSync / Block Sync): \nPlataforma (Web / Android): \nTema (GDPR / CCPA / AdSense / AdMob AAID / UMP): \nDetalles de la solicitud: ",
         },
         deletion: {
           label: "Eliminar Cuenta y Datos",
-          subject: "SudokuSync Account & Data Deletion Request (v1.0.3)",
-          body: "Versión: v1.0.3\nNombre de jugador / Correo: \nSolicitud: Por favor eliminen permanentemente mi perfil de Firestore, registros de partidas y tokens de notificaciones de SudokuSync.",
+          subject: "Mo Logic Account & Data Deletion Request (v1.0.3)",
+          body: "Versión: v1.0.3\nNombre de jugador / Correo: \nSolicitud: Por favor eliminen permanentemente mi perfil de Firestore de Mo Logic (SudokuSync y Block Sync), registros de partidas y tokens de notificaciones.",
         },
       },
     },
@@ -1406,7 +1412,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       publisherBadge: "Publicado por Mo Logic",
       publisherHeader: "Estudio Independiente de Rompecabezas",
       publisherText:
-        "SudokuSync es desarrollado y publicado de forma independiente por Mo Logic para Web (https://sudokusync.com) y Android en Google Play (com.mologic.sudokusync). Ofrece una interfaz pastel sin bordes, temas claro/oscuro, guardado sin conexión y acceso gratuito transparente.",
+        "Mo Logic desarrolla y publica de forma independiente tanto SudokuSync como Block Sync para Web (https://sudokusync.com y /blocks) y Android en Google Play (com.mologic.sudokusync) bajo un mismo ecosistema unificado. Junto al Sudoku clásico 9x9, Block Sync ofrece un relajante puzzle de bloques 9x9 con despejes de cajas 3x3 y modos Classic y Time Rush, interfaz pastel sin bordes, temas claro/oscuro y guardado sin conexión.",
       engineHeader: "Motor Determinista 9x9 y Pistas Verificadas",
       engineIntro:
         "Cada tablero clásico de 9x9 se genera con Mulberry32 PRNG y pasa por nuestro evaluador de lógica humana y verificación MRV para garantizar matemáticamente una solución única:",
@@ -1436,9 +1442,9 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           summary: "Cadenas profundas de eliminación, patrones X-Wing y pistas mínimas.",
         },
       ],
-      multiplayerHeader: "Multijugador en Vivo y Asíncrono en el Mismo Tablero",
+      multiplayerHeader: "Multijugador Unificado en Vivo y Asíncrono Entre Juegos",
       multiplayerText:
-        "Comparte códigos de sala de 6 dígitos, PIN opcional o enlaces directos ?room= para competir en la misma semilla 9x9 entre Web y Android. Al iniciar sesión con Google sincronizas estadísticas, lista de Amigos persistente, Jugadores Recientes y Modo Fantasma.",
+        "En el ecosistema multijugador compartido de Mo Logic puedes usar códigos de sala de 6 dígitos, PIN opcional y enlaces ?room= para competir tanto en SudokuSync (misma semilla 9x9) como en Block Sync (colocación de bloques 9x9 con despejes de cajas 3x3 en modos Classic y Time Rush). Con Google sincronizas estadísticas, Amigos, Jugadores Recientes y Modo Fantasma.",
       assistantsText:
         "Incluye 7 Asistentes Inteligentes reales: Resaltar Números Idénticos, Mostrar Números Restantes, Resaltar Área Relacionada, Cambio Automático al Completar, Eliminar Notas Automáticamente, Notas Automáticas (Difícil/Experto) y Relleno Rápido.",
       exploreHeader: "Explorar Reglas, Herramientas y Soporte",
@@ -1454,21 +1460,22 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     privacy: {
       title: "Politique de Confidentialité",
       intro:
-        "Chez SudokuSync (https://sudokusync.com et l'application officielle Android), la confidentialité de nos joueurs est primordiale. Cette politique détaille les données collectées, stockées et traitées, conformément au RGPD (GDPR), CCPA/CPRA, COPPA, Google Play Data Safety, Google AdSense et Google AdMob.",
+        "Chez Mo Logic (exploitant SudokuSync, Block Sync et tous nos jeux de logique connectés, salons multijoueurs inter-jeux, portails web sur https://sudokusync.com et applications officielles Android), la confidentialité de nos joueurs est primordiale. Cette politique détaille les données collectées, stockées et traitées sur la plateforme Mo Logic, conformément au RGPD (GDPR), CCPA/CPRA, COPPA, Google Play Data Safety, Google AdSense et Google AdMob.",
       s1Header: "1. Collecte des Données et Architecture de Stockage",
       s1Intro:
         "Nous appliquons une minimisation stricte des données, en distinguant stockage local sur l'appareil et enregistrements cloud :",
       s1LocalStorage: {
         label: "Stockage Local Client (Navigateur et Appareil Uniquement) :",
-        text: "Le localStorage est utilisé uniquement sur votre appareil pour conserver vos préférences (Mode sombre, sons, haptique), limites d'erreurs, chronomètre, notes et parties solo sauvegardées. Ces données ne sont jamais vendues ni transmises à des tiers publicitaires.",
+        text: "Le localStorage est utilisé uniquement sur votre appareil pour conserver vos préférences (Mode sombre, sons, haptique), limites d'erreurs, chronomètre, grilles et notes Sudoku actives, ainsi que vos parties solo/salon Block Sync sauvegardées. Ces données ne sont jamais vendues ni transmises à des tiers publicitaires.",
       },
       s1Firestore: {
         label: "Google Cloud Firestore (Multijoueur en Temps Réel et Classements) :",
-        intro: "Lors des défis multijoueurs ou classements, seuls ces paramètres non sensibles sont enregistrés :",
+        intro: "Lors des salons multijoueurs, défis ou classements sur les jeux Mo Logic, seuls ces paramètres non sensibles sont enregistrés :",
         bullets: [
-          "Identifiant anonyme de défi, graine (seed) et niveau de difficulté.",
+          "Identifiant anonyme de défi ou salon, graine (seed) et niveau de difficulté ou mode.",
           "Pseudonyme alphanumérique choisi par le joueur et identifiant utilisateur.",
           "Statistiques de partie : temps de résolution (secondes), erreurs et victoire/défaite.",
+          "Télémétrie des salons multijoueurs inter-jeux Mo Logic (y compris type de jeu tel que sudoku ou blocks, mode Classic ou Time Rush, score et classement du salon) visible par les participants du salon et les Joueurs Récents, avec expiration et nettoyage automatiques des salons.",
         ],
       },
       s1Fcm: {
@@ -1486,7 +1493,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Les journaux web standards (adresse IP, user-agent, horodatage, limitation de débit) sont traités automatiquement par Google Firebase Hosting et notre serveur Express uniquement pour la sécurité et la protection anti-DDoS.",
       },
       s2Header: "2. Publicité, Google AdSense, SDK AdMob, AAID et Consentement Google UMP",
-      s2P1: "Pour garder SudokuSync gratuit, nous utilisons Google AdSense sur le web et le SDK Google AdMob sur Android. Sur le web, des cookies (dont DoubleClick / DART) et balises mesurent et diffusent les annonces. Sur Android, le SDK AdMob peut traiter l'Android Advertising ID (AAID), les interactions et signaux techniques pour la diffusion, le plafonnement et l'anti-fraude.",
+      s2P1: "Pour garder gratuits les jeux Mo Logic (dont SudokuSync et Block Sync), nous utilisons Google AdSense sur le web et le SDK Google AdMob sur Android. Sur le web, des cookies (dont DoubleClick / DART) et balises mesurent et diffusent les annonces. Sur Android, le SDK AdMob peut traiter l'Android Advertising ID (AAID), les interactions et signaux techniques pour la diffusion, le plafonnement et l'anti-fraude.",
       s2P2: "Avant toute publicité personnalisée dans les juridictions réglementées (EEE et Royaume-Uni), notre app utilise le SDK Google UMP (User Messaging Platform) pour recueillir, gérer ou retirer votre consentement à tout moment.",
       s2BoxTitle: "Transparence Publicitaire, Contrôles AAID et Portails d'Opt-Out :",
       s2BoxIntro: "Vous pouvez refuser la publicité personnalisée, réinitialiser votre identifiant publicitaire mobile ou gérer vos cookies à tout moment :",
@@ -1522,10 +1529,10 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         "Les résidents californiens peuvent connaître les catégories collectées et demander leur suppression. Nous ne vendons ni ne partageons vos données personnelles contre rémunération commerciale.",
       s5Header: "5. Protection des Enfants (COPPA)",
       s5Text:
-        "SudokuSync ne collecte pas sciemment de données d'enfants de moins de 13 ans (ou 16 ans dans l'EEE/Royaume-Uni). Aucun nom réel, adresse ou téléphone n'est requis. En cas de doute, contactez sudokutogethermode@gmail.com pour une suppression rapide.",
+        "Les jeux Mo Logic (dont SudokuSync et Block Sync) ne collectent pas sciemment de données d'enfants de moins de 13 ans (ou 16 ans dans l'EEE/Royaume-Uni). Aucun nom réel, adresse ou téléphone n'est requis. En cas de doute, contactez sudokutogethermode@gmail.com pour une suppression rapide.",
       s6Header: "6. Durée de Conservation et Sécurité",
       s6Text:
-        "Les enregistrements de matchs multijoueurs de plus de 30 jours sont purgés automatiquement. Tout trafic est chiffré par TLS/HTTPS et protégé par des règles strictes Firestore.",
+        "Les salons multijoueurs expirent automatiquement et les enregistrements de matchs de plus de 30 jours sont purgés automatiquement. Tout trafic est chiffré par TLS/HTTPS et protégé par des règles strictes Firestore.",
       s7Header: "7. Nous Contacter",
       s7Intro: "Pour toute question relative à cette Politique de Confidentialité, contactez notre support :",
       s7TurnaroundLabel: "Délai de Réponse :",
@@ -1534,12 +1541,12 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     terms: {
       title: "Conditions d'Utilisation",
       intro:
-        "En accédant, installant ou jouant à SudokuSync (https://sudokusync.com ou app officielle Android), vous acceptez ces Conditions d'Utilisation et les lois applicables.",
+        "En accédant, installant ou jouant à tout jeu de la plateforme multi-jeux Mo Logic — incluant SudokuSync, Block Sync et les futurs titres Mo Logic (sur https://sudokusync.com ou l'application officielle Android) — vous acceptez ces Conditions d'Utilisation et les lois applicables.",
       s1Header: "1. Description du Service et Accès Gratuit",
       s1Text:
-        'SudokuSync propose des grilles de Sudoku gratuites, des salons multijoueurs déterministes, classements et outils logiques fournis "EN L\'ÉTAT" et "SELON DISPONIBILITÉ".',
+        'Mo Logic propose gratuitement des jeux de logique et de placement de blocs (dont SudokuSync, Block Sync et les titres à venir), salons multijoueurs déterministes, classements en temps réel et outils d\'entraînement fournis "EN L\'ÉTAT" et "SELON DISPONIBILITÉ". Rejoindre de nouveaux jeux ou salons multijoueurs peut nécessiter la mise à jour vers la dernière version de l\'application (garde de compatibilité Update Required).',
       s2Header: "2. Fair-Play, Anti-Triche et Standards Communautaires",
-      s2Intro: "Pour garantir une compétition loyale, vous vous engagez à respecter nos règles de Fair-Play :",
+      s2Intro: "Pour garantir une compétition loyale sur SudokuSync, Block Sync et les futurs jeux Mo Logic, vous vous engagez à respecter nos règles de Fair-Play :",
       s2BoxTitle: "Politique Fair-Play et Anti-Triche :",
       s2Bullets: [
         { label: "Aucun Bot ni Solveur Automatique :", text: "Interdiction d'utiliser bots, scripts de résolution, auto-clickers ou navigateurs headless." },
@@ -1553,7 +1560,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Toute fraude entraîne la disqualification immédiate des temps, le retrait des classements et la suspension du profil ou de l'appareil.",
       },
       s3Header: "3. Compte Cloud et Synchronisation",
-      s3Intro: "Jouez en mode Invité ou connectez votre compte Google :",
+      s3Intro: "Jouez aux jeux Mo Logic (SudokuSync, Block Sync et titres associés) en mode Invité ou connectez votre compte Google :",
       s3Bullets: [
         { label: "Synchronisation Multi-Appareils :", text: "Synchronise statistiques, historique, meilleurs temps, préférences et grilles entre Web et Android." },
         { label: "Confidentialité :", text: "Vous êtes responsable de la sécurité de vos identifiants Google et de l'activité sous votre session." },
@@ -1563,13 +1570,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Propriété Intellectuelle",
       s4Text:
-        "Tous les moteurs logiques, synthèse sonore procédurale, interfaces, jetons du SudokuSync Design System, graphismes, logos et codes appartiennent à SudokuSync.",
+        "Tous les moteurs logiques, synthèse sonore procédurale, interfaces, jetons du Mo Logic / SudokuSync Design System, graphismes, logos et codes de SudokuSync, Block Sync et des futurs jeux Mo Logic appartiennent à Mo Logic.",
       s5Header: "5. Publicités Tierces (AdSense et AdMob)",
       s5Text:
         "Le service reste gratuit grâce à Google AdSense (Web) et au SDK Google AdMob (Android, incluant annonces interstitielles/récompensées soumises au consentement Google UMP). Nous ne sommes pas responsables des sites tiers annoncés.",
       s6Header: "6. Exclusion de Garanties et Limitation de Responsabilité",
       s6Text:
-        "Le logiciel est fourni 'tel quel' sans garantie expresse ou implicite. SudokuSync décline toute responsabilité en cas de perte de données ou de profit liée à l'utilisation du jeu.",
+        "Les logiciels de Mo Logic (dont SudokuSync et Block Sync) sont fournis 'tels quels' sans garantie expresse ou implicite. Mo Logic décline toute responsabilité en cas de perte de données ou de profit liée à l'utilisation de nos jeux.",
       s7Header: "7. Suppression de Compte et Fin d'Utilisation",
       s7Text:
         'Vous pouvez cesser d\'utiliser l\'app et tout effacer instantanément via "Supprimer le Compte et les Données" dans Paramètres. Nous nous réservons le droit de sanctionner toute violation.',
@@ -1593,18 +1600,18 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       topics: {
         bug: {
           label: "Signaler un Bug",
-          subject: "SudokuSync Bug Report (v1.0.3)",
-          body: "Version : v1.0.3\nPlateforme (Web / Android) : \nÉcran ou fonctionnalité : \nÉtapes pour reproduire : \nRésultat attendu vs observé : ",
+          subject: "Mo Logic Bug Report (SudokuSync / Block Sync v1.0.3)",
+          body: "Version : v1.0.3\nJeu (SudokuSync / Block Sync) : \nPlateforme (Web / Android) : \nÉcran ou fonctionnalité : \nÉtapes pour reproduire : \nRésultat attendu vs observé : ",
         },
         privacy: {
           label: "Confidentialité / UMP",
-          subject: "SudokuSync Privacy & UMP Consent Inquiry (v1.0.3)",
-          body: "Version : v1.0.3\nPlateforme (Web / Android) : \nSujet (RGPD / CCPA / AdSense / AdMob AAID / UMP) : \nDétails : ",
+          subject: "Mo Logic Privacy & UMP Consent Inquiry (v1.0.3)",
+          body: "Version : v1.0.3\nJeu (SudokuSync / Block Sync) : \nPlateforme (Web / Android) : \nSujet (RGPD / CCPA / AdSense / AdMob AAID / UMP) : \nDétails : ",
         },
         deletion: {
           label: "Suppression Compte & Données",
-          subject: "SudokuSync Account & Data Deletion Request (v1.0.3)",
-          body: "Version : v1.0.3\nPseudo joueur / E-mail : \nDemande : Merci de supprimer définitivement mon profil Firestore, mes classements/matchs et mes jetons de notification SudokuSync.",
+          subject: "Mo Logic Account & Data Deletion Request (v1.0.3)",
+          body: "Version : v1.0.3\nPseudo joueur / E-mail : \nDemande : Merci de supprimer définitivement mon profil Firestore Mo Logic (SudokuSync & Block Sync), mes classements/matchs et mes jetons de notification.",
         },
       },
     },
@@ -1612,7 +1619,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       publisherBadge: "Publié par Mo Logic",
       publisherHeader: "Studio Indépendant & Exigence Éditoriale",
       publisherText:
-        "SudokuSync est conçu et publié indépendamment par Mo Logic sur le Web (https://sudokusync.com) et Google Play Android (com.mologic.sudokusync). Chaque grille et guide s'appuie sur une interface pastel sans bordures, thèmes Clair/Sombre, jeu hors ligne et accès gratuit transparent.",
+        "Mo Logic conçoit et publie indépendamment SudokuSync et Block Sync sur le Web (https://sudokusync.com et /blocks) et Google Play Android (com.mologic.sudokusync) au sein d'un seul écosystème unifié. Aux côtés du Sudoku 9x9 classique, Block Sync propose un jeu calme de placement de blocs 9x9 avec suppressions de zones 3x3 et modes Classic et Time Rush sur une interface pastel sans bordures, thèmes Clair/Sombre et jeu hors ligne.",
       engineHeader: "Moteur Déterministe 9x9 & Calibrage des Indices",
       engineIntro:
         "Chaque grille 9x9 est générée par Mulberry32 PRNG et contrôlée par notre moteur de difficulté humaine et notre solveur MRV pour garantir une solution unique mathématiquement vérifiée :",
@@ -1642,9 +1649,9 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           summary: "Chaînes d'élimination avancées, X-Wing et très peu d'indices initiaux.",
         },
       ],
-      multiplayerHeader: "Multijoueur sur Même Grille en Direct et Asynchrone",
+      multiplayerHeader: "Multijoueur Unifié Inter-Jeux en Direct et Asynchrone",
       multiplayerText:
-        "Partagez un code de salon à 6 chiffres, un code PIN optionnel ou un lien direct ?room= pour jouer exactement la même grille 9x9 sur Web et Android. Avec Google, synchronisez vos statistiques, Amis persistants, Joueurs Récents et Mode Fantôme.",
+        "Au sein de l'écosystème multijoueur unifié Mo Logic, utilisez un code de salon à 6 chiffres, un PIN optionnel et un lien ?room= pour affronter vos rivaux aussi bien sur SudokuSync (même graine 9x9) que sur Block Sync (placement de blocs 9x9 avec suppressions 3x3 en modes Classic & Time Rush). Avec Google, synchronisez statistiques, Amis, Joueurs Récents et Mode Fantôme.",
       assistantsText:
         "Sept Assistants Intelligents vérifiés sont disponibles : Surbrillance des chiffres identiques, Chiffres restants, Zone associée, Changement auto des chiffres terminés, Suppression auto des notes, Notes Auto (Difficile/Expert) et Remplissage rapide.",
       exploreHeader: "Explorer Règles, Outils & Support",
@@ -1660,21 +1667,22 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     privacy: {
       title: "Informativa sulla Privacy",
       intro:
-        "Su SudokuSync (https://sudokusync.com e l'app ufficiale Android), la privacy dei nostri giocatori è fondamentale. Questo documento descrive in dettaglio i dati raccolti, archiviati e trattati nel rispetto di GDPR, CCPA/CPRA, COPPA, Google Play Data Safety, Google AdSense e Google AdMob.",
+        "In Mo Logic (che gestisce SudokuSync, Block Sync e tutti i relativi giochi di logica, stanze multigiocatore condivise, portali web su https://sudokusync.com e app ufficiali Android), la privacy dei nostri giocatori è fondamentale. Questo documento descrive i dati raccolti, archiviati e trattati nell'ecosistema Mo Logic nel rispetto di GDPR, CCPA/CPRA, COPPA, Google Play Data Safety, Google AdSense e Google AdMob.",
       s1Header: "1. Raccolta Dati e Architettura di Archiviazione",
       s1Intro:
         "Applichiamo una rigorosa minimizzazione dei dati, distinguendo chiaramente tra dati locali sul dispositivo e record nel cloud:",
       s1LocalStorage: {
         label: "Archiviazione Locale (Solo Browser e Dispositivo):",
-        text: "Il localStorage viene usato esclusivamente sul dispositivo per salvare preferenze UI (Modalità scura, suoni, vibrazione), limiti errori, timer, note e partite solitario salvate. Non viene mai venduto o condiviso per scopi di marketing.",
+        text: "Il localStorage viene usato esclusivamente sul dispositivo per salvare preferenze UI (Modalità scura, suoni, vibrazione), limiti errori, timer, schemi e note Sudoku attive e partite salvate di Block Sync (solitario e stanze). Non viene mai venduto o condiviso per scopi di marketing.",
       },
       s1Firestore: {
         label: "Google Cloud Firestore (Multigiocatore in Tempo Reale e Classifiche):",
-        intro: "Nelle sfide multigiocatore o classifiche globali vengono salvati solo parametri di gioco non sensibili:",
+        intro: "Nelle stanze multigiocatore, sfide o classifiche globali dei giochi Mo Logic vengono salvati solo parametri di gioco non sensibili:",
         bullets: [
-          "ID sfida anonimo, numero di seed e difficoltà.",
+          "ID sfida o stanza anonimo, numero di seed e livello di difficoltà o modalità.",
           "Nickname alfanumerico scelto dal giocatore e ID utente.",
           "Metriche partita: tempo di completamento (secondi), errori ed esito.",
+          "Telemetria multigiocatore tra giochi Mo Logic (incluso il tipo di gioco come sudoku o blocks, modalità come Classic o Time Rush, punteggio e classifica della stanza) visibile ai partecipanti alla stanza e ai Giocatori Recenti, con scadenza e pulizia automatica delle stanze.",
         ],
       },
       s1Fcm: {
@@ -1692,7 +1700,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "I log standard web (indirizzo IP, user-agent, timestamp, limiti di frequenza) vengono elaborati da Google Firebase Hosting e dal nostro server Express solo per sicurezza operativa e protezione DDoS.",
       },
       s2Header: "2. Pubblicità, Google AdSense, AdMob SDK, AAID e Consenso Google UMP",
-      s2P1: "Per mantenere SudokuSync gratuito usiamo Google AdSense sul web e Google AdMob SDK su Android. Sul web vengono utilizzati cookie (incluso DoubleClick / DART) e web beacon; su Android l'SDK AdMob può elaborare l'Android Advertising ID (AAID), interazioni con l'app e segnali diagnostici per erogazione annunci e prevenzione frodi.",
+      s2P1: "Per mantenere gratuiti i giochi Mo Logic (inclusi SudokuSync e Block Sync) usiamo Google AdSense sul web e Google AdMob SDK su Android. Sul web vengono utilizzati cookie (incluso DoubleClick / DART) e web beacon; su Android l'SDK AdMob può elaborare l'Android Advertising ID (AAID), interazioni con l'app e segnali diagnostici per erogazione annunci e prevenzione frodi.",
       s2P2: "Prima di mostrare annunci personalizzati in aree regolamentate (come SEE e Regno Unito), l'app usa Google UMP Consent SDK per consentire la gestione o revoca del consenso in qualsiasi momento.",
       s2BoxTitle: "Trasparenza Pubblicitaria, Controlli AAID e Portali Opt-Out:",
       s2BoxIntro: "Puoi disattivare gli annunci personalizzati, reimpostare l'ID pubblicitario mobile o gestire i cookie in qualsiasi momento:",
@@ -1728,10 +1736,10 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         "I residenti in California hanno diritto a conoscere e richiedere la cancellazione dei dati raccolti. NON vendiamo né condividiamo le tue informazioni personali con terzi a fini monetari o commerciali.",
       s5Header: "5. Tutela dei Minori (COPPA)",
       s5Text:
-        "SudokuSync non raccoglie intenzionalmente dati di minori di 13 anni (o 16 anni nello SEE/Regno Unito). Non servono nomi reali, indirizzi o numeri di telefono per giocare. Per segnalazioni scrivi subito a sudokutogethermode@gmail.com.",
+        "I giochi Mo Logic (inclusi SudokuSync e Block Sync) non raccolgono intenzionalmente dati di minori di 13 anni (o 16 anni nello SEE/Regno Unito). Non servono nomi reali, indirizzi o numeri di telefono per giocare. Per segnalazioni scrivi subito a sudokutogethermode@gmail.com.",
       s6Header: "6. Conservazione dei Dati e Sicurezza",
       s6Text:
-        "I record delle partite multigiocatore più vecchi di 30 giorni vengono eliminati automaticamente. Tutto il traffico è cifrato via TLS/HTTPS con rigide regole di sicurezza Firestore.",
+        "Le stanze multigiocatore scadono automaticamente e i record delle partite più vecchi di 30 giorni vengono eliminati in automatico. Tutto il traffico è cifrato via TLS/HTTPS con rigide regole di sicurezza Firestore.",
       s7Header: "7. Contattaci",
       s7Intro: "Per domande su questa Informativa sulla Privacy contatta il nostro desk dedicato:",
       s7TurnaroundLabel: "Tempi di Risposta:",
@@ -1740,12 +1748,12 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     terms: {
       title: "Termini di Servizio",
       intro:
-        "Accedendo, installando o giocando a SudokuSync (https://sudokusync.com o app ufficiale Android), accetti di essere vincolato dai presenti Termini di Servizio e dalle leggi vigenti.",
+        "Accedendo, installando o giocando a qualsiasi titolo della piattaforma multigioco Mo Logic — inclusi SudokuSync, Block Sync e i futuri giochi Mo Logic (su https://sudokusync.com o sull'app ufficiale Android) — accetti di essere vincolato dai presenti Termini di Servizio e dalle leggi vigenti.",
       s1Header: "1. Descrizione del Servizio e Accesso Gratuito",
       s1Text:
-        'SudokuSync offre puzzle Sudoku gratuiti, stanze multigiocatore deterministiche, classifiche in tempo reale e strumenti logici forniti "COSÌ COME SONO" e "SECONDO DISPONIBILITÀ".',
+        'Mo Logic offre giochi digitali gratuiti di logica e posizionamento blocchi (inclusi SudokuSync, Block Sync e prossimi titoli), stanze multigiocatore deterministiche, classifiche in tempo reale e strumenti di allenamento forniti "COSÌ COME SONO" e "SECONDO DISPONIBILITÀ". L\'accesso ai giochi più recenti o alle stanze multigiocatore può richiedere l\'aggiornamento all\'ultima versione dell\'app (controllo di compatibilità Update Required).',
       s2Header: "2. Fair Play, Anti-Cheat e Norme della Community",
-      s2Intro: "Per garantire partite leali, ti impegni a rispettare rigorosamente le regole di Fair Play:",
+      s2Intro: "Per garantire partite leali su SudokuSync, Block Sync e sui futuri titoli Mo Logic, ti impegni a rispettare rigorosamente le regole di Fair Play:",
       s2BoxTitle: "Politica Fair Play e Anti-Cheat:",
       s2Bullets: [
         { label: "Vietati Bot e Risolutori Automatici:", text: "Vietato usare bot, script risolutori, autoclicker o browser headless." },
@@ -1759,7 +1767,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Qualsiasi alterazione comporta squalifica immediata dei tempi, rimozione dalle classifiche e sospensione del profilo o dispositivo.",
       },
       s3Header: "3. Account Cloud e Sincronizzazione",
-      s3Intro: "Puoi giocare come ospite o collegare il tuo account Google:",
+      s3Intro: "Puoi giocare ai titoli Mo Logic (SudokuSync, Block Sync e giochi collegati) come ospite o collegare il tuo account Google:",
       s3Bullets: [
         { label: "Sincronizzazione Multi-Dispositivo:", text: "Sincronizza statistiche, cronologia, tempi migliori, preferenze e partite salvate tra Web e Android." },
         { label: "Riservatezza dell'Account:", text: "Sei responsabile della sicurezza delle credenziali Google e di ogni attività della sessione." },
@@ -1769,13 +1777,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Proprietà Intellettuale",
       s4Text:
-        "Tutti i motori di gioco, sintesi sonora procedurale, design UI, token di SudokuSync Design System, grafica, loghi e codice sono proprietà intellettuale di SudokuSync.",
+        "Tutti i motori di gioco, sintesi sonora procedurale, design UI, token di Mo Logic / SudokuSync Design System, grafica, loghi e codice di SudokuSync, Block Sync e dei futuri giochi Mo Logic sono proprietà intellettuale di Mo Logic.",
       s5Header: "5. Pubblicità di Terze Parti (AdSense e AdMob)",
       s5Text:
         "Il servizio resta gratuito grazie a Google AdSense (Web) e Google AdMob SDK (Android, inclusi annunci interstitial o con premio soggetti al consenso Google UMP). Non rispondiamo di contenuti di inserzionisti esterni.",
       s6Header: "6. Esclusione di Garanzie e Limitazione di Responsabilità",
       s6Text:
-        "Il software è fornito 'così com'è', senza garanzie esplicite o implicite. SudokuSync non risponde di eventuali danni o perdite di dati o profitti derivanti dall'uso del gioco.",
+        "Il software di Mo Logic (inclusi SudokuSync e Block Sync) è fornito 'così com'è', senza garanzie esplicite o implicite. Mo Logic non risponde di eventuali danni o perdite di dati o profitti derivanti dall'uso dei giochi.",
       s7Header: "7. Eliminazione Account e Cessazione",
       s7Text:
         'Puoi interrompere l\'uso in qualsiasi momento ed eliminare ogni dato con "Elimina Account e Dati" nelle Impostazioni. Ci riserviamo il diritto di rimuovere accessi in caso di violazioni.',
@@ -1799,18 +1807,18 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       topics: {
         bug: {
           label: "Segnala Bug",
-          subject: "SudokuSync Bug Report (v1.0.3)",
-          body: "Versione App: v1.0.3\nPiattaforma (Web / Android): \nSchermata / Funzione: \nPassaggi per riprodurre: \nComportamento atteso vs effettivo: ",
+          subject: "Mo Logic Bug Report (SudokuSync / Block Sync v1.0.3)",
+          body: "Versione App: v1.0.3\nGioco (SudokuSync / Block Sync): \nPiattaforma (Web / Android): \nSchermata / Funzione: \nPassaggi per riprodurre: \nComportamento atteso vs effettivo: ",
         },
         privacy: {
           label: "Privacy / Consenso UMP",
-          subject: "SudokuSync Privacy & UMP Consent Inquiry (v1.0.3)",
-          body: "Versione App: v1.0.3\nPiattaforma (Web / Android): \nTema (GDPR / CCPA / AdSense / AdMob AAID / UMP): \nDettagli richiesta: ",
+          subject: "Mo Logic Privacy & UMP Consent Inquiry (v1.0.3)",
+          body: "Versione App: v1.0.3\nGioco (SudokuSync / Block Sync): \nPiattaforma (Web / Android): \nTema (GDPR / CCPA / AdSense / AdMob AAID / UMP): \nDettagli richiesta: ",
         },
         deletion: {
           label: "Eliminazione Account e Dati",
-          subject: "SudokuSync Account & Data Deletion Request (v1.0.3)",
-          body: "Versione App: v1.0.3\nNickname / Email: \nRichiesta: Chiedo l'eliminazione permanente del mio profilo Firestore, record di gioco e token notifiche di SudokuSync.",
+          subject: "Mo Logic Account & Data Deletion Request (v1.0.3)",
+          body: "Versione App: v1.0.3\nNickname / Email: \nRichiesta: Chiedo l'eliminazione permanente del mio profilo Firestore Mo Logic (SudokuSync e Block Sync), record di gioco e token notifiche.",
         },
       },
     },
@@ -1818,7 +1826,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       publisherBadge: "Pubblicato da Mo Logic",
       publisherHeader: "Studio Indipendente & Standard Qualitativi",
       publisherText:
-        "SudokuSync è sviluppato e pubblicato in modo indipendente da Mo Logic su Web (https://sudokusync.com) e Google Play Android (com.mologic.sudokusync). Offre un design pastello senza bordi con tema Chiaro/Scuro, supporto offline e accesso gratuito trasparente.",
+        "Mo Logic sviluppa e pubblica in modo indipendente sia SudokuSync che Block Sync su Web (https://sudokusync.com e /blocks) e Google Play Android (com.mologic.sudokusync) all'interno di un unico ecosistema. Oltre al Sudoku classico 9x9, Block Sync offre un puzzle rilassante di posizionamento blocchi 9x9 con eliminazione di riquadri 3x3 e modalità Classic e Time Rush in stile pastello senza bordi, tema Chiaro/Scuro e supporto offline.",
       engineHeader: "Motore Deterministico 9x9 e Calibrazione Indizi",
       engineIntro:
         "Ogni griglia 9x9 nasce dal generatore Mulberry32 PRNG ed è verificata dal nostro motore logico umano e risolutore bitmask MRV per garantire matematicamente un'unica soluzione valida:",
@@ -1848,9 +1856,9 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           summary: "Catene logiche profonde, schemi X-Wing e pochi indizi iniziali.",
         },
       ],
-      multiplayerHeader: "Multigiocatore Live e Asincrono sulla Stessa Griglia",
+      multiplayerHeader: "Multigiocatore Unificato Live e Asincrono tra Giochi",
       multiplayerText:
-        "Condividi codici stanza a 6 cifre, PIN opzionale o link diretti ?room= per sfidarti sullo stesso schema 9x9 tra Web e Android. Con Google sincronizzi statistiche, lista Amici persistente, Giocatori Recenti e Modalità Fantasma.",
+        "Nell'ecosistema multigiocatore condiviso di Mo Logic puoi usare codici stanza a 6 cifre, PIN opzionale e link ?room= per giocare sia a SudokuSync (stesso seed 9x9) che a Block Sync (blocchi 9x9 con eliminazione 3x3 in Classic e Time Rush). Con Google sincronizzi statistiche, Amici, Giocatori Recenti e Modalità Fantasma.",
       assistantsText:
         "Sette Assistenti Intelligenti verificati personalizzano la partita: Evidenzia Numeri Identici, Mostra Numeri Rimanenti, Evidenzia Area Correlata, Cambio Automatico Numeri Completati, Rimozione Automatica Note, Note Automatiche (Difficile/Esperto) e Inserimento Rapido.",
       exploreHeader: "Esplora Regole, Strumenti & Supporto",
@@ -1866,21 +1874,22 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     privacy: {
       title: "Política de Privacidade",
       intro:
-        "No SudokuSync (https://sudokusync.com e nosso aplicativo oficial para Android), levamos a privacidade dos jogadores muito a sério. Esta Política de Privacidade detalha os dados coletados, armazenados e processados em conformidade com GDPR, CCPA/CPRA, COPPA, Google Play Data Safety, Google AdSense e Google AdMob.",
+        "Na Mo Logic (que opera o SudokuSync, o Block Sync e todos os jogos de lógica conectados, salas multiplayer entre jogos, portais web em https://sudokusync.com e aplicativos oficiais para Android), levamos a privacidade dos jogadores muito a sério. Esta Política de Privacidade detalha os dados coletados, armazenados e processados no ecossistema Mo Logic em conformidade com GDPR, CCPA/CPRA, COPPA, Google Play Data Safety, Google AdSense e Google AdMob.",
       s1Header: "1. Coleta de Informações e Arquitetura de Armazenamento",
       s1Intro:
         "Operamos com minimização rigorosa de dados, diferenciando claramente armazenamento local no dispositivo e registros em nuvem:",
       s1LocalStorage: {
         label: "Armazenamento Local no Dispositivo (Apenas Navegador e Dispositivo):",
-        text: "O localStorage é usado estritamente no seu dispositivo para salvar preferências de interface (Modo Escuro, som, vibração), limite de erros, temporizador, notas e partidas solo salvas. Esses dados nunca são vendidos ou repassados a terceiros.",
+        text: "O localStorage é usado estritamente no seu dispositivo para salvar preferências de interface (Modo Escuro, som, vibração), limite de erros, temporizador, tabuleiros e notas ativas de Sudoku e partidas salvas do Block Sync (solo e sala). Esses dados nunca são vendidos ou repassados a terceiros.",
       },
       s1Firestore: {
         label: "Google Cloud Firestore (Multiplayer em Tempo Real e Rankings):",
-        intro: "Ao jogar desafios multiplayer ou partidas globais, apenas parâmetros não sensíveis são salvos:",
+        intro: "Ao jogar salas multiplayer, desafios ou partidas globais nos jogos da Mo Logic, apenas parâmetros não sensíveis são salvos:",
         bullets: [
-          "ID anônimo do desafio, seed e nível de dificuldade.",
+          "ID anônimo do desafio ou sala, seed e nível de dificuldade ou modo.",
           "Apelido de exibição alfanumérico escolhido pelo jogador e ID de usuário.",
           "Métricas da partida: tempo de conclusão (segundos), erros e resultado de vitória/derrota.",
+          "Telemetria de salas multiplayer entre jogos da Mo Logic (incluindo tipo de jogo como sudoku ou blocks, modo Classic ou Time Rush, pontuação e classificação da sala) visível para participantes da sala e Jogadores Recentes, com expiração e limpeza automática das salas.",
         ],
       },
       s1Fcm: {
@@ -1898,7 +1907,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Logs padrão de servidor (IP, user-agent, data/hora e controle de taxa) são processados pelo Google Firebase Hosting e nosso servidor Express apenas para segurança operacional e proteção contra DDoS.",
       },
       s2Header: "2. Publicidade, Google AdSense, AdMob SDK, AAID e Consentimento Google UMP",
-      s2P1: "Para manter o SudokuSync gratuito usamos Google AdSense na Web e o Google AdMob SDK no Android. Na Web, cookies (incluindo DoubleClick / DART) e web beacons ajudam na exibição de anúncios. No Android, o SDK AdMob pode processar o Android Advertising ID (AAID), interações e sinais técnicos para entrega de anúncios e prevenção de fraudes.",
+      s2P1: "Para manter os jogos da Mo Logic (incluindo SudokuSync e Block Sync) gratuitos, usamos Google AdSense na Web e o Google AdMob SDK no Android. Na Web, cookies (incluindo DoubleClick / DART) e web beacons ajudam na exibição de anúncios. No Android, o SDK AdMob pode processar o Android Advertising ID (AAID), interações e sinais técnicos para entrega de anúncios e prevenção de fraudes.",
       s2P2: "Antes de exibir anúncios personalizados em regiões reguladas (incluindo EEE e Reino Unido), o app utiliza o Google UMP Consent SDK para que você conceda, gerencie ou retire seu consentimento a qualquer momento.",
       s2BoxTitle: "Transparência Publicitária, Controles AAID e Portais de Opt-Out:",
       s2BoxIntro: "Você pode desativar anúncios personalizados, redefinir seu ID de publicidade ou gerenciar cookies a qualquer momento:",
@@ -1934,10 +1943,10 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         "Residentes da Califórnia têm direito de conhecer e solicitar exclusão dos dados coletados. NÃO vendemos nem compartilhamos seus dados pessoais com terceiros por compensação financeira ou comercial.",
       s5Header: "5. Proteção à Privacidade Infantil (COPPA)",
       s5Text:
-        "O SudokuSync não coleta intencionalmente informações de menores de 13 anos (ou 16 no EEE/Reino Unido). Não exigimos nome real, endereço ou telefone para jogar. Caso acredite que uma criança enviou dados, contate sudokutogethermode@gmail.com para remoção imediata.",
+        "Os jogos da Mo Logic (incluindo SudokuSync e Block Sync) não coletam intencionalmente informações de menores de 13 anos (ou 16 no EEE/Reino Unido). Não exigimos nome real, endereço ou telefone para jogar. Caso acredite que uma criança enviou dados, contate sudokutogethermode@gmail.com para remoção imediata.",
       s6Header: "6. Retenção de Dados e Controles de Segurança",
       s6Text:
-        "Registros de partidas multiplayer com mais de 30 dias são excluídos automaticamente. Todo tráfego é criptografado com TLS/HTTPS e regras estritas do Firestore garantem propriedade dos documentos.",
+        "Salas multiplayer expiram automaticamente e registros de partidas com mais de 30 dias são excluídos automaticamente. Todo tráfego é criptografado com TLS/HTTPS e regras estritas do Firestore garantem propriedade dos documentos.",
       s7Header: "7. Fale Conosco",
       s7Intro: "Para dúvidas sobre esta Política de Privacidade, contate nossa equipe de proteção de dados:",
       s7TurnaroundLabel: "Prazo de Resposta:",
@@ -1946,12 +1955,12 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
     terms: {
       title: "Termos de Uso",
       intro:
-        "Ao acessar, instalar ou jogar SudokuSync (https://sudokusync.com ou app oficial Android), você concorda em cumprir estes Termos de Uso e todas as leis aplicáveis.",
+        "Ao acessar, instalar ou jogar qualquer título da plataforma multijogos da Mo Logic — incluindo SudokuSync, Block Sync e futuros jogos da Mo Logic (em https://sudokusync.com ou app oficial Android) — você concorda em cumprir estes Termos de Uso e todas as leis aplicáveis.",
       s1Header: "1. Descrição do Serviço e Acesso Gratuito",
       s1Text:
-        'O SudokuSync oferece puzzles de Sudoku gratuitos, salas multiplayer com semente determinística, rankings em tempo real e ferramentas de lógica "NO ESTADO EM QUE SE ENCONTRA" e "CONFORME DISPONÍVEL".',
+        'A Mo Logic oferece jogos digitais gratuitos de lógica e encaixe de blocos (incluindo SudokuSync, Block Sync e próximos lançamentos), salas multiplayer com semente determinística, rankings em tempo real e ferramentas de treino "NO ESTADO EM QUE SE ENCONTRA" e "CONFORME DISPONÍVEL". Entrar em jogos mais recentes ou salas multiplayer pode exigir a atualização para a versão mais recente do app (proteção de compatibilidade Update Required).',
       s2Header: "2. Jogo Limpo, Anti-Trapaça e Padrões da Comunidade",
-      s2Intro: "Para manter um ambiente justo baseado em mérito, você concorda estritamente com nossos padrões de Fair Play:",
+      s2Intro: "Para manter um ambiente justo baseado em mérito no SudokuSync, Block Sync e futuros jogos da Mo Logic, você concorda estritamente com nossos padrões de Fair Play:",
       s2BoxTitle: "Política de Fair Play e Anti-Cheat:",
       s2Bullets: [
         { label: "Sem Bots ou Solvers Automáticos:", text: "Proibido usar bots, scripts resolvedores, autoclickers ou navegadores headless." },
@@ -1965,7 +1974,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
         text: "Qualquer fraude resulta em desclassificação imediata dos tempos, remoção dos rankings e suspensão de perfil ou dispositivo.",
       },
       s3Header: "3. Conta em Nuvem e Sincronização",
-      s3Intro: "Jogue como convidado ou conecte sua conta Google:",
+      s3Intro: "Jogue títulos da Mo Logic (SudokuSync, Block Sync e jogos conectados) como convidado ou conecte sua conta Google:",
       s3Bullets: [
         { label: "Sincronização Entre Dispositivos:", text: "Sincroniza estatísticas, histórico, melhores tempos, preferências e jogos salvos entre Web e Android." },
         { label: "Confidencialidade:", text: "Você é responsável pela segurança de sua conta Google e por todas as ações em sua sessão." },
@@ -1975,13 +1984,13 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       ],
       s4Header: "4. Propriedade Intelectual",
       s4Text:
-        "Todos os motores de lógica, síntese sonora procedural, interfaces, tokens do SudokuSync Design System, gráficos, logotipos e códigos são propriedade intelectual do SudokuSync.",
+        "Todos os motores de lógica, síntese sonora procedural, interfaces, tokens do Mo Logic / SudokuSync Design System, gráficos, logotipos e códigos de SudokuSync, Block Sync e futuros jogos da Mo Logic são propriedade intelectual da Mo Logic.",
       s5Header: "5. Anúncios de Terceiros (AdSense e AdMob)",
       s5Text:
         "O serviço é mantido gratuito via Google AdSense (Web) e Google AdMob SDK (Android, incluindo anúncios intersticiais ou premiados sujeitos ao consentimento Google UMP). Não nos responsabilizamos por sites anunciados.",
       s6Header: "6. Isenção de Garantias e Limitação de Responsabilidade",
       s6Text:
-        "O software é fornecido 'como está', sem garantias expressas ou implícitas. Em nenhuma hipótese o SudokuSync será responsável por perda de dados ou lucros decorrentes do uso do jogo.",
+        "O software da Mo Logic (incluindo SudokuSync e Block Sync) é fornecido 'como está', sem garantias expressas ou implícitas. Em nenhuma hipótese a Mo Logic será responsável por perda de dados ou lucros decorrentes do uso dos jogos.",
       s7Header: "7. Exclusão de Conta e Rescisão",
       s7Text:
         'Você pode parar de usar o app a qualquer momento e apagar todos os seus dados com "Excluir Conta e Dados" em Configurações. Reservamo-nos o direito de remover acessos em caso de violações.',
@@ -2005,18 +2014,18 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       topics: {
         bug: {
           label: "Relatar Bug",
-          subject: "SudokuSync Bug Report (v1.0.3)",
-          body: "Versão do App: v1.0.3\nPlataforma (Web / Android): \nTela ou Recurso: \nPassos para reproduzir: \nEsperado vs Obtido: ",
+          subject: "Mo Logic Bug Report (SudokuSync / Block Sync v1.0.3)",
+          body: "Versão do App: v1.0.3\nJogo (SudokuSync / Block Sync): \nPlataforma (Web / Android): \nTela ou Recurso: \nPassos para reproduzir: \nEsperado vs Obtido: ",
         },
         privacy: {
           label: "Privacidade / Consentimento UMP",
-          subject: "SudokuSync Privacy & UMP Consent Inquiry (v1.0.3)",
-          body: "Versão do App: v1.0.3\nPlataforma (Web / Android): \nTema (GDPR / CCPA / AdSense / AdMob AAID / UMP): \nDetalhes: ",
+          subject: "Mo Logic Privacy & UMP Consent Inquiry (v1.0.3)",
+          body: "Versão do App: v1.0.3\nJogo (SudokuSync / Block Sync): \nPlataforma (Web / Android): \nTema (GDPR / CCPA / AdSense / AdMob AAID / UMP): \nDetalhes: ",
         },
         deletion: {
           label: "Excluir Conta e Dados",
-          subject: "SudokuSync Account & Data Deletion Request (v1.0.3)",
-          body: "Versão do App: v1.0.3\nApelido / E-mail: \nSolicitação: Por favor, excluam permanentemente meu perfil Firestore, registros de partidas/ranking e tokens de notificação do SudokuSync.",
+          subject: "Mo Logic Account & Data Deletion Request (v1.0.3)",
+          body: "Versão do App: v1.0.3\nApelido / E-mail: \nSolicitação: Por favor, excluam permanentemente meu perfil Firestore da Mo Logic (SudokuSync e Block Sync), registros de partidas/ranking e tokens de notificação.",
         },
       },
     },
@@ -2024,7 +2033,7 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
       publisherBadge: "Publicado por Mo Logic",
       publisherHeader: "Estúdio Independente de Quebra-Cabeças",
       publisherText:
-        "SudokuSync é desenvolvido e publicado de forma independente pela Mo Logic na Web (https://sudokusync.com) e no Google Play Android (com.mologic.sudokusync). Traz visual pastel sem bordas, temas Claro/Escuro, suporte offline e acesso gratuito transparente.",
+        "A Mo Logic desenvolve e publica de forma independente tanto o SudokuSync quanto o Block Sync na Web (https://sudokusync.com e /blocks) e no Google Play Android (com.mologic.sudokusync) sob um mesmo ecossistema unificado. Além do Sudoku clássico 9x9, o Block Sync traz um jogo calmo de encaixe de blocos 9x9 com limpeza de caixas 3x3 e modos Classic e Time Rush em visual pastel sem bordas, temas Claro/Escuro e suporte offline.",
       engineHeader: "Motor Determinístico 9x9 e Pistas Verificadas",
       engineIntro:
         "Todo tabuleiro 9x9 é criado com Mulberry32 PRNG e validado por nosso motor de lógica humana e solver MRV para garantir matematicamente uma solução única antes da partida:",
@@ -2054,9 +2063,9 @@ export const LEGAL_DOCUMENT_CONTENT: Record<Language, LegalDocumentLocaleContent
           summary: "Cadeias profundas de eliminação, X-Wing e poucas pistas iniciais.",
         },
       ],
-      multiplayerHeader: "Multijogador Ao Vivo e Assíncrono no Mesmo Tabuleiro",
+      multiplayerHeader: "Multijogador Unificado Ao Vivo e Assíncrono Entre Jogos",
       multiplayerText:
-        "Jogue ao vivo ou de forma assíncrona na mesma semente 9x9 usando códigos de sala de 6 dígitos, PIN opcional e links ?room= entre Web e Android. Com Login Google, sincronize estatísticas, lista persistente de Amigos, Jogadores Recentes e Modo Fantasma.",
+        "No ecossistema multiplayer compartilhado da Mo Logic você usa códigos de sala de 6 dígitos, PIN opcional e links ?room= para competir tanto no SudokuSync (mesma semente 9x9) quanto no Block Sync (encaixe de blocos 9x9 com limpeza de caixas 3x3 nos modos Classic e Time Rush). Com Login Google, sincronize estatísticas, Amigos, Jogadores Recentes e Modo Fantasma.",
       assistantsText:
         "Sete Assistentes Inteligentes verificados auxiliam a resolução: Destacar Números Idênticos, Mostrar Números Restantes, Destacar Área Relacionada, Troca Automática de Números Concluídos, Remover Notas Automaticamente, Notas Automáticas (Difícil/Especialista) e Preenchimento Rápido.",
       exploreHeader: "Explorar Regras, Ferramentas e Suporte",

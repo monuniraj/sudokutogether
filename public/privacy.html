@@ -2,13 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Privacy Policy - SudokuSync</title>
+    <title>Privacy Policy - Mo Logic (SudokuSync &amp; Block Sync)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="canonical" href="https://sudokusync.com/privacy" />
-    <meta name="description" content="Privacy Policy for SudokuSync - GDPR, CCPA/CPRA, COPPA, Google AdSense, Google AdMob SDK, AAID, and Google UMP Consent disclosures." />
+    <meta name="description" content="Privacy Policy for Mo Logic games including SudokuSync and Block Sync — GDPR, CCPA/CPRA, COPPA, Cloud Firestore multiplayer telemetry, Google AdSense, Google AdMob SDK, AAID, and Google UMP Consent disclosures." />
     <style>
       :root {
         --bg-color: #fdfbf7;
@@ -78,21 +78,22 @@
       <div class="meta"><strong>Effective Date:</strong> August 12, 2026 | <strong>Version:</strong> 1.0.3 | <strong>Platform:</strong> Web & Android App</div>
 
       <p>
-        At <strong>SudokuSync</strong> (accessible from <a href="https://sudokusync.com">https://sudokusync.com</a> and the official Android mobile application), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed, and how we uphold global privacy standards including the <strong>General Data Protection Regulation (GDPR)</strong>, the <strong>California Consumer Privacy Act (CCPA/CPRA)</strong>, the <strong>Children's Online Privacy Protection Act (COPPA)</strong>, <strong>Google Play Store Data Safety Policies</strong>, <strong>Google AdSense Program Policies</strong>, and <strong>Google AdMob Policies</strong>.
+        At <strong>Mo Logic</strong> (operating <strong>SudokuSync</strong>, <strong>Block Sync</strong>, and all connected puzzle games, cross-game multiplayer rooms, web portals at <a href="https://sudokusync.com">https://sudokusync.com</a>, and official Android mobile applications), we consider the privacy of our visitors and players to be of extreme importance. This Privacy Policy document describes in comprehensive detail the types of information collected, stored, and processed across the Mo Logic ecosystem, and how we uphold global privacy standards including the <strong>General Data Protection Regulation (GDPR)</strong>, the <strong>California Consumer Privacy Act (CCPA/CPRA)</strong>, the <strong>Children's Online Privacy Protection Act (COPPA)</strong>, <strong>Google Play Store Data Safety Policies</strong>, <strong>Google AdSense Program Policies</strong>, and <strong>Google AdMob Policies</strong>.
       </p>
 
       <h2>1. Information Collection & Storage Architecture</h2>
       <p>We operate on strict data minimization principles, clearly distinguishing between client-only local data and cloud database records:</p>
       <ul>
         <li>
-          <strong>Client-Side Local Storage (Browser & Device Only):</strong> Standard browser <code>localStorage</code> is used strictly on your device to persist UI preferences (Dark Mode, sound synthesis, haptics), mistake counter limits, timer visibility, active puzzle board state/notes, and saved single-player games. <em>This data remains on your device and is never sold, shared, or transmitted to third-party marketing entities.</em>
+          <strong>Client-Side Local Storage (Browser & Device Only):</strong> Standard browser <code>localStorage</code> is used strictly on your device to persist UI preferences (Dark Mode, sound synthesis, haptics), mistake counter limits, timer visibility, active Sudoku board states/notes, saved Block Sync runs, and single-player progress. <em>This data remains on your device and is never sold, shared, or transmitted to third-party marketing entities.</em>
         </li>
         <li>
-          <strong>Google Cloud Firestore (Real-Time Multiplayer & Leaderboards):</strong> When participating in multiplayer challenges or global matches, the following non-sensitive game parameters are stored on Google Cloud Firestore:
+          <strong>Google Cloud Firestore (Real-Time Multiplayer & Leaderboards):</strong> When participating in multiplayer rooms, challenges, or global matches across Mo Logic games, the following non-sensitive game parameters are stored on Google Cloud Firestore:
           <ul>
-            <li>Anonymous Challenge ID, seed number, and difficulty level.</li>
+            <li>Anonymous Challenge / Room ID, seed number, and difficulty or mode level.</li>
             <li>Player display nickname (user-chosen alphanumeric string) and user ID.</li>
             <li>Match performance metrics: Completion time (seconds), mistake count, and win/loss completion status.</li>
+            <li>Cross-game multiplayer room telemetry across Mo Logic titles (including <code>gameType</code> such as <code>sudoku</code> or <code>blocks</code>, room mode such as Classic or Time Rush, scores, and room standings) visible to room participants and Recent Players, with automatic room expiry and cleanup.</li>
           </ul>
         </li>
         <li>
@@ -110,7 +111,7 @@
 
       <h2>2. Advertising, Google AdSense, AdMob SDK, AAID & Google UMP Consent</h2>
       <p>
-        We partner with Google LLC to keep SudokuSync free across platforms using <strong>Google AdSense</strong> on the web and the <strong>Google AdMob SDK</strong> in our official Android mobile application. On the web, Google and third-party ad networks use cookies, web beacons, and identifiers to measure ad performance and deliver ads. On Android, the AdMob SDK may process the <strong>Android Advertising ID (AAID)</strong>, app interaction events, and diagnostic signals for ad delivery, frequency capping, and fraud prevention.
+        We partner with Google LLC to keep Mo Logic games (including SudokuSync and Block Sync) free across platforms using <strong>Google AdSense</strong> on the web and the <strong>Google AdMob SDK</strong> in our official Android mobile application. On the web, Google and third-party ad networks use cookies, web beacons, and identifiers to measure ad performance and deliver ads. On Android, the AdMob SDK may process the <strong>Android Advertising ID (AAID)</strong>, app interaction events, and diagnostic signals for ad delivery, frequency capping, and fraud prevention.
       </p>
       <p>
         Before serving personalized ads to users in regulated jurisdictions (including the EEA and the UK), our mobile app uses the <strong>Google UMP (User Messaging Platform) Consent SDK</strong> to present a clear privacy choices dialog so you can grant, manage, or withdraw your consent at any time.
@@ -161,12 +162,12 @@
 
       <h2>5. Children's Privacy Protection (COPPA)</h2>
       <p>
-        Protecting the privacy of young children is especially important. SudokuSync does not knowingly collect or solicit personally identifiable information from children under the age of 13 (or under 16 in the EEA/UK). Our game does not require real names, physical addresses, or phone numbers to play. If a parent or guardian believes their child has submitted personal information to our servers, please contact us immediately at <a href="mailto:sudokutogethermode@gmail.com">sudokutogethermode@gmail.com</a> and we will expeditiously remove such records.
+        Protecting the privacy of young children is especially important. Mo Logic games (including SudokuSync and Block Sync) do not knowingly collect or solicit personally identifiable information from children under the age of 13 (or under 16 in the EEA/UK). Our games do not require real names, physical addresses, or phone numbers to play. If a parent or guardian believes their child has submitted personal information to our servers, please contact us immediately at <a href="mailto:sudokutogethermode@gmail.com">sudokutogethermode@gmail.com</a> and we will expeditiously remove such records.
       </p>
 
       <h2>6. Data Retention & Security Controls</h2>
       <p>
-        Multiplayer challenge match records older than 30 days are pruned automatically from our databases. All client-to-server traffic is encrypted in transit using industry-standard TLS/HTTPS protocols. Strict Firestore security rules enforce document-level ownership and prevent unauthorized data tampering.
+        Multiplayer rooms expire automatically and challenge match records older than 30 days are pruned automatically from our databases. All client-to-server traffic is encrypted in transit using industry-standard TLS/HTTPS protocols. Strict Firestore security rules enforce document-level ownership and prevent unauthorized data tampering.
       </p>
 
       <h2>7. Contact Us</h2>
@@ -181,7 +182,7 @@
       <div class="footer">
         <a href="/">← Return to SudokuSync</a> | <a href="/terms">Terms of Service</a> | <a href="/contact">Contact</a> | <a href="/about">About</a>
         <br /><br />
-        © 2026 SudokuSync. All rights reserved.
+        © 2026 Mo Logic · SudokuSync &amp; Block Sync. All rights reserved.
       </div>
     </div>
   </body>
