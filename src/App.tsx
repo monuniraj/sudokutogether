@@ -136,6 +136,18 @@ const isRulesPath = (pathname?: string | null): boolean =>
 
 const isBlocksPath = (pathname?: string | null): boolean =>
   Boolean(pathname && pathname.trim().toLowerCase().includes("/blocks"));
+
+const SUPPORTED_ROOM_GAME_TYPES = new Set(["sudoku", "blocks"]);
+const CURRENT_PLATFORM_SCHEMA_VERSION = 1;
+
+const isRoomIncompatible = (roomData: any): boolean => {
+  const roomGameType = String(roomData?.gameType || "sudoku");
+  const minAppVersion = Number(roomData?.minAppVersion || 1);
+  return (
+    !SUPPORTED_ROOM_GAME_TYPES.has(roomGameType) ||
+    (Number.isFinite(minAppVersion) && minAppVersion > CURRENT_PLATFORM_SCHEMA_VERSION)
+  );
+};
 import { solveCustomBoard } from "./features/sudokuSolver/services/solverEngine";
 import { updateCustomHistoryTime } from "./features/sudokuSolver/services/customHistoryService";
 import { countSolutionsBitmaskMRV, generateHumanGradedBoard } from "./services/humanDifficultyEngine";
@@ -288,6 +300,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { Capacitor } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
+import { Browser } from '@capacitor/browser';
 import { Share } from '@capacitor/share';
 import { App as CapApp } from '@capacitor/app';
 import { PushNotifications } from "@capacitor/push-notifications";
@@ -3513,6 +3526,43 @@ export default function App() {
   } | null>(null);
   const blockSyncResultsModalRef = useRef(blockSyncResultsModal);
   blockSyncResultsModalRef.current = blockSyncResultsModal;
+  const [showUpdateRequiredModal, setShowUpdateRequiredModal] = useState<boolean>(false);
+  const updateRequiredModalRef = useRef<HTMLDivElement | null>(null);
+  useTopmostModalKeyboardLayer(showUpdateRequiredModal, {
+    id: "update-required-modal",
+    priority: 48,
+    containerRef: updateRequiredModalRef,
+    restoreFocus: true,
+    trapFocus: true,
+    autoFocus: true,
+    onEscape: () => {
+      playClickSound();
+      setShowUpdateRequiredModal(false);
+      return true;
+    },
+    onBackspace: () => {
+      playClickSound();
+      setShowUpdateRequiredModal(false);
+      return true;
+    },
+    onKeyDown: (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || isEditableEventTarget(e.target)) {
+        return false;
+      }
+      if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight" ||
+        e.key === "Home" ||
+        e.key === "End"
+      ) {
+        const focusables = getFocusableElements(updateRequiredModalRef.current);
+        return handleRovingMenuArrowKey(e, focusables, "vertical");
+      }
+      return false;
+    },
+  });
   const blocksRoomCompletionTrackerRef = useRef<{
     roomCode: string;
     initialized: boolean;
@@ -8541,6 +8591,7 @@ export default function App() {
     if (openDropdown) { setOpenDropdown(null); return true; }
     if (playerToUnfriend) { setPlayerToUnfriend(null); return true; }
     if (blockSyncResultsModal) { setBlockSyncResultsModal(null); return true; }
+    if (showUpdateRequiredModal) { setShowUpdateRequiredModal(false); return true; }
     if (notificationResultModal) { setNotificationResultModal(null); return true; }
     if (viewingRankingsGame) { setViewingRankingsGame(null); return true; }
     if (showDeleteAccountModal) { setShowDeleteAccountModal(false); return true; }
@@ -8595,6 +8646,7 @@ export default function App() {
     if (openDropdown) count++;
     if (playerToUnfriend) count++;
     if (blockSyncResultsModal) count++;
+    if (showUpdateRequiredModal) count++;
     if (notificationResultModal) count++;
     if (viewingRankingsGame) count++;
     if (showDeleteAccountModal) count++;
@@ -8685,6 +8737,7 @@ export default function App() {
     showJoinRoomModal,
     showMultiplayerForkModal,
     showHowToPlayModal,
+    showUpdateRequiredModal,
     isPostGameDailyCalendarOpen,
     dailyResultModalState
   ]);
@@ -9123,7 +9176,7 @@ export default function App() {
       targetUid?: string;
       toUserId?: string;
     }
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; error?: string; requiresUpdate?: boolean }> => {
     // 1. Extract canonical 6-digit roomCode
     const trimmedId = (targetGameId || "").trim();
     let roomCode = "";
@@ -9213,6 +9266,15 @@ export default function App() {
 
       if (rData.status === "closed" || rData.isClosed) {
         return { success: false, error: t("roomSessionClosedToast") };
+      }
+
+      if (isRoomIncompatible(rData)) {
+        setShowJoinRoomModal(false);
+        setShowMultiplayerForkModal(false);
+        setShowBellInvitesModal(false);
+        setJoinRoomError(null);
+        setShowUpdateRequiredModal(true);
+        return { success: false, requiresUpdate: true };
       }
 
       // 100% Evergreen Room Model: Rooms never expire. Players can join & solve any challenge anytime.
@@ -9646,7 +9708,7 @@ export default function App() {
       showGameOverModal ||
       Boolean(viewingRankingsGame) ||
       Boolean(notificationResultModal) ||
-    Boolean(blockSyncResultsModal) ||
+      Boolean(blockSyncResultsModal) ||
       Boolean(dailyResultModalState?.isOpen);
   }, [showGameOverModal, viewingRankingsGame, notificationResultModal, dailyResultModalState?.isOpen]);
 
@@ -12558,6 +12620,10 @@ export default function App() {
             showToast(t("roomSessionClosedToast"));
             return;
           }
+          if (isRoomIncompatible(rData)) {
+            setShowUpdateRequiredModal(true);
+            return;
+          }
           const isDailyInviteRoom = rData.gameMode === "daily" && Boolean(rData.dailyDate);
           const rSeed = rData.seed !== undefined ? Number(rData.seed) : parseInt(code, 10);
           const rawRDiff = (rData.difficulty || "EASY").toUpperCase();
@@ -13333,7 +13399,7 @@ export default function App() {
         passwordOverride: joinRoomPinInput.trim(),
         isDirectInvite: false
       });
-      if (!res.success) {
+      if (!res.success && !res.requiresUpdate) {
         setJoinRoomError(res.error || "Failed to connect to room.");
       }
     } catch (err: any) {
@@ -16221,6 +16287,7 @@ export default function App() {
     showHistoryChallengeModal ||
     Boolean(notificationResultModal) ||
     Boolean(blockSyncResultsModal) ||
+    showUpdateRequiredModal ||
     isDailyCardModalOpen ||
     isPostGameDailyCalendarOpen ||
     Boolean(dailyResultModalState?.isOpen) ||
@@ -24327,6 +24394,96 @@ export default function App() {
           }
         }}
       />
+
+      {/* Future-Proof App / Room Schema Update Required Modal */}
+      {showUpdateRequiredModal && (
+        <div
+          className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 backdrop-blur-xs ${
+            darkMode ? "bg-black/60" : "bg-slate-900/25"
+          }`}
+          onClick={() => {
+            playClickSound();
+            setShowUpdateRequiredModal(false);
+          }}
+        >
+          <div
+            ref={updateRequiredModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="update-required-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-[360px] rounded-3xl p-6 flex flex-col items-center text-center gap-4 border-none select-none z-[10001] ${
+              darkMode
+                ? "bg-[#141A21] text-slate-100 shadow-[0_18px_46px_rgba(0,0,0,0.58)]"
+                : "bg-[#F4F8FB] text-[#1E293B] shadow-[0_14px_40px_rgba(15,23,42,0.12)]"
+            }`}
+          >
+            <div
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                darkMode
+                  ? "bg-[#38BDF8]/18 text-[#38BDF8]"
+                  : "bg-[#2B8CEE]/12 text-[#2B8CEE]"
+              }`}
+            >
+              <Rocket className="w-6 h-6 stroke-[2.2]" aria-hidden="true" />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <h3
+                id="update-required-modal-title"
+                className="text-lg font-sans font-extrabold tracking-tight leading-snug"
+              >
+                Update Required
+              </h3>
+              <p
+                className={`text-xs sm:text-[13px] leading-relaxed ${
+                  darkMode ? "text-slate-300" : "text-slate-600"
+                }`}
+              >
+                This multiplayer room uses a newer MoLogic game or feature. Please update the app to join.
+              </p>
+            </div>
+
+            <div className="w-full flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  setShowUpdateRequiredModal(false);
+                  if (Capacitor.isNativePlatform()) {
+                    void Browser.open({ url: PLAY_STORE_URL }).catch(() => {
+                      window.open(PLAY_STORE_URL, "_blank", "noopener,noreferrer");
+                    });
+                  } else {
+                    window.location.reload();
+                  }
+                }}
+                className={`w-full min-h-[46px] px-4 rounded-2xl border-none cursor-pointer font-sans font-bold text-sm transition-all active:scale-[0.985] ${
+                  darkMode
+                    ? "bg-[#38BDF8] hover:bg-[#52C8FA] text-[#082032] shadow-[0_8px_20px_rgba(56,189,248,0.24)]"
+                    : "bg-[#2B8CEE] hover:bg-[#1D7AD9] text-white shadow-[0_8px_20px_rgba(43,140,238,0.22)]"
+                }`}
+              >
+                Update Now
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  setShowUpdateRequiredModal(false);
+                }}
+                className={`w-full h-[40px] px-4 rounded-2xl border-none cursor-pointer font-sans font-semibold text-xs transition-colors active:scale-[0.985] ${
+                  darkMode
+                    ? "bg-[#1B242E] hover:bg-[#24303D] text-slate-300"
+                    : "bg-[#E6F1F8] hover:bg-[#D5E6F3] text-[#49637A]"
+                }`}
+              >
+                Not Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 🔮 CUSTOM GAME HISTORY OR SAVED CHALLENGE LOBBY MODAL */}
       <AnimatePresence>

@@ -1975,6 +1975,7 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
   const musicOn = localMusicOn;
   const vibrationsOn = vibrations !== undefined ? vibrations : localVibrationsOn;
   const [showTutorial, setShowTutorial] = useState<boolean>(false);
+  const [tutorialStage, setTutorialStage] = useState<0 | 1 | 2 | 3>(0);
   const [canUndo, setCanUndo] = useState<boolean>(() =>
     Boolean(restoredSession && restoredSession.historyStack.length > 0)
   );
@@ -1988,6 +1989,17 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       }
     } catch { }
   }, []);
+
+  // Continuous 4-stage How-to-Play demo loop (Row -> Column -> 3x3 Box -> Combo x2)
+  useEffect(() => {
+    if (!showTutorial) return;
+    setTutorialStage(0);
+    if (reducedMotion || typeof window === "undefined") return;
+    const intervalId = window.setInterval(() => {
+      setTutorialStage((prev) => ((prev + 1) % 4) as 0 | 1 | 2 | 3);
+    }, 2700);
+    return () => window.clearInterval(intervalId);
+  }, [showTutorial, reducedMotion]);
 
   const boardGridRef = useRef<HTMLDivElement | null>(null);
   const trayContainerRef = useRef<HTMLElement | null>(null);
@@ -2237,8 +2249,8 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
       midGameBannerExitTimerRef.current = window.setTimeout(() => {
         midGameBannerExitTimerRef.current = null;
         setMidGameBestBanner(null);
-      }, 200);
-    }, 2000);
+      }, 240);
+    }, 1920);
 
     milestoneRainTimerRef.current = window.setTimeout(() => {
       milestoneRainTimerRef.current = null;
@@ -3560,52 +3572,51 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         }
         @media (prefers-reduced-motion: reduce) {
           .bs-rush-minute-pop,
-          .bs-rush-heartbeat {
+          .bs-rush-heartbeat,
+          .bs-tut-piece,
+          .bs-tut-finger,
+          .bs-tut-hover,
+          .bs-tut-vanish,
+          .bs-tut-pop {
             animation: none !important;
           }
         }
         @keyframes bsTutPiece {
-          0%, 10% { transform: translate(0, 0) scale(1); opacity: 1; }
-          18% { transform: translate(10px, -16px) scale(1.06); opacity: 1; }
-          44% { transform: translate(52px, -71px) scale(1.06); opacity: 1; }
-          49%, 58% { transform: translate(52px, -71px) scale(1); opacity: 1; }
-          64% { transform: translate(52px, -71px) scale(1.06); opacity: 0.92; }
-          76% { transform: translate(52px, -71px) scale(0.4); opacity: 0; }
-          78%, 88% { transform: translate(0, 0) scale(0.92); opacity: 0; }
-          96%, 100% { transform: translate(0, 0) scale(1); opacity: 1; }
+          0%, 8% { transform: translate(0px, 0px) scale(1); opacity: 1; }
+          16% { transform: translate(calc(var(--bs-tut-dx) * 0.2), -14px) scale(1.06); opacity: 1; }
+          44% { transform: translate(var(--bs-tut-dx), var(--bs-tut-dy)) scale(1.05); opacity: 1; }
+          49%, 60% { transform: translate(var(--bs-tut-dx), var(--bs-tut-dy)) scale(1); opacity: 1; }
+          66% { transform: translate(var(--bs-tut-dx), var(--bs-tut-dy)) scale(1.06); opacity: 0.92; }
+          78%, 100% { transform: translate(var(--bs-tut-dx), var(--bs-tut-dy)) scale(0.38); opacity: 0; }
         }
         @keyframes bsTutFinger {
-          0%, 10% { transform: translate(0, 0) scale(1); opacity: 0.95; }
-          14% { transform: translate(0, 0) scale(0.92); opacity: 1; }
-          44% { transform: translate(52px, -71px) scale(0.92); opacity: 1; }
-          49% { transform: translate(52px, -71px) scale(1); opacity: 0.95; }
-          56%, 89% { transform: translate(52px, -71px) scale(1); opacity: 0; }
-          90% { transform: translate(0, 0) scale(0.92); opacity: 0; }
-          96%, 100% { transform: translate(0, 0) scale(1); opacity: 0.95; }
+          0%, 8% { transform: translate(0px, 0px) scale(1); opacity: 0.95; }
+          14% { transform: translate(0px, 0px) scale(0.9); opacity: 1; }
+          44% { transform: translate(var(--bs-tut-dx), var(--bs-tut-dy)) scale(0.9); opacity: 1; }
+          49% { transform: translate(var(--bs-tut-dx), var(--bs-tut-dy)) scale(1); opacity: 0.92; }
+          56%, 100% { transform: translate(var(--bs-tut-dx), var(--bs-tut-dy)) scale(1); opacity: 0; }
         }
         @keyframes bsTutHover {
-          0%, 24% { opacity: 0; }
-          32%, 44% { opacity: 1; }
-          49%, 100% { opacity: 0; }
+          0%, 22% { opacity: 0; }
+          32%, 47% { opacity: 1; }
+          51%, 100% { opacity: 0; }
         }
         @keyframes bsTutVanish {
-          0%, 58% { transform: scale(1); opacity: 1; }
-          64% { transform: scale(1.06); opacity: 0.92; }
-          76%, 88% { transform: scale(0.4); opacity: 0; }
-          89% { transform: scale(0.92); opacity: 0; }
-          96%, 100% { transform: scale(1); opacity: 1; }
+          0%, 60% { transform: scale(1); opacity: 1; }
+          66% { transform: scale(1.06); opacity: 0.92; }
+          78%, 100% { transform: scale(0.38); opacity: 0; }
         }
         @keyframes bsTutPop {
-          0%, 56% { transform: translateY(6px) scale(0.92); opacity: 0; }
-          66% { transform: translateY(-4px) scale(1); opacity: 1; }
-          80% { transform: translateY(-12px) scale(1); opacity: 1; }
-          88%, 100% { transform: translateY(-16px) scale(0.96); opacity: 0; }
+          0%, 56% { transform: translateY(6px) scale(0.9); opacity: 0; }
+          66% { transform: translateY(-2px) scale(1); opacity: 1; }
+          84% { transform: translateY(-10px) scale(1); opacity: 1; }
+          96%, 100% { transform: translateY(-15px) scale(0.95); opacity: 0; }
         }
-        .bs-tut-piece { animation: bsTutPiece 4.8s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
-        .bs-tut-finger { animation: bsTutFinger 4.8s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
-        .bs-tut-hover { animation: bsTutHover 4.8s ease-in-out infinite; }
-        .bs-tut-vanish { animation: bsTutVanish 4.8s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
-        .bs-tut-pop { animation: bsTutPop 4.8s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+        .bs-tut-piece { animation: bsTutPiece 2.7s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+        .bs-tut-finger { animation: bsTutFinger 2.7s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+        .bs-tut-hover { animation: bsTutHover 2.7s ease-in-out forwards; }
+        .bs-tut-vanish { animation: bsTutVanish 2.7s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+        .bs-tut-pop { animation: bsTutPop 2.7s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
         @keyframes blockSyncClearPreviewEnter {
           0% {
             opacity: 0;
@@ -3639,12 +3650,13 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
           animation: blockSyncFadeIn 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
         }
         @keyframes bsMidBestEnter {
-          0% { transform: translateY(-18px) scale(0.95); opacity: 0; }
+          0% { transform: translateY(10px) scale(0.84); opacity: 0; }
+          70% { transform: translateY(-2px) scale(1.04); opacity: 1; }
           100% { transform: translateY(0) scale(1); opacity: 1; }
         }
         @keyframes bsMidBestExit {
           0% { transform: translateY(0) scale(1); opacity: 1; }
-          100% { transform: translateY(-10px) scale(0.96); opacity: 0; }
+          100% { transform: translateY(-14px) scale(0.96); opacity: 0; }
         }
       `}</style>
 
@@ -3655,39 +3667,6 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         isDarkMode={darkMode}
         intensity="milestone"
       />
-
-      {/* Non-Blocking Mid-Game Best Cross Designer Crown Pill Banner */}
-      {midGameBestBanner && (
-        <div
-          key={`midgame-best-${midGameBestBanner.id}`}
-          aria-live="polite"
-          className="pointer-events-none fixed top-[calc(76px+env(safe-area-inset-top,0px))] left-1/2 -translate-x-1/2 z-[10060] flex items-center justify-center"
-        >
-          <div
-            id="block-sync-midgame-best-banner"
-            style={
-              reducedMotion
-                ? undefined
-                : {
-                  animation: midGameBestBanner.exiting
-                    ? "bsMidBestExit 200ms ease-in forwards"
-                    : "bsMidBestEnter 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
-                  willChange: "transform, opacity",
-                }
-            }
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-black uppercase tracking-[0.14em] whitespace-nowrap ${darkMode
-              ? "bg-[#16202B]/95 text-[#F8FAFC] border border-[#FBBF24]/45 shadow-[0_10px_30px_rgba(251,191,36,0.22)]"
-              : "bg-white/95 text-[#1E293B] border border-[#F59E0B]/45 shadow-[0_10px_28px_rgba(245,158,11,0.22)]"
-              }`}
-          >
-            <Crown
-              className={`w-4 h-4 shrink-0 ${darkMode ? "text-[#FBBF24]" : "text-[#D97706]"}`}
-              aria-hidden="true"
-            />
-            <span>{t("blocks_new_best_banner")}</span>
-          </div>
-        </div>
-      )}
 
       {/* Adaptive Optical Upper-Middle Top Spacer (~36/64 weighted split) */}
       <div
@@ -3882,6 +3861,39 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
               : "bg-[#D1E4F3]/95 border border-[#B7D2E8]/60 shadow-[0_12px_36px_rgba(44,62,80,0.08)]"
               }`}
           >
+            {/* Non-Blocking Center-of-Board Mid-Game Best Cross Designer Crown Pill */}
+            {midGameBestBanner && (
+              <div
+                key={`midgame-best-${midGameBestBanner.id}`}
+                aria-live="polite"
+                className="pointer-events-none absolute inset-0 z-[40] flex items-center justify-center"
+              >
+                <div
+                  id="block-sync-midgame-best-banner"
+                  style={
+                    reducedMotion
+                      ? undefined
+                      : {
+                        animation: midGameBestBanner.exiting
+                          ? "bsMidBestExit 240ms ease-in forwards"
+                          : "bsMidBestEnter 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
+                        willChange: "transform, opacity",
+                      }
+                  }
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-black uppercase tracking-[0.14em] whitespace-nowrap ${darkMode
+                    ? "bg-[#16202B]/95 text-[#F8FAFC] border border-[#FBBF24]/45 shadow-[0_10px_30px_rgba(251,191,36,0.22)]"
+                    : "bg-white/95 text-[#1E293B] border border-[#F59E0B]/45 shadow-[0_10px_28px_rgba(245,158,11,0.22)]"
+                    }`}
+                >
+                  <Crown
+                    className={`w-4 h-4 shrink-0 ${darkMode ? "text-[#FBBF24]" : "text-[#D97706]"}`}
+                    aria-hidden="true"
+                  />
+                  <span>{t("blocks_new_best_banner")}</span>
+                </div>
+              </div>
+            )}
+
             {/* Non-shifting Floating Combo / Clear Points Pill */}
             {clearFeedback && (
               <div className="pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 z-20">
@@ -4210,16 +4222,16 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className={`relative block-sync-fade-in w-full max-w-[360px] max-h-[90dvh] overflow-y-auto px-6 py-6 rounded-3xl border-none flex flex-col items-center gap-4 text-center ${darkMode
+            className={`relative block-sync-fade-in w-full max-w-[360px] max-h-[calc(100dvh-32px)] overflow-y-auto px-5 py-5 rounded-3xl border-none flex flex-col items-center gap-3 text-center ${darkMode
               ? "bg-[#1B242E] text-slate-100 shadow-[0_24px_60px_rgba(0,0,0,0.55)]"
               : "bg-[#F8FBFE] text-[#2C3E50] shadow-[0_24px_60px_rgba(44,62,80,0.14)]"
               }`}
           >
-            <div className="w-full flex items-center justify-between gap-2">
+            <div className="w-full flex items-center justify-between gap-2 shrink-0">
               <span className="w-8 shrink-0" aria-hidden="true" />
               <h2
                 id="block-sync-tutorial-title"
-                className="text-xl font-bold tracking-tight"
+                className="text-lg sm:text-xl font-bold tracking-tight"
               >
                 {t("blocks_how_to_play_title")}
               </h2>
@@ -4238,86 +4250,278 @@ export const BlockSyncGame: React.FC<BlockSyncGameProps> = ({
               </button>
             </div>
 
-            {/* Self-contained mini-board + tray preview: drag 2-tile piece -> fill row -> unified vanish + +100 */}
-            <div
-              aria-hidden="true"
-              className={`relative w-[244px] h-[224px] rounded-3xl overflow-hidden shrink-0 ${darkMode
-                ? "bg-[#141A21] shadow-[inset_0_2px_10px_rgba(0,0,0,0.55)]"
-                : "bg-[#EBF3F9] shadow-[inset_0_2px_10px_rgba(140,178,209,0.28)]"
-                }`}
-            >
-              {/* Framed 5x3 mini-board container (x=27..217, y=12..132, p=10px -> grid starts at 37,22) */}
-              <div
-                className={`absolute left-[27px] top-[12px] w-[190px] h-[120px] p-[10px] rounded-2xl ${darkMode
-                  ? "bg-[#19222C] ring-1 ring-slate-700/50 shadow-[0_8px_20px_rgba(0,0,0,0.45)]"
-                  : "bg-[#DFECF7] ring-1 ring-slate-300/40 shadow-[0_8px_20px_rgba(140,178,209,0.22)]"
-                  }`}
-              >
-                <div className="grid grid-cols-5 gap-[5px]">
-                  {Array.from({ length: 15 }, (_, idx) => {
-                    const isPrefilledClearTile = idx >= 10 && idx <= 12;
-                    const isTargetDropSlot = idx === 13 || idx === 14;
-                    return (
-                      <div
-                        key={`tut-cell-${idx}`}
-                        className={`relative w-[30px] h-[30px] rounded-xl ${darkMode
-                          ? "bg-[#141A21] shadow-[inset_0_2px_5px_rgba(0,0,0,0.65)]"
-                          : "bg-white/90 shadow-[inset_0_2px_5px_rgba(116,154,186,0.32)]"
+            {/* 6x6 Real 3x3 Checkerboard 4-Stage Interactive Demo (Row -> Column -> 3x3 Box -> Combo x2) */}
+            {(() => {
+              const stageConfigs = [
+                {
+                  key: "row",
+                  label: "Row Clear",
+                  color: "emerald" as PastelColorKey,
+                  prefilled: ["2,0", "2,1", "2,4", "2,5"],
+                  targets: ["2,2", "2,3"],
+                  pieceOffsets: [
+                    [0, 0],
+                    [0, 1],
+                  ] as readonly [number, number][],
+                  cols: 2,
+                  rows: 1,
+                  startX: 90,
+                  startY: 197,
+                  dx: 0,
+                  dy: -131,
+                  fingerX: 112,
+                  fingerY: 207,
+                  popText: "+100",
+                  popTop: 60,
+                  isCombo: false,
+                },
+                {
+                  key: "col",
+                  label: "Column Clear",
+                  color: "sky" as PastelColorKey,
+                  prefilled: ["0,2", "1,2", "4,2", "5,2"],
+                  targets: ["2,2", "3,2"],
+                  pieceOffsets: [
+                    [0, 0],
+                    [1, 0],
+                  ] as readonly [number, number][],
+                  cols: 1,
+                  rows: 2,
+                  startX: 103,
+                  startY: 184,
+                  dx: -13,
+                  dy: -118,
+                  fingerX: 112,
+                  fingerY: 205,
+                  popText: "+100",
+                  popTop: 72,
+                  isCombo: false,
+                },
+                {
+                  key: "box",
+                  label: "3×3 Box Clear",
+                  color: "violet" as PastelColorKey,
+                  prefilled: ["0,3", "0,4", "0,5", "1,3", "1,5", "2,5"],
+                  targets: ["1,4", "2,3", "2,4"],
+                  pieceOffsets: [
+                    [0, 1],
+                    [1, 0],
+                    [1, 1],
+                  ] as readonly [number, number][],
+                  cols: 2,
+                  rows: 2,
+                  startX: 90,
+                  startY: 184,
+                  dx: 26,
+                  dy: -144,
+                  fingerX: 112,
+                  fingerY: 206,
+                  popText: "+100",
+                  popTop: 42,
+                  isCombo: false,
+                },
+                {
+                  key: "combo",
+                  label: `${t("blocks_combo_x", { n: 2 })}!`,
+                  color: "rose" as PastelColorKey,
+                  prefilled: [
+                    "3,0", "3,1", "3,2",
+                    "4,0", "4,3", "4,4", "4,5",
+                    "5,0", "5,1", "5,2",
+                  ],
+                  targets: ["4,1", "4,2"],
+                  pieceOffsets: [
+                    [0, 0],
+                    [0, 1],
+                  ] as readonly [number, number][],
+                  cols: 2,
+                  rows: 1,
+                  startX: 90,
+                  startY: 197,
+                  dx: -26,
+                  dy: -79,
+                  fingerX: 112,
+                  fingerY: 207,
+                  popText: `${t("blocks_combo_x", { n: 2 })}! · +400`,
+                  popTop: 94,
+                  isCombo: true,
+                },
+              ];
+
+              const activeStage = stageConfigs[tutorialStage] || stageConfigs[0];
+              const prefilledSet = new Set(activeStage.prefilled);
+              const targetSet = new Set(activeStage.targets);
+              const demoHoverClass = darkMode
+                ? HOVER_PREVIEW_CLASSES_DARK[activeStage.color]
+                : HOVER_PREVIEW_CLASSES_LIGHT[activeStage.color];
+
+              return (
+                <div className="w-full flex flex-col items-center gap-2 shrink-0">
+                  {/* Subtle Step Pill Above Mini-Board */}
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide ${activeStage.isCombo
+                      ? darkMode
+                        ? "bg-[#2C243D] text-[#D8B4FE]"
+                        : "bg-purple-200/90 text-[#432C7A]"
+                      : darkMode
+                        ? "bg-[#141A21] text-[#38BDF8]"
+                        : "bg-[#E6F1F8] text-[#2B8CEE]"
+                      }`}
+                  >
+                    {activeStage.isCombo && (
+                      <Sparkles className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    )}
+                    <span>{activeStage.label}</span>
+                  </span>
+
+                  {/* Self-Contained 6x6 Mini-Board (2x2 of 3x3 Zones) + Tray Stage */}
+                  <div
+                    key={`tut-stage-${activeStage.key}`}
+                    aria-hidden="true"
+                    style={
+                      {
+                        "--bs-tut-dx": `${activeStage.dx}px`,
+                        "--bs-tut-dy": `${activeStage.dy}px`,
+                      } as React.CSSProperties
+                    }
+                    className={`relative w-[228px] h-[240px] rounded-3xl overflow-hidden shrink-0 ${darkMode
+                      ? "bg-[#141A21] shadow-[inset_0_2px_10px_rgba(0,0,0,0.55)]"
+                      : "bg-[#EBF3F9] shadow-[inset_0_2px_10px_rgba(140,178,209,0.28)]"
+                      }`}
+                  >
+                    {/* Authentic 6x6 Checkerboard Mini-Board (left=30px, top=6px, p=8px -> cell 22px, gap 4px) */}
+                    <div
+                      className={`absolute left-[30px] top-[6px] w-[168px] h-[168px] p-[8px] rounded-2xl ${darkMode
+                        ? "bg-[#19222C] border border-slate-700/50 shadow-[0_8px_20px_rgba(0,0,0,0.48)]"
+                        : "bg-[#D1E4F3]/95 border border-[#B7D2E8]/60 shadow-[0_8px_20px_rgba(44,62,80,0.08)]"
+                        }`}
+                    >
+                      <div className="grid grid-cols-6 grid-rows-6 gap-[4px]">
+                        {Array.from({ length: 36 }, (_, idx) => {
+                          const r = Math.floor(idx / 6);
+                          const c = idx % 6;
+                          const cellCoord = `${r},${c}`;
+                          const isAltBox = (Math.floor(r / 3) + Math.floor(c / 3)) % 2 === 1;
+                          const isPrefilled = prefilledSet.has(cellCoord);
+                          const isTarget = targetSet.has(cellCoord);
+
+                          const pocketCls = darkMode
+                            ? isAltBox
+                              ? "border-none bg-[#283747] shadow-[inset_0_2px_5px_rgba(0,0,0,0.52)]"
+                              : "border-none bg-[#0E141B] shadow-[inset_0_2px_6px_rgba(0,0,0,0.74)]"
+                            : isAltBox
+                              ? "border-none bg-[#BDD9EE]/95 shadow-[inset_0_2px_4px_rgba(78,122,160,0.24)]"
+                              : "border-none bg-white shadow-[inset_0_2px_4px_rgba(116,154,186,0.16)]";
+
+                          return (
+                            <div
+                              key={`tut-6x6-${cellCoord}`}
+                              className={`relative w-[22px] h-[22px] rounded-[24%] ${pocketCls}`}
+                            >
+                              {isTarget && (
+                                <div
+                                  className={`absolute inset-0 rounded-[24%] bs-tut-hover ${demoHoverClass}`}
+                                />
+                              )}
+                              {isPrefilled && (
+                                <div
+                                  className={`absolute inset-0 rounded-[24%] bs-tut-vanish ${tileClasses[activeStage.color]} !shadow-none`}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Matching Mini Spawner Tray Slot Below Mini-Board */}
+                    <div
+                      className={`absolute left-[30px] top-[182px] w-[168px] h-[52px] rounded-2xl ${darkMode
+                        ? "bg-[#1B242E] shadow-[inset_0_2px_6px_rgba(0,0,0,0.45)]"
+                        : "bg-[#E8F2FA]/90 border border-[#C4DCEF]/75 shadow-[inset_0_2px_6px_rgba(140,178,209,0.2)]"
+                        }`}
+                    />
+
+                    {/* Dragged Polyomino Piece */}
+                    <div
+                      style={{
+                        left: `${activeStage.startX}px`,
+                        top: `${activeStage.startY}px`,
+                        width: `${activeStage.cols * 22 + (activeStage.cols - 1) * 4}px`,
+                        height: `${activeStage.rows * 22 + (activeStage.rows - 1) * 4}px`,
+                      }}
+                      className="absolute bs-tut-piece pointer-events-none z-10"
+                    >
+                      {activeStage.pieceOffsets.map(([pr, pc], pIdx) => (
+                        <div
+                          key={`tut-drag-sq-${pIdx}`}
+                          style={{
+                            left: `${pc * 26}px`,
+                            top: `${pr * 26}px`,
+                          }}
+                          className={`absolute w-[22px] h-[22px] rounded-[24%] ${tileClasses[activeStage.color]}`}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Crisp Score / Combo Pop Over Cleared Cells */}
+                    <div
+                      style={{ top: `${activeStage.popTop}px` }}
+                      className="pointer-events-none absolute inset-x-0 flex justify-center z-20 bs-tut-pop"
+                    >
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold tracking-wide whitespace-nowrap ${activeStage.isCombo
+                          ? darkMode
+                            ? "bg-[#2C243D] text-[#D8B4FE] shadow-[0_6px_14px_rgba(0,0,0,0.45)]"
+                            : "bg-purple-200 text-[#432C7A] shadow-[0_6px_14px_rgba(67,44,122,0.16)]"
+                          : darkMode
+                            ? "bg-[#22303E] text-yellow-300 shadow-[0_6px_14px_rgba(0,0,0,0.45)]"
+                            : "bg-yellow-200 text-[#92400E] shadow-[0_6px_14px_rgba(140,178,209,0.28)]"
                           }`}
                       >
-                        {isTargetDropSlot && (
-                          <div
-                            className={`absolute inset-0 rounded-xl bs-tut-hover ${darkMode
-                              ? "bg-emerald-300/25 ring-1 ring-emerald-300/50"
-                              : "bg-emerald-200/80 ring-1 ring-emerald-400/60"
-                              }`}
-                          />
-                        )}
-                        {isPrefilledClearTile && (
-                          <div
-                            className={`absolute inset-0 rounded-xl ${tileClasses.emerald} bs-tut-vanish`}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
+                        {activeStage.popText}
+                      </span>
+                    </div>
+
+                    {/* Pointer Hand Tracking Drag Movement */}
+                    <div
+                      style={{
+                        left: `${activeStage.fingerX}px`,
+                        top: `${activeStage.fingerY}px`,
+                      }}
+                      className={`pointer-events-none absolute z-30 drop-shadow-sm bs-tut-finger ${darkMode ? "text-slate-100" : "text-[#2C3E50]"
+                        }`}
+                    >
+                      <Hand className="w-5 h-5" />
+                    </div>
+                  </div>
+
+                  {/* Subtle 4-Dot Stage Indicator (tappable for instant inspection) */}
+                  <div className="flex items-center justify-center gap-1.5" role="tablist" aria-label="Demo steps">
+                    {stageConfigs.map((st, idx) => {
+                      const isActive = tutorialStage === idx;
+                      return (
+                        <button
+                          key={`tut-dot-${st.key}`}
+                          type="button"
+                          aria-label={st.label}
+                          aria-selected={isActive}
+                          onClick={() => setTutorialStage(idx as 0 | 1 | 2 | 3)}
+                          className={`h-1.5 rounded-full border-none cursor-pointer transition-all duration-200 ${isActive
+                            ? darkMode
+                              ? "w-5 bg-[#38BDF8]"
+                              : "w-5 bg-[#2B8CEE]"
+                            : darkMode
+                              ? "w-1.5 bg-slate-600/70 hover:bg-slate-500"
+                              : "w-1.5 bg-[#B7D2E8] hover:bg-[#8FB7D8]"
+                            }`}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-
-              {/* Dedicated spawner tray slot container below the mini-board */}
-              <div
-                className={`absolute left-[27px] top-[146px] w-[190px] h-[64px] rounded-2xl ${darkMode
-                  ? "bg-[#19222C] ring-1 ring-slate-700/50 shadow-[inset_0_2px_6px_rgba(0,0,0,0.5)]"
-                  : "bg-[#DFECF7] ring-1 ring-slate-300/40 shadow-[inset_0_2px_6px_rgba(140,178,209,0.28)]"
-                  }`}
-              />
-
-              {/* Dragged 2-Straight Mint piece: tray (90,163) -> slots (142,92) via translate(52px, -71px) */}
-              <div className="absolute left-[90px] top-[163px] flex gap-[5px] bs-tut-piece">
-                <div className={`w-[30px] h-[30px] rounded-xl ${tileClasses.emerald}`} />
-                <div className={`w-[30px] h-[30px] rounded-xl ${tileClasses.emerald}`} />
-              </div>
-
-              {/* Centered +100 score pop over the cleared row */}
-              <div className="pointer-events-none absolute inset-x-0 top-[64px] flex justify-center z-10 bs-tut-pop">
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold tracking-wide ${darkMode
-                    ? "bg-[#22303E] text-yellow-300 shadow-[0_6px_14px_rgba(0,0,0,0.45)]"
-                    : "bg-yellow-200 text-[#92400E] shadow-[0_6px_14px_rgba(140,178,209,0.28)]"
-                    }`}
-                >
-                  +100
-                </span>
-              </div>
-
-              {/* Pointer hand tracking the dragged piece cleanly */}
-              <div
-                className={`pointer-events-none absolute left-[110px] top-[177px] z-20 drop-shadow-sm bs-tut-finger ${darkMode ? "text-slate-100" : "text-[#2C3E50]"
-                  }`}
-              >
-                <Hand className="w-6 h-6" />
-              </div>
-            </div>
+              );
+            })()}
 
             <ol className="w-full flex flex-col gap-2 text-left text-sm font-medium">
               {[
